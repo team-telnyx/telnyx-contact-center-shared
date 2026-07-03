@@ -119,6 +119,7 @@ export async function POST(request) {
         i.prompt_hint,
         i.slot_name,
         i.slot_type,
+        i.slot_options,
         i.slot_validation,
         i.completion_trigger,
         s.name as stage_name,
@@ -180,6 +181,7 @@ export async function POST(request) {
       model: llmModel,
       includeIntent: assistConfig.enable_intent_recognition === true,
       includeSentiment: assistConfig.enable_sentiment_analysis === true,
+      confidenceThreshold,
     });
 
     // Process completed items
@@ -225,7 +227,7 @@ export async function POST(request) {
              WHERE session_id = $5 AND item_id = $6`,
             [
               speakerType || "auto",
-              completed.extracted_value || null,
+              completed.extracted_value ?? null,
               completed.confidence,
               transcript,
               workflowSession.id,
@@ -233,8 +235,10 @@ export async function POST(request) {
             ]
           );
 
-          // If this is a slot item with a value, update slots_filled
-          if (item?.slot_name && completed.extracted_value) {
+          // If this is a slot item with a value, update slots_filled. Use the
+          // meaningful-value check (not truthiness) so boolean false / numeric 0
+          // are kept — e.g. accompanying=false, iv_count=0.
+          if (item?.slot_name && hasMeaningfulExtractedValue(completed.extracted_value)) {
             slotsFilled[item.slot_name] = completed.extracted_value;
           }
 
@@ -244,9 +248,16 @@ export async function POST(request) {
             confidence: completed.confidence,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
+            alternatives: [],
           });
         } else {
-          // Persist as suggestion (don't auto-complete) so the agent can confirm or correct it
+          // Persist as suggestion (don't auto-complete) so the agent can confirm or correct it.
+          // Store the low-confidence alternatives so the agent desktop can render
+          // confirmation chips (previously only the insights path produced these).
+          const suggestedAlternatives =
+            Array.isArray(completed.alternatives) && completed.alternatives.length > 0
+              ? JSON.stringify(completed.alternatives)
+              : null;
           await client.query(
             `UPDATE aa_workflow_item_status
              SET status = $1::varchar,
@@ -255,16 +266,17 @@ export async function POST(request) {
                  extracted_value = $2,
                  confidence_score = $3,
                  source_transcript = $4,
-                 alternatives = NULL,
+                 alternatives = $7::jsonb,
                  updated_at = NOW()
              WHERE session_id = $5 AND item_id = $6`,
             [
               'suggested',
-              completed.extracted_value || null,
+              completed.extracted_value ?? null,
               completed.confidence,
               transcript,
               workflowSession.id,
               completed.item_id,
+              suggestedAlternatives,
             ]
           );
 
@@ -274,6 +286,7 @@ export async function POST(request) {
             confidence: completed.confidence,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
+            alternatives: Array.isArray(completed.alternatives) ? completed.alternatives : [],
             completed_by: "ai",
             low_confidence: completed.confidence < confidenceThreshold,
             confidence_threshold: confidenceThreshold,

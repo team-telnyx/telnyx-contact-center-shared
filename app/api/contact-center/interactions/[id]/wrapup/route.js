@@ -7,6 +7,7 @@ import {
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { interactionAgentMatches } from "@/lib/contact-center/interaction-agent-access.mjs";
 import { handleAgentCallLifecycleStatus } from "@/lib/contact-center/agent-call-lifecycle-status";
 
 async function getUsernameForUserId(userId) {
@@ -45,17 +46,15 @@ export async function POST(request, { params }) {
       );
     }
 
-    if (interaction.agent_username) {
-      const username = await getUsernameForUserId(user.id);
-      if (username && interaction.agent_username !== username) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Unauthorized - interaction belongs to different agent",
-          },
-          { status: 403 },
-        );
-      }
+    const currentUsername = await getUsernameForUserId(user.id);
+    if (!interactionAgentMatches(interaction, [user.username, currentUsername])) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Unauthorized - interaction belongs to different agent",
+        },
+        { status: 403 },
+      );
     }
 
     const body = await request.json();

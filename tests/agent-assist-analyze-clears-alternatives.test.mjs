@@ -4,16 +4,17 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("FDE-535: live analyze route clears alternatives on both completed and suggested UPDATEs", async () => {
+test("live analyze route: completed branch clears alternatives; suggested branch persists them", async () => {
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
-  // The live analyzer re-writes value/confidence/source but does not produce
-  // alternatives, so it must clear the column to avoid stale chips under a new
-  // value. Expect the clear in BOTH the completed and suggested UPDATEs.
-  const clears = route.match(/alternatives = NULL/g) || [];
-  assert.ok(
-    clears.length >= 2,
-    `expected 'alternatives = NULL' in both UPDATE statements, found ${clears.length}`
-  );
+  // Contract after live-alternatives: a COMPLETED (confident) slot has no chips,
+  // so it still clears (alternatives = NULL). A SUGGESTED (low-confidence) slot
+  // now PERSISTS the analyzer's alternatives (= $7::jsonb; null when empty, which
+  // also clears any stale value) so the agent-desktop chips can render.
+  assert.match(route, /alternatives = NULL/, "completed branch still clears alternatives");
+  assert.match(route, /alternatives = \$7::jsonb/, "suggested branch persists alternatives");
+  // The old behavior (both branches hardcoded NULL) must be gone.
+  const nullClears = route.match(/alternatives = NULL/g) || [];
+  assert.equal(nullClears.length, 1, "only the completed branch hardcodes NULL now");
 });
 
 test("FDE-535: workflow-store analyzeTranscript clears stale alternatives on merge", async () => {

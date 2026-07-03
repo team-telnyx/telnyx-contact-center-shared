@@ -75,7 +75,10 @@ test("does not suggest a confirmation item when prerequisite slots in that stage
   assert.equal(result.blockedItem.id, "confirm-patient");
 });
 
-test("prioritizes a suggested low-confidence slot in the active stage for agent confirmation", () => {
+test("advances past a suggested low-confidence slot to the next uncollected slot (does not pin on confirmation)", () => {
+  // Updated contract (#1117): a captured low-confidence slot no longer pins the
+  // suggested response for confirmation. It advances to the next empty slot;
+  // confirmation is deferred until every slot has a value (see next test).
   const result = resolveSuggestedResponseTarget({
     stages,
     itemStatuses: {
@@ -92,10 +95,39 @@ test("prioritizes a suggested low-confidence slot in the active stage for agent 
   });
 
   assert.equal(result.stage.id, "stage-3");
+  assert.equal(result.item.id, "dob");
+  assert.equal(result.mode, "collect_missing_slot");
+});
+
+test("confirms a suggested low-confidence slot once every slot has a value, before finalizing", () => {
+  // All slots across the workflow are captured; patient-name is still a
+  // low-confidence suggestion and the only remaining open item is the
+  // confirm-patient action → confirm the slot before that action.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "123456" },
+      "confirm-account": { status: "completed" },
+      "patient-name": {
+        status: "suggested",
+        extracted_value: "Jane Doe",
+        confidence_score: 0.72,
+        confidence_threshold: 0.95,
+      },
+      dob: { status: "completed", extracted_value: "1988-03-04" },
+      symptoms: { status: "completed", extracted_value: "high fever" },
+    },
+    slotsFilled: { account_number: "123456", date_of_birth: "1988-03-04", symptoms: "high fever" },
+    transcriptions: finalConversation("The patient information is Jane Doe, she has a high fever."),
+  });
+
   assert.equal(result.item.id, "patient-name");
   assert.equal(result.itemStatus.extracted_value, "Jane Doe");
   assert.equal(result.mode, "confirm_slot");
-  assert.equal(result.reason, "slot_confirmation_required");
+  assert.equal(result.reason, "slot_confirmation_pending");
 });
 
 test("tries another matched stage before falling back to the first open workflow item", () => {

@@ -89,164 +89,76 @@ yarn dev
 
 The application will be available at `http://localhost:3000`.
 
-## Production deployment architecture
+## Production deployment with Docker
 
-Production deployments no longer build the application directly on the EC2 host with `docker compose up --build` or the legacy `docker/deploy.sh` workflow. The current production model is:
+The project includes a complete Docker setup for running the Contact Center and PostgreSQL in containers on a single machine.
 
-```text
-GitHub repository ref
-  -> GitHub Actions workflow builds the production Docker image
-  -> workflow saves the image as image.tar.zst, checksum, and manifest.json
-  -> workflow uploads the immutable artifact to S3
-  -> FDE CLI or an SSM deployment command downloads the artifact on EC2
-  -> EC2 verifies checksum, docker-loads the image, recreates the app container
-  -> app connects to environment-specific PostgreSQL in Amazon RDS
+### Prerequisites
+
+- Docker Engine and Docker Compose v2
+- A Telnyx account with an API key
+- A Telnyx Call Control Application with its webhook URL pointing to your server
+
+### Quick deploy
+
+```bash
+# 1. Configure environment
+cp docker/production/sample.env docker/production/.env
+# Edit .env with your Telnyx API key, database password, and secrets
+
+# 2. Deploy
+./docker/deploy.sh production
+
+# 3. Verify
+curl http://localhost:3000/api/health
 ```
 
-The important rule is that the Docker image is built once and then promoted. Runtime differences such as database host, secrets, Telnyx credentials, public URL, and health-check settings live in the environment file on each EC2 node, not in a rebuilt image.
+The deployment script handles building the Docker image, starting PostgreSQL and the app container, running database schema initialization, and health checks. Database data is preserved between deploys; use `--fresh` to recreate the database from scratch.
 
-### Source repositories and deployment tooling
+### What the Docker setup includes
 
-- Application repo: `team-telnyx/telnyx-contact-center`
-- Artifact workflow: `.github/workflows/build-s3-image-artifact.yml`
-- Dockerfile used by the workflow: `docker/production/Dockerfile`
-- Shared artifact bucket: `s3://fde-app-artifacts-260957529682`
-- Contact Center artifact prefix: `contact-center`
-- Operator tool: [FDE Infra CLI](https://github.com/team-telnyx/fde-infra-cli)
-- Detailed artifact guide: [`docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md`](docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md)
+- **PostgreSQL 17** — database container with persistent volume
+- **Next.js application** — production build served by the app container
+- **Automatic schema initialization** — database tables are created on startup via `yarn ensure:pg`
+- **Health checks** — both PostgreSQL and the application have Docker health checks
 
-Use the FDE CLI for normal automated deployments. It discovers environments from EC2 `Fde*` tags, lists S3 artifacts, triggers the GitHub Actions artifact workflow when requested, deploys existing artifacts through AWS SSM, performs health checks, and supports rollback by redeploying a previous artifact.
+See [`docker/README.md`](docker/README.md) for detailed configuration, manual deployment, logs, and troubleshooting.
 
-### Runtime database model: PostgreSQL in Amazon RDS
+### Environment variables
 
-Production environments use PostgreSQL in RDS rather than a PostgreSQL container managed by this repo. The application still runs schema initialization with `yarn ensure:pg` during container startup, but the database lifecycle belongs to RDS.
-
-Required runtime environment variables on each node include:
-
-```env
-POSTGRES_HOST=<rds-endpoint>
-POSTGRES_PORT=5432
-POSTGRES_DB=<database-name>
-POSTGRES_USER=<database-user>
-POSTGRES_PASSWORD=<database-password>
-
-# TLS for RDS. PGSSLMODE=require is the normal FDE setting.
-PGSSLMODE=require
-# Optional stricter modes if root certs are provisioned:
-# PGSSLMODE=verify-ca
-# PGSSLMODE=verify-full
-# PGSSLROOTCERT=/path/to/rds-ca.pem
-```
-
-Do not use `POSTGRES_HOST=postgres` in production; that value only applies to local Docker Compose setups with a database service. Do not create or destroy RDS data as part of application deployment. Backups, Multi-AZ, parameter groups, and destructive database operations must be handled explicitly at the infrastructure/RDS layer.
-
-### Runtime application configuration
-
-Each EC2 node has an env file identified by the `FdeEnvFile` tag, for example `/opt/cc-prod/app.env` or `/opt/cc-ha/app.env`. Keep secrets and environment-specific values there:
+Copy `docker/production/sample.env` to `docker/production/.env` and fill in the required values:
 
 ```env
 NODE_ENV=production
-NEXTAUTH_URL=https://<environment-url>
-APP_BASE_URL=https://<environment-url>
-NEXT_PUBLIC_BASE_URL=https://<environment-url>
-ALLOWED_ORIGINS=https://<environment-url>
+NEXTAUTH_URL=https://<your-server-url>
+APP_BASE_URL=https://<your-server-url>
+NEXT_PUBLIC_BASE_URL=https://<your-server-url>
+ALLOWED_ORIGINS=https://<your-server-url>
 NEXTAUTH_SECRET=<long-random-secret>
 
-TELNYX_API_KEY=<telnyx-api-key>
-TELNYX_WEBHOOK_SECRET=<webhook-secret>
-TELNYX_CALL_CONTROL_ID=<call-control-connection-id>
+# Telnyx credentials
+TELNYX_API_KEY=<your-telnyx-api-key>
+TELNYX_WEBHOOK_SECRET=<your-webhook-secret>
+TELNYX_CALL_CONTROL_ID=<your-call-control-application-id>
 
+# Database
+POSTGRES_DB=telnyx_contact_center
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<secure-password>
+
+# Initial admin user
+DEFAULT_OWNER_EMAIL=admin@example.com
+DEFAULT_OWNER_PASSWORD=<change-after-first-login>
 ALLOWED_EMAIL_DOMAINS=example.com
-DEFAULT_OWNER_EMAIL=owner@example.com
-DEFAULT_OWNER_PASSWORD=<initial-password-change-after-login>
 ```
 
-`NEXT_PUBLIC_*` variables are compiled into the browser bundle during the GitHub Actions build. Keep them shared or intentionally configured in repository/environment variables if the same image is promoted across multiple environments. Server-only values can differ per EC2 node via `FdeEnvFile`.
+`NEXT_PUBLIC_*` variables are compiled into the browser bundle at build time. Server-only values can be changed in `.env` without rebuilding the image.
 
-### FDE EC2 tag contract
+### Streaming WebSocket (optional)
 
-FDE CLI discovers deploy targets from EC2 tags. A Contact Center node should have tags like:
+If you use AI streaming, Telnyx STT streaming, or the hardphone bridge, the app starts a streaming WebSocket server on `STREAMING_WS_PORT` (defaults to `PORT + 1`, normally `3001`). Expose this port through your reverse proxy or load balancer and set `WS_BASE_URL` to the public `wss://` URL.
 
-```text
-FdeManagedBy=fde
-FdeRole=app
-FdeApp=contact-center
-FdeDisplayName=Contact Center
-FdeEnv=cc-prod                  # or cc-ha for HA
-FdeDeployMode=single-node        # or ha
-FdeGithubOwner=team-telnyx
-FdeGithubRepo=telnyx-contact-center
-FdeGithubWorkflow=build-s3-image-artifact.yml
-FdeArtifactBucket=fde-app-artifacts-260957529682
-FdeArtifactPrefix=contact-center
-FdeImageName=telnyx-contact-center
-FdeContainer=telnyx-contact-center-app
-FdeEnvFile=/opt/cc-prod/app.env
-FdeAppPort=3000
-FdeWsPort=3001                  # optional, when WebSocket sidecar/port is used
-FdeHealthPath=/api/health
-FdePublicUrl=https://<environment-url>
-```
-
-See the [FDE Infra CLI README](https://github.com/team-telnyx/fde-infra-cli#fde-ec2-app-tag-standard) for the full tag standard, required IAM permissions, and onboarding checklist.
-
-### Build a new immutable artifact
-
-Preferred path: use FDE CLI and select `Application artifacts` → `Build new artifact`.
-
-Equivalent GitHub CLI command, if you are intentionally triggering a build:
-
-```bash
-gh workflow run build-s3-image-artifact.yml \
-  --repo team-telnyx/telnyx-contact-center \
-  -f ref=master \
-  -f artifact_bucket=fde-app-artifacts-260957529682 \
-  -f artifact_prefix=contact-center \
-  -f aws_region=us-east-2 \
-  -f image_name=telnyx-contact-center
-```
-
-The workflow creates an immutable prefix such as:
-
-```text
-s3://fde-app-artifacts-260957529682/contact-center/<short-sha>/
-├── image.tar.zst
-├── image.tar.zst.sha256
-└── manifest.json
-```
-
-Do not manually create replacement artifacts from a workstation or EC2 host unless an operator explicitly authorizes bypassing the pipeline.
-
-### Deploy or roll back an existing artifact
-
-Preferred path: use FDE CLI and select `Application artifacts` → `Deploy existing artifact / rollback`.
-
-The CLI will:
-
-1. discover the selected environment and nodes from EC2 tags,
-2. show available S3 artifact prefixes and manifests,
-3. send an AWS SSM command to the target node(s),
-4. download and checksum-verify the artifact,
-5. load the Docker image,
-6. recreate only the application container with the node's existing env file,
-7. check `http://127.0.0.1:<FdeAppPort><FdeHealthPath>`, and
-8. for HA environments, deploy nodes sequentially.
-
-Rollback is the same operation using a previously successful S3 artifact prefix. The deployment path is intentionally artifact-based; do not run `docker compose up --build` on production EC2 to roll forward or roll back.
-
-### Local development and local Docker Compose
-
-Local development is unchanged:
-
-```bash
-yarn install
-cp sample.env .env.local
-# edit local PostgreSQL/Telnyx/auth settings
-yarn ensure:pg
-yarn dev
-```
-
-The `docker/` directory remains useful for local experiments and historical reference, but production deployment is governed by GitHub Actions artifacts, S3, RDS, EC2 tags, and FDE CLI.
+For high-availability and load-balanced deployments, see [`docker/README.md`](docker/README.md).
 
 ## Database Schema
 
@@ -347,8 +259,9 @@ telnyx-contact-center/
 │   ├── production/           # Production Docker config
 │   ├── deploy.sh             # Deployment script
 │   └── install-docker.sh     # Docker installation script
-├── scripts/                  # Utility scripts
-│   └── ensure-pg.mjs         # Database schema initialization
+├── scripts/                  # Runtime scripts
+│   ├── ensure-pg.mjs         # Database schema initialization (called by Dockerfile)
+│   └── start-next-with-pino.mjs # Production startup wrapper (yarn start)
 └── hooks/                    # React hooks
     └── use-mobile.js         # Mobile detection hook
 ```
@@ -422,7 +335,7 @@ The bottom menu provides access to:
 - Real-time call state synchronization
 - Queue metrics and agent status tracking
 
-For detailed architecture documentation, see `CLAUDE.md` and files in the `plan/` directory.
+For detailed architecture documentation, see the `docs/` directory.
 
 ## License
 

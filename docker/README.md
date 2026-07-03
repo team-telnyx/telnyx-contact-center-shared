@@ -1,265 +1,184 @@
-> **Production deployment note:** This Docker Compose documentation is retained for local experiments and historical reference. Current production deployments use GitHub Actions to build immutable Docker image artifacts, store them in S3, and deploy them with [FDE Infra CLI](https://github.com/team-telnyx/fde-infra-cli) to EC2 nodes that use PostgreSQL in RDS. Start with the root [`README.md`](../README.md) and [`docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md`](../docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md) before using any legacy Docker scripts.
+# Telnyx Contact Center — Docker Deployment
 
-# Telnyx Contact Center - Docker Deployment
+This directory contains everything needed to deploy the Telnyx Contact Center on a single machine using Docker containers.
 
-This directory contains Docker configurations for deploying the Telnyx Contact Center application.
+## Architecture
 
-## 🏗️ Architecture
+The Docker setup runs two containers:
 
-The application uses a multi-container setup with:
+- **PostgreSQL 17** — database with a persistent volume
+- **Next.js application** — production build of the Contact Center
 
-- **PostgreSQL 17 Database**: Stores all application data
-- **Next.js Application**: The main web application
-- **Automatic Schema Initialization**: Database schema is created automatically on startup
+Both containers are defined in `docker/production/compose.yaml` and managed by the `deploy.sh` script.
 
-## 📁 Directory Structure
-
-```
-docker/
-├── production/          # Production environment
-│   ├── compose.yaml    # Docker Compose configuration
-│   ├── Dockerfile      # Application Docker image
-│   ├── init-schema.sql # PostgreSQL initialization script
-│   └── .env.example   # Environment variables template
-├── deploy.sh          # Deployment script
-└── README.md          # This file
-```
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
-- Docker and Docker Compose V2 installed
-- Environment variables configured
+- Docker Engine (20+) and Docker Compose V2
+- A Telnyx account with:
+  - An API key
+  - A Call Control Application
+  - The webhook URL configured to point to your server
 
-### 1. Configure Environment Variables
-
-Copy the example environment file:
+### 1. Configure environment
 
 ```bash
-cp docker/production/.env.example docker/production/.env
+cp docker/production/sample.env docker/production/.env
 ```
 
-Update the `.env` file with your actual values:
+Edit `docker/production/.env` with your actual values:
 
-- `POSTGRES_PASSWORD`: A secure database password
-- `TELNYX_API_KEY`: Your Telnyx API key
-- `NEXTAUTH_SECRET`: A secure random string (minimum 32 characters)
+| Variable | Description |
+|---|---|
+| `POSTGRES_PASSWORD` | Secure password for the database |
+| `TELNYX_API_KEY` | Your Telnyx API key |
+| `TELNYX_CALL_CONTROL_ID` | Your Telnyx Call Control Application ID |
+| `TELNYX_WEBHOOK_SECRET` | Telnyx webhook verification secret |
+| `NEXTAUTH_SECRET` | Random string (min 32 chars) for session signing |
+| `NEXTAUTH_URL` | Your public URL (e.g. `https://cc.example.com`) |
+| `DEFAULT_OWNER_EMAIL` | Initial admin user email |
+| `DEFAULT_OWNER_PASSWORD` | Initial admin password (change after first login) |
+| `ALLOWED_EMAIL_DOMAINS` | Comma-separated allowed email domains for registration |
 
-### 2. Deploy Using the Script
+### 2. Deploy
 
 ```bash
-# Make deploy script executable
 chmod +x docker/deploy.sh
-
-# Deploy to production
 ./docker/deploy.sh production
 ```
 
-### 3. Manual Deployment
+The script will:
+1. Build the Docker image from `docker/production/Dockerfile`
+2. Start PostgreSQL and the app container
+3. Wait for health checks
+4. Run database schema initialization automatically on first start
 
-If you prefer manual deployment:
+### 3. Verify
 
 ```bash
-# Navigate to the environment directory
+# Application health
+curl http://localhost:3000/api/health
+
+# Container status
+docker compose -f docker/production/compose.yaml ps
+```
+
+## Deployment Modes
+
+### Normal deploy (preserves database)
+
+```bash
+./docker/deploy.sh production
+```
+
+Stops and rebuilds only the app container. Database data is preserved.
+
+### Fresh deploy (recreates database)
+
+```bash
+./docker/deploy.sh production --fresh
+```
+
+Removes all containers and volumes, recreating the database from scratch. **This deletes all data.**
+
+## Manual Deployment
+
+If you prefer to run Docker Compose directly:
+
+```bash
 cd docker/production
 
-# Start services
+# Build and start
 docker compose up --build -d
 
 # Check logs
 docker compose logs -f
+
+# Stop
+docker compose down
 ```
 
-## 🔧 Environment Configuration
+## Database Schema & Seeding
 
-### Production
+The application automatically creates all database tables on startup via `yarn ensure:pg`. The schema includes:
 
-- **Port**: 3000 (app), 5432 (database)
-- **Database**: `telnyx_contact_center`
-- **Features**: Production build, health checks, restart policies
+- **Core**: `users`, `domains`, `app_settings`, `skills`
+- **Contact Center**: `cc_queues`, `cc_interactions`, `cc_agent_state`, `cc_queue_state`
+- **Voice Flows**: `voice_flows`, `voice_flow_phone_numbers`, `voice_flow_executions`
+- **Authentication**: `auth_users`, `auth_accounts`, `auth_sessions` (NextAuth.js)
 
-## 🗄️ Database Schema & Seeding
+Seeding is **idempotent** — running it multiple times will not create duplicates.
 
-The application automatically creates the following database schema on startup:
+## Health Checks
 
-- **Core Tables**: users, domains, app_settings
-- **Contact Center**: cc_queues, cc_queue_user_assignments, cc_interactions, cc_agent_state
-- **Authentication**: NextAuth tables (auth_users, auth_accounts, auth_sessions)
-- **Voice Flows**: voice_flows, voice_flow_phone_numbers, voice_flow_executions
+Both containers have Docker health checks configured:
 
-### 🌱 Database Seeding
+| Service | Check | Interval |
+|---|---|---|
+| PostgreSQL | `pg_isready` | 10s |
+| Application | `GET /api/health` | 30s |
 
-The deployment process automatically seeds the database with:
-
-- **Default User Statuses** - Available, Busy, Away, Offline, Break
-- **Default App Settings** - Theme colors and branding from globals.css
-
-The seeding is **idempotent** - it won't create duplicate records when run multiple times.
-
-## 🔍 Health Checks
-
-The application includes health check endpoints:
-
-- **Application**: `http://localhost:3000/api/health`
-- **Database**: Automatic PostgreSQL health checks
-- **Container**: Docker health checks for both services
-
-## 📊 Monitoring
-
-### View Logs
+## Logs
 
 ```bash
 # All services
-docker compose logs -f
+docker compose -f docker/production/compose.yaml logs -f
 
-# Specific service
-docker compose logs -f app
-docker compose logs -f postgres
+# App only
+docker compose -f docker/production/compose.yaml logs -f app
+
+# PostgreSQL only
+docker compose -f docker/production/compose.yaml logs -f postgres
 ```
 
-### Check Status
+## Streaming WebSocket (optional)
+
+The app starts a streaming WebSocket server on `STREAMING_WS_PORT` (defaults to `PORT + 1`, normally `3001`). This is needed for:
+
+- AI assistant streaming
+- Telnyx STT (Speech-to-Text) streaming
+- Hardphone bridge
+
+Expose port `3001` through your reverse proxy and set `WS_BASE_URL` to the public `wss://` URL in `.env`.
+
+## High Availability
+
+For high-availability deployments with multiple application nodes behind a load balancer:
+
+1. Use a managed PostgreSQL instance (e.g. AWS RDS Multi-AZ, Google Cloud SQL HA)
+2. Run the app container on at least two nodes in different availability zones
+3. Terminate TLS at the load balancer
+4. Use `/api/health` as the health check endpoint
+5. Increase the load balancer idle timeout to ~300 seconds for SSE and WebSocket connections
+6. Ensure all `NEXT_PUBLIC_*` variables are consistent across nodes (they are compiled into the browser bundle at build time)
+7. Store recordings, uploads, and media in S3-compatible object storage shared across nodes
+
+The app is designed to be stateless or near-stateless — in-memory state is periodically synced to PostgreSQL, so individual nodes can be replaced without data loss.
+
+## Troubleshooting
+
+### Permission denied: Cannot connect to Docker daemon
 
 ```bash
-# Service status
-docker compose ps
-
-# Health check
-curl http://localhost:3000/api/health
+sudo usermod -aG docker $USER
+# Log out and log back in
 ```
 
-### Database Access
+### PostgreSQL is not responding
 
 ```bash
-# Connect to database
-docker compose exec postgres psql -U postgres -d telnyx_contact_center
-
-# Run database commands
-docker compose exec postgres psql -U postgres -d telnyx_contact_center -c "SELECT * FROM users LIMIT 5;"
+docker compose -f docker/production/compose.yaml logs postgres
+docker compose -f docker/production/compose.yaml restart postgres
 ```
 
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-1. **Database Connection Failed**
-
-   ```bash
-   # Check if PostgreSQL is running
-   docker compose ps postgres
-
-   # Check PostgreSQL logs
-   docker compose logs postgres
-   ```
-
-2. **Application Won't Start**
-
-   ```bash
-   # Check application logs
-   docker compose logs app
-
-   # Verify environment variables
-   docker compose exec app env | grep POSTGRES
-   ```
-
-3. **Schema Initialization Failed**
-
-   ```bash
-   # Check if schema initialization ran
-   docker compose logs app | grep "Schema created"
-
-   # Manually run schema initialization
-   docker compose exec app node scripts/ensure-pg.mjs
-   ```
-
-### Reset Everything
+### App container fails to start
 
 ```bash
-# Stop and remove all containers, networks, and volumes
-docker compose down -v --remove-orphans
-
-# Remove images
-docker compose down --rmi all
-
-# Start fresh
-docker compose up --build -d
+docker compose -f docker/production/compose.yaml logs app
 ```
 
-## 🔒 Security Considerations
-
-### Production Deployment
-
-1. **Change Default Passwords**: Update all default passwords in production
-2. **Use Secrets Management**: Consider using Docker secrets or external secret management
-3. **Network Security**: Configure proper firewall rules
-4. **SSL/TLS**: Use reverse proxy with SSL termination (nginx recommended)
-5. **Database Security**: Use strong passwords and consider encrypted connections
-
-### Environment Variables
-
-Never commit `.env` files to version control. Use environment-specific configurations:
-
-```bash
-# Example production .env
-POSTGRES_PASSWORD=your_very_secure_password_here
-NEXTAUTH_SECRET=your_very_secure_secret_here_min_32_chars
-TELNYX_API_KEY=your_actual_telnyx_key
-```
-
-## 🚀 AWS EC2 Deployment
-
-For AWS EC2 deployment:
-
-1. **Launch EC2 Instance**: Use Ubuntu 22.04 LTS or later
-2. **Install Docker**: Follow the commands in `UBUNTU_DOCKER_SETUP.md`
-3. **Configure Security Groups**: Open ports 22 (SSH), 80 (HTTP), 443 (HTTPS), 3000 (App)
-4. **Deploy Application**: Use the production configuration
-5. **Set up Reverse Proxy**: Use Nginx for SSL termination and routing
-6. **Configure Domain**: Point your domain to the EC2 instance
-
-### Example AWS Setup
-
-```bash
-# On EC2 instance
-# 1. Update system and install Docker (see UBUNTU_DOCKER_SETUP.md)
-
-# 2. Clone your repository
-git clone <your-repo-url>
-cd telnyx-contact-center
-
-# 3. Configure environment
-cp docker/production/.env.example docker/production/.env
-# Edit .env with your values
-
-# 4. Deploy
-chmod +x docker/deploy.sh
-./docker/deploy.sh production
-```
-
-## 📝 Maintenance
-
-### Regular Tasks
-
-1. **Update Dependencies**: Regularly update Docker images and application dependencies
-2. **Backup Database**: Set up regular database backups
-3. **Monitor Logs**: Check logs for errors and performance issues
-4. **Security Updates**: Keep the system updated with security patches
-
-### Backup Database
-
-```bash
-# Create backup
-docker compose exec postgres pg_dump -U postgres telnyx_contact_center > backup.sql
-
-# Restore backup
-docker compose exec -T postgres psql -U postgres telnyx_contact_center < backup.sql
-```
-
-## 🤝 Support
-
-For issues and questions:
-
-1. Check the logs first: `docker compose logs -f`
-2. Verify environment variables are correct
-3. Ensure all required services are running
-4. Check the health endpoint: `curl http://localhost:3000/api/health`
+Common issues:
+- Missing required environment variables in `.env`
+- PostgreSQL not ready before app starts (health check will retry)
+- Invalid `TELNYX_API_KEY` or `TELNYX_CALL_CONTROL_ID`

@@ -86,3 +86,45 @@ test("appendUniqueSuggestion: distinct target keys producing identical text rend
   assert.equal(result.length, 1);
   assert.equal(result, list);
 });
+
+// --- upsertSuggestionByTarget (Issue 1: "re-appears") ---
+import { upsertSuggestionByTarget, suggestionTargetKey } from "../lib/agent-assist/suggestion-dedup.mjs";
+
+test("suggestionTargetKey keys by itemId + targetMode", () => {
+  assert.equal(suggestionTargetKey({ itemId: "a", targetMode: "confirm_slot" }), "a:confirm_slot");
+  assert.equal(suggestionTargetKey({ itemId: "a" }), "a:default");
+  assert.equal(suggestionTargetKey({}), "none:default");
+});
+
+test("upsert: appends a new target", () => {
+  const list = [{ itemId: "a", targetMode: "confirm_slot", text: "confirm A?" }];
+  const out = upsertSuggestionByTarget(list, { itemId: "b", targetMode: "collect_missing_slot", text: "provide B?" });
+  assert.equal(out.length, 2);
+  assert.notEqual(out, list);
+});
+
+test("upsert: REPLACES same target in place when the value (text) is refined — no re-append", () => {
+  let list = [];
+  list = upsertSuggestionByTarget(list, { itemId: "i1", targetMode: "confirm_slot", text: 'confirm "General Hospital"?' });
+  list = upsertSuggestionByTarget(list, { itemId: "i1", targetMode: "confirm_slot", text: 'confirm "General Hospital in San Francisco"?' });
+  assert.equal(list.filter((s) => s.itemId === "i1").length, 1, "one entry per slot+mode");
+  assert.match(list[0].text, /San Francisco/, "keeps the latest refined value");
+});
+
+test("upsert: identical text for same target is a no-op (same reference)", () => {
+  const list = [{ itemId: "i1", targetMode: "confirm_slot", text: "confirm X?" }];
+  assert.equal(upsertSuggestionByTarget(list, { itemId: "i1", targetMode: "confirm_slot", text: "  confirm   X? " }), list);
+});
+
+test("upsert: same slot, DIFFERENT mode keeps both (collect then confirm)", () => {
+  let list = [];
+  list = upsertSuggestionByTarget(list, { itemId: "i1", targetMode: "collect_missing_slot", text: "provide facility?" });
+  list = upsertSuggestionByTarget(list, { itemId: "i1", targetMode: "confirm_slot", text: 'confirm "GH"?' });
+  assert.equal(list.length, 2);
+});
+
+test("upsert: empty/blank candidate returns same reference", () => {
+  const list = [{ itemId: "i1", targetMode: "confirm_slot", text: "x" }];
+  assert.equal(upsertSuggestionByTarget(list, null), list);
+  assert.equal(upsertSuggestionByTarget(list, { itemId: "i1", targetMode: "confirm_slot", text: "  " }), list);
+});

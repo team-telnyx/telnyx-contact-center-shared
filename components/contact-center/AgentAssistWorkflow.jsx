@@ -54,7 +54,7 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { normalizeLanguageCode as normalizeBaseLanguageCode } from "@/lib/language-code-utils";
 import { resolveSuggestedResponseTarget } from "@/lib/agent-assist/suggestion-target-resolver.mjs";
-import { appendUniqueSuggestion } from "@/lib/agent-assist/suggestion-dedup.mjs";
+import { upsertSuggestionByTarget } from "@/lib/agent-assist/suggestion-dedup.mjs";
 import { findTranscriptIdForUtterance } from "@/lib/agent-assist/slot-utterance-match.mjs";
 
 /**
@@ -1869,6 +1869,37 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     // Only generate for a target key we haven't already generated for. A set
     // (rather than just the previous key) is what prevents duplicate guides when
     // the resolved target oscillates back to a previously-suggested one.
+    //
+    // However, when a low-confidence slot value oscillates (e.g.
+    // "General Hospital" → "General Hospital in San Francisco" → "General
+    // Hospital"), the value component of the key changes on the refinement but
+    // reverts to the original on the last oscillation. The Set would block
+    // regenerating for the reverted key, even though the prior suggestion's
+    // context (the intermediate value) is now stale. Fix: when the same item+mode
+    // was previously generated with a DIFFERENT value, invalidate the old key so
+    // the reverted value triggers a fresh suggestion.
+    const baseKey = [
+      item.id,
+      targetMode || "default",
+      blockedItem?.id || "none",
+      conversationContext?.matchedItemId || "none",
+      conversationContext?.reason || "none",
+    ].join(":");
+    const currentValue = itemStatus?.extracted_value ?? itemStatus?.value ?? "none";
+    // Check if we previously generated for this item+mode with a different value
+    let staleKey = null;
+    for (const existingKey of generatedTargetKeysRef.current) {
+      if (existingKey === targetKey) continue;
+      const existingParts = existingKey.split(":");
+      const existingBase = existingParts.slice(0, 5).join(":");
+      if (existingBase === baseKey && existingParts[5] !== String(currentValue)) {
+        staleKey = existingKey;
+        break;
+      }
+    }
+    if (staleKey) {
+      generatedTargetKeysRef.current.delete(staleKey);
+    }
     if (!generatedTargetKeysRef.current.has(targetKey)) {
       generatedTargetKeysRef.current.add(targetKey);
       
@@ -1890,11 +1921,12 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
         .then((newSuggestion) => {
           if (!newSuggestion) return;
           setSuggestions((prev) => {
-            // appendUniqueSuggestion returns the same reference when the guide is
-            // a duplicate, so identical guidance never renders twice even if two
-            // distinct target keys produce the same text.
-            const updated = appendUniqueSuggestion(prev, newSuggestion);
-            // Notify parent only when a new (non-duplicate) suggestion was added.
+            // Upsert by target (slot + mode): a low-confidence slot whose value is
+            // refined on re-analysis UPDATES its guide in place instead of
+            // appending a second, near-duplicate copy (the "re-appears" bug).
+            // Returns the same reference when nothing changed.
+            const updated = upsertSuggestionByTarget(prev, newSuggestion);
+            // Notify parent only when the list actually changed.
             if (updated !== prev && onSuggestionsChange) {
               onSuggestionsChange(updated);
             }
