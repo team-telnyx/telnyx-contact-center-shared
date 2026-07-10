@@ -140,6 +140,15 @@ describe('envgen.mjs', () => {
     assert.strictEqual(rendered, 'FOO="value with spaces"');
   });
 
+  it('escapes backslashes before quotes so quoted values round-trip correctly', () => {
+    // Regression: a naive implementation that only escapes `"` (not `\`)
+    // produces a malformed .env line for values containing both — e.g. a
+    // Windows-style path or a value with a trailing backslash before a quote.
+    const sampleEnvText = 'FOO=';
+    const rendered = renderEnvFile(sampleEnvText, { FOO: 'C:\\path with spaces\\"quoted"' });
+    assert.strictEqual(rendered, 'FOO="C:\\\\path with spaces\\\\\\"quoted\\""');
+  });
+
   it('leaves Telnyx resource-id fields blank — those are filled by telnyx-bootstrap, not envgen', () => {
     const sampleEnvText = [
       'TELNYX_CALL_CONTROL_ID=',

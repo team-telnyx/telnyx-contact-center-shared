@@ -260,7 +260,12 @@ export function buildEnvValues({ sampleKeys, answers, target = 'local', postgres
 function serializeValue(value) {
   const str = String(value ?? '');
   if (str === '') return '';
-  if (/[\s#"']/.test(str)) return `"${str.replace(/"/g, '\\"')}"`;
+  if (/[\s#\"'\\]/.test(str)) {
+    // Escape backslashes first, then quotes — reversing the order would
+    // double-escape the backslashes introduced by the quote replacement.
+    const escaped = str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `"${escaped}"`;
+  }
   return str;
 }
 
