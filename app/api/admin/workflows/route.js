@@ -10,6 +10,20 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+function normalizeWorkflowDataActionButtons(buttons) {
+  if (!Array.isArray(buttons)) return [];
+  return buttons
+    .map((button, index) => ({
+      id: String(button?.id || `data-action-${index + 1}`).trim(),
+      label: String(button?.label || "Data action").trim(),
+      data_action_flow_id: String(button?.data_action_flow_id || button?.dataActionFlowId || button?.flow_id || button?.flowId || "").trim(),
+      data_action_label: String(button?.data_action_label || button?.dataActionLabel || "").trim(),
+      variant: String(button?.variant || "secondary").trim(),
+      one_click: Boolean(button?.one_click || button?.oneClick),
+    }))
+    .filter((button) => button.id && button.label && button.data_action_flow_id);
+}
+
 // GET /api/admin/workflows - List all workflows
 export async function GET(request) {
   try {
@@ -122,7 +136,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active = true, stages } = body;
+    const { name, description, category, is_active = true, stages, data_action_buttons } = body;
 
     if (!name?.trim()) {
       return NextResponse.json(
@@ -137,10 +151,10 @@ export async function POST(request) {
 
       // Create workflow
       const { rows: [workflow] } = await client.query(
-        `INSERT INTO aa_workflows (name, description, category, is_active, created_by)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO aa_workflows (name, description, category, is_active, created_by, data_action_buttons)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
-        [name.trim(), description || null, category || null, is_active, session.user.id]
+        [name.trim(), description || null, category || null, is_active, session.user.id, JSON.stringify(normalizeWorkflowDataActionButtons(data_action_buttons))]
       );
 
       // If stages are provided, create them

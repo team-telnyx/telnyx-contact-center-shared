@@ -281,6 +281,7 @@ async function getWorkflowSessionState(pool, sessionId) {
     `SELECT s.*, 
             w.name as workflow_name, 
             w.category as workflow_category,
+            w.data_action_buttons,
             i.agent_username,
             u.first_name as agent_first_name,
             u.last_name as agent_last_name

@@ -29,6 +29,14 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
   IconArrowLeft,
   IconDeviceFloppy,
   IconGitBranch,
@@ -76,6 +84,25 @@ const WORKFLOW_CATEGORIES = [
   "Other",
 ];
 
+function flowNodes(flow = {}) {
+  if (Array.isArray(flow.nodes)) return flow.nodes;
+  if (typeof flow.nodes === "string") {
+    try { return JSON.parse(flow.nodes); } catch { return []; }
+  }
+  return [];
+}
+
+function isFormSubmitFlow(flow = {}) {
+  const textFields = [flow.initiator, flow.trigger, flow.trigger_type, flow.triggerType, flow.metadata?.initiator, flow.metadata?.trigger, flow.metadata?.trigger_type, flow.metadata?.triggerType]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase().replace(/[\s-]+/g, "_"));
+  return textFields.includes("form_submit") || flowNodes(flow).some((node) => node?.data?.nodeType === "form_submit" || node?.type === "form_submit");
+}
+
+function dataActionTitle(flow = {}) {
+  return flow.name || flow.display_name || flow.displayName || "Untitled data action";
+}
+
 export default function WorkflowEditorPage() {
   const router = useRouter();
   const params = useParams();
@@ -98,7 +125,10 @@ export default function WorkflowEditorPage() {
     is_active: false,
     llm_model: "openai/gpt-4o",
     llm_confidence_threshold: 0.95,
+    data_action_buttons: [],
   });
+  const [dataActions, setDataActions] = useState([]);
+  const [dataActionsLoading, setDataActionsLoading] = useState(false);
   
   // LLM models
   const [llmModels, setLlmModels] = useState([]);
@@ -253,6 +283,7 @@ export default function WorkflowEditorPage() {
         is_active: data.workflow.is_active,
         llm_model: data.workflow.llm_model || "openai/gpt-4o",
         llm_confidence_threshold: data.workflow.llm_confidence_threshold ?? 0.95,
+        data_action_buttons: Array.isArray(data.workflow.data_action_buttons) ? data.workflow.data_action_buttons : [],
       });
       const workflowStages = data.workflow.stages || data.stages || [];
       setStages(workflowStages);
@@ -272,6 +303,48 @@ export default function WorkflowEditorPage() {
       setLoading(false);
     }
   }, [workflowId, selectedStageId, router]);
+
+  async function loadDataActions() {
+    setDataActionsLoading(true);
+    try {
+      const res = await fetch("/api/voice/flows?pageSize=100", { cache: "no-store" });
+      const data = await res.json();
+      if (data.ok) setDataActions((data.items || []).filter(isFormSubmitFlow));
+    } catch {
+      setDataActions([]);
+    } finally {
+      setDataActionsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (editingWorkflow && !dataActions.length) loadDataActions().catch(() => {});
+  }, [editingWorkflow, dataActions.length]);
+
+  function updateDataActionButton(index, patch) {
+    setWorkflowForm((current) => {
+      const nextButtons = [...(current.data_action_buttons || [])];
+      nextButtons[index] = { ...nextButtons[index], ...patch };
+      return { ...current, data_action_buttons: nextButtons };
+    });
+  }
+
+  function addDataActionButton() {
+    setWorkflowForm((current) => ({
+      ...current,
+      data_action_buttons: [
+        ...(current.data_action_buttons || []),
+        { id: `data-action-${Date.now()}`, label: "Data action", data_action_flow_id: "", data_action_label: "", variant: "secondary", one_click: false },
+      ],
+    }));
+  }
+
+  function removeDataActionButton(index) {
+    setWorkflowForm((current) => ({
+      ...current,
+      data_action_buttons: (current.data_action_buttons || []).filter((_, idx) => idx !== index),
+    }));
+  }
 
   useEffect(() => {
     loadWorkflow();
@@ -1203,16 +1276,24 @@ export default function WorkflowEditorPage() {
         </div>
       </div>
 
-      {/* Edit Workflow Dialog */}
-      <Dialog open={editingWorkflow} onOpenChange={setEditingWorkflow}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Workflow</DialogTitle>
-            <DialogDescription>
+      {/* Edit Workflow Sheet */}
+      <Sheet open={editingWorkflow} onOpenChange={setEditingWorkflow}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
+        >
+          <SheetHeader className="px-6 py-4 border-b">
+            <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
+              <IconEdit className="size-5" />
+              Edit Workflow
+            </SheetTitle>
+            <SheetDescription>
               Update the workflow name, description, and settings.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto">
+            <Card className="mx-5 my-4">
+              <CardContent className="p-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Name</Label>
               <Input
@@ -1306,6 +1387,58 @@ export default function WorkflowEditorPage() {
                 Default: 0.95. Auto-filled LLM slots below this threshold stay red until the agent confirms or edits them.
               </p>
             </div>
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <Label>Data Action Buttons</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Optional Form Submit call flows shown on the agent desktop workflow footer.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addDataActionButton}>
+                  <IconPlus className="size-4 mr-1" />
+                  Add Button
+                </Button>
+              </div>
+              {dataActionsLoading ? <p className="text-xs text-muted-foreground">Loading Form Submit flows...</p> : null}
+              {(workflowForm.data_action_buttons || []).map((button, index) => (
+                <div key={button.id || index} className="space-y-3 rounded-md border bg-muted/20 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Input
+                      value={button.label || ""}
+                      onChange={(e) => updateDataActionButton(index, { label: e.target.value })}
+                      placeholder="Button label"
+                    />
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeDataActionButton(index)}>
+                      <IconTrash className="size-4" />
+                    </Button>
+                  </div>
+                  <Select value={button.data_action_flow_id || "none"} onValueChange={(value) => {
+                    if (value === "none") updateDataActionButton(index, { data_action_flow_id: "", data_action_label: "" });
+                    else {
+                      const action = dataActions.find((item) => String(item.id) === String(value));
+                      updateDataActionButton(index, { data_action_flow_id: value, data_action_label: action ? dataActionTitle(action) : "" });
+                    }
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Select Form Submit flow" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No data action</SelectItem>
+                      {dataActions.map((action) => <SelectItem key={action.id} value={String(action.id)}>{dataActionTitle(action)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>One-click</Label>
+                      <p className="text-xs text-muted-foreground">Disable this button after a successful data action during the same call.</p>
+                    </div>
+                    <Switch checked={button.one_click === true} onCheckedChange={(checked) => updateDataActionButton(index, { one_click: checked })} />
+                  </div>
+                </div>
+              ))}
+              {!dataActionsLoading && !(workflowForm.data_action_buttons || []).length ? (
+                <p className="text-xs text-muted-foreground">No workflow data action buttons configured.</p>
+              ) : null}
+            </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="edit-active">Active</Label>
               <Switch
@@ -1316,8 +1449,10 @@ export default function WorkflowEditorPage() {
                 }
               />
             </div>
+            </CardContent>
+            </Card>
           </div>
-          <div className="flex justify-end gap-2 pt-4">
+          <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => setEditingWorkflow(false)}
@@ -1338,9 +1473,9 @@ export default function WorkflowEditorPage() {
                 </>
               )}
             </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {/* New Stage Dialog */}
       <Dialog open={showNewStageDialog} onOpenChange={setShowNewStageDialog}>

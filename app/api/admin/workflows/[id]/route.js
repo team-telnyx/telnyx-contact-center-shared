@@ -12,6 +12,30 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { syncWorkflowInsights, deleteWorkflowInsights } from "@/lib/telnyx-insights";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+function normalizeWorkflowDataActionButtons(buttons) {
+  if (!Array.isArray(buttons)) return [];
+  return buttons
+    .map((button, index) => ({
+      id: String(button?.id || `data-action-${index + 1}`).trim(),
+      label: String(button?.label || "Data action").trim(),
+      data_action_flow_id: String(
+        button?.data_action_flow_id ||
+        button?.dataActionFlowId ||
+        button?.flow_id ||
+        button?.flowId ||
+        "",
+      ).trim(),
+      data_action_label: String(
+        button?.data_action_label ||
+        button?.dataActionLabel ||
+        "",
+      ).trim(),
+      variant: String(button?.variant || "secondary").trim(),
+      one_click: Boolean(button?.one_click || button?.oneClick),
+    }))
+    .filter((button) => button.id && button.label && button.data_action_flow_id);
+}
+
 // GET /api/admin/workflows/[id] - Get workflow with stages and items
 export async function GET(request, { params }) {
   try {
@@ -111,7 +135,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active, llm_model, llm_confidence_threshold, ai_assistant_id, syncInsights } = body;
+    const { name, description, category, is_active, llm_model, llm_confidence_threshold, ai_assistant_id, data_action_buttons, syncInsights } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -133,6 +157,10 @@ export async function PUT(request, { params }) {
     if (is_active !== undefined) {
       updates.push(`is_active = $${paramIndex++}`);
       values.push(is_active);
+    }
+    if (data_action_buttons !== undefined) {
+      updates.push(`data_action_buttons = $${paramIndex++}`);
+      values.push(JSON.stringify(normalizeWorkflowDataActionButtons(data_action_buttons)));
     }
     if (llm_model !== undefined) {
       updates.push(`llm_model = $${paramIndex++}`);

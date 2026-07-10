@@ -1,16 +1,41 @@
+# Pin the compose project name explicitly. Without this, docker compose v2
+# derives the project name from the parent directory of the compose file
+# (`docker/production/` -> `production`), which causes:
+#   - containers/network/volume names like `production-postgres-1`, `production_telnyx-network`
+#   - a stale `production_postgres_data` volume on hosts that have ever run
+#     `cd docker/production && docker compose up` (the default when following
+#     the legacy docker/README.md quickstart)
+# Pinning to `telnyx-contact-center` keeps the legacy naming contract that
+# container_name: telnyx-contact-center-* and users' existing CLI invocations
+# (`docker compose -p telnyx-contact-center down -v`) expect. If you need a
+# second deployment on the same host, set COMPOSE_PROJECT_NAME=<other-name>
+# in the shell before invoking `docker compose up`.
+name: telnyx-contact-center
+
 services:
   postgres:
     image: postgres:17-alpine
     container_name: telnyx-contact-center-postgres
+    # Bundled Postgres is gated behind the `with-pg` profile so users who already
+    # run their own Postgres locally (and pointed the wizard at it during the
+    # port-conflict step) can suppress this container via `--profile no-with-pg`.
+    # The wizard writes POSTGRES_MODE=bundled|existing into .env; compose.yaml itself
+    # stays declarative and profile-driven, not env-driven, so plain `docker compose up`
+    # still brings Postgres up by default (preserves the "just works" Local story).
+    profiles: ["with-pg"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST_AUTH_METHOD: trust
+    # Host port mapping is parameterized: default 5432, but the wizard can rewrite
+    # POSTGRES_HOST_PORT in .env when the user's host already has something on 5432
+    # (e.g. they have a local Postgres for development). The container still listens
+    # on 5432 internally so the app container's POSTGRES_PORT=5432 is unchanged.
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres:/var/lib/postgresql/data
       - ./init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -31,7 +56,7 @@ services:
         NEXT_PUBLIC_STREAMING_PORT: ${NEXT_PUBLIC_STREAMING_PORT:-}
         NEXT_PUBLIC_TELNYX_WEBRTC_REGION: ${NEXT_PUBLIC_TELNYX_WEBRTC_REGION:-}
         NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES: ${NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES:-}
-    image: telnyx-contact-center-prod
+    image: ${CC_IMAGE:-telnyx-contact-center-prod}
     container_name: telnyx-contact-center-app
     ports:
       - "3000:3000"
@@ -41,18 +66,29 @@ services:
     volumes:
       - ./.env:/app/.env:ro
       # Persist uploaded media files across container restarts and rebuilds.
-      # NOTE: Create this directory on the host before first run:
-      # mkdir -p /home/ubuntu/apps/media
-      - /home/ubuntu/apps/media:/app/public/media
+      #
+      # Default: a Docker-managed named volume (cc_media, declared below) — works
+      # out of the box on any host (laptop, any cloud VM), no host directory to
+      # pre-create.
+      #
+      # Existing GMR/EC2 production deployments: set CC_MEDIA_PATH to the
+      # existing host path (e.g. /home/ubuntu/apps/media) in .env to keep using
+      # a bind mount and preserve already-uploaded files without migration.
+      - ${CC_MEDIA_PATH:-cc_media}:/app/public/media
       # Optional persistent diagnostic logs. Prefer Docker stdout for normal ops;
       # set LOG_FILE_PATH=/app/logs/diagnostics.jsonl when you need JSONL files
       # across container restarts (for example DEBUG_TELNYX_STT=true on GMR).
-      # NOTE: Create this directory on the host before first run:
-      # mkdir -p /home/ubuntu/apps/logs
-      - /home/ubuntu/apps/logs:/app/logs
+      #
+      # Same default-vs-override convention as CC_MEDIA_PATH above.
+      - ${CC_LOGS_PATH:-cc_logs}:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
+        # When the user points the wizard at an existing Postgres (no-with-pg),
+        # this service is suppressed and app must start without waiting on a
+        # container that isn't there. `required: false` is the compose v2 way
+        # to ignore a missing dependency silently.
+        required: false
     networks:
       - telnyx-network
     restart: unless-stopped
@@ -62,8 +98,55 @@ services:
       timeout: 10s
       retries: 3
 
+  # Cloud-only reverse proxy: automatic Let's Encrypt TLS for CC_DOMAIN, terminating
+  # both the app port (3000) and the streaming WebSocket port (3001, upgraded to wss://).
+  # Not started by default — only when the "cloud" profile is enabled
+  # (`docker compose --profile cloud up -d`, which deploy/cli's terraform-driven
+  # cloud-init template does automatically). Local target never uses this.
+  caddy:
+    image: caddy:2-alpine
+    container_name: telnyx-contact-center-caddy
+    profiles: ["cloud"]
+    environment:
+      # Not using ${VAR:?...} here: docker compose interpolates every service's
+      # env vars during `config`/parsing even for profiles that aren't active,
+      # so a hard-required var would break plain `docker compose config` on any
+      # host that hasn't set CC_DOMAIN yet. deploy/cli's terraform/cloud-init
+      # path always sets CC_DOMAIN before starting the cloud profile; the CLI
+      # itself validates this before invoking `--profile cloud up`.
+      CC_DOMAIN: ${CC_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - telnyx-network
+    restart: unless-stopped
+
 volumes:
-  postgres_data:
+  # Per-deployment named volume: the actual Docker volume name is
+  # `cc-postgres-<POSTGRES_VOLUME_NAME>`. The wizard sets POSTGRES_VOLUME_NAME
+  # to the deployment slug (default `cc-main`) in .env, so:
+  #   - a fresh install gets `cc-postgres-cc-main`
+  #   - the second deployment on the same host gets `cc-postgres-<other-slug>`
+  #   - changing the slug in .env (or via the wizard) starts a fresh, empty
+  #     volume without inheriting data from any previous, possibly dirty install
+  # If you're upgrading from an earlier version that didn't pin the project
+  # name (so docker compose v2 named the project after the parent directory
+  # `production`), the old volume `production_postgres_data` becomes orphaned
+  # and can be removed with `docker volume rm production_postgres_data`.
+  postgres:
+    name: cc-postgres-${POSTGRES_VOLUME_NAME:-main}
+  cc_media:
+  cc_logs:
+  caddy_data:
+  caddy_config:
 
 networks:
   telnyx-network:

@@ -84,8 +84,11 @@ test("workflow UI analyzes every unprocessed final transcript, not only the late
   const ui = await read("../components/contact-center/AgentAssistWorkflow.jsx");
 
   assert.match(ui, /const finalTranscriptionsToAnalyze = transcriptions\.filter/);
-  assert.match(ui, /for \(const transcription of finalTranscriptionsToAnalyze\)/);
-  assert.match(ui, /analyzedTranscriptionIdsRef\.current\.add\(transcription\.id\)/);
+  // Every unprocessed final is analyzed: the fired batch is derived from
+  // finalTranscriptionsToAnalyze and each item is dispatched (#1211).
+  assert.match(ui, /const batch = finalTranscriptionsToAnalyze\.filter/);
+  assert.match(ui, /for \(const transcription of batch\)/);
+  assert.match(ui, /analyzedTranscriptionIdsRef\.current\.add\(t\.id\)/);
   assert.doesNotMatch(ui, /const latestTranscription = transcriptions\[transcriptions\.length - 1\]/);
 });
 

@@ -43,6 +43,7 @@ import {
 } from "@/lib/color-utils";
 import { notify } from "@/components/ToastNotify";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const COLOR_GROUPS = [
   {
@@ -186,6 +187,7 @@ export default function SettingsPage() {
     setTheme(newTheme);
   };
 
+  const [brandName, setBrandName] = useState("");
   const [brandLogoUri, setBrandLogoUri] = useState(null);
   const [authRightImageUri, setAuthRightImageUri] = useState(null);
   const [sidebarLogoUri, setSidebarLogoUri] = useState(null);
@@ -196,6 +198,10 @@ export default function SettingsPage() {
   const brandLogoInputRef = useRef(null);
   const authRightInputRef = useRef(null);
   const sidebarLogoInputRef = useRef(null);
+  // Last brand name persisted to the DB. Reset to Defaults restores the field to
+  // this (discarding a pending edit) instead of clearing it, so a color reset
+  // never wipes the configured company brand.
+  const lastSavedBrandNameRef = useRef("");
 
   useEffect(() => {
     // Load settings from database
@@ -276,6 +282,8 @@ export default function SettingsPage() {
               }),
             }).catch((e) => console.error("Error auto-saving defaults:", e));
           }
+          setBrandName(data.brandName || "");
+          lastSavedBrandNameRef.current = data.brandName || "";
           setBrandLogoUri(data.brandLogoUri);
           setAuthRightImageUri(data.authRightImageUri);
           setSidebarLogoUri(data.sidebarLogoUri);
@@ -559,6 +567,11 @@ export default function SettingsPage() {
         body: JSON.stringify({
           themeColors: { light: completeLightColors, dark: completeDarkColors },
           themeColorsHex: { light: completeLightHex, dark: completeDarkHex },
+          // Only send brandName when the admin actually edited it. For a
+          // color/logo-only save we OMIT it so the PUT preserves whatever brand
+          // is currently in the DB (which another admin may have changed after
+          // this page loaded) instead of overwriting it with a stale value.
+          ...(brandName !== lastSavedBrandNameRef.current ? { brandName } : {}),
           brandLogoUri,
           authRightImageUri,
           sidebarLogoUri,
@@ -568,6 +581,8 @@ export default function SettingsPage() {
       if (!response.ok) {
         throw new Error("Failed to save settings");
       }
+
+      lastSavedBrandNameRef.current = brandName;
 
       // Update state with complete colors to keep UI in sync
       setLightColors(completeLightColors);
@@ -870,6 +885,9 @@ export default function SettingsPage() {
       body: JSON.stringify({
         themeColors: { light: completeLightColors, dark: completeDarkColors },
         themeColorsHex: { light: completeLightHex, dark: completeDarkHex },
+        // brandName is intentionally OMITTED so the reset preserves the configured
+        // company brand (it's org identity, not a color). The local field is
+        // restored to the saved value below, so no stale edit survives the reset.
         brandLogoUri: null,
         authRightImageUri: null,
         sidebarLogoUri: null,
@@ -895,6 +913,9 @@ export default function SettingsPage() {
       })
       .catch((e) => console.error("Error resetting settings:", e));
 
+    // Restore the brand field to the last-saved value (discard any pending edit)
+    // rather than clearing it — a color reset must not wipe the company brand.
+    setBrandName(lastSavedBrandNameRef.current);
     setBrandLogoUri(null);
     setAuthRightImageUri(null);
     setSidebarLogoUri(null);
@@ -992,6 +1013,25 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Brand / company name (used in agent-assist suggested-response greetings) */}
+          <div className="space-y-2">
+            <Label htmlFor="brand-name">Brand / Company Name</Label>
+            <p className="text-sm text-muted-foreground">
+              Used in agent-assist greetings, e.g. &ldquo;Thanks for calling{" "}
+              {brandName?.trim() || "<your company>"}.&rdquo;
+            </p>
+            <Input
+              id="brand-name"
+              value={brandName}
+              onChange={(e) => {
+                setBrandName(e.target.value);
+                setHasChanges(true);
+              }}
+              placeholder="e.g. Global Medical Response"
+              className="max-w-md"
+            />
+          </div>
+
           {/* Brand Logo (Auth Pages Left Side) */}
           <div className="space-y-2">
             <Label>Brand Logo (Auth Pages)</Label>

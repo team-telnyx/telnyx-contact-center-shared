@@ -40,32 +40,107 @@ const finalConversation = (text) => [
   { isFinal: true, track: "inbound", transcript: text },
 ];
 
-test("follows the conversation into a later stage instead of the first pending workflow item", () => {
+test("leads in workflow order: does NOT follow the conversation past an open earlier stage", () => {
+  // Sequential leading: the caller volunteers Patient-stage info, but an earlier
+  // stage still has an uncollected slot (account number). The agent must keep
+  // asking in order and collect the earlier open slot first, instead of jumping
+  // ahead to the stage the caller mentioned. (Reproduces the reported bug:
+  // "asked Destination facility before Pickup was collected.")
   const result = resolveSuggestedResponseTarget({
     stages,
     itemStatuses: {
       greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+    },
+    slotsFilled: {},
+    transcriptions: finalConversation("The patient name is Jane Doe and her birthday is March 4th 1988."),
+  });
+
+  assert.equal(result.stage.id, "stage-2");
+  assert.equal(result.item.id, "account-number");
+  assert.equal(result.mode, "collect_missing_slot");
+});
+
+test("still follows the conversation forward once the earlier stage's slot is collected", () => {
+  // Counterpart to sequential leading: when the earlier open slot is filled the
+  // clamp lifts, and the resolver follows the caller into the later stage
+  // (advance-past-filled / #1117 preserved).
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
       "patient-name": { status: "completed", extracted_value: "Jane Doe" },
     },
-    slotsFilled: { patient_name: "Jane Doe" },
+    slotsFilled: { account_number: "12345", patient_name: "Jane Doe" },
     transcriptions: finalConversation("The patient name is Jane Doe and her birthday is March 4th 1988."),
   });
 
   assert.equal(result.stage.id, "stage-3");
   assert.equal(result.item.id, "dob");
-  assert.equal(result.mode, "collect_missing_slot");
   assert.equal(result.reason, "conversation_stage_match");
 });
 
+test("non-slot items in an earlier stage do NOT block leading (clamp keys on open SLOTS only)", () => {
+  // Deliberate design (see resolver comment): the clamp keys on the earliest
+  // open SLOT, not the earliest open item. Required data lives in slots; a
+  // non-slot opening item (greeting) stays non-blocking so an undetectable
+  // non-slot item can't hard-stall the whole workflow. Here the opening
+  // greeting/ask-help are still open, but the caller volunteers an account
+  // number — the resolver follows into the Verification stage instead of
+  // pinning on the greeting.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {},
+    slotsFilled: {},
+    transcriptions: finalConversation("My account number is 123456."),
+  });
+
+  assert.equal(result.stage.id, "stage-2");
+  assert.equal(result.reason, "conversation_stage_match");
+});
+
+test("a stale earlier-stage match does not preempt the lead slot once the caller jumped ahead", () => {
+  // The greeting item is still open and an old "hello welcome" utterance is
+  // still in the transcript window, but the caller has now volunteered
+  // Patient-stage info. The later Patient match is clamped (past the lead slot),
+  // and the stale Greeting match must NOT win — the resolver collects the
+  // earliest open slot (account number) directly.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {},
+    slotsFilled: {},
+    transcriptions: [
+      { isFinal: true, track: "outbound", transcript: "Hello, welcome, thanks for calling." },
+      { isFinal: true, track: "inbound", transcript: "The patient is Jane Doe, high fever." },
+    ],
+  });
+
+  assert.equal(result.stage.id, "stage-2");
+  assert.equal(result.item.id, "account-number");
+  assert.equal(result.mode, "collect_missing_slot");
+  assert.equal(result.reason, "lead_slot");
+});
+
 test("does not suggest a confirmation item when prerequisite slots in that stage are still missing", () => {
+  // Earlier stages fully collected so the sequential-leading clamp is inert and
+  // this isolates the stage-3 prerequisite-gating behavior.
   const result = resolveSuggestedResponseTarget({
     stages,
     itemStatuses: {
       greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
       "patient-name": { status: "completed", extracted_value: "Jane Doe" },
       dob: { status: "completed", extracted_value: "1988-03-04" },
     },
-    slotsFilled: { patient_name: "Jane Doe", date_of_birth: "1988-03-04" },
+    slotsFilled: { account_number: "12345", patient_name: "Jane Doe", date_of_birth: "1988-03-04" },
     transcriptions: finalConversation("Can you confirm the patient details before we book the appointment?"),
   });
 
@@ -79,10 +154,15 @@ test("advances past a suggested low-confidence slot to the next uncollected slot
   // Updated contract (#1117): a captured low-confidence slot no longer pins the
   // suggested response for confirmation. It advances to the next empty slot;
   // confirmation is deferred until every slot has a value (see next test).
+  // Earlier stages are collected so this isolates the stage-3 #1117 behavior.
   const result = resolveSuggestedResponseTarget({
     stages,
     itemStatuses: {
       greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
       "patient-name": {
         status: "suggested",
         extracted_value: "Jane Doe",
@@ -90,7 +170,7 @@ test("advances past a suggested low-confidence slot to the next uncollected slot
         confidence_threshold: 0.95,
       },
     },
-    slotsFilled: {},
+    slotsFilled: { account_number: "12345" },
     transcriptions: finalConversation("The patient information is Jane Doe, she has a high fever."),
   });
 

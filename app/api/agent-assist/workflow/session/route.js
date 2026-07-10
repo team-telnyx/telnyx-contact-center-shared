@@ -86,6 +86,7 @@ async function getWorkflowSessionState(pool, sessionId) {
             w.name as workflow_name, 
             w.category as workflow_category,
             w.llm_confidence_threshold as workflow_confidence_threshold,
+            w.data_action_buttons,
             i.agent_username,
             u.first_name as agent_first_name,
             u.last_name as agent_last_name

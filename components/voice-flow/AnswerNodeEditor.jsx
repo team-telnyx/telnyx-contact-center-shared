@@ -31,7 +31,11 @@ import { AI_STREAMING_PROVIDERS } from "@/config/ai-streaming-providers";
 
 const SIP_HEADER_NAMES = ["User-to-User", "Diversion"];
 const TELNYX_STT_PROVIDER_OPTION = { value: "telnyx-stt", label: "Telnyx Standalone STT" };
-const EXPERIMENTAL_USER = "leszek@telnyx.com";
+// Gate for experimental STT providers: only shown to the user whose email
+// matches NEXT_PUBLIC_EXPERIMENTAL_USER. If that env var is unset, the gate
+// matches nobody and the features stay hidden for everyone — this file
+// ships with no hardcoded identity.
+const EXPERIMENTAL_USER = process.env.NEXT_PUBLIC_EXPERIMENTAL_USER || "";
 const EXPERIMENTAL_PROVIDERS = [];
 
 const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
@@ -126,7 +130,7 @@ export default function AnswerNodeEditor({
   currentUserEmail,
   hasCallerLanguageParameterBefore = false,
 }) {
-  const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
+  const isExperimentalUser = Boolean(EXPERIMENTAL_USER) && currentUserEmail === EXPERIMENTAL_USER;
   // Basic fields
   const [billingGroupId, setBillingGroupId] = useState(
     config.billing_group_id || ""

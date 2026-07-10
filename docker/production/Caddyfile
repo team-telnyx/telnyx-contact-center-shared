@@ -1,0 +1,14 @@
+# Caddyfile for cloud-profile deployments — automatic HTTPS via Let's Encrypt.
+# Rendered by cloud-init on the target VM using the CC_DOMAIN value from the
+# deploy wizard's Region/Params steps (deploy/cloud-init/user-data.yaml.tftpl,
+# Phase 4). For local development this file is never used (see docker/production/
+# compose.yaml — the `caddy` service only starts under the `cloud` profile).
+
+{$CC_DOMAIN} {
+	# Main app (Next.js) on 3000
+	reverse_proxy /* localhost:3000
+
+	# Streaming WebSocket server (Google Gemini / OpenAI Realtime / Azure) on 3001.
+	# Caddy auto-upgrades to wss:// for Upgrade: websocket requests under the same domain.
+	reverse_proxy /ws* localhost:3001
+}

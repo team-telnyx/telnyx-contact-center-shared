@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import useWorkflowStore, { useSlotsFilled } from "@/lib/stores/workflow-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import ReactMarkdown from "react-markdown";
@@ -50,10 +59,12 @@ import {
   Target,
   Volume2,
   Languages,
+  DatabaseZap,
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 import { normalizeLanguageCode as normalizeBaseLanguageCode } from "@/lib/language-code-utils";
 import { resolveSuggestedResponseTarget } from "@/lib/agent-assist/suggestion-target-resolver.mjs";
+import { hasSlotValue, pickSlotValue, formatSlotDisplay } from "@/lib/agent-assist/slot-display.mjs";
 import { upsertSuggestionByTarget } from "@/lib/agent-assist/suggestion-dedup.mjs";
 import { findTranscriptIdForUtterance } from "@/lib/agent-assist/slot-utterance-match.mjs";
 
@@ -98,6 +109,9 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   const aiPollTimeoutRef = useRef(null);
   const aiPollCountRef = useRef(0);
   const analyzedTranscriptionIdsRef = useRef(new Set());
+  const [dataActionStatuses, setDataActionStatuses] = useState({});
+  const [disabledButtonIds, setDisabledButtonIds] = useState(new Set());
+  const [headerActionsTarget, setHeaderActionsTarget] = useState(null);
   const AI_POLL_MAX_ATTEMPTS = 10; // 10 attempts * 3 seconds = 30 seconds
   const AI_POLL_INTERVAL_MS = 3000;
 
@@ -139,6 +153,59 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       targetLanguage: latest?.translation?.targetLanguage || null,
     };
   }, [transcriptions]);
+
+  const workflowDataActionButtons = useMemo(
+    () => (Array.isArray(session?.data_action_buttons) ? session.data_action_buttons : []),
+    [session?.data_action_buttons],
+  );
+
+  useEffect(() => {
+    setHeaderActionsTarget(document.getElementById("interaction-detail-header-actions"));
+  }, []);
+
+  async function runWorkflowDataAction(button) {
+    if (!session?.id || !button?.id || disabledButtonIds.has(button.id)) return;
+    setDataActionStatuses((current) => ({
+      ...current,
+      [button.id]: { status: "running", message: "Running data action..." },
+    }));
+    try {
+      const res = await fetch("/api/agent-assist/workflow/data-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          sessionId: session.id,
+          interactionId,
+          buttonId: button.id,
+          button,
+          slotsFilled,
+          context: { interaction },
+        }),
+      });
+      const data = await res.json();
+      const actionStatus = data.dataAction || data;
+      const normalizedStatus = String(actionStatus.status || (data.ok ? "success" : "error")).toLowerCase();
+      const nextStatus = {
+        status: normalizedStatus,
+        success: data.ok !== false && actionStatus.success !== false,
+        message: actionStatus.message || (data.ok ? "Data action completed." : data.error || "Data action failed."),
+      };
+      setDataActionStatuses((current) => ({ ...current, [button.id]: nextStatus }));
+      notify({
+        title: `Form Submit Status: ${nextStatus.status}`,
+        description: nextStatus.message,
+        variant: nextStatus.success ? "success" : "error",
+      });
+      if (nextStatus.success && button.one_click === true) {
+        setDisabledButtonIds((current) => new Set([...current, button.id]));
+      }
+    } catch (err) {
+      const message = err?.message || "Data action failed.";
+      setDataActionStatuses((current) => ({ ...current, [button.id]: { status: "error", success: false, message } }));
+      notify({ title: "Data action failed", description: message, variant: "error" });
+    }
+  }
 
   // Set AI assisted flag when ai_call_control_id is detected
   useEffect(() => {
@@ -392,16 +459,34 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     );
     if (finalTranscriptionsToAnalyze.length === 0) return;
 
-    for (const transcription of finalTranscriptionsToAnalyze) {
-      analyzedTranscriptionIdsRef.current.add(transcription.id);
-    }
-
     const analyzeIfNew = async () => {
-      for (const transcription of finalTranscriptionsToAnalyze) {
+      // Reserve the whole fired batch synchronously, the moment the timer
+      // fires and BEFORE any await. Marking is deliberately NOT done before the
+      // timer: during active speech `transcriptions` updates on every STT
+      // partial, which re-runs this effect and clears the pending timer via
+      // cleanup; pre-marking would consume those finals without ever analyzing
+      // them (utterances silently dropped mid-conversation). Marking the full
+      // batch up-front here also prevents a second timer, scheduled while the
+      // first /analyze is still awaiting, from re-dispatching this batch's
+      // later utterances concurrently and clobbering slots_filled.
+      const batch = finalTranscriptionsToAnalyze.filter(
+        (t) => !analyzedTranscriptionIdsRef.current.has(t.id)
+      );
+      for (const t of batch) analyzedTranscriptionIdsRef.current.add(t.id);
+
+      for (const transcription of batch) {
         try {
+          // Preceding final utterances (usually the agent's question) give the
+          // analyzer the context to interpret a bare answer like "No"/"ICU".
+          const at = transcriptions.findIndex((t) => t.id === transcription.id);
+          const recentContext = (at > 0 ? transcriptions.slice(0, at) : [])
+            .filter((t) => t?.isFinal && t?.transcript)
+            .slice(-4)
+            .map((t) => ({ speaker: t.track, text: t.transcript }));
           await analyzeTranscript(
             transcription.transcript,
-            transcription.track
+            transcription.track,
+            recentContext
           );
         } catch (err) {
           console.error("[AgentAssistWorkflow] Analysis error:", err);
@@ -479,6 +564,17 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
 
   return (
     <div className="flex flex-col h-full">
+      {headerActionsTarget && workflowDataActionButtons.length > 0
+        ? createPortal(
+            <WorkflowDataActionsDropdown
+              buttons={workflowDataActionButtons}
+              statuses={dataActionStatuses}
+              disabledButtonIds={disabledButtonIds}
+              onRun={runWorkflowDataAction}
+            />,
+            headerActionsTarget,
+          )
+        : null}
       {/* AI Assisted Badge */}
       {aiHandoff.isAiAssisted && (
         <div className="shrink-0 mb-3">
@@ -650,6 +746,58 @@ function formatLanguageLabel(language) {
   return languageNames[baseLanguage] || baseLanguage.toUpperCase();
 }
 
+function WorkflowDataActionsDropdown({ buttons = [], statuses = {}, disabledButtonIds = new Set(), onRun }) {
+  if (buttons.length === 0) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5">
+          <DatabaseZap className="h-3.5 w-3.5" />
+          Data Actions
+          <ChevronDown className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel className="flex items-center justify-between gap-2 text-xs">
+          <span>Data Actions</span>
+          <Badge variant="outline" className="text-[10px]">Form Submit Status</Badge>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {buttons.map((button) => {
+          const status = statuses[button.id];
+          const running = status?.status === "running";
+          const disabled = running || disabledButtonIds.has(button.id);
+          const success = status?.success === true;
+          const failed = status?.success === false;
+          return (
+            <DropdownMenuItem
+              key={button.id}
+              disabled={disabled}
+              onSelect={(event) => {
+                event.preventDefault();
+                if (!disabled) onRun?.(button);
+              }}
+              className="flex cursor-pointer flex-col items-start gap-0.5"
+            >
+              <span className="flex w-full items-center gap-2">
+                {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DatabaseZap className="h-3.5 w-3.5" />}
+                <span className="min-w-0 flex-1 truncate">{button.label || "Data action"}</span>
+                {button.one_click ? <Badge variant="outline" className="text-[10px]">one-click</Badge> : null}
+              </span>
+              {status ? (
+                <span className={`max-w-full truncate pl-5 text-[10px] ${success ? "text-emerald-600 dark:text-emerald-400" : failed ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                  {status.status}: {status.message}
+                </span>
+              ) : null}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function TranslationIndicator({ sourceLanguage, targetLanguage }) {
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border border-sky-500/30 bg-sky-500/5">
@@ -668,7 +816,7 @@ function TranslationIndicator({ sourceLanguage, targetLanguage }) {
             {getLanguageFlag(sourceLanguage)}
             <span className="truncate">{formatLanguageLabel(sourceLanguage)}</span>
           </span>
-          <span className="shrink-0">-</span>
+          <span className="shrink-0">→</span>
           <span className="flex items-center gap-1 min-w-0">
             {getLanguageFlag(targetLanguage)}
             <span className="truncate">{formatLanguageLabel(targetLanguage)}</span>
@@ -821,14 +969,14 @@ function AiSummaryPanel({ summary, sentiment }) {
 
 function getItemStatusSnapshot(item, itemStatuses, slotsFilled) {
   const status = itemStatuses[item.id] || { status: "pending" };
-  const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
+  const slotValue = pickSlotValue(status.value, status.extracted_value, item.slot_name ? slotsFilled[item.slot_name] : null);
   const confidenceScore = status.confidence_score;
   const confidenceThreshold = status.confidence_threshold ?? 0.95;
   const isSuggested = status.status === "suggested";
   const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
   const needsConfirmation =
     isSuggested &&
-    Boolean(slotValue) &&
+    hasSlotValue(slotValue) &&
     confidenceScore !== null &&
     confidenceScore !== undefined &&
     confidenceScore < confidenceThreshold;
@@ -923,7 +1071,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
         const snapshot = getItemStatusSnapshot(item, itemStatuses, slotsFilled);
         const compactSnapshot = {
           status: snapshot.status.status || "pending",
-          value: snapshot.slotValue || "",
+          value: hasSlotValue(snapshot.slotValue) ? snapshot.slotValue : "",
           needsConfirmation: snapshot.needsConfirmation,
           isCompleted: snapshot.isCompleted,
         };
@@ -992,7 +1140,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
   };
 
   const handleConfirmSuggestedSlot = (itemId, value) => {
-    if (!value) return;
+    // Use presence, not truthiness: a captured boolean false ("No" to an
+    // air-safety question) is a real value the agent must be able to confirm.
+    if (!hasSlotValue(value)) return;
     onCompleteItem(itemId, value);
     setHighlightedItemId(itemId);
   };
@@ -1093,11 +1243,11 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           const isSkipped = status.status === "skipped";
                           const isHighlighted = item.id === highlightedItemId;
                           const isEditing = editingItemId === item.id;
-                          const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
+                          const slotValue = pickSlotValue(status.value, status.extracted_value, item.slot_name ? slotsFilled[item.slot_name] : null);
                           const completedBy = status.completed_by; // 'ai' | 'agent' | null
                           const confidenceScore = status.confidence_score;
                           const confidenceThreshold = status.confidence_threshold ?? 0.95;
-                          const isLowConfidence = isSuggested && slotValue && confidenceScore !== null && confidenceScore !== undefined && confidenceScore < confidenceThreshold;
+                          const isLowConfidence = isSuggested && hasSlotValue(slotValue) && confidenceScore !== null && confidenceScore !== undefined && confidenceScore < confidenceThreshold;
                           // Check AI slots details for additional context
                           const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
                           const isAiFilled = completedBy === "ai" || (aiSlotInfo?.value && !completedBy);
@@ -1133,7 +1283,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                 disabled={isCompleted || isSkipped || isLowConfidence}
                                 onCheckedChange={(checked) => {
                                   if (checked) {
-                                    if (isSuggested && slotValue) {
+                                    if (isSuggested && hasSlotValue(slotValue)) {
                                       handleConfirmSuggestedSlot(item.id, slotValue);
                                       return;
                                     }
@@ -1192,7 +1342,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           <X className="h-3.5 w-3.5" />
                                         </Button>
                                       </div>
-                                    ) : slotValue ? (
+                                    ) : hasSlotValue(slotValue) ? (
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         {sourceUtteranceForJump ? (
                                           <>
@@ -1205,13 +1355,13 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                                 onJumpToUtterance?.(sourceUtteranceForJump);
                                               }}
                                             >
-                                              {slotValue}
+                                              {formatSlotDisplay(slotValue)}
                                             </button>
                                             <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden="true" />
                                           </>
                                         ) : (
                                           <span className="text-sm font-medium text-foreground">
-                                            {slotValue}
+                                            {formatSlotDisplay(slotValue)}
                                           </span>
                                         )}
                                         {/* Source indicator: AI or Agent */}
@@ -1689,12 +1839,16 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
     if (!res.ok) {
       console.error("[generateSuggestion] API error:", res.status);
       // Fallback to static template
-      return generateStaticSuggestion(stage, item, session?.agent_name);
+      // Carry targetMode so the dedup key (which normalizes mode to collect/
+      // confirm) keeps a confirm fallback distinct from an existing collect entry.
+      return { ...generateStaticSuggestion(stage, item, session?.agent_name), targetMode };
     }
 
     const data = await res.json();
     if (!data.suggestion) {
-      return generateStaticSuggestion(stage, item, session?.agent_name);
+      // Carry targetMode so the dedup key (which normalizes mode to collect/
+      // confirm) keeps a confirm fallback distinct from an existing collect entry.
+      return { ...generateStaticSuggestion(stage, item, session?.agent_name), targetMode };
     }
 
     const slotOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
@@ -1715,7 +1869,7 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
     };
   } catch (error) {
     console.error("[generateSuggestion] Error:", error);
-    return generateStaticSuggestion(stage, item, session?.agent_name);
+    return { ...generateStaticSuggestion(stage, item, session?.agent_name), targetMode };
   }
 }
 

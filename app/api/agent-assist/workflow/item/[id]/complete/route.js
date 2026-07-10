@@ -9,6 +9,12 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+// Presence check that preserves boolean false / 0 — a captured "No" is a real
+// value. Truthiness (value || null / && value) would drop it.
+function hasMeaningfulValue(value) {
+  return value !== null && value !== undefined && value !== "";
+}
+
 // PUT /api/agent-assist/workflow/item/[id]/complete - Complete item manually
 export async function PUT(request, { params }) {
   try {
@@ -90,11 +96,11 @@ export async function PUT(request, { params }) {
              confidence_score = 1.0,
              updated_at = NOW()
          WHERE session_id = $2 AND item_id = $3`,
-        [value || null, workflowSession.id, itemId]
+        [hasMeaningfulValue(value) ? value : null, workflowSession.id, itemId]
       );
 
       // If this is a slot item with a value, update slots_filled
-      if (item.slot_name && value) {
+      if (item.slot_name && hasMeaningfulValue(value)) {
         const slotsFilled = workflowSession.slots_filled || {};
         slotsFilled[item.slot_name] = value;
         

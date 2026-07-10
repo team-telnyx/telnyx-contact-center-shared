@@ -48,3 +48,25 @@ docker/production/.env
 # Logs
 logs/
 Dockerfile.local
+
+# Contact Center deployment wizard
+/deploy/cli/node_modules/
+/deploy/.cc-state.json
+/deploy/.cc-telnyx-secrets.json
+/deploy/cc.answers.json
+/deploy/keys/
+/deploy/.cc-credentials.txt
+/deploy/.cc-tunnel.log
+
+# Terraform (AWS cloud path, Phase 4) — local state/cache/vars are
+# environment-specific and can contain secrets (tfvars carries the
+# deployment name/region/instance sizing, never API keys, but state files
+# can reflect resource attributes); never commit any of this.
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars.json
+!deploy/terraform/aws-required-policy.json
+cc.tfplan
+

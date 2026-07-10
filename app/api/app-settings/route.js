@@ -54,6 +54,7 @@ export async function GET() {
               light: {},
               dark: {},
             },
+            brandName: settings.brand_name || null,
             brandLogoUri: settings.brand_logo_uri || null,
             authRightImageUri: settings.auth_right_image_uri || null,
             sidebarLogoUri: settings.sidebar_logo_uri || null,
@@ -64,6 +65,7 @@ export async function GET() {
         return NextResponse.json({
           themeColors: { light: {}, dark: {} },
           themeColorsHex: { light: {}, dark: {} },
+          brandName: null,
           brandLogoUri: null,
           authRightImageUri: null,
           sidebarLogoUri: null,
@@ -74,6 +76,7 @@ export async function GET() {
       return NextResponse.json({
         themeColors: settings.theme_colors || { light: {}, dark: {} },
         themeColorsHex: settings.theme_colors_hex || { light: {}, dark: {} },
+        brandName: settings.brand_name || null,
         brandLogoUri: settings.brand_logo_uri || null,
         authRightImageUri: settings.auth_right_image_uri || null,
         sidebarLogoUri: settings.sidebar_logo_uri || null,
@@ -117,6 +120,7 @@ export async function PUT(request) {
     const {
       themeColors,
       themeColorsHex,
+      brandName,
       brandLogoUri,
       authRightImageUri,
       sidebarLogoUri,
@@ -142,19 +146,39 @@ export async function PUT(request) {
       if (columnCheck.rows.length === 0) {
         // Add the missing column
         await client.query(`
-          ALTER TABLE app_settings 
+          ALTER TABLE app_settings
           ADD COLUMN theme_colors_hex JSONB DEFAULT '{"light": {}, "dark": {}}'::jsonb
         `);
       }
 
-      // Check if settings exist
+      // Same in-place repair for brand_name: an app_settings table from before
+      // this column existed would make the SELECT/write below fail with
+      // "column brand_name does not exist", blocking all settings saves.
+      const brandColumnCheck = await client.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'app_settings' AND column_name = 'brand_name'
+      `);
+      if (brandColumnCheck.rows.length === 0) {
+        await client.query(`ALTER TABLE app_settings ADD COLUMN brand_name TEXT`);
+      }
+
+      // Check if settings exist (and read the current brand so an omitted
+      // brandName in the payload is preserved, not cleared).
       const checkResult = await client.query(
-        "SELECT id FROM app_settings WHERE id = 'default' LIMIT 1"
+        "SELECT id, brand_name FROM app_settings WHERE id = 'default' LIMIT 1"
       );
+      const existingBrandName = checkResult.rows[0]?.brand_name ?? null;
 
       const updateData = {
         theme_colors: themeColors || { light: {}, dark: {} },
         theme_colors_hex: themeColorsHex || { light: {}, dark: {} },
+        // Only change the brand when the field is explicitly present. The
+        // colors/logos Settings form doesn't send brandName, so an omitted value
+        // must keep the current brand rather than null it out.
+        brand_name: brandName === undefined
+          ? existingBrandName
+          : ((typeof brandName === "string" && brandName.trim()) ? brandName.trim() : null),
         brand_logo_uri: brandLogoUri || null,
         auth_right_image_uri: authRightImageUri || null,
         sidebar_logo_uri: sidebarLogoUri || null,
@@ -166,9 +190,9 @@ export async function PUT(request) {
         // Insert new settings
         await client.query(
           `INSERT INTO app_settings (
-            id, theme_colors, theme_colors_hex, brand_logo_uri, auth_right_image_uri, 
-            sidebar_logo_uri, updated_by, updated_at, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            id, theme_colors, theme_colors_hex, brand_logo_uri, auth_right_image_uri,
+            sidebar_logo_uri, updated_by, updated_at, created_at, brand_name
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             "default",
             JSON.stringify(updateData.theme_colors),
@@ -179,6 +203,7 @@ export async function PUT(request) {
             updateData.updated_by,
             updateData.updated_at,
             new Date(),
+            updateData.brand_name,
           ]
         );
       } else {
@@ -191,7 +216,8 @@ export async function PUT(request) {
             auth_right_image_uri = $4,
             sidebar_logo_uri = $5,
             updated_by = $6,
-            updated_at = $7
+            updated_at = $7,
+            brand_name = $8
           WHERE id = 'default'`,
           [
             JSON.stringify(updateData.theme_colors),
@@ -201,6 +227,7 @@ export async function PUT(request) {
             updateData.sidebar_logo_uri,
             updateData.updated_by,
             updateData.updated_at,
+            updateData.brand_name,
           ]
         );
       }
