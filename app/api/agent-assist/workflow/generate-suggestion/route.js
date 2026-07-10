@@ -8,9 +8,24 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, suggestionsLogger } from "@/lib/agent-assist/logging.mjs";
+import { isReadBackItem, buildReadBackSuggestion, orderedSlotsFromMap, formatSlotValue, earliestReadBackItemId } from "@/lib/agent-assist/readback.mjs";
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
+
+// Global brand/company name for greetings, from app_settings.brand_name.
+// Returns undefined when unset so the greeting templates fall back to "the company".
+async function getConfiguredBrandName(pool) {
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT brand_name FROM app_settings WHERE id = 'default' LIMIT 1`
+    );
+    const name = row?.brand_name;
+    return (typeof name === "string" && name.trim()) ? name.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // POST /api/agent-assist/workflow/generate-suggestion
 export async function POST(request) {
@@ -69,6 +84,14 @@ export async function POST(request) {
       }
     }
 
+    // Resolve the brand for greetings ("Thanks for calling <brand>"). The client
+    // passes brandName from the (currently unpopulated) session, so fall back to
+    // the global app_settings.brand_name. When neither is set the templates use
+    // "the company".
+    const effectiveBrandName = (typeof brandName === "string" && brandName.trim())
+      ? brandName.trim()
+      : await getConfiguredBrandName(pool);
+
     // Special case: AI-assisted call, first item — generate handoff greeting
     if (isAiAssisted && isFirstItem) {
       return NextResponse.json({
@@ -82,13 +105,40 @@ export async function POST(request) {
       });
     }
 
+    // Special case: final read-back / "confirm all information" item. Read back
+    // every collected slot so the agent can confirm the whole intake at once.
+    // Bypasses the two-sentence truncation the generic generator applies. Only
+    // fires when slots have actually been collected (otherwise falls through to
+    // the normal single-line suggestion).
+    //
+    // Guard against reading back twice: some workflows split read-back and
+    // confirmation into adjacent items (e.g. "Read back transport details" then
+    // "Confirm all information is correct"). Only the EARLIEST read-back-matching
+    // item recites the full list; a later confirm-all item falls through to the
+    // normal short confirmation instead of repeating every slot.
+    if (isReadBackItem({ itemType, itemLabel, itemPromptHint, itemHints })) {
+      const earliest = await isEarliestReadBackItem(pool, workflowId, itemId);
+      if (earliest !== false) {
+        const orderedSlots = await buildOrderedFilledSlots(pool, workflowId, prefilledSlots || {});
+        const readBack = buildReadBackSuggestion({ orderedSlots });
+        if (readBack) {
+          return NextResponse.json({
+            ok: true,
+            suggestion: readBack,
+            model: "template",
+            isReadBack: true,
+          });
+        }
+      }
+    }
+
     const deterministicSuggestion = buildDeterministicSuggestion({
       itemType,
       itemLabel,
       itemPromptHint,
       itemHints,
       agentName,
-      brandName,
+      brandName: effectiveBrandName,
       targetMode,
       conversationContext,
       blockedItem,
@@ -107,7 +157,7 @@ export async function POST(request) {
     const systemPrompt = buildSuggestionSystemPrompt({
       itemType,
       agentName,
-      brandName,
+      brandName: effectiveBrandName,
       isAiAssisted,
       targetMode,
     });
@@ -172,7 +222,7 @@ export async function POST(request) {
         itemPromptHint,
         itemHints,
         agentName,
-        brandName,
+        brandName: effectiveBrandName,
         targetMode,
         conversationContext,
         blockedItem,
@@ -223,7 +273,7 @@ Hard rules:
 - Keep it concise: one short paragraph, preferably one sentence, maximum two sentences.
 - Do not describe what the agent should do. Say the actual words.
 - Do not include internal workflow names, item ids, analysis, or recap sections.
-- If the item is a greeting or introduction, introduce the agent by name when known.
+- For an opening greeting or "how can I help" item, thank the caller for calling ${brand} and ask how you can help (e.g. "Hi, thanks for calling ${brand}. How can I help you today?"). Do NOT lead with the agent's name and never say "the company". Only introduce the agent by name for an explicit "introduce yourself" item.
 - If the call was transferred from an AI assistant, acknowledge that briefly only when it helps the first handoff.
 - Do not jump back to the first pending workflow item when the conversation clearly moved to another workflow stage.
 - Follow the provided target mode exactly: collect the selected slot, confirm a low-confidence slot, or collect a prerequisite for a blocked item.
@@ -357,6 +407,69 @@ function buildDefaultHandoffGreeting({ agentName, prefilledSlots }) {
   return `${intro} ${context} Would you like us to continue from there?`;
 }
 
+/**
+ * Is this the EARLIEST read-back-matching item in the workflow (by stage, then
+ * item order)? Used so only the first read-back item recites the full list and
+ * an adjacent confirm-all follow-up does not repeat it.
+ *   - true  → this item is the (or the only) read-back item → read back.
+ *   - false → an earlier read-back item exists → skip the full read-back.
+ *   - null  → unknown (no workflowId/itemId, or the workflow can't be read) →
+ *             caller keeps the default read-back behavior.
+ */
+async function isEarliestReadBackItem(pool, workflowId, itemId) {
+  if (!workflowId || !itemId) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT i.id, i.type, i.label, i.prompt_hint, i.hints
+         FROM aa_workflow_items i
+         JOIN aa_workflow_stages s ON i.stage_id = s.id
+        WHERE s.workflow_id = $1
+        ORDER BY s.order_index, i.order_index`,
+      [workflowId]
+    );
+    const earliestId = earliestReadBackItemId(rows);
+    if (!earliestId) return null;
+    return earliestId === itemId;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build the ordered [{ label, value }] list for the final read-back: collected
+ * slots in workflow order (stage, then item), labelled with each slot item's
+ * human label. Falls back to the prefilledSlots map (humanized keys) when the
+ * workflow can't be read.
+ */
+async function buildOrderedFilledSlots(pool, workflowId, prefilledSlots) {
+  if (!workflowId) {
+    return orderedSlotsFromMap(prefilledSlots);
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT i.slot_name, i.label
+         FROM aa_workflow_items i
+         JOIN aa_workflow_stages s ON i.stage_id = s.id
+        WHERE s.workflow_id = $1 AND i.type = 'slot' AND i.slot_name IS NOT NULL
+        ORDER BY s.order_index, i.order_index`,
+      [workflowId]
+    );
+    if (!rows || rows.length === 0) {
+      return orderedSlotsFromMap(prefilledSlots);
+    }
+    const ordered = [];
+    for (const { slot_name: slotName, label } of rows) {
+      const value = prefilledSlots?.[slotName];
+      if (value !== null && value !== undefined && String(value).trim() !== "") {
+        ordered.push({ label: label || slotName, value: formatSlotValue(value) });
+      }
+    }
+    return ordered;
+  } catch {
+    return orderedSlotsFromMap(prefilledSlots);
+  }
+}
+
 function hasMeaningfulValue(value) {
   return value !== null && value !== undefined && value !== "";
 }
@@ -431,11 +544,20 @@ function buildDeterministicSuggestion({
     return `Hello, I'm ${identity}. I'll be helping you today.`;
   }
 
-  if (/\b(greet|greeting|welcome|say hello|introduce)\b/i.test(label)) {
-    if (finalAgentName) {
-      return `Hello, I'm ${finalAgentName}. I'll be helping you today.`;
-    }
-    return `Hello, I'm calling from ${brand}. I'll be helping you today.`;
+  // Opening greeting / "how can I help" item: brand-forward — "Thanks for calling
+  // <brand>" — never "this is <agent> with the company". Require greeting/opening
+  // WORDING on a NON-slot item so a first item that is a slot or ordinary question
+  // (e.g. "Customer full name") is NOT hijacked into a greeting. Explicit
+  // "introduce yourself as ..." items are handled above and keep the agent name.
+  const looksLikeOpeningGreeting =
+    itemType !== "slot" &&
+    (/\b(greet|greeting|welcome|say hello|hello)\b/i.test(label) ||
+      /how (can|may|to)\s+(i\s+)?(help|assist)|assist (you|today)|help you today|how may i be of/i.test(`${label} ${promptHint}`));
+  if (looksLikeOpeningGreeting) {
+    // Drop the "the company" placeholder — a brandless "thanks for calling" reads
+    // cleanly until a real brand is configured (app_settings.brand_name).
+    const brandPhrase = brand && brand !== "the company" ? `calling ${brand}` : "calling";
+    return `Hi, thanks for ${brandPhrase}. How can I help you today?`;
   }
 
   if (allowGeneric && itemType === "slot") {

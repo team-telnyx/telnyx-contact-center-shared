@@ -89,6 +89,36 @@ yarn dev
 
 The application will be available at `http://localhost:3000`.
 
+## Deployment wizard (`./deploy/cc`)
+
+The fastest way to get a fully working, Telnyx-wired Contact Center running
+is the interactive deployment wizard:
+
+```bash
+./deploy/cc up
+```
+
+It's a single CLI that walks you through choosing a target — your own
+machine (Docker), AWS, Azure, or GCP — then handles everything end to end:
+provisioning infrastructure (Terraform, for cloud targets), creating the
+Telnyx voice app / SIP connection / phone number, generating all secrets,
+building and deploying the app image, and printing a ready-to-use summary
+(app URL, owner login, inbound number). It also manages the full day-2
+lifecycle — `cc status`, `cc logs`, `cc update`, `cc telnyx` (repair Telnyx
+resources), and `cc destroy` (tear down).
+
+Every run is resumable (Ctrl-C or a crash picks back up where it left off)
+and every external write is idempotent, so re-running the wizard never
+duplicates cloud infrastructure or Telnyx resources.
+
+For the full command reference, every deployment target's specifics, all
+wizard prompts explained, non-interactive/CI usage, and troubleshooting,
+see **[`deploy/README.md`](deploy/README.md)**.
+
+The manual Docker Compose setup described below still works and is useful
+if you want to manage the containers yourself instead of going through the
+wizard — but for most cases, `./deploy/cc up` is the recommended path.
+
 ## Production deployment with Docker
 
 The project includes a complete Docker setup for running the Contact Center and PostgreSQL in containers on a single machine.

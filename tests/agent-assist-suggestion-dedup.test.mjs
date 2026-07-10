@@ -90,10 +90,24 @@ test("appendUniqueSuggestion: distinct target keys producing identical text rend
 // --- upsertSuggestionByTarget (Issue 1: "re-appears") ---
 import { upsertSuggestionByTarget, suggestionTargetKey } from "../lib/agent-assist/suggestion-dedup.mjs";
 
-test("suggestionTargetKey keys by itemId + targetMode", () => {
-  assert.equal(suggestionTargetKey({ itemId: "a", targetMode: "confirm_slot" }), "a:confirm_slot");
-  assert.equal(suggestionTargetKey({ itemId: "a" }), "a:default");
-  assert.equal(suggestionTargetKey({}), "none:default");
+test("suggestionTargetKey keys by itemId + NORMALIZED mode (collect vs confirm)", () => {
+  // Only confirm_slot is "confirm"; all collect/continue modes collapse to "collect".
+  assert.equal(suggestionTargetKey({ itemId: "a", targetMode: "confirm_slot" }), "a:confirm");
+  assert.equal(suggestionTargetKey({ itemId: "a", targetMode: "collect_missing_slot" }), "a:collect");
+  assert.equal(suggestionTargetKey({ itemId: "a" }), "a:collect");
+  assert.equal(suggestionTargetKey({}), "none:collect");
+  // The opening-greeting duplicate: same item reached via two "continue" modes -> ONE key.
+  assert.equal(
+    suggestionTargetKey({ itemId: "greet", targetMode: "continue_workflow" }),
+    suggestionTargetKey({ itemId: "greet", targetMode: "continue_stage" })
+  );
+});
+
+test("upsert: the opening greeting is NOT duplicated across continue_workflow/continue_stage", () => {
+  const text = "Hi, thanks for calling GMR. How can I help you today?";
+  let list = upsertSuggestionByTarget([], { itemId: "greet", targetMode: "continue_workflow", text });
+  list = upsertSuggestionByTarget(list, { itemId: "greet", targetMode: "continue_stage", text });
+  assert.equal(list.length, 1);
 });
 
 test("upsert: appends a new target", () => {
@@ -127,4 +141,14 @@ test("upsert: empty/blank candidate returns same reference", () => {
   const list = [{ itemId: "i1", targetMode: "confirm_slot", text: "x" }];
   assert.equal(upsertSuggestionByTarget(list, null), list);
   assert.equal(upsertSuggestionByTarget(list, { itemId: "i1", targetMode: "confirm_slot", text: "  " }), list);
+});
+
+test("static suggestion fallback carries targetMode (Codex #1208: confirm stays distinct on API error)", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const cmp = await readFile(new URL("../components/contact-center/AgentAssistWorkflow.jsx", import.meta.url), "utf8");
+  // The API-error / no-suggestion fallbacks must attach targetMode so a failed
+  // confirm_slot generation doesn't fold into an existing collect entry.
+  assert.match(cmp, /\{ \.\.\.generateStaticSuggestion\(stage, item, session\?\.agent_name\), targetMode \}/);
+  // The bare fallback (dropping targetMode) must be gone.
+  assert.doesNotMatch(cmp, /return generateStaticSuggestion\(stage, item, session\?\.agent_name\);/);
 });

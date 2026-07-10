@@ -1,0 +1,8 @@
+{
+  "target": "local",
+  "deploymentName": "cc-main",
+  "domain": "",
+  "ownerEmail": "owner@example.com",
+  "ownerPassword": "",
+  "telnyxApiKey": "KEY..."
+}

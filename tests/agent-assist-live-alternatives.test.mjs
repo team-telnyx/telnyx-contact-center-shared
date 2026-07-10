@@ -60,7 +60,10 @@ test("analyze-test route returns alternatives for suggested slots", async () => 
 
 test("analyzer scales the token budget with pending item count (no truncation on multi-slot)", async () => {
   const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
-  assert.match(analyzer, /const maxTokens = Math\.min\(\s*4000,/s);
+  // Ceiling is 8000 to fit the widened 40-item window so a data-dump utterance's
+  // JSON isn't truncated (truncation -> empty parse -> lost captures). Verified
+  // safe on the models in use — analyze returns 200, not 400 (#1210/#1211).
+  assert.match(analyzer, /const maxTokens = Math\.min\(\s*8000,/s);
   assert.match(analyzer, /itemCount \* 150/);
   assert.match(analyzer, /max_tokens: maxTokens/);
   // The old fixed 500/800 cap must be gone.

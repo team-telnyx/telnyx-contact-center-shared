@@ -27,7 +27,11 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 
-const EXPERIMENTAL_USER = "leszek@telnyx.com";
+// Gate for experimental features (Online Translation, Auto-send TTS): only
+// shown to the user whose email matches NEXT_PUBLIC_EXPERIMENTAL_USER. If
+// that env var is unset, the gate matches nobody and the features stay
+// hidden for everyone — this file ships with no hardcoded identity.
+const EXPERIMENTAL_USER = process.env.NEXT_PUBLIC_EXPERIMENTAL_USER || "";
 
 function dateInputType(mode) {
   return mode === "time" ? "time" : mode === "datetime" || mode === "datetime-local" ? "datetime-local" : "date";
@@ -81,7 +85,7 @@ export default function AgentAssistNodeEditor({
   currentUserEmail,
   availableVariables = [],
 }) {
-  const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
+  const isExperimentalUser = Boolean(EXPERIMENTAL_USER) && currentUserEmail === EXPERIMENTAL_USER;
   const [workflows, setWorkflows] = useState([]);
   const [kbCategories, setKbCategories] = useState([]);
   const [forms, setForms] = useState([]);
@@ -889,7 +893,7 @@ export default function AgentAssistNodeEditor({
             />
           </div>
 
-          {/* Online Translation — experimental, visible only for leszek@telnyx.com */}
+          {/* Online Translation — experimental, gated by NEXT_PUBLIC_EXPERIMENTAL_USER */}
           {isExperimentalUser && (
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -905,7 +909,7 @@ export default function AgentAssistNodeEditor({
             </div>
           )}
 
-          {/* Auto-send TTS — experimental, visible only for leszek@telnyx.com */}
+          {/* Auto-send TTS — experimental, gated by NEXT_PUBLIC_EXPERIMENTAL_USER */}
           {isExperimentalUser && (
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">

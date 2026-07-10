@@ -1497,6 +1497,7 @@ export function AgentDesktop() {
                 </Select>
               ) : null}
             </div>
+            <div id="interaction-detail-header-actions" className="shrink-0" />
           </div>
         </div>
 

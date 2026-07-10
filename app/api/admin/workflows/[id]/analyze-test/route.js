@@ -11,6 +11,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+import { isReadBackItem } from "@/lib/agent-assist/readback.mjs";
+import { isAccumulatingSlot, accumulateSlotValue } from "@/lib/agent-assist/slot-accumulate.mjs";
 
 function normalizeConfidenceThreshold(value) {
   const numericValue = Number(value);
@@ -50,7 +52,7 @@ export async function POST(request, { params }) {
 
     const { id: workflowId } = await params;
     const body = await request.json();
-    const { transcript, speaker, itemStatuses = {}, slotsFilled = {} } = body;
+    const { transcript, speaker, itemStatuses = {}, slotsFilled = {}, recentContext = [] } = body;
 
     if (!transcript?.trim()) {
       return NextResponse.json(
@@ -105,22 +107,34 @@ export async function POST(request, { params }) {
     const getDefaultCompletionTrigger = (type) =>
       type === "slot" ? "customer" : "agent";
 
+    const toAnalyzerItem = (item, current_status) => ({
+      item_id: item.id,
+      type: item.type,
+      label: item.label,
+      prompt_hint: item.prompt_hint,
+      hints: item.hints,
+      slot_name: item.slot_name,
+      slot_type: item.slot_type,
+      slot_validation: item.slot_validation,
+      completion_trigger: item.completion_trigger || getDefaultCompletionTrigger(item.type),
+      stage_name: item.stage_name,
+      stage_order: item.stage_order,
+      current_status,
+    });
+
     const pendingItems = items
       .filter((item) => !completedIds.has(item.id))
-      .map((item) => ({
-        item_id: item.id,
-        type: item.type,
-        label: item.label,
-        prompt_hint: item.prompt_hint,
-        slot_name: item.slot_name,
-        slot_type: item.slot_type,
-        slot_validation: item.slot_validation,
-        completion_trigger: item.completion_trigger || getDefaultCompletionTrigger(item.type),
-        stage_name: item.stage_name,
-        stage_order: item.stage_order,
-      }));
+      .map((item) => toAnalyzerItem(item, "pending"));
 
-    if (pendingItems.length === 0) {
+    // Completed notes slots stay analyzable so multi-utterance notes accumulate
+    // (mirrors the live analyze route).
+    const completedNotesItems = items
+      .filter((item) => completedIds.has(item.id) && item.type === "slot" && isAccumulatingSlot(item))
+      .map((item) => toAnalyzerItem(item, "completed"));
+
+    const analyzerItems = [...pendingItems, ...completedNotesItems];
+
+    if (analyzerItems.length === 0) {
       return NextResponse.json({
         ok: true,
         message: "All items completed",
@@ -129,14 +143,23 @@ export async function POST(request, { params }) {
       });
     }
 
+    // The slot currently being collected (earliest open slot) — mirrors the live
+    // analyze route so tests exercise the same current-target disambiguation.
+    const currentTargetItem = pendingItems.find((i) => i.type === "slot");
+    const currentTarget = currentTargetItem
+      ? { label: currentTargetItem.label, slotName: currentTargetItem.slot_name }
+      : null;
+
     // Call same LLM analyzer as live agent desktop (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
       transcript,
       speaker: speaker || "unknown",
-      pendingItems,
+      pendingItems: analyzerItems,
       slotsFilled: { ...slotsFilled },
       model: llmModel,
       confidenceThreshold,
+      currentTarget,
+      recentContext: Array.isArray(recentContext) ? recentContext.slice(-6) : [],
     });
 
     // Apply completion_trigger and confidence threshold (same logic as live API)
@@ -146,7 +169,7 @@ export async function POST(request, { params }) {
     const newSlotsFilled = { ...slotsFilled };
 
     for (const completed of analysisResult.completed_items || []) {
-      const item = pendingItems.find((p) => p.item_id === completed.item_id);
+      const item = analyzerItems.find((p) => p.item_id === completed.item_id);
       if (!item) continue;
 
       const completionTrigger = item.completion_trigger || getDefaultCompletionTrigger(item.type);
@@ -161,6 +184,36 @@ export async function POST(request, { params }) {
         continue;
       }
 
+      // Keep the final read-back / "confirm all" item open until every slot is
+      // collected and confirmed (mirrors the live route).
+      const hasUnconfirmedSlot = pendingItems.some((p) => p.type === "slot");
+      if (
+        item.type !== "slot" &&
+        hasUnconfirmedSlot &&
+        isReadBackItem({ itemType: item.type, itemLabel: item.label, itemPromptHint: item.prompt_hint, itemHints: item.hints })
+      ) {
+        continue;
+      }
+
+      // Already-completed notes slot re-analyzed → append the new fragment.
+      if (item.current_status === "completed" && item.type === "slot" && isAccumulatingSlot(item)) {
+        if (completed.confidence < confidenceThreshold) {
+          continue;
+        }
+        const accumulated = accumulateSlotValue(newSlotsFilled[item.slot_name], completed.extracted_value);
+        if (accumulated !== (newSlotsFilled[item.slot_name] ?? "")) {
+          newSlotsFilled[item.slot_name] = accumulated;
+          updates.push({
+            item_id: completed.item_id,
+            status: "completed",
+            confidence: completed.confidence,
+            extracted_value: accumulated,
+            source_text: completed.source_text,
+          });
+        }
+        continue;
+      }
+
       if (completed.confidence >= confidenceThreshold) {
         updates.push({
           item_id: completed.item_id,
@@ -170,7 +223,9 @@ export async function POST(request, { params }) {
           source_text: completed.source_text,
         });
         if (item.slot_name && completed.extracted_value) {
-          newSlotsFilled[item.slot_name] = completed.extracted_value;
+          newSlotsFilled[item.slot_name] = isAccumulatingSlot(item)
+            ? accumulateSlotValue(newSlotsFilled[item.slot_name], completed.extracted_value)
+            : completed.extracted_value;
         }
       } else {
         updates.push({

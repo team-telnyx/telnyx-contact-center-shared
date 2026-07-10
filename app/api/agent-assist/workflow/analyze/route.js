@@ -9,6 +9,16 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+import { isReadBackItem } from "@/lib/agent-assist/readback.mjs";
+import { isAccumulatingSlot, accumulateSlotValue } from "@/lib/agent-assist/slot-accumulate.mjs";
+
+// How many pending items to send the analyzer per utterance. The old cap of 12
+// starved larger intakes: on a 24+ slot workflow the first 12 pending items only
+// reach the Destination stage, so Patient / Clinical / Trip-notes / Air-safety
+// slots were NEVER analyzed and could not capture. Widened to cover realistic
+// workflows — the output stays small (only matched items are returned) and the
+// analyzer's max_tokens already scales with item count.
+const MAX_ANALYZER_PENDING_ITEMS = 40;
 
 function normalizeConfidenceThreshold(value) {
   const numericValue = Number(value);
@@ -47,7 +57,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { sessionId, interactionId, transcript, speaker } = body;
+    const { sessionId, interactionId, transcript, speaker, recentContext } = body;
 
     if (!transcript?.trim()) {
       return NextResponse.json(
@@ -122,6 +132,7 @@ export async function POST(request) {
         i.slot_options,
         i.slot_validation,
         i.completion_trigger,
+        i.hints,
         s.name as stage_name,
         s.order_index as stage_order,
         ist.status as current_status
@@ -143,9 +154,35 @@ export async function POST(request) {
           (completionTrigger === "either" || completionTrigger === speakerType)
         );
       })
-      .slice(0, 12);
+      .slice(0, MAX_ANALYZER_PENDING_ITEMS);
 
-    if (relevantPendingItems.length === 0) {
+    // Free-text notes slots keep accumulating AFTER they complete: a completed
+    // item drops out of the pending set, so later STT fragments of a multi-
+    // sentence note would be lost. Re-include completed accumulating (notes)
+    // slots in the analyzer INPUT only — not in pendingItems — so subsequent
+    // fragments accumulate without affecting the read-back guard or the current
+    // target. Fetched BEFORE the empty-pending check so a note still accumulates
+    // when it is the only thing the customer is still adding to.
+    const { rows: completedSlotRows } = await pool.query(
+      `SELECT i.id as item_id, i.type, i.label, i.prompt_hint, i.slot_name,
+              i.slot_type, i.slot_options, i.slot_validation, i.completion_trigger,
+              i.hints, s.name as stage_name, s.order_index as stage_order,
+              ist.status as current_status
+         FROM aa_workflow_items i
+         JOIN aa_workflow_stages s ON i.stage_id = s.id
+         JOIN aa_workflow_item_status ist ON ist.item_id = i.id AND ist.session_id = $1
+        WHERE s.workflow_id = $2 AND ist.status = 'completed' AND i.type = 'slot'
+        ORDER BY s.order_index, i.order_index`,
+      [workflowSession.id, workflowSession.workflow_id]
+    );
+    const completedNotesItems = completedSlotRows.filter((it) => {
+      if (!isAccumulatingSlot(it)) return false;
+      const trigger = it.completion_trigger || "agent";
+      return Boolean(speakerType) && (trigger === "either" || trigger === speakerType);
+    });
+    const analyzerItems = [...relevantPendingItems, ...completedNotesItems];
+
+    if (analyzerItems.length === 0) {
       workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
         sessionId: workflowSession.id,
         interactionId: workflowSession.interaction_id,
@@ -161,8 +198,15 @@ export async function POST(request) {
       });
     }
 
-    // Get current slots filled
+    // Get current slots filled. `slotsFilled` is the snapshot read at request
+    // start; `slotsDelta` accumulates ONLY the slots this request changes, so the
+    // persist can jsonb-merge the delta instead of overwriting the whole object.
+    // Overwriting is a lost-update race: when analyze is slow, two requests
+    // overlap, each reads this snapshot, and the later write wipes the earlier
+    // one's slots (e.g. a freshly captured `other_aircraft_responding: false`
+    // vanishes, so the suggested response re-targets an already-filled slot).
     const slotsFilled = workflowSession.slots_filled || {};
+    const slotsDelta = {};
 
     // Get workflow's LLM model and confidence threshold
     const { rows: [workflow] } = await pool.query(
@@ -172,16 +216,30 @@ export async function POST(request) {
     const llmModel = workflow?.llm_model || "openai/gpt-4o";
     const confidenceThreshold = normalizeConfidenceThreshold(workflow?.llm_confidence_threshold);
 
+    // The slot the agent is currently collecting = the earliest still-open slot
+    // (pendingItems are ordered by stage, then item). Passed to the analyzer so
+    // an ambiguous answer is assigned to the slot actually being asked, instead
+    // of a same-looking slot elsewhere (e.g. a mis-heard destination facility
+    // going into a patient-name slot).
+    const currentTargetItem = pendingItems.find(
+      (i) => i.type === "slot" && i.current_status === "pending"
+    );
+    const currentTarget = currentTargetItem
+      ? { label: currentTargetItem.label, slotName: currentTargetItem.slot_name }
+      : null;
+
     // Call LLM analyzer (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
       transcript,
       speaker: speaker || "unknown",
-      pendingItems: relevantPendingItems,
+      pendingItems: analyzerItems,
       slotsFilled,
       model: llmModel,
       includeIntent: assistConfig.enable_intent_recognition === true,
       includeSentiment: assistConfig.enable_sentiment_analysis === true,
       confidenceThreshold,
+      currentTarget,
+      recentContext: Array.isArray(recentContext) ? recentContext.slice(-6) : [],
     });
 
     // Process completed items
@@ -192,8 +250,9 @@ export async function POST(request) {
       await client.query("BEGIN");
 
       for (const completed of analysisResult.completed_items || []) {
-        // Get item details including completion_trigger
-        const item = relevantPendingItems.find(p => p.item_id === completed.item_id);
+        // Get item details including completion_trigger (search the analyzer input,
+        // which also carries completed notes slots still accumulating).
+        const item = analyzerItems.find(p => p.item_id === completed.item_id);
         if (!item) continue;
         
         // Check if completion_trigger matches speaker
@@ -210,7 +269,52 @@ export async function POST(request) {
         if (!shouldComplete || !hasExtractedSlotValue) {
           continue;
         }
-        
+
+        // Keep the final read-back / "confirm all information" item OPEN until every
+        // slot has been collected AND confirmed. Otherwise a per-slot confirmation
+        // exchange ("please confirm that's correct" / "that's correct") auto-completes
+        // it and the agent never gets the full read-back. `pendingItems` still lists
+        // any slot that is pending or an unconfirmed low-confidence suggestion.
+        const hasUnconfirmedSlot = pendingItems.some((p) => p.type === "slot");
+        if (
+          item.type !== "slot" &&
+          hasUnconfirmedSlot &&
+          isReadBackItem({ itemType: item.type, itemLabel: item.label, itemPromptHint: item.prompt_hint, itemHints: item.hints })
+        ) {
+          continue;
+        }
+
+        // A notes slot that has ALREADY completed is re-analyzed so later
+        // utterances of a multi-sentence note keep accumulating. Only append a
+        // fragment that clears the confidence threshold — otherwise noisy/ambiguous
+        // post-completion STT would be permanently glued onto the note. Dedup means
+        // a repeated/echoed fragment is a no-op.
+        if (item.current_status === "completed" && item.type === "slot" && isAccumulatingSlot(item)) {
+          if (completed.confidence < confidenceThreshold) {
+            continue;
+          }
+          const accumulated = accumulateSlotValue(slotsFilled[item.slot_name], completed.extracted_value);
+          if (accumulated !== (slotsFilled[item.slot_name] ?? "")) {
+            slotsFilled[item.slot_name] = accumulated;
+            slotsDelta[item.slot_name] = accumulated;
+            await client.query(
+              `UPDATE aa_workflow_item_status
+                 SET extracted_value = $1, source_transcript = $2, updated_at = NOW()
+               WHERE session_id = $3 AND item_id = $4`,
+              [accumulated, transcript, workflowSession.id, completed.item_id]
+            );
+            updates.push({
+              item_id: completed.item_id,
+              status: "completed",
+              confidence: completed.confidence,
+              extracted_value: accumulated,
+              source_text: completed.source_text,
+              alternatives: [],
+            });
+          }
+          continue;
+        }
+
         // Only auto-complete if confidence is high enough; otherwise persist a suggestion.
         if (completed.confidence >= confidenceThreshold) {
           // Update item status
@@ -237,9 +341,14 @@ export async function POST(request) {
 
           // If this is a slot item with a value, update slots_filled. Use the
           // meaningful-value check (not truthiness) so boolean false / numeric 0
-          // are kept — e.g. accompanying=false, iv_count=0.
+          // are kept — e.g. accompanying=false, iv_count=0. Free-text notes slots
+          // accumulate across utterances instead of overwriting, so a multi-
+          // sentence answer isn't reduced to its last fragment.
           if (item?.slot_name && hasMeaningfulExtractedValue(completed.extracted_value)) {
-            slotsFilled[item.slot_name] = completed.extracted_value;
+            slotsFilled[item.slot_name] = isAccumulatingSlot(item)
+              ? accumulateSlotValue(slotsFilled[item.slot_name], completed.extracted_value)
+              : completed.extracted_value;
+            slotsDelta[item.slot_name] = slotsFilled[item.slot_name];
           }
 
           updates.push({
@@ -295,14 +404,25 @@ export async function POST(request) {
         }
       }
 
-      // Update slots_filled in session
-      if (Object.keys(slotsFilled).length > 0) {
-        await client.query(
-          `UPDATE aa_workflow_sessions 
-           SET slots_filled = $1, updated_at = NOW()
-           WHERE id = $2`,
-          [JSON.stringify(slotsFilled), workflowSession.id]
+      // Persist ONLY the slots this request changed, jsonb-merged into whatever
+      // the row currently holds — never overwrite the whole object. This is
+      // atomic at the DB level, so a concurrent analyze that filled a DIFFERENT
+      // slot is preserved instead of clobbered. Re-read the merged result so the
+      // response reflects the true post-merge state (including a concurrent
+      // request's slots), not just this request's local snapshot.
+      if (Object.keys(slotsDelta).length > 0) {
+        const { rows: [merged] } = await client.query(
+          `UPDATE aa_workflow_sessions
+           SET slots_filled = COALESCE(slots_filled, '{}'::jsonb) || $1::jsonb,
+               updated_at = NOW()
+           WHERE id = $2
+           RETURNING slots_filled`,
+          [JSON.stringify(slotsDelta), workflowSession.id]
         );
+        if (merged?.slots_filled && typeof merged.slots_filled === "object") {
+          for (const key of Object.keys(slotsFilled)) delete slotsFilled[key];
+          Object.assign(slotsFilled, merged.slots_filled);
+        }
       }
 
       // Recalculate completion percentage

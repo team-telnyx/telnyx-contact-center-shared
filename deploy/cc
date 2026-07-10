@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Thin POSIX shim for the Contact Center deployment wizard CLI.
+# Real logic lives in deploy/cli/cc.mjs (Node.js, @inquirer/prompts + chalk —
+# same UX conventions as ~/Documents/dev/fde-infra-cli).
+#
+# On first use, installs the CLI's isolated dependency tree (deploy/cli/node_modules)
+# so this never touches the main app's package.json/yarn.lock.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_DIR="$SCRIPT_DIR/cli"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "❌ Node.js is required to run the deployment wizard (>= 20). Install it and try again." >&2
+  exit 1
+fi
+
+if [ ! -d "$CLI_DIR/node_modules" ]; then
+  echo "📦 First run: installing deploy CLI dependencies (isolated from the app's own package.json)..." >&2
+  ( cd "$CLI_DIR" && npm install --no-audit --no-fund --silent )
+fi
+
+exec node "$CLI_DIR/cc.mjs" "$@"
