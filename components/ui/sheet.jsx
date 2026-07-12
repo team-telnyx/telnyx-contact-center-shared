@@ -35,10 +35,18 @@ function SheetOverlay({ className, ...props }) {
   );
 }
 
-function SheetContent({ className, children, side = "right", showCloseButton = true, ...props }) {
+function SheetContent({
+  className,
+  children,
+  side = "right",
+  showCloseButton = true,
+  showOverlay = true,
+  portalContainer,
+  ...props
+}) {
   return (
-    <SheetPortal>
-      <SheetOverlay />
+    <SheetPortal container={portalContainer}>
+      {showOverlay ? <SheetOverlay /> : null}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         aria-describedby={props["aria-describedby"] ?? undefined}

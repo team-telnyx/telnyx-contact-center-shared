@@ -1,0 +1,38 @@
+---
+title: Call Generator
+description: Build controlled call scenarios, action sequences, safety limits, and execution reports.
+audiences: [admin, owner]
+keywords: [call generator, test call, scenario, action, load, safety]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → System**, then select the **Call Generator** tile or rail item. The nested rail contains Dashboard, Logs, Scenarios, Actions, Settings, and Exit.
+
+## Dashboard and Logs
+
+**Dashboard** monitors active runs and their live reports. **Logs** lists completed, stopped, failed, or abandoned runs; expand a run to see the same metrics captured at completion. Use run controls only after confirming the scenario and safety settings.
+
+## Scenarios
+
+A scenario has a name, description, optional maximum call duration, and one or more targets. Each target selects a call flow, total call count, allowed from numbers, action sequence/trigger, and optional workflow-testing configuration.
+
+Assertions can verify routing to a queue, answer time, maximum abandonment rate, and minimum answer rate. Assertions evaluate the run; they do not automatically correct the target flow.
+
+## Actions
+
+Actions define ordered behavior for generated calls. Steps may wait, speak text with a selected voice/persona, send input, or perform other supported generator actions. Preview expressive speech before a run; expressive tags depend on the selected voice family.
+
+## Settings and safety rails
+
+| Field | Purpose |
+| --- | --- |
+| **Enabled** | Master switch for generator execution. |
+| **Max Concurrent Calls** | Caps simultaneous generated calls. |
+| **Max CPS** | Caps call starts per second. |
+| **From Numbers** | Restricts source numbers. |
+| **Dial Timeout** | Limits ringing time. |
+| **Max Call Duration** | Limits individual generated calls. |
+| **PSTN Whitelist** | Restricts destinations allowed for external calls. |
+
+Generated PSTN calls can create charges and real external traffic. Begin with one call, a test destination, low concurrency/CPS, and a strict whitelist. Stop the run immediately when routing or assertions differ from expectations.

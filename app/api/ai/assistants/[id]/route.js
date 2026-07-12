@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { normalizeAssistantPayload } from "@/lib/ai/assistant-payload.mjs";
+import { telnyxErrorDetail } from "@/lib/telnyx-error.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +30,7 @@ export async function GET(request, { params }) {
     if (!res.ok) {
       const text = await res.text();
       return NextResponse.json(
-        { ok: false, error: `Telnyx API error: ${res.status} ${text}` },
+        { ok: false, error: telnyxErrorDetail(text, `Telnyx API error: ${res.status}`) },
         { status: res.status === 404 ? 404 : 502, headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -58,7 +60,7 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = await params;
-    const payload = await request.json().catch(() => ({}));
+    const payload = normalizeAssistantPayload(await request.json().catch(() => ({})));
 
     const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${id}`), {
       method: "POST",
@@ -73,7 +75,7 @@ export async function PUT(request, { params }) {
     if (!res.ok) {
       const text = await res.text();
       return NextResponse.json(
-        { ok: false, error: `Telnyx API error: ${res.status} ${text}` },
+        { ok: false, error: telnyxErrorDetail(text, `Telnyx API error: ${res.status}`) },
         { status: res.status === 404 ? 404 : 502, headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -89,6 +91,12 @@ export async function PUT(request, { params }) {
       { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
+}
+
+// Telnyx uses POST for assistant updates; keep PUT for the contact-center
+// editor and expose POST for demo-portal components such as WidgetTab.
+export async function POST(request, context) {
+  return PUT(request, context);
 }
 
 // DELETE assistant
@@ -116,7 +124,7 @@ export async function DELETE(request, { params }) {
     if (!res.ok) {
       const text = await res.text();
       return NextResponse.json(
-        { ok: false, error: `Telnyx API error: ${res.status} ${text}` },
+        { ok: false, error: telnyxErrorDetail(text, `Telnyx API error: ${res.status}`) },
         { status: res.status === 404 ? 404 : 502, headers: { "Cache-Control": "no-store" } }
       );
     }

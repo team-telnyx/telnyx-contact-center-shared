@@ -1,0 +1,8 @@
+---
+title: Noise Suppression Stop
+description: Disable previously enabled noise suppression.
+---
+
+This node disables noise suppression on the active leg. Use it only after a corresponding start or when the current call state guarantees suppression is active.
+
+Connect success/error cleanup paths and avoid assuming the stop operation succeeds after the leg has already ended.

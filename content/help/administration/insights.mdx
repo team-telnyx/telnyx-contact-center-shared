@@ -1,0 +1,38 @@
+---
+title: Insights
+description: Define post-conversation extraction instructions, structured schemas, groups, and webhooks.
+audiences: [admin, owner]
+keywords: [insight, conversation, extraction, JSON schema, webhook, group]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → AI Assistants**, then select **Insights** in the rail. Insights extract or compute information from completed AI conversations.
+
+## Insights and groups
+
+The page manages two resources. **Insights** define what to extract; **Groups** collect insights and can deliver grouped results to a webhook. Switch between list and card views, then edit or delete individual records.
+
+## Create an insight
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Name** | Yes | Stable extraction name. |
+| **Webhook URL** | No | Optional destination for this insight. |
+| **Mode** | Yes | **Instructions** for free-form extraction or **Structured data** for a generated JSON Schema. |
+| **Instructions** | In Instructions mode | What the system should extract or compute. |
+| **Parameters** | In Structured mode | One or more uniquely named fields. |
+| **Parameter Type** | Per parameter | String, numeric, boolean, enum, array, or another supported schema type. |
+| **Required** | No | Adds the parameter to the JSON Schema required list. |
+| **Description** | No | Explains the field to the extraction model and downstream consumers. |
+| **Allowed values** | For enum | Comma-separated accepted values. |
+
+Duplicate or empty parameter names prevent saving. Treat schema changes as an integration change because webhook consumers may depend on field names and types.
+
+## Create a group
+
+Enter a group name, optional webhook, and select at least one insight. Groups provide a reusable delivery bundle. Verify that the destination accepts the generated structure and handles retries or duplicate delivery safely.
+
+## Assign and validate
+
+Enable the required insights in an assistant's **Insights** editor section. Run a controlled conversation with known facts, end it normally, and compare the stored or delivered output with the expected schema before production use.

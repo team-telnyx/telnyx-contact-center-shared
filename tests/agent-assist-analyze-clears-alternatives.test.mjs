@@ -12,9 +12,11 @@ test("live analyze route: completed branch clears alternatives; suggested branch
   // also clears any stale value) so the agent-desktop chips can render.
   assert.match(route, /alternatives = NULL/, "completed branch still clears alternatives");
   assert.match(route, /alternatives = \$7::jsonb/, "suggested branch persists alternatives");
-  // The old behavior (both branches hardcoded NULL) must be gone.
+  // The old behavior (the SUGGESTED branch hardcoding NULL) must be gone. Two
+  // legitimate NULL clears remain: the completed branch and the name-reconcile
+  // reset (clearing a first-name slot that duplicated the last name).
   const nullClears = route.match(/alternatives = NULL/g) || [];
-  assert.equal(nullClears.length, 1, "only the completed branch hardcodes NULL now");
+  assert.equal(nullClears.length, 2, "completed branch + name-reconcile reset clear NULL; suggested uses $7");
 });
 
 test("FDE-535: workflow-store analyzeTranscript clears stale alternatives on merge", async () => {

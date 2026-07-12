@@ -1,0 +1,34 @@
+---
+title: Pronunciation Dictionaries
+description: Control how AI Assistants pronounce names, brands, abbreviations, and specialist terms.
+audiences: [admin, owner]
+keywords: [ai assistants, pronunciation, dictionary, alias, phoneme, ipa, x-sampa]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Pronunciation Dictionaries define how an AI Assistant speaks selected words and phrases. Open **Admin → AI Assistants → Pronunciation Dictionaries** to create, edit, preview, or delete dictionaries.
+
+## Create a dictionary
+
+1. Select **New Dictionary**.
+2. Enter a unique dictionary name.
+3. Add pronunciation items manually or upload a `.txt`, `.pls`, or `.xml` file.
+4. Use Preview Settings to select a TTS provider, model, voice, and speed.
+5. Preview individual items, then select **Create Dictionary**.
+
+An **Alias** replaces the matched text with a spoken form. A **Phoneme** provides IPA or X-SAMPA notation for precise pronunciation. Each dictionary supports up to 100 items.
+
+## Assign a dictionary
+
+Open an AI Assistant, select **Voice**, and choose the dictionary under **Pronunciation Dictionary**. Save the assistant to persist the dictionary ID in its voice settings.
+
+## File formats
+
+- Plain text uses one entry per line in `word=spoken replacement` format.
+- PLS/XML uses `<lexeme>` entries with `<grapheme>` plus either `<alias>` or `<phoneme>`.
+- Uploads are limited to 1 MB and 100 parsed entries.
+
+<Callout>
+Preview the most important names and specialist terms with the same provider and voice used by the assistant before enabling the dictionary in production.
+</Callout>

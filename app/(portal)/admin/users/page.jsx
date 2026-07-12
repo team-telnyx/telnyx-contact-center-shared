@@ -1,6 +1,7 @@
 "use client";
 
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/users/EditSheet";
+import { sortUserRoles } from "@/config/user";
 
 function SkillsInfoCell({ user }) {
   const skills = user.skills || {};
@@ -258,7 +260,7 @@ export default function AdminUsersPage() {
           : ["user"];
       userRoles.forEach((r) => roleSet.add(String(r).toLowerCase()));
     });
-    return Array.from(roleSet).sort();
+    return sortUserRoles(Array.from(roleSet));
   }, [items]);
 
   const headerActions = <>
@@ -280,7 +282,7 @@ export default function AdminUsersPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader title="Users" badges={<Badge variant="secondary">{total} users</Badge>} actions={headerActions} />
-      <AdminPageContent>
+      <ConfigurationSectionPage activeId="users">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
@@ -370,13 +372,14 @@ export default function AdminUsersPage() {
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
                             <div className="flex flex-wrap gap-1">
-                              {(u.roles &&
-                              Array.isArray(u.roles) &&
-                              u.roles.length > 0
-                                ? u.roles
-                                : u.role
-                                ? [u.role]
-                                : ["user"]
+                              {sortUserRoles(
+                                u.roles &&
+                                  Array.isArray(u.roles) &&
+                                  u.roles.length > 0
+                                  ? u.roles
+                                  : u.role
+                                    ? [u.role]
+                                    : ["user"],
                               ).map((r) => (
                                 <Badge
                                   key={r}
@@ -588,7 +591,7 @@ export default function AdminUsersPage() {
         onSaveComplete={load}
       />
         </div>
-      </AdminPageContent>
+      </ConfigurationSectionPage>
     </AdminPageShell>
   );
 }

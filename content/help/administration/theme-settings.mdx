@@ -1,0 +1,39 @@
+---
+title: Theme Settings
+description: Customize company branding, authentication imagery, sidebar logo, and light/dark application colors.
+audiences: [admin, owner]
+keywords: [theme, branding, logo, colors, light, dark]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → System**, then choose the **Theme Settings** tile or rail item.
+
+## Branding & Logos
+
+| Field | Purpose |
+| --- | --- |
+| **Brand / Company Name** | Used in Agent Assist greetings and other brand-aware text. |
+| **Brand Logo (Auth Pages)** | Logo on the left side of sign-in and sign-up pages. |
+| **Right Panel Image (Auth Pages)** | Image displayed in the authentication-page right panel. |
+| **Sidebar Logo** | Logo at the top of the authenticated application sidebar. |
+
+Upload controls accept browser-supported image files and display a preview. The × action marks a custom image for removal; select **Save Changes** to persist it.
+
+## Light and dark themes
+
+Use **Light Theme** and **Dark Theme** tabs to edit each theme independently. Opening a tab also switches the current UI theme so changes can be previewed.
+
+Color groups include Base, Card, Primary, Interactive, Border & Input, Chart, Sidebar, Modal, Sheet, Popover, and Brand colors. Each picker stores the application color value and its corresponding hexadecimal representation.
+
+## Save Changes
+
+Color and branding edits are previewed in the browser but are not permanent until **Save Changes** is selected. The button is disabled when nothing has changed. Review both light and dark themes before saving because shared components must remain readable in each mode.
+
+## Reset to Defaults
+
+**Reset to Defaults** requires confirmation. It resets light and dark colors and removes custom logo/image values. The last saved company name is preserved. This action saves the reset configuration to the database, so record custom values before resetting if they may be needed again.
+
+## Accessibility guidance
+
+Check text/background contrast, focus rings, destructive and success states, charts, dialogs, sheets, and sidebar active items. Test sign-in pages and the agent workspace at common desktop and mobile sizes before publishing a new brand theme.

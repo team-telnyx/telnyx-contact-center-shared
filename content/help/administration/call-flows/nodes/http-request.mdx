@@ -1,0 +1,8 @@
+---
+title: HTTP Request initiator
+description: Start an application flow from an inbound HTTP request.
+---
+
+**HTTP Request** starts a flow through an API endpoint. Configure the HTTP method, expected request/sample payload, and payload variable (normally `request_payload`). GET inputs are modeled under `query`; POST bodies under `payload`.
+
+Use the sample to populate Edge Variable Mapper paths. Validate authentication at the endpoint boundary and return deterministic success/error behavior. Do not confuse this initiator with the outbound [HTTP Request action](./http-request-action).

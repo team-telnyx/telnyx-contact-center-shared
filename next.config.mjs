@@ -1,20 +1,37 @@
+import { createMDX } from "fumadocs-mdx/next";
+
+function devOriginHostname(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate) return "";
+  try {
+    return new URL(candidate.includes("://") ? candidate : `http://${candidate}`).hostname;
+  } catch {
+    return candidate.replace(/^https?:\/\//, "").split(/[/:]/)[0];
+  }
+}
+
+const allowedDevOrigins = [...new Set([
+  "localhost",
+  "127.0.0.1",
+  devOriginHostname(process.env.NEXT_PUBLIC_BASE_URL),
+  devOriginHostname(process.env.NEXTAUTH_URL),
+  devOriginHostname(process.env.APP_BASE_URL),
+  ...(process.env.ALLOWED_DEV_ORIGINS || "").split(",").map(devOriginHostname),
+].filter(Boolean))];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Configure body size limit for Server Actions (for profile picture uploads)
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
+      allowedOrigins: allowedDevOrigins,
     },
   },
   // Allowed dev origins - required when using a reverse proxy (e.g. your-dev-server.example.com)
   // Prevents "Blocked cross-origin request" which breaks HMR and causes ~40s page refreshes
   // Set ALLOWED_DEV_ORIGINS env var to override (comma-separated).
-  allowedDevOrigins: [
-    ...(process.env.ALLOWED_DEV_ORIGINS || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-  ],
+  allowedDevOrigins,
   // Serve runtime-uploaded media from the mounted public/media directory.
   // A beforeFiles rewrite avoids relying on Next's static-file snapshot/cache for files created after build.
   async rewrites() {
@@ -92,4 +109,22 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+const withMDX = createMDX({
+  configPath: "source.config.ts",
+});
+
+const configuredNext = withMDX(nextConfig);
+
+// Fumadocs' metadata loader already falls back to the normal JSON/YAML loader
+// when a file has no `?collection=` query. Next 16.1 removed `query` from the
+// public Turbopack rule-condition schema, so let the loader perform that check
+// instead of emitting an invalid Next config.
+for (const pattern of ["*.json", "*.yaml"]) {
+  const rule = configuredNext.turbopack?.rules?.[pattern];
+  if (rule && !Array.isArray(rule) && rule.condition?.query) {
+    const { condition: _condition, ...ruleWithoutLegacyCondition } = rule;
+    configuredNext.turbopack.rules[pattern] = ruleWithoutLegacyCondition;
+  }
+}
+
+export default configuredNext;

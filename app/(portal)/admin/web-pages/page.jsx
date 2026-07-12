@@ -1,6 +1,7 @@
 "use client";
 
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
 import { Fragment, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,7 @@ export default function AdminWebPagesPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader title="Web Pages" badges={<Badge variant="secondary">{items.length} pages</Badge>} actions={headerActions} />
-      <AdminPageContent>
+      <ConfigurationSectionPage activeId="web-pages">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
@@ -234,7 +235,7 @@ export default function AdminWebPagesPage() {
         onSaveComplete={load}
       />
         </div>
-      </AdminPageContent>
+      </ConfigurationSectionPage>
     </AdminPageShell>
   );
 }

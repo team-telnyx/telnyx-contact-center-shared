@@ -1,0 +1,27 @@
+---
+title: Handling calls
+description: Follow the complete inbound and outbound call procedure from offer through disconnect.
+audiences: [agent, supervisor, admin, owner]
+keywords: [answer, reject, mute, hold, transfer, DTMF]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+## Inbound calls
+
+1. Confirm the caller/queue in Desktop and the incoming identity in WebRTC Phone.
+2. Select **Answer** before the queue answer timeout or **Reject** when the call cannot be handled.
+3. After connection, use **Mute**, **Hold**, **Transfer**, **DTMF**, and **End** as required.
+4. Complete wrap-up after the answered interaction disconnects.
+
+Rejecting or missing an offered queue call is recorded as a pre-answer no-answer outcome and can set **Agent Not Answering**. A customer abandonment before answer does not open wrap-up.
+
+## Outbound calls
+
+Choose a destination from Contacts in the phone, verify the read-only **From** number from the user profile, and select **Call**. While dialing/ringing, **Disconnect** cancels the attempt. Once connected, the standard controls replace it.
+
+## Transfer and consult
+
+Transfer destinations include Queues, Agents, Contacts, AI Agents, and a Manual number/SIP target. Queue transfer can preserve routing options where supported. **Consult** is available for external destinations, not queue transfer. During consult, the original caller is parked and the modal lets the agent switch between the parked and consultant legs before completing or cancelling the transfer.
+
+Do not close the transfer dialog while a consult is being established. If a leg cannot be identified yet, wait briefly for call metadata rather than repeating the action.

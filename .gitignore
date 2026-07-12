@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+/.source/
 
 # production
 /build
@@ -70,3 +71,10 @@ Dockerfile.local
 !deploy/terraform/aws-required-policy.json
 cc.tfplan
 
+# Build/deploy artifacts produced by the AWS E2E driver / cloud-deploy.mjs
+# (image tarball shipped to S3, its checksum, and the deploy manifest) —
+# generated on demand at repo root when running deploy/e2e-aws-driver.mjs
+# from there; never something to commit (the tarball alone is 1GB+).
+/image.tar.zst
+/image.tar.zst.sha256
+/manifest.json

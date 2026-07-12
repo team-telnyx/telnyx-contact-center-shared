@@ -1,0 +1,31 @@
+{
+  "title": "Admin Workspace",
+  "pages": [
+    "index",
+    "ai-assistants",
+    "tools-library",
+    "insights",
+    "scheduled-events",
+    "pronunciation-dictionaries",
+    "mcp-servers",
+    "users",
+    "queues",
+    "skills",
+    "statuses",
+    "wrapup-codes",
+    "numbers",
+    "data-sources",
+    "web-pages",
+    "media-library",
+    "domains",
+    "secrets",
+    "system",
+    "call-generator",
+    "logging",
+    "phones-provisioning",
+    "theme-settings",
+    "call-flows",
+    "workflows",
+    "forms"
+  ]
+}

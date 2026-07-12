@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBlockquote, IconBlocks, IconBolt, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
+import { IconBlockquote, IconBlocks, IconBolt, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconLogout, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
 import * as TablerIcons from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,6 +35,14 @@ const RAIL = [
   { id: "media", label: "Media", icon: IconPhoto },
   { id: "templates", label: "Templates", icon: IconTemplate },
 ];
+
+const EXIT_RAIL_ITEM = {
+  id: "exit",
+  label: "Exit",
+  icon: IconLogout,
+  description: "Return to Forms",
+  tone: "exit",
+};
 
 const BLOCK_GROUPS = [
   { title: "Layout", color: "border-l-sky-500", iconClass: "text-sky-500", items: ["section", "row", "columns", "grid", "flex", "spacer", "divider"] },
@@ -641,6 +649,19 @@ export function FormEditor({ initialForm, isNew = false }) {
   }
   function cancelExit() { setShowExitDialog(false); setPendingNavigation(null); }
 
+  function selectRailItem(id) {
+    if (id !== "exit") {
+      setActiveTab(id);
+      return;
+    }
+    if (hasUnsavedChanges) {
+      setPendingNavigation("/admin/forms");
+      setShowExitDialog(true);
+    } else {
+      router.push("/admin/forms");
+    }
+  }
+
   async function sendAi() {
     const prompt = aiPrompt.trim();
     if (!prompt || aiLoading) return;
@@ -863,7 +884,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     <AdminPageHeader
       title={form.name || "Untitled form"}
       badges={<><Badge variant="outline" className={STATUS_BADGE_CLASS[form.status || "draft"] || STATUS_BADGE_CLASS.draft}>{form.status || "draft"}</Badge>{hasUnsavedChanges ? <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge> : <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>}</>}
-      actions={<><Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => { if (hasUnsavedChanges) { setPendingNavigation("/admin/forms"); setShowExitDialog(true); } else router.push("/admin/forms"); }}><IconArrowLeft className="mr-1 h-4 w-4" />Forms</Button><Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button><Button variant="outline" size="sm" onClick={() => setFormSettingsOpen(true)}><IconSettings className="h-4 w-4 mr-1" />Form settings</Button><Button variant="outline" size="sm" onClick={exportJson} disabled={saving}><IconDownload className="h-4 w-4 mr-1" />Export JSON</Button><Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button><Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button></>}
+      actions={<><Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button><Button variant="outline" size="sm" onClick={() => setFormSettingsOpen(true)}><IconSettings className="h-4 w-4 mr-1" />Form settings</Button><Button variant="outline" size="sm" onClick={exportJson} disabled={saving}><IconDownload className="h-4 w-4 mr-1" />Export JSON</Button><Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button><Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button></>}
     />
 
     <Dialog open={formSettingsOpen} onOpenChange={setFormSettingsOpen}>
@@ -891,7 +912,7 @@ export function FormEditor({ initialForm, isNew = false }) {
 
     <DndContext onDragStart={handleDragStart} onDragCancel={() => setActiveDragType(null)} onDragEnd={handleDragEnd}>
     <div className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0,1fr) 360px` }}>
-      <SectionRail items={RAIL} activeId={activeTab} onSelect={setActiveTab} ariaLabel="Form builder sections" />
+      <SectionRail fixedItems={[EXIT_RAIL_ITEM]} items={RAIL} activeId={activeTab} onSelect={selectRailItem} ariaLabel="Form builder sections" />
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} selectedId={selectedId} setSelectedId={selectField} addField={addField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} dataActions={dataActions} dataActionsLoading={dataActionsLoading} selectedField={selectedField} assignDataActionToButton={assignDataActionToButton} />

@@ -1,0 +1,40 @@
+---
+title: Phones Provisioning
+description: Manage hardphone inventory, SIP registration, LAN bridges, provisioning logs, and vendor settings.
+audiences: [admin, owner]
+keywords: [hardphone, provisioning, SIP, Poly, Yealink, AudioCodes, bridge, CTI]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → System**, then select **Phones Provisioning**. The nested rail contains Dashboard, Phones, Bridges, Logs, Settings, and Exit.
+
+## Dashboard
+
+Dashboard summarizes fleet vendor distribution, provisioning state, registration identity, and last contact. A phone appears healthy only after it fetches configuration and reports the expected state.
+
+## Phones
+
+Create a phone from the header and configure it in the right **Context Settings** panel.
+
+| Area | Important settings |
+| --- | --- |
+| Identity | Name/label, normalized MAC address, vendor, model, and optional local bridge. |
+| Telnyx | Assigned number, automatically managed SIP credential, and outbound voice profile requirements. |
+| Device | Line keys, CTI mode, SNTP server, timezone, DHCP/site timezone discovery, dynamic reload, and firmware updates. |
+| Operations | Remote status check, reprovision, reboot, enable/disable provisioning, and deletion. |
+| CTI | Dial, answer, hold/resume, mute/unmute, and hang up when supported by the selected device/bridge state. |
+
+Creating a phone requires the server's phone admin password and outbound voice profile configuration. Deleting a phone also deletes its Telnyx credential and cannot be undone.
+
+## Bridges
+
+Bridges provide an outbound WebSocket relay for phones on a customer LAN without inbound firewall access. Create an enrollment, copy the generated environment values once, deploy the bridge container, and confirm live presence. A bridge cannot be deleted while phones are assigned to it.
+
+## Logs
+
+Provisioning logs include configuration fetches, bridge observations, CTI commands, and vendor callbacks. Filter by date range/page size, expand rows to inspect raw event detail, and correlate by phone name and MAC address.
+
+## Settings
+
+The Settings section documents the provisioning endpoint, zero-touch vendor setup, NAT/bridge model, generated filename conventions, and security controls. Test a factory-reset device in a controlled network before rolling a template across the fleet.

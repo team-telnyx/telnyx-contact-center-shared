@@ -1,0 +1,52 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { IconLink, IconPlus, IconServer, IconTrash, IconWebhook } from "@tabler/icons-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+
+const TOOL_TYPES = [
+  ["webhook", "Webhook"], ["transfer", "Transfer"], ["handoff", "Assistant handoff"], ["hangup", "Hang up"],
+  ["retrieval", "Knowledge retrieval"], ["send_message", "Send message"], ["dtmf", "Send DTMF"], ["skip_turn", "Skip turn"],
+];
+
+function createTool(type) {
+  if (type === "webhook") return { type, webhook: { name: "New webhook", description: "", url: "", method: "POST", timeout_secs: 30, headers: [], body_parameters: { type: "object", properties: {}, required: [] } } };
+  if (type === "transfer") return { type, transfer: { name: "Transfer call", description: "", target: "" } };
+  if (type === "handoff") return { type, handoff: { name: "Assistant handoff", description: "", assistant_id: "" } };
+  if (type === "retrieval") return { type, retrieval: { name: "Search knowledge", description: "", bucket_ids: [] } };
+  if (type === "send_message") return { type, send_message: { name: "Send message", description: "", channel: "sms" } };
+  if (type === "dtmf") return { type, dtmf: { name: "Send DTMF", description: "", digits: "" } };
+  if (type === "skip_turn") return { type, skip_turn: { name: "Skip turn", description: "" } };
+  return { type: "hangup", hangup: { name: "Hang up", description: "End the call." } };
+}
+
+function toolConfig(tool) { return tool?.[tool.type] || {}; }
+function toolName(tool) { return toolConfig(tool).name || toolConfig(tool).description || tool.type; }
+
+export default function IntegrationsSettingsPanel({ values, setValues }) {
+  const router = useRouter();
+  const [servers, setServers] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [newType, setNewType] = useState("webhook");
+  const tools = Array.isArray(values.tools) ? values.tools : [];
+  const selected = tools[selectedIndex];
+  useEffect(() => { fetch("/api/admin/mcp-servers?page=1&pageSize=100", { cache: "no-store" }).then((response) => response.json()).then((data) => setServers(Array.isArray(data.rows) ? data.rows : [])).catch(() => setServers([])); }, []);
+  function setTools(next) { setValues((current) => ({ ...current, tools: next })); }
+  function addTool() { const next = [...tools, createTool(newType)]; setTools(next); setSelectedIndex(next.length - 1); }
+  function removeTool(index) { const next = tools.filter((_, itemIndex) => itemIndex !== index); setTools(next); setSelectedIndex(Math.max(0, Math.min(selectedIndex, next.length - 1))); }
+  function patchConfig(patch) { setTools(tools.map((tool, index) => index === selectedIndex ? { ...tool, [tool.type]: { ...toolConfig(tool), ...patch } } : tool)); }
+  const config = toolConfig(selected);
+
+  return <div className="space-y-4"><Card><CardHeader><CardTitle>Dynamic variable webhook</CardTitle><CardDescription>Fetch runtime context before a conversation starts.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-4 md:grid-cols-[1fr_220px]"><div className="space-y-2"><Label>Webhook URL</Label><Input type="url" value={values.dynamic_variables_webhook_url || ""} onChange={(event) => setValues((current) => ({ ...current, dynamic_variables_webhook_url: event.target.value }))} placeholder="https://example.com/assistant/context" /></div><div className="space-y-2"><Label>Target</Label><Select value={values.dynamic_variables_target || "none"} onValueChange={(value) => setValues((current) => ({ ...current, dynamic_variables_target: value === "none" ? undefined : value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No preset target</SelectItem><SelectItem value="customers">Customers</SelectItem><SelectItem value="patients">Patients</SelectItem></SelectContent></Select></div></div></CardContent></Card>
+    <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>Assistant tools</CardTitle><CardDescription className="mt-1">Add actions the model may invoke during a conversation.</CardDescription></div><div className="flex gap-2"><Select value={newType} onValueChange={setNewType}><SelectTrigger className="w-48"><SelectValue /></SelectTrigger><SelectContent>{TOOL_TYPES.map(([id, label]) => <SelectItem key={id} value={id}>{label}</SelectItem>)}</SelectContent></Select><Button onClick={addTool}><IconPlus className="size-4" />Add</Button></div></div></CardHeader><CardContent><div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]"><div className="space-y-2">{tools.map((tool, index) => <button key={`${tool.type}-${index}`} type="button" onClick={() => setSelectedIndex(index)} className={`flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition ${selectedIndex === index ? "border-foreground bg-muted" : "hover:bg-muted/50"}`}><div className="min-w-0"><div className="truncate text-sm font-medium">{toolName(tool)}</div><div className="text-xs text-muted-foreground">{TOOL_TYPES.find(([id]) => id === tool.type)?.[1] || tool.type}</div></div><Button variant="ghost" size="icon" className="shrink-0 text-destructive" onClick={(event) => { event.stopPropagation(); removeTool(index); }}><IconTrash className="size-4" /></Button></button>)}{!tools.length ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No tools configured.</div> : null}</div>{selected ? <div className="space-y-4 rounded-xl border p-4"><div className="flex items-center gap-2"><IconWebhook className="size-5 text-violet-500" /><div className="font-semibold">Configure {TOOL_TYPES.find(([id]) => id === selected.type)?.[1] || selected.type}</div></div><div className="space-y-2"><Label>Name</Label><Input value={config.name || ""} onChange={(event) => patchConfig({ name: event.target.value })} /></div><div className="space-y-2"><Label>Description</Label><Textarea value={config.description || ""} onChange={(event) => patchConfig({ description: event.target.value })} rows={3} /></div>{selected.type === "webhook" ? <><div className="grid gap-4 md:grid-cols-[160px_1fr]"><div className="space-y-2"><Label>Method</Label><Select value={config.method || "POST"} onValueChange={(value) => patchConfig({ method: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => <SelectItem key={method} value={method}>{method}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>URL</Label><Input type="url" value={config.url || ""} onChange={(event) => patchConfig({ url: event.target.value })} /></div></div><div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label>Timeout seconds</Label><Input type="number" min="1" max="120" value={config.timeout_secs ?? 30} onChange={(event) => patchConfig({ timeout_secs: Number(event.target.value) })} /></div><div className="flex items-center gap-3 pt-7"><Switch checked={Boolean(config.async)} onCheckedChange={(checked) => patchConfig({ async: checked })} /><Label>Run asynchronously</Label></div></div></> : null}{selected.type === "transfer" ? <div className="space-y-2"><Label>Transfer target</Label><Input value={config.target || ""} onChange={(event) => patchConfig({ target: event.target.value })} placeholder="+15551234567 or SIP URI" /></div> : null}{selected.type === "handoff" ? <div className="space-y-2"><Label>Target assistant ID</Label><Input value={config.assistant_id || ""} onChange={(event) => patchConfig({ assistant_id: event.target.value })} /></div> : null}{selected.type === "dtmf" ? <div className="space-y-2"><Label>Digits</Label><Input value={config.digits || ""} onChange={(event) => patchConfig({ digits: event.target.value })} placeholder="123#" /></div> : null}{selected.type === "send_message" ? <div className="space-y-2"><Label>Channel</Label><Select value={config.channel || "sms"} onValueChange={(value) => patchConfig({ channel: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sms">SMS</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem></SelectContent></Select></div> : null}{selected.type === "retrieval" ? <div className="space-y-2"><Label>Knowledge bucket IDs</Label><Input value={(config.bucket_ids || []).join(", ")} onChange={(event) => patchConfig({ bucket_ids: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="bucket-id-1, bucket-id-2" /></div> : null}</div> : <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">Select or add a tool to configure it.</div>}</div></CardContent></Card>
+    <Card><CardHeader><div className="flex items-start justify-between gap-4"><div><CardTitle>MCP servers</CardTitle><CardDescription className="mt-1">Contact-center MCP servers available for assistant integrations.</CardDescription></div><Button variant="outline" onClick={() => router.push("/admin/mcp-servers")}><IconServer className="size-4" />Manage servers</Button></div></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{servers.map((server) => <div key={server.id} className="rounded-lg border p-4"><div className="flex items-center justify-between gap-3"><div className="font-medium">{server.name}</div><Badge variant="secondary">{String(server.type || "mcp").toUpperCase()}</Badge></div><div className="mt-1 truncate text-xs text-muted-foreground">{server.url}</div><div className="mt-3 flex flex-wrap gap-1">{(server.allowed_tools || []).map((tool) => <Badge key={tool} variant="outline">{tool}</Badge>)}</div></div>)}{!servers.length ? <div className="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No MCP servers configured.</div> : null}</CardContent></Card>
+  </div>;
+}

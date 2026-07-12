@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { SYSTEM_EXIT_ITEM } from "@/components/admin/SystemSectionNav";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import CallGeneratorDashboardView from "@/components/contact-center/CallGeneratorDashboardView";
 import CallGeneratorLogsView from "@/components/contact-center/CallGeneratorLogsView";
@@ -494,6 +496,7 @@ function flowWorkflowTestingInfo(flows, flowId) {
 }
 
 export default function AdminCallGeneratorPage() {
+  const router = useRouter();
   const [active, setActive] = useState("dashboard");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -790,7 +793,7 @@ export default function AdminCallGeneratorPage() {
         )}
       />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
-        <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Call generator sections" />
+        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel="Call generator sections" />
 
         {/* Main panel */}
         <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">

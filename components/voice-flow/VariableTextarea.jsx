@@ -21,6 +21,7 @@ export function VariableTextarea({
   webhookSchema = null,
   placeholder = "",
   className = "",
+  wrapperClassName = "",
   rows = 3,
   ...props
 }) {
@@ -140,7 +141,7 @@ export function VariableTextarea({
   const filteredVars = getFilteredVariables();
 
   return (
-    <div className="relative">
+    <div className={`relative ${wrapperClassName}`}>
       <Textarea
         ref={textareaRef}
         value={value}

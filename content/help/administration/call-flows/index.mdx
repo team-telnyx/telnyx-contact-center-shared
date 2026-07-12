@@ -1,0 +1,36 @@
+---
+title: Overview
+description: Build, connect, test, import, and operate visual call and application flows.
+audiences: [admin, owner]
+keywords: [call flow, app flow, voice flow, automation]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → Automations → Call & App Flows**. A flow is a directed graph: one initiator starts an execution, nodes perform work, and edges select what runs next.
+
+## Flow list
+
+Use search, **Import**, or **Create Flow**. Each row shows the initiator, assigned-number count, node count, creation date, and actions. You can edit, duplicate, export, or permanently delete a flow. Imports and duplicates must be reviewed for environment-specific IDs, secrets, URLs, assistants, queues, media, and phone-number assignments.
+
+## Choose the initiator
+
+| Initiator | Use it when |
+| --- | --- |
+| Incoming Call | A Telnyx number or voice application receives a call. |
+| HTTP Request | An API request should start an application flow. |
+| Form Submit | A form button should run a data action. |
+| Outbound Campaign | A campaign/contact record starts an outbound call. |
+
+Only one initiator should define the entry point. The rest of the graph is composed from the [node reference](./nodes).
+
+## Recommended build order
+
+1. Define the initiator and its payload variable.
+2. Add global constants and environment values that are safe to store in the flow.
+3. Build the happy path with explicit terminal nodes.
+4. Add timeout, error, invalid-input, no-answer, and hangup branches.
+5. Map only the output values needed downstream.
+6. Validate, save, and test with non-production resources.
+
+Inbound flows do not receive traffic until the intended phone number/voice application is assigned. Export before major changes and never place credentials directly in node text fields; use Secrets and references supported by the integration.

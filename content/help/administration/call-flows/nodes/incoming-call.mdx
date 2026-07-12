@@ -1,0 +1,8 @@
+---
+title: Incoming Call
+description: Start a flow from an inbound Telnyx call event.
+---
+
+**Incoming Call** is an initiator. It receives the Telnyx call payload and exposes it under the configured payload variable, normally `call_payload`.
+
+Assign the intended number/voice application, then connect the start output to Answer, Reject, routing, or other call-control logic. Read nested event data through the payload alias or map selected values on the outgoing edge. Test missing caller ID, anonymous calls, repeat webhooks, and hangup before answer.

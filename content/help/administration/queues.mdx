@@ -1,0 +1,210 @@
+---
+title: Queues
+description: Create queues, choose routing behavior, assign agents, configure overflow, SLA, wrap-up codes, and waiting audio.
+audiences: [admin, owner]
+keywords: [queue, ACD, routing, waiting, overflow, SLA, hold music, agent assignment]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Queues hold calls until an eligible agent can handle them. A queue combines call ordering, agent assignment, capacity limits, overflow behavior, service-level targets, and the audio played while a caller waits.
+
+<DocsCallout title="Before you begin">
+  Create the required users, skills, wrap-up codes, and media files first. A queue can only assign resources that already exist.
+</DocsCallout>
+
+## Open the Queues menu
+
+Open **Admin → Configuration**, then select **Queues** in the section rail. Only users with the **Admin** or **Owner** role can use this page.
+
+The badge beside the page title shows the total number of queues that match the current filters.
+
+## Find and review queues
+
+Use the controls above the table to narrow the list.
+
+| Control | What it does |
+| --- | --- |
+| **Name** | Searches the internal name, display name, and description. The match is not case-sensitive. |
+| **Routing** | Shows all queues or only queues using FIFO, Skill-based, or Priority-based routing. |
+| **Clear** | Resets the search and routing filter. |
+| **Refresh** | Reloads the list without changing the current filters or page. |
+| **New Queue** | Opens a blank queue sheet. |
+
+The table contains the following information.
+
+| Column | Meaning |
+| --- | --- |
+| **Name** | Internal queue name. |
+| **Routing** | The strategy used when selecting queued work and eligible agents. |
+| **Max Wait** | Configured maximum waiting time in seconds. |
+| **Max Size** | Maximum number of calls that may wait at once. |
+| **Priority** | Queue priority from one to five stars. Select a star directly in the table to change the priority without opening the edit sheet. |
+| **Enabled** | Whether the queue is available for routing. |
+| **Actions** | Edit or delete the queue. |
+
+Use **Rows per page** and the first, previous, next, and last page buttons to navigate a long list.
+
+## Create a queue
+
+1. Select **New Queue**.
+2. Complete the settings described below.
+3. Assign at least one suitable user if calls should be offered from this queue.
+4. Select **Save Changes**.
+5. Add the queue to the appropriate call flow and place a controlled test call.
+
+Only **Name** is required by the form. Defaults are provided for the main routing, capacity, SLA, priority, and audio settings.
+
+## Queue Settings
+
+| Field | Description |
+| --- | --- |
+| **Enabled** | Makes the queue available to the routing system. Turn this off when the queue must remain configured but should not receive work. |
+| **Active** | Marks the queue as active in its configuration. This is separate from **Enabled**; for normal production use, keep both settings on. |
+
+## Basic Information
+
+### Queue name
+
+<HelpTopicContent helpId="admin.queues.form.name" />
+
+The name is required and is trimmed when saved. Queue names must be unique; use a stable value because call flows and other queue settings may refer to the queue.
+
+| Field | Description |
+| --- | --- |
+| **Name \*** | Required internal identifier, for example `support-billing`. |
+| **Display Name** | Human-readable label shown in places where a friendly queue name is needed. If omitted, the internal name is used. |
+| **Description** | Optional explanation of the queue's purpose, audience, or routing policy. |
+
+## Routing Settings
+
+### Routing strategy
+
+<HelpTopicContent helpId="admin.queues.form.routing-strategy" />
+
+| Strategy | Use it when |
+| --- | --- |
+| **FIFO** | Calls should normally be handled in arrival order. |
+| **Skill-based** | An agent's assigned skills and proficiency must be considered. This strategy also exposes the skill-relaxation settings. |
+| **Priority-based** | Higher-priority waiting work should be considered before lower-priority work. |
+
+| Field | Default | Description |
+| --- | ---: | --- |
+| **Max Wait Time (secs)** | 600 | Configured maximum time a call may wait. |
+| **Max Size** | 100 | Maximum number of waiting calls. |
+| **Timeout (secs)** | 300 | General queue timeout stored with the queue configuration. |
+| **Agent Answer Timeout (secs)** | 30 | Time an offered agent has to answer. The minimum accepted in the sheet is one second. |
+
+### Maximum wait time
+
+<HelpTopicContent helpId="admin.queues.form.max-wait-time" />
+
+### Maximum queue size
+
+<HelpTopicContent helpId="admin.queues.form.max-size" />
+
+### Agent answer timeout
+
+<HelpTopicContent helpId="admin.queues.form.agent-answer-timeout" />
+
+## Queue and call priority
+
+### Queue priority
+
+<HelpTopicContent helpId="admin.queues.form.queue-priority" />
+
+Both priority fields use one to five stars: **Low**, **Below Normal**, **Normal**, **Above Normal**, and **High**.
+
+| Field | Default | Scope |
+| --- | ---: | --- |
+| **Queue Priority** | 1 star | Ranks this queue against other queues. It can also be changed directly from the queue list. |
+| **Default Call Priority** | 3 stars | Sets the initial priority of calls entering this queue. |
+
+Do not use the highest priority for every queue or call; equal priorities remove the intended differentiation.
+
+## Skill relaxation
+
+These settings appear only when **Routing Strategy** is **Skill-based**.
+
+| Field | Default | Description |
+| --- | ---: | --- |
+| **Enable Skill Relaxation** | Off | Allows a waiting call's skill requirements to be relaxed after a threshold. |
+| **Relaxation After (seconds)** | 60 | Waiting time before relaxation begins. The sheet accepts zero or more seconds. |
+| **Relaxation Strategy** | Progressive | Determines how requirements are reduced. |
+
+**Progressive** reduces each requirement by one proficiency star every 30 seconds, down to one star. **Fallback** immediately lowers requirements above three stars to three stars after the threshold; requirements already at three stars or lower remain unchanged.
+
+Use relaxation when a faster answer is preferable to waiting indefinitely for the best-qualified agent. Test the behavior with realistic skill combinations before production use.
+
+## Service Level Agreement (SLA)
+
+SLA settings define the target used for queue performance reporting; they do not themselves change the routing strategy.
+
+| Field | Default | Description |
+| --- | ---: | --- |
+| **Answer Threshold (seconds)** | 20 | Target maximum answer time. The sheet minimum is one second. |
+| **Target Percentage** | 80 | Percentage of calls that should be answered within the threshold, from 0 to 100. |
+
+For example, a threshold of 20 and target of 80 means the service goal is to answer 80% of calls within 20 seconds.
+
+## Overflow Settings
+
+| Field | Options | Description |
+| --- | --- | --- |
+| **Overflow Queue** | None or another queue | Destination queue used when this queue cannot accept more work. The current queue is excluded from the choices. |
+| **Overflow Action** | Transfer, Voicemail, Hangup | Configured action for overflow handling. |
+
+<DocsCallout title="Test the complete overflow path" tone="warning">
+  When the queue is full, local routing sends the call to the selected overflow queue, or returns a hangup action when Hangup is selected. Configure and test any timeout, transfer, or voicemail behavior in the associated call flow. A queue cannot be deleted while another queue uses it as its overflow destination.
+</DocsCallout>
+
+## Wrapup Codes
+
+Select the disposition codes agents may use after handling a call from this queue. **Select All** selects or clears every available code. The list shows only wrap-up codes configured in Admin Workspace.
+
+If no codes are available, select **Wrapup Codes** in the Configuration rail, create them, then return to **Queues**.
+
+## Queue Audio
+
+### Hold music
+
+Choose an item from the Media Library in **Queue Hold Music**, or select **None**. The audio loops while a call waits. Use the play/stop button to preview the selected file.
+
+Selecting hold music automatically enables queue-position announcements if they were off. The announcement controls are only visible while a media file is selected.
+
+### Position announcements
+
+| Field | Options | Description |
+| --- | --- | --- |
+| **Queue Position Announcements** | On or off | Announces the caller's current position using text-to-speech. |
+| **Announcement Interval** | 30, 60, or 120 seconds | Controls how often the position is announced. |
+| **Provider** | Available TTS providers | Selects the service that generates the announcement. |
+| **Model** | Provider-dependent | Narrows the available voices where a provider exposes multiple models. |
+| **Language Filter** | Any or a supported locale | Filters the voice list; it does not translate custom content. |
+| **Voice** | Provider-dependent | Required when position announcements are enabled. Use the preview control to test the selected voice. |
+
+The TTS preview generates a sample queue-position message. If a provider requires a configured API-key reference, the selected voice must have access to it.
+
+## User Assignments
+
+Select every user who may receive calls from the queue. For each assigned user, choose a priority from one to five stars. Higher-priority users are considered before lower-priority users within this queue; the minimum is one star.
+
+Assigning a user to a queue does not replace skill matching. For Skill-based routing, the user must also have the required active skills and suitable proficiency.
+
+## Edit a queue
+
+Select the green edit icon on a row, change the required settings, and select **Save Changes**. Saving agent or wrap-up-code selections replaces the queue's previous assignments with the selections currently shown in the sheet.
+
+Select **Cancel** or close the sheet to leave without saving.
+
+## Delete a queue
+
+1. Select the red delete icon.
+2. Review the queue name in the confirmation dialog.
+3. Select **Delete** to permanently remove it, or **Cancel** to keep it.
+
+Deletion cannot be undone. A queue cannot be deleted while it is selected as another queue's **Overflow Queue**. Change that dependency first and retry.
+
+## Verify the result
+
+Place a controlled test call through the associated call flow. Confirm that the call joins the expected queue, hears the intended audio, is offered to an eligible agent, respects the answer timeout, and follows the intended overflow behavior when capacity is reached.

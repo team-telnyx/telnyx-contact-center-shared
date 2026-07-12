@@ -17,7 +17,7 @@ describe("call generator code completeness", () => {
   });
 
   it("menu includes Call Generator under ADMIN", async () => {
-    const code = await srcFile("config/menu.jsx");
+    const code = await srcFile("components/admin/SystemSectionNav.jsx");
     assert.match(code, /Call Generator/);
     assert.match(code, /\/admin\/call-generator/);
   });

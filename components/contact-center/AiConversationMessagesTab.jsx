@@ -91,16 +91,6 @@ export default function AiConversationMessagesTab({
   const messageTimeline = useMemo(() => {
     if (!recording || messages.length === 0) return [];
 
-    const recordingStartTime = recording?.started_at
-      ? new Date(recording.started_at).getTime()
-      : recording?.recording_started_at
-      ? new Date(recording.recording_started_at).getTime()
-      : recording?.created_at
-      ? new Date(recording.created_at).getTime()
-      : null;
-
-    if (!recordingStartTime) return [];
-
     const timeline = messages
       .map((msg, index) => {
         const timestamp = msg?.sent_at || msg?.metadata?.sent_at;
@@ -117,6 +107,18 @@ export default function AiConversationMessagesTab({
       .sort((a, b) => a.time - b.time);
 
     if (timeline.length === 0) return [];
+
+    const explicitRecordingStart = recording?.started_at || recording?.recording_started_at;
+    const fallbackRecordingStart = recording?.created_at || conversation?.created_at;
+    let recordingStartTime = explicitRecordingStart
+      ? new Date(explicitRecordingStart).getTime()
+      : fallbackRecordingStart
+      ? new Date(fallbackRecordingStart).getTime()
+      : timeline[0].time;
+    const durationMs = Number(recording.duration_millis || 0);
+    const firstMessageTime = timeline[0].time;
+    const implausibleStart = !Number.isFinite(recordingStartTime) || recordingStartTime > firstMessageTime + 2000 || (durationMs > 0 && firstMessageTime - recordingStartTime > durationMs + 30000);
+    if (implausibleStart) recordingStartTime = firstMessageTime;
 
     const result = timeline.map((item, idx) => {
       const relativeStart = (item.time - recordingStartTime) / 1000;
@@ -136,7 +138,7 @@ export default function AiConversationMessagesTab({
     });
 
     return result;
-  }, [messages, recording]);
+  }, [messages, recording, conversation?.created_at]);
 
   const currentMessageIndex = useMemo(() => {
     if (!isPlaying || !recording || messageTimeline.length === 0) return -1;
@@ -174,16 +176,16 @@ export default function AiConversationMessagesTab({
         } else if (!cancelled && hasAiCallControlId && !useDemoApiKey) {
           // Check if we should retry with demo API key
           // Retry if: 502 (gateway error), 403, 404, or error message indicates "not found"
-          const shouldRetry = !res.ok || 
-            res.status === 403 || 
-            res.status === 404 || 
+          const shouldRetry = !res.ok ||
+            res.status === 403 ||
+            res.status === 404 ||
             res.status === 502 ||
             (data?.error && (
-              data.error.includes("404") || 
-              data.error.includes("not found") || 
+              data.error.includes("404") ||
+              data.error.includes("not found") ||
               data.error.includes("Resource not found")
             ));
-          
+
           if (shouldRetry) {
             // Fallback: try with demo API key if regular fetch failed
             const demoUrl = `/api/ai/conversations/${encodeURIComponent(

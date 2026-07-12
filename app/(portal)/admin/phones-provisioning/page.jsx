@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { SYSTEM_EXIT_ITEM } from "@/components/admin/SystemSectionNav";
+import { useExperimentalFeatures } from "@/lib/experimental-features-client";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import {
   IconActivity,
@@ -420,6 +423,11 @@ function phoneDraftValid(draft) {
 }
 
 export default function PhonesProvisioningPage() {
+  const router = useRouter();
+  const {
+    enabled: experimentalFeaturesEnabled,
+    loading: experimentalFeaturesLoading,
+  } = useExperimentalFeatures();
   const [active, setActive] = useState("dashboard");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -451,6 +459,12 @@ export default function PhonesProvisioningPage() {
   const pendingRebootLabel = pendingRebootIds.length === phones.length ? "all phones" : `${pendingRebootIds.length} phone${pendingRebootIds.length === 1 ? "" : "s"}`;
 
   useEffect(() => {
+    if (!experimentalFeaturesLoading && !experimentalFeaturesEnabled) {
+      router.replace("/admin/system");
+    }
+  }, [experimentalFeaturesEnabled, experimentalFeaturesLoading, router]);
+
+  useEffect(() => {
     try {
       const requested = new URLSearchParams(window.location.search).get("section");
       if (requested && NAV_ITEMS.some((i) => i.id === requested)) { setActive(requested); return; }
@@ -471,6 +485,10 @@ export default function PhonesProvisioningPage() {
   }, [active]);
 
   const refresh = useCallback(async (toast = false, options = {}) => {
+    if (!experimentalFeaturesEnabled) {
+      if (!options.silent) setLoading(false);
+      return;
+    }
     if (!options.silent) setLoading(true);
     try {
       const includeAvailablePhoneNumbers = options.includeAvailablePhoneNumbers || (active === "phones" && !options.silent);
@@ -498,7 +516,7 @@ export default function PhonesProvisioningPage() {
     } finally {
       if (!options.silent) setLoading(false);
     }
-  }, [active]);
+  }, [active, experimentalFeaturesEnabled]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -538,6 +556,7 @@ export default function PhonesProvisioningPage() {
   const draftValid = phoneDraftValid(phoneDraft);
 
   const loadLogs = useCallback(async (overrides = {}) => {
+    if (!experimentalFeaturesEnabled) return;
     const nextDays = overrides.days ?? logDays;
     const nextPage = overrides.page ?? logPage;
     const nextPageSize = overrides.pageSize ?? logPageSize;
@@ -553,7 +572,7 @@ export default function PhonesProvisioningPage() {
     } finally {
       setLogsLoading(false);
     }
-  }, [logDays, logPage, logPageSize]);
+  }, [experimentalFeaturesEnabled, logDays, logPage, logPageSize]);
 
   useEffect(() => {
     if (active === "logs") loadLogs();
@@ -665,6 +684,17 @@ export default function PhonesProvisioningPage() {
   const headerCreate = active === "phones" ? { label: "New phone", onClick: () => { setSelectedPhoneId(null); refresh(false, { includeAvailablePhoneNumbers: true }); } } : active === "bridges" ? { label: "New bridge", onClick: () => setSelectedBridgeId(null) } : null;
   const totals = dashboard?.totals || { total: 0, provisioned: 0, pending: 0, disabled: 0, recently_seen: 0 };
 
+  if (experimentalFeaturesLoading || !experimentalFeaturesEnabled) {
+    return (
+      <AdminPageShell>
+        <AdminPageHeader title="Phones Provisioning" />
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          {experimentalFeaturesLoading ? "Checking feature access…" : "This experimental feature is not enabled for your account."}
+        </div>
+      </AdminPageShell>
+    );
+  }
+
   return (
     <AdminPageShell>
       <AdminPageHeader
@@ -690,7 +720,7 @@ export default function PhonesProvisioningPage() {
         )}
       />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
-        <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Phones provisioning sections" />
+        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel="Phones provisioning sections" />
 
         {/* Main panel */}
         <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">

@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import SoftphoneMini from "@/components/softphone-mini";
 import { StatusSelector } from "@/components/contact-center/StatusSelector";
 import { QueueActivationPanel } from "@/components/contact-center/QueueActivationPanel";
@@ -13,6 +15,7 @@ import {
   subscribeStatusStream,
   subscribeStatusStreamState,
 } from "@/lib/status-stream-client";
+import { IconBook2 } from "@tabler/icons-react";
 
 export function SiteHeader() {
   const [status, setStatus] = useState(DEFAULT_USER_STATUS);
@@ -221,6 +224,12 @@ export function SiteHeader() {
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />
+        <Button asChild variant="ghost" size="sm" title="Open documentation">
+          <Link href="/help">
+            <IconBook2 aria-hidden="true" className="text-sky-500" />
+            <span>Docs</span>
+          </Link>
+        </Button>
         <Separator
           orientation="vertical"
           className="mx-2 data-[orientation=vertical]:h-4"

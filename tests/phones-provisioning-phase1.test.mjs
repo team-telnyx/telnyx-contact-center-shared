@@ -456,7 +456,7 @@ describe("hard phones provisioning (Phase 1)", () => {
   });
 
   it("menu replaces CTI Testing with Phones Provisioning", async () => {
-    const code = await src("config/menu.jsx");
+    const code = await src("components/admin/SystemSectionNav.jsx");
     assert.match(code, /Phones Provisioning/);
     assert.match(code, /\/admin\/phones-provisioning/);
     assert.doesNotMatch(code, /cti-testing/);

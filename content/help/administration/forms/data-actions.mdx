@@ -1,0 +1,14 @@
+---
+title: Data Actions
+description: Connect a form button to a Form Submit application flow and understand its payload.
+audiences: [admin, owner]
+keywords: [form data action, form submit, payload]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+A Button can submit the form or run a selected Call & App Flow whose initiator is **Form Submit**. The runtime supports form-oriented nodes including Set Variable, Condition, Switch, Logic Gate, HTTP Request, Data Action, Form Submit Status, and Flow End.
+
+The action payload includes form identity/version, submission identity/status, button identity, action flow ID, values keyed by field ID, variables keyed by variable name, field metadata, context, and interaction data. The initiator stores it under its configured payload variable (default `form_payload`).
+
+Build explicit success and error paths and use **Form Submit Status** to return a meaningful outcome. Never assume a button action ran successfully merely because the form UI accepted the click. Test missing required context, external timeout, malformed response, duplicate clicks, and partial failure.

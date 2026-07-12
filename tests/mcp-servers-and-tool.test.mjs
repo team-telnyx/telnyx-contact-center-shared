@@ -18,13 +18,15 @@ async function loadMcpAuthDiscoveryForUnitTests() {
   return import(new URL("lib/mcp/mcp-auth-discovery.js", root));
 }
 
-test("Admin menu exposes MCP Servers for admin users", async () => {
+test("AI Assistants navigation exclusively exposes MCP Servers for admin users", async () => {
   const menu = await read("config/menu.jsx");
+  const aiRail = await read("components/assistants/AiAssistantsSectionNav.jsx");
+  const configurationRail = await read("components/admin/ConfigurationSectionNav.jsx");
 
-  assert.match(menu, /IconTools/, "menu should import the tools icon");
-  assert.match(menu, /title:\s*"MCP Servers"/, "admin navigation should include MCP Servers");
-  assert.match(menu, /url:\s*"\/admin\/mcp-servers"/, "MCP Servers should link to the admin page");
-  assert.match(menu, /role_access:\s*\["admin",\s*"owner"\]/, "MCP Servers should be admin/owner scoped");
+  assert.match(aiRail, /label:\s*"MCP Servers"/, "AI Assistants rail should include MCP Servers");
+  assert.match(aiRail, /href:\s*"\/admin\/mcp-servers"/, "MCP Servers should link to the admin page");
+  assert.doesNotMatch(configurationRail, /label:\s*"MCP Servers"/, "Configuration rail should not duplicate MCP Servers");
+  assert.match(menu, /title:\s*"AI Assistants"[\s\S]*role_access:\s*\["admin",\s*"owner"\]/, "MCP Servers should inherit the admin/owner-scoped AI section");
 });
 
 test("Admin MCP Server routes use local Postgres registry and never proxy Telnyx MCP registry", async () => {

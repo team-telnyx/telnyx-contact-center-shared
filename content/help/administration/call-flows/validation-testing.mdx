@@ -1,0 +1,18 @@
+---
+title: Validation and testing
+description: Validate graph structure, variables, mappings, expressions, and operational outcomes.
+audiences: [admin, owner]
+keywords: [validation, testing, errors, cycles]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Validation checks duplicate or invalid globals, missing global values, invalid edge mappings, unknown template variables, Set Variable expressions, condition operands, missing connections, invalid edges, and graph cycles.
+
+Warnings require review even when saving is allowed. A node without an outgoing connection may be correct only if termination is intentional.
+
+## Test matrix
+
+Test the happy path plus no-answer, busy, rejection, timeout, full queue, invalid input, retry exhaustion, external API error, malformed response, MCP/tool failure, caller hangup, and duplicate webhook delivery where applicable. Confirm the actual output handle and mapped variables at every branch.
+
+For inbound flows, use a non-production number. For outbound flows, restrict destinations and volume. Check logs for sensitive data before enabling verbose logging in production.

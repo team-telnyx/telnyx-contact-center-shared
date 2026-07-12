@@ -1,0 +1,20 @@
+---
+title: Block reference
+description: Choose and configure layout, input, content, action, and marketing blocks.
+audiences: [admin, owner]
+keywords: [form block, layout, input, content]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+| Group | Blocks | Use |
+| --- | --- | --- |
+| Layout | Section, Row, Columns, Grid, Flex, Spacer, Divider | Structure and spacing. Columns support 1–6 columns; Grid supports up to 6 columns and 12 rows. |
+| Basic | Text input, Textarea, Select, Checkbox, Radio group, Switch, Slider, Date/time picker | Values submitted by the user. |
+| Content | Label, Badge, Image, Code block, Context value | Static or contextual information. |
+| Actions | Button, Hidden | Submit/run an action or carry a non-visible value. |
+| Marketing | Hero, Stats, Card, Rich text, Accordion, Avatar | Rich informational layouts. |
+
+Containers include Section, Row, Columns, Grid, Flex, and Card. Use Columns/Grid for defined cells and Flex for a responsive row or column. Avoid deeply nested containers because they reduce usable width and make keyboard order harder to predict.
+
+Choice controls need stable values as well as human-readable labels. Slider needs min, max, step, and default. Date/time supports date, time, or combined mode. Rich Text accepts a restricted safe HTML set. Images should include meaningful alternative text; Code Block is display content, not executable form logic.

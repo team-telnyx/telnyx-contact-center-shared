@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone, IconSelector } from "@tabler/icons-react";
+import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone, IconSelector, IconHelpCircle } from "@tabler/icons-react";
 import {
   Command,
   CommandInput,
@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/command";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
+import { useHelp } from "@/components/help/HelpProvider";
 import {
   Popover,
   PopoverContent,
@@ -51,6 +52,7 @@ import {
   DEFAULT_USER_STATUS,
   USER_ROLES,
 } from "@/config/user";
+import { notifyExperimentalFeaturesChanged } from "@/lib/experimental-features-client";
 
 /**
  * Multi-select component for roles
@@ -119,6 +121,7 @@ export default function EditSheet({
   onSaved,
   createMode = false,
 }) {
+  const { openHelp, registerHelpPortalContainer } = useHelp();
   const [username, setUsername] = React.useState("");
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
@@ -126,6 +129,7 @@ export default function EditSheet({
   const [roles, setRoles] = React.useState(["agent"]);
   const [verified, setVerified] = React.useState(false);
   const [active, setActive] = React.useState(true);
+  const [experimentalFeatures, setExperimentalFeatures] = React.useState(false);
   const [status, setStatus] = React.useState(DEFAULT_USER_STATUS);
   const [mobile, setMobile] = React.useState("");
   const [smsNumber, setSmsNumber] = React.useState("");
@@ -168,6 +172,7 @@ export default function EditSheet({
       setRoles(["agent"]);
       setVerified(false);
       setActive(true);
+      setExperimentalFeatures(false);
       setStatus(DEFAULT_USER_STATUS);
       setMobile("");
       setSmsNumber("");
@@ -213,6 +218,7 @@ export default function EditSheet({
           setRoles(userRoles);
           setVerified(Boolean(d.verified));
           setActive(d.active !== undefined ? Boolean(d.active) : true);
+          setExperimentalFeatures(d.experimental_features === true);
           setStatus(d.status || DEFAULT_USER_STATUS);
           setMobile(d.mobile || "");
           setSmsNumber(d.sms_number || "");
@@ -424,6 +430,7 @@ export default function EditSheet({
             voiceNumber: voiceNumber || null,
             skills,
             sendInvite,
+            experimentalFeatures,
           }),
         });
         const data = await res.json();
@@ -495,6 +502,7 @@ export default function EditSheet({
         roles, // Send roles array
         verified,
         active,
+        experimentalFeatures,
         mobile,
         smsNumber,
         voiceNumber,
@@ -521,6 +529,7 @@ export default function EditSheet({
           variant: "success",
         });
         onOpenChange(false);
+        notifyExperimentalFeaturesChanged(userId);
         onSaveComplete && onSaveComplete();
       } else {
         const d = await r.json().catch(() => ({}));
@@ -544,14 +553,31 @@ export default function EditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        ref={registerHelpPortalContainer}
         side="right"
+        data-context-help-host="true"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
-        <SheetHeader className="px-6 py-4 border-b">
-          <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconEdit className="size-5" />
-            {createMode ? "Add New User" : "Edit User"}
-          </SheetTitle>
+        <SheetHeader className="px-6 py-4 pr-12 border-b">
+          <div className="flex items-center justify-between gap-3">
+            <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
+              <IconEdit className="size-5" />
+              {createMode ? "Add New User" : "Edit User"}
+            </SheetTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-controls="context-help-sheet"
+              aria-keyshortcuts="F1"
+              title="Help for users (F1)"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openHelp()}
+            >
+              <IconHelpCircle aria-hidden="true" />
+              Help
+            </Button>
+          </div>
         </SheetHeader>
 
         {/* Scrollable Content Section */}
@@ -753,6 +779,21 @@ export default function EditSheet({
                     <Switch
                       checked={active}
                       onCheckedChange={(v) => setActive(Boolean(v))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-4 border-t pt-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="experimental-features" className="text-sm font-medium">
+                        Experimental features
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Translation/TTS, Phones Provisioning, and headset integrations
+                      </p>
+                    </div>
+                    <Switch
+                      id="experimental-features"
+                      checked={experimentalFeatures}
+                      onCheckedChange={(value) => setExperimentalFeatures(Boolean(value))}
                     />
                   </div>
 
@@ -1073,7 +1114,7 @@ export default function EditSheet({
                           </p>
                         ) : userSkillsArray.length === 0 ? (
                           <p className="text-sm text-muted-foreground">
-                            No skills assigned. Click "Add Skill" to assign skills to this agent.
+                            No skills assigned. Click &quot;Add Skill&quot; to assign skills to this agent.
                           </p>
                         ) : (
                           userSkillsArray.map((skill, index) => {

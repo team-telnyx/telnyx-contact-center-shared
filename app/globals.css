@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -186,6 +188,575 @@
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;
+  }
+}
+
+@layer components {
+  .help-docs-shell {
+    --help-topbar-height: 4rem;
+    display: flex;
+    height: 100dvh;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--background);
+    --color-fd-background: var(--background);
+    --color-fd-card: var(--background);
+    --color-fd-border: var(--border);
+  }
+
+  .help-topbar {
+    position: relative;
+    z-index: 80;
+    display: flex;
+    min-height: 4rem;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    background: var(--background);
+    padding: 0 1rem;
+  }
+
+  .help-docs-layout {
+    height: calc(100dvh - var(--help-topbar-height)) !important;
+    min-height: 0 !important;
+    flex: 1;
+    overflow: hidden !important;
+    --fd-docs-height: calc(100dvh - var(--help-topbar-height)) !important;
+    --fd-layout-width: 100vw;
+  }
+
+  .help-docs-layout #nd-page {
+    height: var(--fd-docs-height);
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .help-docs-layout #nd-sidebar {
+    border-inline-end: 1px solid var(--border) !important;
+    background: var(--background) !important;
+    box-shadow: none !important;
+  }
+
+  .help-docs-layout #nd-sidebar > div:last-child:has(button[aria-label="Toggle Theme"]),
+  .help-docs-layout #nd-sidebar div:has(> button[aria-label="Toggle Theme"]) {
+    display: none !important;
+  }
+
+  .help-docs-layout #nd-sidebar a[href="/help"] {
+    margin-bottom: 0.85rem;
+  }
+
+  .help-docs-layout #nd-sidebar a[href="/help"]::after {
+    position: absolute;
+    right: 0;
+    bottom: -0.55rem;
+    left: 0;
+    height: 1px;
+    background: var(--border);
+    content: "";
+  }
+
+  .help-docs-layout [data-sidebar-panel] {
+    display: none;
+  }
+
+  .help-sidebar-restore {
+    position: fixed;
+    top: calc(var(--help-topbar-height) + 0.75rem);
+    inset-inline-start: 0.75rem;
+    z-index: 90;
+    display: inline-flex;
+    width: 2.5rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 0.625rem;
+    background: var(--card);
+    color: var(--foreground);
+    box-shadow: 0 6px 20px oklch(0 0 0 / 18%);
+  }
+
+  .help-sidebar-restore:hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .help-brand {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+
+  .help-brand-divider {
+    height: 1.5rem;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .help-brand-title {
+    font-size: 1.05rem;
+    font-weight: 750;
+  }
+
+  .help-topbar-actions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+  }
+
+  .help-topbar-link,
+  .help-theme-trigger {
+    border-radius: 999px;
+  }
+
+  .help-theme-trigger {
+    background: color-mix(in srgb, var(--secondary) 86%, var(--background));
+  }
+
+  .help-home {
+    max-width: none;
+    padding: 0 0 4rem;
+  }
+
+  .help-hero {
+    max-width: 50rem;
+    padding: 0.25rem 0 2rem;
+  }
+
+  .help-eyebrow {
+    margin: 0 0 0.7rem;
+    color: var(--telnyx-green);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .help-hero h1 {
+    margin: 0;
+    max-width: 50rem;
+    font-size: clamp(2.25rem, 5vw, 4.35rem);
+    font-weight: 820;
+    letter-spacing: 0;
+    line-height: 0.96;
+  }
+
+  .help-hero-description {
+    margin: 1rem 0 0;
+    max-width: 44rem;
+    color: var(--muted-foreground);
+    font-size: 1.1rem;
+    line-height: 1.65;
+  }
+
+  .help-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 0 0 2rem;
+  }
+
+  .help-section-card {
+    position: relative;
+    display: grid;
+    min-height: 18rem;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 0.9rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: var(--card);
+    color: var(--card-foreground);
+    padding: 1.35rem;
+    text-decoration: none;
+    transition:
+      border-color 160ms ease,
+      transform 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .help-section-card:hover {
+    border-color: var(--help-card-accent);
+    transform: translateY(-1px);
+  }
+
+  .help-home .help-section-card,
+  .help-home .help-section-card * {
+    text-decoration: none !important;
+    text-decoration-line: none !important;
+  }
+
+  .help-section-card::before {
+    position: absolute;
+    right: -2.75rem;
+    bottom: -3.5rem;
+    width: 12rem;
+    height: 12rem;
+    border: 1px solid var(--help-card-accent);
+    border-radius: 50%;
+    content: "";
+    opacity: 0.18;
+  }
+
+  .help-section-card.help-card-blue {
+    border-color: color-mix(in srgb, var(--help-card-accent) 58%, var(--border));
+    background: color-mix(in srgb, var(--help-card-accent) 16%, var(--card));
+  }
+
+  .help-section-card.help-card-green {
+    border-color: color-mix(in srgb, var(--help-card-accent) 58%, var(--border));
+    background: color-mix(in srgb, var(--help-card-accent) 14%, var(--card));
+  }
+
+  .help-section-card.help-card-purple {
+    border-color: color-mix(in srgb, var(--help-card-accent) 58%, var(--border));
+    background: color-mix(in srgb, var(--help-card-accent) 14%, var(--card));
+  }
+
+  .help-section-card.help-card-amber {
+    border-color: color-mix(in srgb, var(--help-card-accent) 58%, var(--border));
+    background: color-mix(in srgb, var(--help-card-accent) 14%, var(--card));
+  }
+
+  .help-card-blue {
+    --help-card-accent: oklch(0.74 0.16 236);
+    color: var(--help-card-accent);
+  }
+
+  .help-card-green {
+    --help-card-accent: var(--telnyx-green);
+    color: var(--help-card-accent);
+  }
+
+  .help-card-purple {
+    --help-card-accent: oklch(0.72 0.19 304);
+    color: var(--help-card-accent);
+  }
+
+  .help-card-amber {
+    --help-card-accent: oklch(0.78 0.17 73);
+    color: var(--help-card-accent);
+  }
+
+  .help-card-heading {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--foreground);
+  }
+
+  .help-card-icon {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background: var(--help-card-accent);
+    padding: 0.8rem;
+  }
+
+  .help-card-icon svg {
+    color: var(--background);
+  }
+
+  .help-card-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1.18;
+  }
+
+  .help-card-watermark {
+    position: absolute;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    width: 9.5rem;
+    height: 9.5rem;
+    color: var(--help-card-accent);
+    opacity: 0.16;
+  }
+
+  .help-card-copy {
+    position: relative;
+    z-index: 1;
+    align-self: start;
+    color: var(--card-foreground);
+  }
+
+  .help-card-copy span {
+    color: var(--muted-foreground);
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+
+  .help-card-cta {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    gap: 0.4rem;
+    align-self: end;
+    border-radius: 999px;
+    background: var(--help-card-accent);
+    color: oklch(0.13 0 0);
+    font-size: 0.9rem;
+    font-weight: 750;
+    padding: 0.55rem 0.8rem;
+  }
+
+  .help-card-terminal {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    width: 100%;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.55rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+    border-radius: 0.5rem;
+    background: oklch(0.08 0 0);
+    color: oklch(0.96 0 0);
+    padding: 0.75rem 0.85rem;
+    align-self: start;
+  }
+
+  .help-card-terminal code {
+    overflow: hidden;
+    background: transparent !important;
+    color: oklch(0.96 0 0) !important;
+    padding: 0 !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .help-home-panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+
+  .help-home-panel {
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--card) 94%, var(--background));
+    padding: 1.25rem;
+  }
+
+  .help-home-panel-accent {
+    border-color: color-mix(in srgb, var(--telnyx-green) 46%, var(--border));
+    background: color-mix(in srgb, var(--telnyx-green) 10%, var(--card));
+  }
+
+  .help-home-panel h2 {
+    margin: 0 0 0.9rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+
+  .help-home-panel-copy,
+  .help-home-panel-copy p {
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+
+  .help-terminal {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: 0.55rem;
+    background: oklch(0.09 0 0);
+    color: oklch(0.97 0 0);
+    margin: 1rem 0;
+    padding: 0;
+  }
+
+  .help-terminal figcaption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: oklch(0.2 0 0);
+    color: oklch(0.9 0 0) !important;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin: 0 !important;
+    padding: 0.7rem 0.9rem;
+  }
+
+  .help-terminal figcaption span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .help-terminal figcaption,
+  .help-terminal figcaption * {
+    color: oklch(0.9 0 0) !important;
+  }
+
+  .help-terminal-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 0;
+    background: transparent;
+    color: oklch(0.9 0 0) !important;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 0;
+  }
+
+  .help-terminal pre {
+    margin: 0 !important;
+    overflow-x: auto;
+    background: transparent;
+    padding: 1rem;
+    color: oklch(0.96 0 0);
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    line-height: 1.7;
+  }
+
+  .help-terminal code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  .help-callout {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--telnyx-green) 50%, var(--border));
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--telnyx-green) 10%, var(--card));
+    color: var(--foreground);
+    margin: 1.25rem 0;
+    padding: 1rem;
+  }
+
+  .help-callout strong {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .help-callout-warning {
+    border-color: color-mix(in srgb, oklch(0.78 0.17 73) 60%, var(--border));
+    background: color-mix(in srgb, oklch(0.78 0.17 73) 12%, var(--card));
+  }
+
+  .help-feature-grid,
+  .help-deploy-matrix {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0;
+  }
+
+  .help-feature,
+  .help-deploy-matrix > div {
+    border: 1px solid color-mix(in srgb, currentColor 38%, var(--border));
+    border-radius: 0.65rem;
+    background: color-mix(in srgb, currentColor 8%, var(--card));
+    padding: 1rem;
+  }
+
+  .help-feature h3,
+  .help-deploy-matrix strong {
+    color: var(--foreground);
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
+  .help-feature p,
+  .help-deploy-matrix p {
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+
+  .help-deploy-matrix span {
+    display: inline-flex;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    color: var(--foreground);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.35rem 0.55rem;
+  }
+
+  .help-changelog-entry {
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--card) 94%, var(--background));
+    margin: 1rem 0;
+    padding: 1.15rem;
+  }
+
+  .help-changelog-entry > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: var(--muted-foreground);
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+
+  .help-changelog-entry > div:first-child a {
+    color: var(--telnyx-green);
+    text-decoration: none;
+  }
+
+  .help-changelog-entry h2 {
+    margin: 0.45rem 0 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+
+  .help-changelog-entry p {
+    color: var(--muted-foreground);
+    line-height: 1.7;
+  }
+
+  @media (max-width: 900px) {
+    .help-topbar {
+      align-items: flex-start;
+      flex-direction: column;
+      padding: 0.8rem 1rem;
+    }
+
+    .help-topbar-actions {
+      width: 100%;
+      justify-content: flex-start;
+      overflow-x: auto;
+      padding-bottom: 0.15rem;
+    }
+
+    .help-card-grid,
+    .help-home-panels,
+    .help-feature-grid,
+    .help-deploy-matrix {
+      grid-template-columns: 1fr;
+    }
+
+    .help-hero h1 {
+      font-size: 2.45rem;
+    }
   }
 }
 

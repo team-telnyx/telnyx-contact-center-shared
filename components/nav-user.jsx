@@ -189,19 +189,19 @@ export function NavUser({ user, hideExtras }) {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="min-h-20 rounded-xl border bg-card/70 px-3 py-3 shadow-xs transition-colors hover:bg-card data-[state=open]:bg-card data-[state=open]:text-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="h-11 w-11 rounded-xl">
                 <AvatarImage
                   src={profilePictureSrc}
                   alt={user?.name || "User"}
                   className="object-cover"
                 />
-                <AvatarFallback className="rounded-lg">
+                <AvatarFallback className="rounded-xl">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">
                   {user?.name || "User"}
                 </span>

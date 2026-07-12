@@ -20,6 +20,15 @@ import { isAccumulatingSlot, accumulateSlotValue } from "@/lib/agent-assist/slot
 // analyzer's max_tokens already scales with item count.
 const MAX_ANALYZER_PENDING_ITEMS = 40;
 
+// No-information sentinels the analyzer may legitimately store in BOTH a first-
+// and last-name slot when the caller doesn't know a name ("N/A", "unknown", ...).
+// The duplicate-name reconciliation must NOT treat these shared sentinels as a
+// mis-captured surname, or it would clear + re-ask the first name forever.
+const NAME_DUP_SENTINELS = new Set([
+  "n/a", "na", "n a", "unknown", "unk", "none", "not known", "not available",
+  "not provided", "no name",
+]);
+
 function normalizeConfidenceThreshold(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1) {
@@ -167,7 +176,8 @@ export async function POST(request) {
       `SELECT i.id as item_id, i.type, i.label, i.prompt_hint, i.slot_name,
               i.slot_type, i.slot_options, i.slot_validation, i.completion_trigger,
               i.hints, s.name as stage_name, s.order_index as stage_order,
-              ist.status as current_status
+              ist.status as current_status,
+              ist.completed_at, ist.extracted_value as completed_value
          FROM aa_workflow_items i
          JOIN aa_workflow_stages s ON i.stage_id = s.id
          JOIN aa_workflow_item_status ist ON ist.item_id = i.id AND ist.session_id = $1
@@ -198,6 +208,15 @@ export async function POST(request) {
       });
     }
 
+    // NOTE: the safe half of a "skip agent questions" optimization already lives
+    // in the empty-analyzerItems early-return above — for an agent utterance,
+    // relevantPendingItems is filtered to only `either`/`agent`-triggered items,
+    // so when the only open items are customer-only slots the LLM is already
+    // skipped. We do NOT additionally skip agent utterances while `either` slots
+    // are open: this workflow lets the agent state values for either-triggered
+    // slots ("Can I get Mercy for the pickup facility?"), so any text heuristic
+    // to guess "asking vs stating" would drop real captures.
+
     // Get current slots filled. `slotsFilled` is the snapshot read at request
     // start; `slotsDelta` accumulates ONLY the slots this request changes, so the
     // persist can jsonb-merge the delta instead of overwriting the whole object.
@@ -215,6 +234,27 @@ export async function POST(request) {
     );
     const llmModel = workflow?.llm_model || "openai/gpt-4o";
     const confidenceThreshold = normalizeConfidenceThreshold(workflow?.llm_confidence_threshold);
+
+    // Bleed guard: find the most recently completed slot (within a short window).
+    // A stray numeric tail of a just-answered slot (e.g. "eight" from "nineteen
+    // sixty-eight" arriving after DOB was captured as "1960-03-12") must not
+    // bleed into the next pending slot (e.g. weight). Only activate when the
+    // transcript itself looks like a numeric/ordinal fragment — clear boolean
+    // answers ("No", "Yes") must NEVER be caught by this guard.
+    const BLEED_WINDOW_MS = 8000;
+    const NUMERIC_FRAGMENT_RE = /^(?:\d+(?:st|nd|rd|th)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth|fortieth|fiftieth|sixtieth|seventieth|eightieth|ninetieth|hundredth)(?:[\s-]+(?:\d+(?:st|nd|rd|th)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth|fortieth|fiftieth|sixtieth|seventieth|eightieth|ninetieth|hundredth))*$/i;
+    const transcriptWords = transcript.trim().split(/\s+/);
+    const isNumericFragment = transcriptWords.length <= 3 && NUMERIC_FRAGMENT_RE.test(transcript.trim());
+    const recentlyCompletedSlot = isNumericFragment
+      ? (completedSlotRows
+          .filter((r) => r.completed_at && r.completed_value != null)
+          .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))
+          .find((r) => Date.now() - new Date(r.completed_at).getTime() < BLEED_WINDOW_MS)
+          ?? null)
+      : null;
+    const bleedGuardSlot = recentlyCompletedSlot
+      ? { slotName: recentlyCompletedSlot.slot_name, slotType: recentlyCompletedSlot.slot_type, value: recentlyCompletedSlot.completed_value }
+      : null;
 
     // The slot the agent is currently collecting = the earliest still-open slot
     // (pendingItems are ordered by stage, then item). Passed to the analyzer so
@@ -240,6 +280,7 @@ export async function POST(request) {
       confidenceThreshold,
       currentTarget,
       recentContext: Array.isArray(recentContext) ? recentContext.slice(-6) : [],
+      bleedGuardSlot,
     });
 
     // Process completed items
@@ -422,6 +463,63 @@ export async function POST(request) {
         if (merged?.slots_filled && typeof merged.slots_filled === "object") {
           for (const key of Object.keys(slotsFilled)) delete slotsFilled[key];
           Object.assign(slotsFilled, merged.slots_filled);
+        }
+      }
+
+      // Deterministic name reconciliation. Per-utterance analysis with the
+      // "current focus" tie-breaker can drop a lone surname into a `*_first_name`
+      // slot (e.g. the agent asks "first name?" and STT yields the family name),
+      // leaving first === last (both "Thompson"). Equal first/last is virtually
+      // never a real person, so clear the first-name slot and reset its status so
+      // the agent re-asks for the given name. Only the unambiguous duplicate case
+      // is auto-corrected: a full name mis-dumped into one slot is left to the
+      // prompt, because "Mary Jo" is a valid two-word first name that must not be
+      // split. Runs AFTER the merge on the freshest state, and each clear is a
+      // SINGLE atomic UPDATE guarded on the LIVE DB still showing first === last —
+      // so a concurrent request that just captured the correct first name is never
+      // wiped (the guard fails and we skip). Self-heals a duplicate created on an
+      // earlier utterance since it scans the whole slot set.
+      for (const key of Object.keys(slotsFilled)) {
+        if (!key.endsWith("_first_name")) continue;
+        const lastKey = `${key.slice(0, -"_first_name".length)}_last_name`;
+        const norm = (v) => (typeof v === "string" ? v.trim().toLowerCase() : "");
+        if (!(norm(slotsFilled[key]) && norm(slotsFilled[key]) === norm(slotsFilled[lastKey]))) continue;
+        // A shared no-info sentinel ("N/A"/"unknown") in both slots is a valid
+        // "caller doesn't know the name", not a duplicate surname — leave it.
+        if (NAME_DUP_SENTINELS.has(norm(slotsFilled[key]))) continue;
+
+        // Atomic + conditional: only drop the first-name key if the DB STILL shows
+        // it equal to the last name. If a concurrent analyze corrected it, the
+        // WHERE matches nothing and we leave the fresh value alone.
+        const { rows: clearedSession } = await client.query(
+          `UPDATE aa_workflow_sessions
+              SET slots_filled = slots_filled - $2, updated_at = NOW()
+            WHERE id = $1
+              AND (slots_filled->>$2) IS NOT NULL
+              AND lower(btrim(slots_filled->>$2)) = lower(btrim(slots_filled->>$3))
+            RETURNING id`,
+          [workflowSession.id, key, lastKey]
+        );
+        if (clearedSession.length === 0) continue; // concurrent correction won
+
+        slotsFilled[key] = null; // response carries null -> client merges -> re-asks
+        const { rows: cleared } = await client.query(
+          `UPDATE aa_workflow_item_status ist
+              SET status = 'pending', extracted_value = NULL, completed_at = NULL,
+                  confidence_score = NULL, source_transcript = NULL,
+                  alternatives = NULL, completed_by = NULL, updated_at = NOW()
+             FROM aa_workflow_items i
+            WHERE ist.item_id = i.id AND ist.session_id = $1 AND i.slot_name = $2
+            RETURNING ist.item_id`,
+          [workflowSession.id, key]
+        );
+        for (const row of cleared) {
+          updates.push({
+            item_id: row.item_id,
+            status: "pending",
+            extracted_value: null,
+            cleared_reason: "name_first_equals_last",
+          });
         }
       }
 

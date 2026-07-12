@@ -14,8 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Combobox } from "@/components/ui/combobox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconEdit } from "@tabler/icons-react";
+import { IconEdit, IconHelpCircle } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
+import { useHelp } from "@/components/help/HelpProvider";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -193,6 +194,7 @@ export default function EditSheet({
   queueId,
   onSaveComplete,
 }) {
+  const { openHelp, registerHelpPortalContainer } = useHelp();
   const [name, setName] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -803,14 +805,31 @@ export default function EditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        ref={registerHelpPortalContainer}
         side="right"
+        data-context-help-host="true"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
-        <SheetHeader className="px-6 py-4 border-b">
-          <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconEdit className="size-5" />
-            {queueId ? "Edit Queue" : "Create Queue"}
-          </SheetTitle>
+        <SheetHeader className="border-b px-6 py-4 pr-12">
+          <div className="flex items-center justify-between gap-3">
+            <SheetTitle className="flex items-center gap-2 text-xl font-bold text-telnyx-green">
+              <IconEdit className="size-5" />
+              {queueId ? "Edit Queue" : "Create Queue"}
+            </SheetTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-controls="context-help-sheet"
+              aria-keyshortcuts="F1"
+              title="Help for the focused field (F1)"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openHelp()}
+            >
+              <IconHelpCircle aria-hidden="true" />
+              Help
+            </Button>
+          </div>
         </SheetHeader>
 
         {/* Scrollable Content Section */}
@@ -859,7 +878,10 @@ export default function EditSheet({
                       Basic Information
                     </h3>
                     <div className="space-y-3">
-                      <div className="grid gap-2">
+                      <div
+                        className="grid gap-2"
+                        data-help-id="admin.queues.form.name"
+                      >
                         <Label className="text-sm">Name *</Label>
                         <Input
                           value={name}
@@ -894,7 +916,10 @@ export default function EditSheet({
                       Routing Settings
                     </h3>
                     <div className="space-y-3">
-                      <div className="grid gap-2">
+                      <div
+                        className="grid gap-2"
+                        data-help-id="admin.queues.form.routing-strategy"
+                      >
                         <Label className="text-sm">Routing Strategy</Label>
                         <Combobox
                           value={routingStrategy}
@@ -905,7 +930,10 @@ export default function EditSheet({
                         />
                       </div>
                       <div className="grid gap-3 grid-cols-2">
-                        <div className="grid gap-2">
+                        <div
+                          className="grid gap-2"
+                          data-help-id="admin.queues.form.max-wait-time"
+                        >
                           <Label className="text-sm">
                             Max Wait Time (secs)
                           </Label>
@@ -917,7 +945,10 @@ export default function EditSheet({
                             }
                           />
                         </div>
-                        <div className="grid gap-2">
+                        <div
+                          className="grid gap-2"
+                          data-help-id="admin.queues.form.max-size"
+                        >
                           <Label className="text-sm">Max Size</Label>
                           <Input
                             type="number"
@@ -936,7 +967,10 @@ export default function EditSheet({
                           }
                         />
                       </div>
-                      <div className="grid gap-2">
+                      <div
+                        className="grid gap-2"
+                        data-help-id="admin.queues.form.agent-answer-timeout"
+                      >
                         <Label className="text-sm">
                           Agent Answer Timeout (secs)
                         </Label>
@@ -951,8 +985,8 @@ export default function EditSheet({
                         <p className="text-xs text-muted-foreground">
                           Time agent has to answer a call transferred from the
                           queue. If not answered in time, call will be
-                          re-enqueued and agent status will be set to "Agent Not
-                          Answering".
+                          re-enqueued and agent status will be set to &quot;Agent
+                          Not Answering&quot;.
                         </p>
                       </div>
                     </div>
@@ -966,7 +1000,10 @@ export default function EditSheet({
                       Queue Priority Settings
                     </h3>
                     <div className="space-y-3">
-                      <div className="grid gap-2">
+                      <div
+                        className="grid gap-2"
+                        data-help-id="admin.queues.form.queue-priority"
+                      >
                         <Label className="text-sm">Queue Priority</Label>
                         <div className="flex items-center gap-3">
                           <StarRating
@@ -1382,7 +1419,7 @@ export default function EditSheet({
                                 Queue Position Announcements
                               </Label>
                               <p className="text-xs text-muted-foreground">
-                                Announce caller's position in queue using TTS
+                                Announce caller&apos;s position in queue using TTS
                               </p>
                             </div>
                             <Switch

@@ -70,6 +70,9 @@ export async function POST(request) {
           ? { api_key_ref: voiceApiKeyRef }
           : {}),
         voice_speed: body?.voice_speed || 1,
+        ...(body?.voice_language && /^xai\./i.test(voice)
+          ? { language: body.voice_language }
+          : {}),
       },
     };
 

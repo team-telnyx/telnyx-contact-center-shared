@@ -376,3 +376,62 @@ test("consecutive interim chunks on the same leg still merge into one open bubbl
   assert.equal(transcriptions.length, 1);
   assert.equal(transcriptions[0].transcript, "I would like a transport");
 });
+
+test("a repeated final on the same leg with identical text is deduped (no duplicate row)", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  // First final (segment-end).
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "dup-1",
+    transcript: "Sarah Thompson.",
+    is_final: true,
+  });
+  // Same final re-delivered (speech_final / duplicate WS message), different key.
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "dup-1b",
+    transcript: "Sarah Thompson.",
+    is_final: true,
+    speech_final: true,
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 1);
+  assert.equal(transcriptions[0].transcript, "Sarah Thompson.");
+});
+
+test("a legit repeat of the same phrase across turns is NOT deduped", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "no-1",
+    transcript: "No.",
+    is_final: true,
+  });
+  // Agent speaks in between (other leg), so the customer's next "No." is a real
+  // separate answer, not a duplicate.
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-1",
+    transcript: "Any other aircraft currently responding?",
+    is_final: true,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "no-2",
+    transcript: "No.",
+    is_final: true,
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 3);
+});

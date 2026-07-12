@@ -74,7 +74,7 @@ export async function GET(request) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const fromSql = `FROM users u LEFT JOIN cc_agent_state s ON s.user_id = u.id`;
-  const rowsSql = `SELECT u.id, u.username, u.first_name, u.last_name, u.nick, u.mobile, u.roles, u.verified, s.agent_status AS status, u.skills, u.created_at, u.updated_at ${fromSql} ${whereSql} ORDER BY u.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
+  const rowsSql = `SELECT u.id, u.username, u.first_name, u.last_name, u.nick, u.mobile, u.roles, u.verified, u.experimental_features, s.agent_status AS status, u.skills, u.created_at, u.updated_at ${fromSql} ${whereSql} ORDER BY u.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
   const [rowsRes, countRes] = await Promise.all([
     pool.query(rowsSql, vals),
     pool.query(`SELECT COUNT(*) AS c ${fromSql} ${whereSql}`, vals),
@@ -103,6 +103,7 @@ export async function POST(request) {
     const nick = body.nick || null;
     const mobile = body.mobile || null;
     const sendInvite = Boolean(body.sendInvite !== false); // default true
+    const experimentalFeatures = body.experimentalFeatures === true;
 
     if (!username) {
       return NextResponse.json({ error: "Email (username) is required" }, { status: 400 });
@@ -168,19 +169,20 @@ export async function POST(request) {
         id, username, first_name, last_name, nick, mobile, roles,
         active, verified, auth_strategy, language, theme,
         invite_token, invite_token_expires, invite_sent_at, invite_status,
-        skills, agent_groups, preferred_languages,
+        skills, agent_groups, preferred_languages, experimental_features,
         created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         false, false, 'local', 'en-US', 'system',
         $8, $9, $10, $11,
-        '{}', '{}', ARRAY['en-US']::TEXT[],
+        '{}', '{}', ARRAY['en-US']::TEXT[], $12,
         NOW(), NOW()
       )`,
       [
         id, username, firstName, lastName, nick, mobile,
         Array.isArray(roles) ? roles : [roles],
         inviteToken, inviteExpires, inviteSentAt, inviteStatus,
+        experimentalFeatures,
       ]
     );
 

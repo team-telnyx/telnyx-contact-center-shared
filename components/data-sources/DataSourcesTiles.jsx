@@ -47,7 +47,7 @@ export default function DataSourcesTiles() {
             className={cn(
               "cursor-pointer transition-all hover:shadow-md",
               isActive
-                ? "ring-2 ring-telnyx-green bg-telnyx-green/5"
+                ? "bg-telnyx-green/10 shadow-sm hover:bg-telnyx-green/15"
                 : "hover:bg-muted/50",
             )}
             onClick={() => handleTileClick(tile.id)}

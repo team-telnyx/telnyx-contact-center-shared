@@ -1,0 +1,16 @@
+---
+title: Overview
+description: Shared browser phone for inbound, outbound, transfer, consult, and DTMF calling across all user roles.
+audiences: [agent, supervisor, admin, owner]
+keywords: [webrtc phone, softphone, browser phone, SIP]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+WebRTC Phone is a shared application component available to every authenticated user role. Open it from the phone control in the application header. The floating panel can be dragged within the browser viewport; its last position is remembered. Choose **X** to hide it without signing out or changing call routing.
+
+The title bar shows the current state, including idle, ringing, dialing/connecting, connected, ended, or **On Hold**. **WebRTC URI** copies the profile SIP address in the form `sip:<telephony-user>@sip.telnyx.com` when configured.
+
+The panel provides WebRTC region, microphone and speaker selection, To/From identities, inbound Answer/Reject, outbound Call/Disconnect, connected-call Mute/Hold/Transfer/End, and an expandable DTMF keypad.
+
+The browser phone is independent of agent queue eligibility. An agent can be Available and activated in a queue but still fail to receive audio if browser permissions, profile telephony configuration, or device selection is invalid.

@@ -78,7 +78,7 @@ test("Answer streaming provider selector matches Streaming Start providers", asy
     "Answer node should auto-configure stream URLs for Google and OpenAI providers",
   );
   assert.doesNotMatch(answerSource, /azure-transcription|Azure Transcription/);
-  assert.match(pageSource, /<AnswerNodeEditor[\s\S]*currentUserEmail=\{userEmail\}/);
+  assert.match(pageSource, /<AnswerNodeEditor[\s\S]*experimentalFeaturesEnabled=\{experimentalFeaturesEnabled\}/);
 });
 
 test("voice-flow engine resolves virtual Telnyx STT provider model for answer and streaming_start", async () => {

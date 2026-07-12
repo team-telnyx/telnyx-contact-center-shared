@@ -1,0 +1,50 @@
+---
+title: Data Sources
+description: Manage contacts, knowledge-base articles, and operational tasks used by contact-center workflows.
+audiences: [admin, owner]
+keywords: [contacts, knowledge base, tasks, API schema, import]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → Configuration**, select **Data Sources** in the rail, then choose one of the three tiles: **Contacts**, **KB Articles**, or **Tasks**. Each view includes **API Schema**, which documents its programmatic fields and operations.
+
+## Contacts
+
+Search by name/company/notes, phone, email, or company. Actions include **Clear**, **Refresh**, **Import**, **New Contact**, edit, and permanent delete. The table shows name, company, phone, and email.
+
+At least one of first name, last name, display name, or company name is required. The contact sheet supports identity and company fields, job title, department, multiple phone and email fields, postal address, notes, and a JSON custom-data object. Custom data must be valid JSON.
+
+Use **Import** for bulk contact loading and review validation results before relying on the imported records.
+
+## KB Articles
+
+Search title, content, or tags and filter by **Status** (Draft, Published, Archived) and category. Create, edit, refresh, or permanently delete articles.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Title** | Yes | Human-readable article title. |
+| **Slug** | Yes | Stable URL/search identifier. |
+| **Summary** | No | Short synopsis. |
+| **Content** | Yes | Full article in Markdown or plain text. |
+| **Category** | Yes | Primary organization group. |
+| **Subcategory** | No | Secondary grouping. |
+| **Tags / Keywords** | No | Comma-separated discovery metadata. |
+| **Author Name** | No | Display attribution. |
+| **Status** | Yes | Draft, Published, or Archived. |
+| **Language** | No | Language code, defaulting to the configured value. |
+| **Custom Data** | No | Valid JSON metadata. |
+
+Only publish reviewed content. Archive content that should remain available historically but should no longer be treated as current guidance.
+
+## Tasks
+
+Search title, description, or caller and filter by status, type, priority, and assigned user. The table shows title, type, status, priority, caller, assignee, creation time, and actions.
+
+A task requires **Title** and **Task Type**. Other fields include description, a standard or custom type, status, priority, linked contact, caller name/phone/email, assigned user, due date, comma-separated tags, and valid JSON custom data.
+
+Link a contact when possible to keep caller identity consistent. Use caller fields for snapshots or unlinked requests, and assign an owner plus due date for actionable work.
+
+## Delete safely
+
+Delete actions cannot be undone. Prefer Archived status for knowledge that must remain auditable and completed/closed task states for finished work. Export or retain externally required records before deletion.

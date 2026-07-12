@@ -1,0 +1,24 @@
+---
+title: Transfer and consult
+description: Transfer to queues, agents, contacts, AI agents, or manual destinations and manage a consult call.
+audiences: [agent, supervisor, admin, owner]
+keywords: [transfer, consult, queue transfer, blind transfer]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Select **Transfer**, then choose a target type:
+
+| Target | Configuration |
+| --- | --- |
+| Queues | Select the destination queue, inspect available/busy agents and routing type, and choose whether to preserve routing options where supported. |
+| Agents | Select the agent and one of the available profile/telephony numbers; inspect status/statistics before transfer. |
+| Contacts | Select a record and one of its phone numbers. |
+| AI Agents | Select the configured assistant; the target is built as a SIP address. |
+| Manual | Enter a supported phone number or SIP URI. |
+
+**Transfer** sends the call to the selected target without starting a consult conversation. **Consult** is available for external targets but not queue transfers.
+
+During consult, the original caller is parked and a new WebRTC call is made to the consultant. The dialog stays open and shows the parked and consultant legs. Use the leg tiles to switch which party is connected, then complete the intended transfer or cancel/disconnect the consultant and return to the parked caller.
+
+Do not close the dialog while consult setup is in progress. If switching reports missing call-control IDs, wait for webhook metadata to arrive and retry once. Repeatedly starting consult can create conflicting call legs.

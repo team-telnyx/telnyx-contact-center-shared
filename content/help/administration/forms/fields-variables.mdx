@@ -1,0 +1,16 @@
+---
+title: Fields, variables, and validation
+description: Configure data-producing fields, stable variable names, defaults, required rules, and context.
+audiences: [admin, owner]
+keywords: [form field, variable name, validation, hidden]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Data-producing blocks are Text, Textarea, Select, Radio, Checkbox, Switch, Slider, Date/time, and Hidden. Each requires a unique variable name beginning with a letter or underscore and containing only letters, numbers, and underscores.
+
+The field ID identifies the UI element; the variable name identifies its value in action payloads. Keep both stable after publication. Configure Label, Required, Placeholder, Help Text, Default Value, and options where supported.
+
+Checkbox with options submits a list; a plain checkbox and Switch submit booleans; Slider submits a number. Hidden fields carry defaults or resolved context but are not a security boundary. Context Value displays live client context without itself producing submitted data.
+
+Required validation rejects empty values before submission. Also test defaults, `false`, zero, empty arrays, renamed variables, and missing context paths.

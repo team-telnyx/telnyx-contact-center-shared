@@ -121,7 +121,7 @@ test("translation header and suggestions use bounded layout with language names"
   assert.match(workflowSource, /pl: "Polish"/);
   assert.doesNotMatch(workflowSource, /return String\(language\)\.toUpperCase\(\)/,
     "Translation header should show language names instead of raw PL-PL/EN-US codes");
-  assert.match(workflowSource, /<span className="shrink-0">-<\/span>/);
+  assert.match(workflowSource, /<span className="shrink-0">→<\/span>/);
   assert.match(workflowSource, /flex flex-wrap items-center gap-1\.5 mb-2 min-w-0 max-w-full overflow-hidden/);
   assert.match(workflowSource, /max-w-full min-w-0 overflow-hidden truncate/);
 });

@@ -1,0 +1,21 @@
+---
+title: Slot-filling recommendations
+description: Design labels, hints, ordering, and validation so values fill the correct slots.
+audiences: [admin, owner]
+keywords: [slot recommendations, matching, prompt hints]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+To improve matching accuracy:
+
+1. Use one concept per slot: `receiving_facility`, not `destination_details`.
+2. Make labels role-specific: “Receiving physician name” and “Patient name” are safer than two “Name” items.
+3. Place the item immediately before the likely answer; current collection focus helps disambiguate short replies.
+4. Add domain synonyms as hints, but do not add values belonging to another slot.
+5. Use Select for a controlled vocabulary and Yes/No for a true binary proposition.
+6. Put formatting rules in Validation Instructions, including units, date normalization, and accepted identifier patterns.
+7. Keep a recently completed numeric/date slot away from an unrelated numeric slot where trailing speech fragments could bleed into the next answer.
+8. Add a clearly named read-back/confirmation item after collection when the agent must summarize captured values.
+
+Test paraphrases, speech-to-text mistakes, answers given out of order, several values in one utterance, a bare “yes/no”, unknown values, corrections, and repeated notes.

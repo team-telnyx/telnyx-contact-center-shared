@@ -1,0 +1,74 @@
+---
+title: Overview
+description: Navigate Admin Workspace and understand its tiles, section rails, and nested editors.
+audiences: [admin, owner]
+keywords: [admin, workspace, navigation, tiles, rail, configuration, system, automations]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Admin Workspace contains the configuration, automation, AI, and platform-management tools used to operate the contact center. The application's left menu remains labeled **ADMIN**; **Admin Workspace** is the name of this documentation chapter and the page-header context.
+
+## Current navigation model
+
+The left menu exposes four entry points. Selecting one opens a page with a section rail on the left. Use the rail to move between related modules without returning to the main application menu.
+
+| Left-menu entry | Rail sections |
+| --- | --- |
+| **AI Assistants** | AI Assistants, Tools Library, Insights, Scheduled Events, Pronunciation Dictionaries, MCP Servers |
+| **Configuration** | Users, Queues, Skills, Statuses, Wrapup Codes, Numbers, Data Sources, Web Pages, Media Library, Domains, Secrets |
+| **System** | Dashboard, Call Generator, Logging, Phones Provisioning, Theme Settings |
+| **Automations** | Call & App Flows, Workflows, Forms |
+
+**System** first opens a tile overview. Select a module tile or the same module in the rail. **Data Sources** also uses tiles for Contacts, KB Articles, and Tasks.
+
+Some complex modules replace the outer rail with their own detailed rail:
+
+- an AI Assistant editor uses Dashboard, Agent, Voice, Workflow, Integrations, Insights, Calling, Messaging, Widget, Privacy, and Conversations;
+- Call Generator uses Dashboard, Logs, Scenarios, Actions, and Settings;
+- Logging uses Live, Files, and Settings;
+- Phones Provisioning uses Dashboard, Phones, Bridges, Logs, and Settings.
+
+Use **Exit** in these nested rails to return to the parent list or System overview.
+
+## Recommended setup order
+
+1. In **Configuration**, create Domains, Users, Skills, Statuses, and Wrapup Codes.
+2. Configure Queues, Numbers, Data Sources, Web Pages, Media Library, and Secrets.
+3. In **AI Assistants**, configure assistants, reusable tools, insights, scheduled events, pronunciation dictionaries, and MCP Servers.
+4. In **Automations**, create Call & App Flows, Agent Assist Workflows, and Forms.
+5. Use **System** for controlled testing, logging, phones, and branding.
+6. Test routing and failure paths before enabling production traffic.
+
+## Documentation by workspace
+
+### AI Assistants
+
+- [AI Assistants](/help/administration/ai-assistants)
+- [Tools Library](/help/administration/tools-library)
+- [Insights](/help/administration/insights)
+- [Scheduled Events](/help/administration/scheduled-events)
+- [Pronunciation Dictionaries](/help/administration/pronunciation-dictionaries)
+- [MCP Servers](/help/administration/mcp-servers)
+
+### Configuration
+
+- [Users](/help/administration/users), [Queues](/help/administration/queues), [Skills](/help/administration/skills)
+- [Statuses](/help/administration/statuses), [Wrapup Codes](/help/administration/wrapup-codes)
+- [Numbers](/help/administration/numbers), [Data Sources](/help/administration/data-sources), [Web Pages](/help/administration/web-pages)
+- [Media Library](/help/administration/media-library), [Domains](/help/administration/domains), [Secrets](/help/administration/secrets)
+
+### System
+
+- [System](/help/administration/system)
+- [Dashboard](/help/administration/system#dashboard)
+- [Call Generator](/help/administration/call-generator)
+- [Logging](/help/administration/logging)
+- [Phones Provisioning](/help/administration/phones-provisioning)
+- [Theme Settings](/help/administration/theme-settings)
+
+### Automations
+
+- [Call & App Flows](/help/administration/call-flows)
+- [Workflows](/help/administration/workflows)
+- [Forms](/help/administration/forms)

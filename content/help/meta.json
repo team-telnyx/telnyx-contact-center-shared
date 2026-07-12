@@ -1,0 +1,14 @@
+{
+  "title": "Contact Center Help",
+  "pages": [
+    "index",
+    "setup",
+    "getting-started",
+    "agent",
+    "supervisor",
+    "administration",
+    "webrtc-phone",
+    "troubleshooting",
+    "changelog"
+  ]
+}

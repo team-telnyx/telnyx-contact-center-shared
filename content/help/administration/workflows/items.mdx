@@ -1,0 +1,21 @@
+---
+title: Workflow items
+description: Configure actions, questions, topics, completion speakers, hints, and requirements.
+audiences: [admin, owner]
+keywords: [workflow item, action, question, topic, completion trigger]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+| Type | Purpose | Typical completion trigger |
+| --- | --- | --- |
+| Action | Something the agent must perform. | Agent |
+| Question | A question the agent must ask. | Agent or Customer, depending on the intended evidence. |
+| Topic | A subject that must be covered. | Either |
+| Data Slot | A concrete value collected from the customer. | Customer |
+
+Every item has **Label**, **Description**, **Required**, **Completion Trigger**, and **Prompt Hints**. The trigger specifies whether agent speech, customer speech, or either side can complete it.
+
+Write the label as one observable outcome. Put additional context in Description. Hints should be short keywords, paraphrases, or domain terms that distinguish the item; they are detection aids, not a replacement for a precise label. Avoid duplicate hints and broad words such as “customer” or “information”.
+
+Required means the agent is expected to complete the item. Do not mark unavailable or conditional information required without an accepted value such as `N/A` and clear instructions.

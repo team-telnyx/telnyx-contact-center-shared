@@ -94,6 +94,7 @@ export async function GET(request) {
       language: user.language,
       profile_picture_uri: user.profile_picture_uri,
       setup_completed: user.setup_completed,
+      experimental_features: user.experimental_features === true,
     };
 
     return NextResponse.json({ ok: true, data: userData });

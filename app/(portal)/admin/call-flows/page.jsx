@@ -1,11 +1,20 @@
 "use client";
 
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AutomationsSectionPage } from "@/components/admin/AutomationsSectionNav";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -25,7 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  IconPencil,
+  IconEdit,
   IconTrash,
   IconCopy,
   IconPlus,
@@ -53,7 +62,7 @@ export default function CallFlowsPage() {
   const [flows, setFlows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(12);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
   const [filterName, setFilterName] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -141,7 +150,7 @@ export default function CallFlowsPage() {
     if (isAuthorized) {
       loadFlows();
     }
-  }, [page, filterName, isAuthorized]);
+  }, [page, pageSize, filterName, isAuthorized]);
 
   async function handleCreate() {
     try {
@@ -341,9 +350,7 @@ export default function CallFlowsPage() {
     input.click();
   }
 
-  const totalPages = Math.ceil(total / pageSize);
-  const hasNextPage = page < totalPages;
-  const hasPrevPage = page > 1;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Show loading state while checking authorization
   if (checkingAuth || !isAuthorized) {
@@ -375,8 +382,8 @@ export default function CallFlowsPage() {
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Call Flows" badges={<Badge variant="secondary">{total} flows</Badge>} actions={headerActions} />
-      <AdminPageContent>
+      <AdminPageHeader title="Call & App Flows" badges={<Badge variant="secondary">{total} flows</Badge>} actions={headerActions} />
+      <AutomationsSectionPage activeId="call-app-flows">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
@@ -385,7 +392,10 @@ export default function CallFlowsPage() {
             <Input
               placeholder="Filter by name..."
               value={filterName}
-              onChange={(e) => setFilterName(e.target.value)}
+              onChange={(e) => {
+                setFilterName(e.target.value);
+                setPage(1);
+              }}
               className="max-w-sm"
             />
           </div>
@@ -558,40 +568,44 @@ export default function CallFlowsPage() {
                       <TableCell>
                         {new Date(flow.created_at).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
+                      <TableCell className="whitespace-nowrap text-right">
+                        <div className="inline-flex items-center justify-end gap-2">
+                          <button
+                            type="button"
                             onClick={() =>
                               router.push(`/admin/call-flows/${flow.id}`)
                             }
+                            className="inline-flex items-center text-telnyx-green"
+                            title="Edit flow"
                           >
-                            <IconPencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
+                            <IconEdit className="size-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleDuplicate(flow.id, flow.name)}
+                            className="inline-flex items-center text-blue-500"
+                            title="Duplicate flow"
                           >
-                            <IconCopy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
+                            <IconCopy className="size-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleExport(flow.id, flow.name)}
+                            className="inline-flex items-center text-violet-500"
+                            title="Export flow"
                           >
-                            <IconDownload className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
+                            <IconDownload className="size-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() =>
                               handleDeleteClick(flow.id, flow.name)
                             }
+                            className="inline-flex items-center text-red-500"
+                            title="Delete flow"
                           >
-                            <IconTrash className="h-4 w-4" />
-                          </Button>
+                            <IconTrash className="size-4" />
+                          </button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -599,51 +613,75 @@ export default function CallFlowsPage() {
                 </TableBody>
               </Table>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-muted-foreground">
-                    Page {page} of {totalPages} ({total} total)
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPage(1)}
-                      disabled={!hasPrevPage}
-                    >
-                      <IconChevronsLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={!hasPrevPage}
-                    >
-                      <IconChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPage((p) => p + 1)}
-                      disabled={!hasNextPage}
-                    >
-                      <IconChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPage(totalPages)}
-                      disabled={!hasNextPage}
-                    >
-                      <IconChevronsRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </CardContent>
+        <div className="px-6 pb-6">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="flex w-full items-center gap-8 lg:w-fit">
+              <div className="hidden items-center gap-2 lg:flex">
+                <Label htmlFor="call-flows-rows-per-page" className="text-sm font-medium">
+                  Rows per page
+                </Label>
+                <Select
+                  value={`${pageSize}`}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value));
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger id="call-flows-rows-per-page" className="w-[70px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                >
+                  <IconChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page - 1)}
+                  disabled={page === 1}
+                >
+                  <IconChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page + 1)}
+                  disabled={page >= totalPages}
+                >
+                  <IconChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(totalPages)}
+                  disabled={page >= totalPages}
+                >
+                  <IconChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </Card>
 
       {/* Delete Confirmation Dialog */}
@@ -652,7 +690,7 @@ export default function CallFlowsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Flow</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{flowToDelete?.name}"? This will
+              Are you sure you want to delete &quot;{flowToDelete?.name}&quot;? This will
               also delete the associated voice application and unassign all
               phone numbers. This action cannot be undone.
             </AlertDialogDescription>
@@ -671,7 +709,7 @@ export default function CallFlowsPage() {
         </AlertDialogContent>
       </AlertDialog>
         </div>
-      </AdminPageContent>
+      </AutomationsSectionPage>
     </AdminPageShell>
   );
 }

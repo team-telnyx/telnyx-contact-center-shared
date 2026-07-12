@@ -31,10 +31,10 @@ import {
   IconMoon,
 } from "@tabler/icons-react";
 import {
-  AdminPageContent,
   AdminPageHeader,
   AdminPageShell,
 } from "@/components/contact-center/WorkspacePageLayout";
+import { SystemSectionPage } from "@/components/admin/SystemSectionNav";
 import {
   getDefaultColors,
   getDefaultDarkColors,
@@ -1002,7 +1002,7 @@ export default function SettingsPage() {
           </>
         }
       />
-      <AdminPageContent className="space-y-6">
+      <SystemSectionPage activeId="theme-settings" contentClassName="space-y-6 overflow-y-auto pr-1">
         {/* Branding Section */}
         <Card>
         <CardHeader>
@@ -1294,7 +1294,7 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      </AdminPageContent>
+      </SystemSectionPage>
     </AdminPageShell>
   );
 }

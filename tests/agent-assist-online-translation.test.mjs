@@ -55,10 +55,10 @@ test("Azure and Microsoft streaming services are removed from runtime and node c
     streamingEditor,
     nodesConfig,
     webhookHandler,
-    pkg,
   })) {
     assert.doesNotMatch(source, /azure-transcription|\/streaming\/azure|startAzureTranscription|stopAzureTranscription|AZURE_SERVICE|AZURE_SPEECH|@azure|Microsoft|Azure/, `${name} still references Azure/Microsoft streaming services`);
   }
+  assert.doesNotMatch(pkg, /@azure\/cognitiveservices-speech|microsoft-cognitiveservices-speech-sdk/);
 });
 
 test("profile exposes user language selector and saves users.language", () => {

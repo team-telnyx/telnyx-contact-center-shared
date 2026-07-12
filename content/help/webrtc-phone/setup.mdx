@@ -1,0 +1,21 @@
+---
+title: Setup and audio devices
+description: Prepare browser permissions, WebRTC region, microphone, speaker, profile number, and SIP identity.
+audiences: [agent, supervisor, admin, owner]
+keywords: [microphone permission, speaker, WebRTC region, SIP URI]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+## First-time setup
+
+1. Use a supported browser and allow microphone permission for the application origin.
+2. Open WebRTC Phone before accepting production work.
+3. Select the closest/recommended **WebRTC Region** or keep Auto. Region cannot be changed during an active call.
+4. Select the intended microphone and speakers. Device names may remain generic until permission is granted.
+5. Confirm the read-only **From** value reflects the profile voice number for outbound calls.
+6. If SIP identity is needed, use **WebRTC URI** to copy it; a disabled button means `telephony_user_name` is not configured.
+
+Microphone selection is applied through the available browser/Telnyx client device API. Speaker selection requires browser support for output-device routing (`setSinkId`); on unsupported browsers, the operating-system default output remains authoritative.
+
+Changing a physical headset while the page is open can change device identifiers. Reopen selectors and verify the active devices after docking, reconnecting Bluetooth, or switching audio hardware.

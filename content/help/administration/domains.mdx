@@ -1,0 +1,29 @@
+---
+title: Domains
+description: Manage the email domains allowed when administrators create contact-center users.
+audiences: [admin, owner]
+keywords: [domain, email, allowlist, users, onboarding]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Domains form the email-domain allowlist used by user creation. Open **Admin → Configuration**, then select **Domains** in the rail.
+
+## List and filters
+
+Search by domain name, filter by **Active**, and use **Clear**, **Refresh**, or **New Domain**. The table shows the domain, active state, created and updated timestamps, and edit/delete actions. Pagination supports 10, 25, 50, or 100 rows.
+
+## Create or edit a domain
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Active** | No | Only active domains are enforced as allowed domains during user creation. |
+| **Domain** | Yes | Bare domain such as `example.com`; do not include `@`, a protocol, path, or wildcard. |
+
+Domains are normalized to lowercase and must be unique. The validator accepts standard dotted domain names with a two-character-or-longer top-level domain.
+
+If at least one active domain exists, a newly created user's email must match an active entry. When no active domains exist, the create-user API does not apply a domain allowlist.
+
+## Delete a domain
+
+Deletion is permanent and is blocked when the domain is used by existing users. Deactivate the domain to stop future onboarding while retaining current accounts, or migrate those users before deletion.

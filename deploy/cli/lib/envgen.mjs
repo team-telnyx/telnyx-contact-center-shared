@@ -215,6 +215,7 @@ export function buildEnvValues({ sampleKeys, answers, target = 'local', postgres
     NEXT_PUBLIC_TELNYX_WEBRTC_REGION: 'auto',
     TELNYX_AI_API_KEY: '',
     TELNYX_AI_API_KEY_REF: '',
+    DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_URLS: '',
     TELNYX_SUPERVISOR_FROM_NUMBER: '',
     TELNYX_MAIN_FROM_NUMBER: '',
     // Telnyx resource id (not the E.164 string) for the purchased number —

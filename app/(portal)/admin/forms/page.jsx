@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconArchive, IconDownload, IconPencil, IconPlus, IconRefresh, IconUpload, IconWorldUpload } from "@tabler/icons-react";
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AutomationsSectionPage } from "@/components/admin/AutomationsSectionNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -212,7 +213,7 @@ export default function AdminFormsPage() {
 
   return <AdminPageShell>
     <AdminPageHeader title="Agent Forms" badges={<Badge variant="secondary">{forms.length} forms</Badge>} actions={headerActions} />
-    <AdminPageContent>
+    <AutomationsSectionPage activeId="forms">
       <div className="space-y-5">
     <AlertDialog open={Boolean(archiveTarget)} onOpenChange={(open) => { if (!open && !loading) setArchiveTarget(null); }}>
       <AlertDialogContent>
@@ -262,6 +263,6 @@ export default function AdminFormsPage() {
       </Card>)}
     </div> : null}
       </div>
-    </AdminPageContent>
+    </AutomationsSectionPage>
   </AdminPageShell>;
 }

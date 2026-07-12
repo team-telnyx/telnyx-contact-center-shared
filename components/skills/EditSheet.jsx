@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Sheet,
   SheetContent,
@@ -13,9 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconEdit, IconPlus } from "@tabler/icons-react";
+import { IconEdit, IconPlus, IconHelpCircle } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
+import { useHelp } from "@/components/help/HelpProvider";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ export default function SkillEditSheet({
   skillId,
   onSave,
 }) {
+  const { openHelp, registerHelpPortalContainer } = useHelp();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
@@ -37,21 +39,7 @@ export default function SkillEditSheet({
   const [category, setCategory] = useState("");
   const [isActive, setIsActive] = useState(true);
 
-  useEffect(() => {
-    if (open) {
-      if (skillId) {
-        loadSkill();
-      } else {
-        // Reset form for new skill
-        setName("");
-        setDescription("");
-        setCategory("");
-        setIsActive(true);
-      }
-    }
-  }, [open, skillId]);
-
-  async function loadSkill() {
+  const loadSkill = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(
@@ -81,7 +69,21 @@ export default function SkillEditSheet({
     } finally {
       setLoading(false);
     }
-  }
+  }, [skillId]);
+
+  useEffect(() => {
+    if (open) {
+      if (skillId) {
+        loadSkill();
+      } else {
+        // Reset form for new skill
+        setName("");
+        setDescription("");
+        setCategory("");
+        setIsActive(true);
+      }
+    }
+  }, [loadSkill, open, skillId]);
 
   async function handleSave() {
     if (!name.trim()) {
@@ -143,23 +145,40 @@ export default function SkillEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        ref={registerHelpPortalContainer}
         side="right"
+        data-context-help-host="true"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
-        <SheetHeader className="px-6 py-4 border-b">
-          <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            {skillId ? (
-              <>
-                <IconEdit className="size-5" />
-                Edit Skill
-              </>
-            ) : (
-              <>
-                <IconPlus className="size-5" />
-                Create Skill
-              </>
-            )}
-          </SheetTitle>
+        <SheetHeader className="px-6 py-4 pr-12 border-b">
+          <div className="flex items-center justify-between gap-3">
+            <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
+              {skillId ? (
+                <>
+                  <IconEdit className="size-5" />
+                  Edit Skill
+                </>
+              ) : (
+                <>
+                  <IconPlus className="size-5" />
+                  Create Skill
+                </>
+              )}
+            </SheetTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-controls="context-help-sheet"
+              aria-keyshortcuts="F1"
+              title="Help for skills (F1)"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openHelp()}
+            >
+              <IconHelpCircle aria-hidden="true" />
+              Help
+            </Button>
+          </div>
         </SheetHeader>
 
         {/* Scrollable Content Section */}
@@ -252,4 +271,3 @@ export default function SkillEditSheet({
     </Sheet>
   );
 }
-

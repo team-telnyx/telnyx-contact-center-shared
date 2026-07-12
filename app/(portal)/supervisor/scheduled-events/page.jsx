@@ -53,10 +53,10 @@ import PreviewSheet from "@/components/scheduled-events/PreviewSheet";
 import CreateSheet from "@/components/scheduled-events/CreateSheet";
 import AiConversationSheet from "@/components/contact-center/AiConversationSheet";
 import {
-  SupervisorPageContent,
   SupervisorPageHeader,
   SupervisorPageShell,
 } from "@/components/contact-center/SupervisorPageLayout";
+import { AiAssistantsSectionPage } from "@/components/assistants/AiAssistantsSectionNav";
 
 const neutralActionClass =
   "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
@@ -509,7 +509,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
           </>
         )}
       />
-      <SupervisorPageContent>
+      <AiAssistantsSectionPage activeId="scheduled-events">
         <Card className="shadow-sm">
           <CardContent className="py-6">
 
@@ -709,7 +709,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                                       setDeleteId(eventId);
                                       setDeleteAssistantId(event.assistant_id);
                                     }}
-                                    className="inline-flex items-center text-red-500"
+                                    className="inline-flex items-center text-red-500 hover:text-red-700"
                                     title="Delete event"
                                   >
                                     <IconTrash className="size-4" />
@@ -834,7 +834,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
           </div>
           </CardContent>
         </Card>
-      </SupervisorPageContent>
+      </AiAssistantsSectionPage>
 
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>

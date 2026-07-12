@@ -1,0 +1,46 @@
+---
+title: AI Assistants
+description: Create, configure, version, test, and monitor Telnyx AI assistants.
+audiences: [admin, owner]
+keywords: [AI assistant, model, voice, workflow, calling, messaging, privacy]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → AI Assistants**. The outer rail links AI Assistants, Tools Library, Insights, Scheduled Events, and MCP Servers.
+
+## Assistant list
+
+Filter by name, ID, or model; switch between list and card views; use **Clear** or **Refresh**; and select **Add assistant** to create one. The list shows name, ID, model, TTS, STT, and actions. Copy the assistant ID when configuring integrations or scheduled events.
+
+Deleting an assistant permanently removes it from Telnyx. Check assigned numbers, schedules, workflows, tools, and integrations first.
+
+## Assistant editor rail
+
+Opening an assistant replaces the outer rail with a detailed editor rail.
+
+| Section | What it controls |
+| --- | --- |
+| **Dashboard** | Recent activity, conversation counts, channel mix, and latency. |
+| **Agent** | Name, description, LLM model, instructions, greeting, and dynamic variables. |
+| **Voice** | TTS voice/provider, speed, background audio, pronunciation, expressive options, and transcription model. |
+| **Workflow** | Visual conversation workflow, nodes, edges, conditions, agent/voice/tool overrides, and variable comparisons. |
+| **Integrations** | Dynamic variables, reusable tools, external providers, and MCP Servers. |
+| **Insights** | Post-conversation insight configuration assigned to this assistant. |
+| **Calling** | Phone-number assignments, call duration, idle behavior, voicemail detection, and recording. |
+| **Messaging** | Messaging-profile assignment and conversation inactivity timeout. |
+| **Widget** | Browser widget code, theme, placement, labels, visualizer, logo, and support links. |
+| **Privacy** | Recording and data-retention/privacy controls exposed by the assistant API. |
+| **Conversations** | Conversation history for this assistant. |
+
+Use **Exit** to return to the assistant list.
+
+## Save, versions, and testing
+
+The header shows **Unsaved** or **Saved** state. Save ordinary edits to the current assistant, or use **Save as New Version** to create a named version without immediately changing the live version. Traffic distribution controls can split traffic between versions; verify percentages and production readiness before rollout.
+
+Use the assistant chat panel for controlled prompt/tool testing. A chat test does not replace a real call or message test because telephony, STT/TTS, number assignment, recording, and provider credentials are channel-specific.
+
+## Recommended verification
+
+Test greeting and interruption, dynamic variables, every callable tool, failure and timeout paths, voicemail behavior, call duration, recordings, messaging inactivity, insights, and privacy settings. Then place controlled calls through every assigned number.

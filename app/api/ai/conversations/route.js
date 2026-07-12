@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/ai/conversations
  * Creates a new AI conversation via Telnyx API
- * 
+ *
  * Body:
  *   - name: string (optional) - Conversation name
  *   - metadata: object (optional) - Custom metadata
@@ -45,7 +45,7 @@ export async function POST(request) {
     if (!res.ok) {
       const text = await res.text();
       platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-      
+
       return NextResponse.json(
         {
           ok: false,
@@ -57,7 +57,7 @@ export async function POST(request) {
     }
 
     const data = await res.json();
-    
+
     // Telnyx returns { data: { id, ... } }
     const conversation = data.data || data;
 
@@ -95,16 +95,31 @@ export async function GET(request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const pageSize = searchParams.get("pageSize") || "20";
-    const pageNumber = searchParams.get("pageNumber") || "1";
+    const page = Math.max(1, parseInt(searchParams.get("page") || searchParams.get("pageNumber") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20", 10)));
+    const assistantValue = String(
+      searchParams.get("metadata->assistant_id") || searchParams.get("assistantId") || ""
+    ).trim().replace(/^eq\./, "");
+    const telnyxParams = new URLSearchParams();
+    telnyxParams.set("order", "last_message_at.desc");
+    telnyxParams.set("page[number]", String(page));
+    telnyxParams.set("page[size]", String(pageSize));
+    if (assistantValue) telnyxParams.set("metadata->assistant_id", assistantValue);
+    const name = String(searchParams.get("name") || "").trim();
+    const id = String(searchParams.get("id") || "").trim();
+    const channel = String(searchParams.get("channel") || "").trim();
+    if (name) telnyxParams.set("name", `like.%${name}%`);
+    if (id) telnyxParams.set("id", `eq.${id}`);
+    if (channel) telnyxParams.set("metadata->telnyx_conversation_channel", `eq.${channel}`);
 
     const res = await fetch(
-      buildTelnyxV2Url(`/ai/conversations?page[size]=${pageSize}&page[number]=${pageNumber}`),
+      buildTelnyxV2Url(`/ai/conversations?${telnyxParams.toString()}`),
       {
         method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
+          Prefer: "count=exact",
         },
         cache: "no-store",
       }
@@ -113,7 +128,7 @@ export async function GET(request) {
     if (!res.ok) {
       const text = await res.text();
       platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-      
+
       return NextResponse.json(
         {
           ok: false,
@@ -125,12 +140,21 @@ export async function GET(request) {
     }
 
     const data = await res.json();
+    const items = data.data || data.items || [];
+    const meta = data.meta || {};
+    const total = Number(
+      meta.total_results ?? meta.total_items ?? meta.total ?? meta.count ??
+      ((items.length < pageSize) ? ((page - 1) * pageSize + items.length) : (page * pageSize + 1))
+    );
 
     return NextResponse.json(
       {
         ok: true,
-        items: data.data || [],
-        meta: data.meta,
+        page,
+        pageSize,
+        total,
+        items,
+        meta,
       },
       { headers: { "Cache-Control": "no-store" } }
     );

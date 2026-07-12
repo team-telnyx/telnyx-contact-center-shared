@@ -85,7 +85,26 @@ export async function POST(request) {
   try {
     if (generatorState && eventType === "call.transcription") {
       const { handleTranscriptionEvent } = await import("@/lib/contact-center/webhook-handler.js");
-      await handleTranscriptionEvent(payload);
+      // The generated call is the agent leg. Telnyx reports the physical media
+      // direction: the agent's voice arrives as "inbound" (client→server) and
+      // conference audio sent to the agent is "outbound" (server→client).
+      // Standalone STT remaps this to conversational role: agent audio →
+      // outputTrack "outbound", customer audio → "inbound". Normalize here so
+      // the per-leg and cross-leg dedup keys match across both paths and the
+      // shared cache can suppress the cross-path duplicate.
+      const td = payload?.transcription_data;
+      const agentPayload =
+        td?.transcription_track === "inbound" || td?.transcription_track === "outbound"
+          ? {
+              ...payload,
+              transcription_data: {
+                ...td,
+                transcription_track:
+                  td.transcription_track === "inbound" ? "outbound" : "inbound",
+              },
+            }
+          : payload;
+      await handleTranscriptionEvent(agentPayload);
     } else if (
       generatorState &&
       (eventType === "call.answered" ||
