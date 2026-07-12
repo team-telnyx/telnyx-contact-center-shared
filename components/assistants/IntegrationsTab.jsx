@@ -1986,9 +1986,7 @@ function createDefaultWebhookWithDemoData() {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_BASE_URL ||
     (typeof window !== "undefined" ? window.location.origin : "");
-  let url = action.urlPattern
-    .replace("{basePath}", entity.basePath)
-    .replace("{id}", "{id}");
+  let url = action.urlPattern.replace("{basePath}", entity.basePath);
   url = `${baseUrl}${url}`;
 
   // Generate name and description

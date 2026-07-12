@@ -255,7 +255,7 @@ test("AI Assistant dashboard matches the demo portal executive review layout", a
     "Average latency",
     "Interactions over time",
     "Latency distribution",
-  ]) assert.match(source, new RegExp(label.replace(/[+]/g, "\\+")));
+  ]) assert.match(source, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(source, /dashboard-summary/);
   assert.match(source, /metadata->assistant_id/);
   assert.doesNotMatch(source, /Executive configuration overview generated/);

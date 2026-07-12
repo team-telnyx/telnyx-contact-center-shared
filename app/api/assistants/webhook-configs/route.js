@@ -82,9 +82,7 @@ function generateWebhookConfigServer(entityId, actionId, baseUrl) {
     baseUrl || process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:3000";
 
   // Build URL
-  let url = action.urlPattern
-    .replace("{basePath}", entity.basePath)
-    .replace("{id}", "{id}");
+  let url = action.urlPattern.replace("{basePath}", entity.basePath);
   url = `${finalBaseUrl}${url}`;
 
   // Generate name

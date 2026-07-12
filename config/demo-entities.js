@@ -1366,9 +1366,7 @@ export function generateWebhookConfig(entityId, actionId) {
     (typeof window !== "undefined" ? window.location.origin : "");
 
   // Build URL
-  let url = action.urlPattern
-    .replace("{basePath}", entity.basePath)
-    .replace("{id}", "{id}");
+  let url = action.urlPattern.replace("{basePath}", entity.basePath);
   url = `${baseUrl}${url}`;
 
   // Generate name
