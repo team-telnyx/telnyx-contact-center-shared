@@ -67,8 +67,10 @@ test("dynamic variables webhook tester requires admin auth and a server allowlis
 
   assert.match(source, /getAuthenticatedUser/);
   assert.match(source, /isAdmin\(user\)/);
-  assert.match(source, /DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_HOSTS/);
-  assert.match(source, /allowedHosts\.has\(targetHostname\)/);
+  assert.match(source, /DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_URLS/);
+  assert.match(source, /allowedUrl === targetUrl\.toString\(\)/);
+  assert.match(source, /fetch\(configuredTarget,/);
+  assert.doesNotMatch(source, /fetch\(targetUrl(?:\.toString\(\))?,/);
   assert.match(source, /assertPublicHostname\(targetHostname\)/);
   assert.match(source, /redirect: "error"/);
   assert.doesNotMatch(source, /fetch\(url,/);

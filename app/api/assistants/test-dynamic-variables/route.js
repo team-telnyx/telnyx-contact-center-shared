@@ -11,13 +11,26 @@ import { isAdmin } from "@/lib/role-utils";
 import { platformApiLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 import { assertPublicHostname } from "@/lib/security/outbound-url.mjs";
 
-function configuredWebhookHosts() {
-  return new Set(
-    String(process.env.DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_HOSTS || "")
-      .split(",")
-      .map((value) => value.trim().toLowerCase().replace(/\.$/, ""))
-      .filter(Boolean)
-  );
+function configuredWebhookUrls() {
+  return String(process.env.DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_URLS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .flatMap((value) => {
+      try {
+        const configuredUrl = new URL(value);
+        if (
+          !["http:", "https:"].includes(configuredUrl.protocol) ||
+          configuredUrl.username ||
+          configuredUrl.password
+        ) {
+          return [];
+        }
+        return [configuredUrl.toString()];
+      } catch {
+        return [];
+      }
+    });
 }
 
 export async function POST(request) {
@@ -54,17 +67,26 @@ export async function POST(request) {
       );
     }
 
-    const allowedHosts = configuredWebhookHosts();
-    const targetHostname = targetUrl.hostname.toLowerCase().replace(/\.$/, "");
-    if (!allowedHosts.size || !allowedHosts.has(targetHostname)) {
+    let configuredTarget;
+    for (const allowedUrl of configuredWebhookUrls()) {
+      if (allowedUrl === targetUrl.toString()) {
+        configuredTarget = allowedUrl;
+        break;
+      }
+    }
+
+    if (!configuredTarget) {
       return NextResponse.json(
         {
           error:
-            "Webhook hostname is not allowed. Configure DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_HOSTS.",
+            "Webhook URL is not allowed. Configure DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_URLS.",
         },
         { status: 400 }
       );
     }
+
+    const configuredUrl = new URL(configuredTarget);
+    const targetHostname = configuredUrl.hostname.toLowerCase().replace(/\.$/, "");
 
     try {
       await assertPublicHostname(targetHostname);
@@ -84,7 +106,7 @@ export async function POST(request) {
     }
 
     // Make the request to the dynamic variables webhook
-    const response = await fetch(targetUrl.toString(), {
+    const response = await fetch(configuredTarget, {
       method: "POST",
       redirect: "error",
       headers: {
