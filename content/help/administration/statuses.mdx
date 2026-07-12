@@ -1,0 +1,45 @@
+---
+title: Statuses
+description: Configure the agent statuses used for availability, breaks, and routing state.
+audiences: [admin, owner]
+keywords: [status, agent status, availability, break, routing]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Statuses describe an agent's current availability. Open **Admin → Configuration**, then select **Statuses** in the rail.
+
+## Find and review statuses
+
+| Control | Purpose |
+| --- | --- |
+| **Name** | Searches name and description. |
+| **Type** | Filters Active or Break statuses. |
+| **Active** | Filters enabled or disabled definitions. |
+| **User Selectable** | Filters statuses agents may select themselves. |
+| **Clear / Refresh / New Status** | Reset filters, reload the table, or open a blank sheet. |
+
+The table shows **Name**, **Type**, **Active**, **User Selectable**, **Icon**, **Display Order**, **Description**, and edit/delete actions. Results are ordered by display order and then name. Pagination supports 10, 25, 50, or 100 rows.
+
+## Create or edit a status
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Active** | No | Makes the status available to the application. Turn it off to retire a definition without deleting it. |
+| **User selectable** | No | Allows an agent to choose the status manually. Turn it off for states controlled by routing or automation. |
+| **Name** | Yes | Unique visible status name, for example `Available`, `Busy`, or `Break`. |
+| **Type** | Yes | **Active** represents working/availability states; **Break** represents non-working break states. |
+| **Icon** | No | Visual symbol shown with the status. The picker is searchable. |
+| **Icon Color** | No | Color used when rendering the selected icon. |
+| **Display Order** | No | Numeric sort position; lower values appear first. Default is 0. |
+| **Description** | No | Explanation of when the status should be used. |
+
+Select **Save Changes** to create or update the definition. Empty names, duplicate names, and types other than Active or Break are rejected.
+
+## Delete a status
+
+Select the red delete icon and confirm. Deletion is permanent. A status cannot be deleted while it is the current runtime status of one or more users. Move those users to another status first, or deactivate the definition when it must be retained.
+
+## Recommended setup
+
+Keep a small, clearly named set of user-selectable statuses. Reserve non-selectable statuses for automatic call-routing states so agents cannot bypass workflow rules.

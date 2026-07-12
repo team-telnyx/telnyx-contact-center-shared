@@ -120,7 +120,7 @@ export async function POST(request) {
       const earliest = await isEarliestReadBackItem(pool, workflowId, itemId);
       if (earliest !== false) {
         const orderedSlots = await buildOrderedFilledSlots(pool, workflowId, prefilledSlots || {});
-        const readBack = buildReadBackSuggestion({ orderedSlots });
+        const readBack = buildReadBackSuggestion({ orderedSlots, rawSlots: prefilledSlots || {} });
         if (readBack) {
           return NextResponse.json({
             ok: true,
@@ -483,6 +483,32 @@ function capturedSlotValue({ itemStatus, prefilledSlots, conversationContext }) 
   return hasMeaningfulValue(statusValue) ? statusValue : null;
 }
 
+// A readable noun phrase for a slot label — "the caller's last name", "the
+// patient's date of birth", "the number of IV drips" — used to build a natural
+// collection prompt instead of the stilted "provide your <label>". Returns null
+// for a label that is already a full question (the caller asks it directly).
+function slotNounPhrase(label) {
+  const raw = String(label || "").trim();
+  if (!raw || raw.endsWith("?")) return null;
+  const phrase = raw
+    .toLowerCase()
+    .replace(/^patient\b(?!')/, "patient's") // "patient date of birth" -> possessive
+    .replace(/\biv\b/g, "IV")
+    .replace(/\bicu\b/g, "ICU")
+    .replace(/\bdob\b/g, "DOB");
+  return `the ${phrase}`;
+}
+
+// Deterministic collection prompt for a slot. A question-label ("Other aircraft
+// currently responding?") is asked verbatim (no "provide your ...??"); otherwise
+// use the noun phrase ("Could you provide the caller's last name?").
+function phraseSlotCollection(label) {
+  const raw = String(label || "").trim();
+  if (!raw) return null;
+  if (raw.endsWith("?")) return raw.charAt(0).toUpperCase() + raw.slice(1);
+  return `Could you provide ${slotNounPhrase(label)}?`;
+}
+
 function buildDeterministicSuggestion({
   itemType,
   itemLabel,
@@ -515,11 +541,11 @@ function buildDeterministicSuggestion({
   }
 
   if (targetMode === "collect_prerequisite" && blockedItem?.label) {
-    return `Before I ${blockedItem.label.toLowerCase()}, could you please provide your ${labelLower}?`;
+    return `Before I ${blockedItem.label.toLowerCase()}, could you provide ${slotNounPhrase(label) || `the ${labelLower}`}?`;
   }
 
   if (conversationContext?.reason === "conversation_stage_match" && itemType === "slot") {
-    return `Could you please provide your ${labelLower}?`;
+    return phraseSlotCollection(label);
   }
 
   const introduceMatch = label.match(/introduce (?:yourself|your self)(?: as)?\s+(.+?)$/i);
@@ -561,7 +587,7 @@ function buildDeterministicSuggestion({
   }
 
   if (allowGeneric && itemType === "slot") {
-    return `Could you please provide your ${labelLower}?`;
+    return phraseSlotCollection(label);
   }
 
   return null;

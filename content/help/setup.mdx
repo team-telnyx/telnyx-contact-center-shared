@@ -1,0 +1,190 @@
+---
+title: Setup
+description: Install, configure, initialize, and deploy Telnyx Contact Center.
+audiences: [admin, owner]
+keywords: [setup, install, deployment, docker, postgres, telnyx, wizard]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Telnyx Contact Center is a Next.js application backed by PostgreSQL and
+Telnyx Voice APIs. It includes a visual voice flow designer, skills-based
+routing, WebRTC agent desktop, real-time monitoring, recordings,
+transcription, and AI assistant administration.
+
+<DocsCallout title="Recommended path">
+  Use <code>./deploy/cc up</code> for a complete Telnyx-wired deployment. Use
+  the manual local setup when you are developing the app or managing the
+  containers yourself.
+</DocsCallout>
+
+## Requirements
+
+- Node.js 20 or newer.
+- Yarn package manager.
+- PostgreSQL for local development.
+- Docker Engine and Docker Compose v2 for production Docker deployment.
+- A Telnyx account with API credentials for voice, AI assistant, webhook, and
+  phone-number provisioning flows.
+
+## Local development
+
+Install dependencies and create the local environment file.
+
+<DocsTerminal>{`yarn install
+cp sample.env .env.local`}</DocsTerminal>
+
+Fill in the PostgreSQL connection, Telnyx credentials, and NextAuth settings.
+Then initialize the database and start the app.
+
+<DocsTerminal>{`yarn ensure:pg
+yarn dev`}</DocsTerminal>
+
+The development server is available at <code>http://localhost:3000</code>.
+The default dev command uses webpack and binds to <code>0.0.0.0:3000</code>.
+
+## Environment
+
+The application uses browser-visible <code>NEXT_PUBLIC_*</code> values at build
+time and server-only secrets at runtime. For production, copy
+<code>docker/production/sample.env</code> to
+<code>docker/production/.env</code> and fill in values like these.
+
+<DocsTerminal title="Environment">{`NODE_ENV=production
+NEXTAUTH_URL=https://<your-server-url>
+APP_BASE_URL=https://<your-server-url>
+NEXT_PUBLIC_BASE_URL=https://<your-server-url>
+ALLOWED_ORIGINS=https://<your-server-url>
+NEXTAUTH_SECRET=<long-random-secret>
+
+TELNYX_API_KEY=<your-telnyx-api-key>
+TELNYX_WEBHOOK_SECRET=<your-webhook-secret>
+TELNYX_CALL_CONTROL_ID=<your-call-control-application-id>
+
+POSTGRES_DB=telnyx_contact_center
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<secure-password>
+
+DEFAULT_OWNER_EMAIL=admin@example.com
+DEFAULT_OWNER_PASSWORD=<change-after-first-login>
+ALLOWED_EMAIL_DOMAINS=example.com`}</DocsTerminal>
+
+<DocsCallout title="Build-time values" tone="warning">
+  <code>NEXT_PUBLIC_*</code> values are compiled into the browser bundle.
+  Changing them requires rebuilding the image. Server-only values can be
+  changed in the runtime environment without rebuilding.
+</DocsCallout>
+
+## Database
+
+The PostgreSQL schema includes users, domains, app settings, skills, queues,
+queue assignments, interactions, agent state, call flows, recordings, and
+AI-related operational data. Running <code>yarn ensure:pg</code> creates or
+migrates the schema.
+
+On first deployment the app also seeds:
+
+- allowed email domains from <code>ALLOWED_EMAIL_DOMAINS</code>;
+- a default owner account from <code>DEFAULT_OWNER_EMAIL</code> and
+  <code>DEFAULT_OWNER_PASSWORD</code>;
+- base contact-center tables required for routing, monitoring, and setup.
+
+<DocsCallout title="Owner password">
+  The default owner password must be at least 8 characters. Change it after the
+  first login.
+</DocsCallout>
+
+## Manual Docker deployment
+
+The Docker setup runs PostgreSQL and the Next.js app in containers and
+initializes the schema automatically.
+
+<DocsTerminal>{`cp docker/production/sample.env docker/production/.env
+./docker/deploy.sh production
+curl http://localhost:3000/api/health`}</DocsTerminal>
+
+The deployment script builds the app image, starts PostgreSQL and the app
+container, runs database initialization, and performs health checks. Database
+data is preserved between deploys unless you intentionally run a fresh setup.
+
+## Deployment wizard
+
+The <code>./deploy/cc</code> wizard is the fastest way to get a fully working
+Contact Center running on a laptop or cloud provider. It provisions
+infrastructure, creates Telnyx resources, generates secrets, builds and deploys
+the app image, and prints the app URL, owner login, and inbound number.
+
+<DocsTerminal>{`./deploy/cc up`}</DocsTerminal>
+
+The wizard persists answers to <code>deploy/.cc-state.json</code>, so interrupted
+runs are resumable. External writes are idempotent where possible: Telnyx
+resources are created with find-by-name upserts, and re-running the wizard does
+not duplicate voice apps, SIP connections, or numbers.
+
+<DocsDeployMatrix />
+
+## Wizard lifecycle commands
+
+<DocsFeatureGrid>
+  <DocsFeature title="cc up" tone="green">
+    Runs or resumes the full interactive deployment. Supports
+    <code> --non-interactive --config deploy/cc.answers.json</code> for
+    scripted installs.
+  </DocsFeature>
+  <DocsFeature title="cc doctor" tone="blue">
+    Runs read-only preflight checks for Docker, ports, PostgreSQL, Telnyx API
+    credentials, Terraform, provider CLIs, IAM, quota, and target auth.
+  </DocsFeature>
+  <DocsFeature title="cc status" tone="purple">
+    Reports Docker Compose state for Local or live cloud status for AWS, GCP,
+    and Azure, including app health where available.
+  </DocsFeature>
+  <DocsFeature title="cc logs" tone="amber">
+    Shows app stack logs for the Local target. Use
+    <code> ./deploy/cc logs -f</code> to follow continuously.
+  </DocsFeature>
+  <DocsFeature title="cc update" tone="green">
+    Rebuilds the app from the current working tree and deploys it to existing
+    infrastructure without changing Terraform-managed resources.
+  </DocsFeature>
+  <DocsFeature title="cc telnyx" tone="blue">
+    Re-runs or repairs Telnyx bootstrap for an existing deployment and reships
+    the app if new Telnyx config values are generated.
+  </DocsFeature>
+  <DocsFeature title="cc destroy" tone="purple">
+    Tears down Local containers or cloud infrastructure with explicit
+    confirmations. Telnyx resource cleanup and phone-number release are
+    separate confirmations.
+  </DocsFeature>
+  <DocsFeature title="cc clean" tone="amber">
+    Backs up and removes local wizard artifacts such as state, credentials,
+    generated env files, tunnel logs, and Terraform state files.
+  </DocsFeature>
+</DocsFeatureGrid>
+
+## Streaming WebSocket
+
+AI streaming, Telnyx STT streaming, and the hardphone bridge use a streaming
+WebSocket server on <code>STREAMING_WS_PORT</code>. By default it uses
+<code>PORT + 1</code>, usually <code>3001</code>. Expose that port through the
+reverse proxy or load balancer and set <code>WS_BASE_URL</code> to the public
+<code>wss://</code> URL.
+
+## Operational model
+
+- <strong>Agent Desktop</strong> handles real-time WebRTC calls, customer
+  context, and Agent Assist guidance.
+- <strong>Queue Management</strong> controls queue behavior, priority routing,
+  and agent assignment.
+- <strong>Supervisor Monitoring</strong> provides live state, analytics,
+  quality, call history, transcripts, and recordings.
+- <strong>AI Administration</strong> manages Telnyx AI assistants, tools,
+  insights, calling, messaging, privacy, and conversation history.
+- <strong>Event-driven runtime</strong> processes Telnyx webhooks and uses
+  server-sent events for live UI updates.
+
+## More references
+
+- Main repository README: <code>README.md</code>
+- Deployment wizard reference: <code>deploy/README.md</code>
+- Docker deployment reference: <code>docker/README.md</code>

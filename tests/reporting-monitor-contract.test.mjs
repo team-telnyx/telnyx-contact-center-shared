@@ -55,7 +55,8 @@ test("scheduled events moved from SUPERVISOR to ADMIN group", () => {
   );
   const adminGroup = menuConfig.slice(menuConfig.indexOf('label: "ADMIN"'));
   assert.doesNotMatch(supervisorGroup, /Scheduled Events/);
-  assert.match(adminGroup, /title: ["']Scheduled Events["'],[\s\S]*?url: ["']\/supervisor\/scheduled-events["'],[\s\S]*?role_access: \["admin", "owner"\]/);
+  assert.match(adminGroup, /activeUrls: \[[^\]]*["']\/supervisor\/scheduled-events["']/);
+  assert.match(adminGroup, /role_access: \["admin", "owner"\]/);
 });
 
 test("dashboard consolidates today statistics tiles and live signals", () => {

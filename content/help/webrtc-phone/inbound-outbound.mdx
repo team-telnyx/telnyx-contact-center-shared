@@ -1,0 +1,20 @@
+---
+title: Inbound and outbound calls
+description: Answer, reject, dial, cancel, and verify caller identities in WebRTC Phone.
+audiences: [agent, supervisor, admin, owner]
+keywords: [answer call, reject call, outbound call, phone number]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+## Inbound
+
+When the phone is ringing, **From** shows the incoming caller and the panel exposes **Reject** and **Answer**. Answer within the queue timeout. Reject ends the local offer; for a queued agent call it is recorded as a pre-answer no-answer signal and can affect agent status/routing.
+
+Do not answer a call whose Desktop interaction has already disappeared after timeout/re-enqueue. Wait for the current state to settle or refresh the authoritative interaction list.
+
+## Outbound
+
+Select the Contacts button or the read-only **To** field to open number selection. Choose a phone number or supported SIP URI. **From** is read-only and comes from the profile/call context. Select **Call**; while the attempt is dialing or ringing, **Disconnect** cancels it.
+
+The call button remains disabled until prerequisites such as a destination and ready client are satisfied. Verify country code/E.164 formatting and the intended contact field before placing the call.

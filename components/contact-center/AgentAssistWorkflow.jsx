@@ -1909,7 +1909,16 @@ function generateStaticSuggestion(stage, item, agentName = null) {
       "order number": "What is your order number?",
       product: "Which product are you inquiring about?",
       issue: "Could you describe the issue you're experiencing?",
-      default: `Could you please provide your ${item.label.toLowerCase()}?`,
+      // A question-label ("Other aircraft currently responding?") is asked
+      // verbatim; otherwise a natural noun phrase ("the caller's last name").
+      default: item.label.trim().endsWith("?")
+        ? item.label.trim().charAt(0).toUpperCase() + item.label.trim().slice(1)
+        : `Could you provide the ${item.label
+            .toLowerCase()
+            .replace(/^patient\b(?!')/, "patient's")
+            .replace(/\biv\b/g, "IV")
+            .replace(/\bicu\b/g, "ICU")
+            .replace(/\bdob\b/g, "DOB")}?`,
     },
     question: {
       default: `${item.label}`,
@@ -1965,6 +1974,7 @@ function getHumanAgentIntroIdentity({ labelIdentity, promptHint, agentName }) {
   return rawIdentity || finalAgentName || "your support agent";
 }
 
+
 /**
  * Suggested Response Card - Accumulating list of suggestions
  */
@@ -1972,6 +1982,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   const [suggestions, setSuggestions] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
   const [generatingSuggestion, setGeneratingSuggestion] = useState(false);
+  // Counts in-flight generate-suggestion requests. The boolean state is derived
+  // from this so that Item A's finally() doesn't clear the spinner while Item B's
+  // request is already in flight (rapid-answer overlap).
+  const generatingSuggestionCountRef = useRef(0);
   const scrollRef = useRef(null);
   const endRef = useRef(null);
   // Set of target keys already generated this session. Using a set (not a single
@@ -1986,6 +2000,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   // Get session and transcriptions from stores
   const session = useWorkflowStore((state) => state.session);
   const slotsFilled = useWorkflowStore((state) => state.slotsFilled);
+  const itemStatuses = useWorkflowStore((state) => state.itemStatuses);
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
 
   // Fix 2: When AI handoff data arrives mid-session (race condition), reset suggestions
@@ -2011,15 +2026,19 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     if (isAiAssisted && aiDataLoading) return;
     
     const { stage, item, targetMode, conversationContext, blockedItem, itemStatus } = currentSlot;
+    // matchedItemId and conversationContext.reason are intentionally excluded:
+    // both change on every new transcription even when the resolved item hasn't
+    // changed (reason can flip between conversation_stage_match / lead_slot /
+    // explicit_match across utterances). Including either would bypass the dedup
+    // Set and generate a second suggestion for the same item on every new
+    // transcription.
     const targetKey = [
       item.id,
       targetMode || "default",
       blockedItem?.id || "none",
-      conversationContext?.matchedItemId || "none",
-      conversationContext?.reason || "none",
       itemStatus?.extracted_value ?? itemStatus?.value ?? "none",
     ].join(":");
-    
+
     // Only generate for a target key we haven't already generated for. A set
     // (rather than just the previous key) is what prevents duplicate guides when
     // the resolved target oscillates back to a previously-suggested one.
@@ -2036,8 +2055,6 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       item.id,
       targetMode || "default",
       blockedItem?.id || "none",
-      conversationContext?.matchedItemId || "none",
-      conversationContext?.reason || "none",
     ].join(":");
     const currentValue = itemStatus?.extracted_value ?? itemStatus?.value ?? "none";
     // Check if we previously generated for this item+mode with a different value
@@ -2045,8 +2062,8 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     for (const existingKey of generatedTargetKeysRef.current) {
       if (existingKey === targetKey) continue;
       const existingParts = existingKey.split(":");
-      const existingBase = existingParts.slice(0, 5).join(":");
-      if (existingBase === baseKey && existingParts[5] !== String(currentValue)) {
+      const existingBase = existingParts.slice(0, 3).join(":");
+      if (existingBase === baseKey && existingParts[3] !== String(currentValue)) {
         staleKey = existingKey;
         break;
       }
@@ -2062,6 +2079,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       // race condition where concurrent calls see isFirstItem=true multiple times
       const isFirstItem = isAiAssisted && !handoffGreetingSentRef.current;
       if (isFirstItem) handoffGreetingSentRef.current = true;
+      generatingSuggestionCountRef.current += 1;
       setGeneratingSuggestion(true);
       generateSuggestion(stage, item, session, transcriptions, {
         isAiAssisted,
@@ -2074,6 +2092,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       })
         .then((newSuggestion) => {
           if (!newSuggestion) return;
+          // Fix 5: If the slot was completed while the request was in-flight,
+          // discard the suggestion. Read store state directly (not a ref or
+          // closure) so this check is never stale at promise resolution time.
+          if (useWorkflowStore.getState().itemStatuses[item.id]?.status === "completed") return;
           setSuggestions((prev) => {
             // Upsert by target (slot + mode): a low-confidence slot whose value is
             // refined on re-analysis UPDATES its guide in place instead of
@@ -2091,10 +2113,30 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
           console.error("[SuggestedResponseCard] Failed to generate suggestion:", err);
         })
         .finally(() => {
-          setGeneratingSuggestion(false);
+          generatingSuggestionCountRef.current = Math.max(0, generatingSuggestionCountRef.current - 1);
+          if (generatingSuggestionCountRef.current === 0) setGeneratingSuggestion(false);
         });
     }
   }, [currentSlot, session, transcriptions, onSuggestionsChange, isAiAssisted, aiDataLoading, slotsFilled]);
+
+  // Fix 5b: "resolves before" cleanup — when a suggestion was appended BEFORE
+  // analyze marked the item completed, getState() in .then couldn't catch it.
+  // Re-filter whenever itemStatuses changes to drop any suggestion whose item
+  // is now completed. Fix 5a (.then guard) prevents re-appending, so it is
+  // safe to clear all targetModes — including continue_stage read-backs.
+  useEffect(() => {
+    setSuggestions((prev) => {
+      const filtered = prev.filter((s) => {
+        if (!s.itemId) return true;
+        const status = useWorkflowStore.getState().itemStatuses[s.itemId];
+        return status?.status !== "completed";
+      });
+      if (filtered.length === prev.length) return prev; // bail out — no change
+      if (onSuggestionsChange) onSuggestionsChange(filtered);
+      return filtered;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemStatuses, onSuggestionsChange]);
 
   // Auto-scroll to bottom when new suggestions added
   useEffect(() => {
@@ -2114,7 +2156,12 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const isComplete = !currentSlot && suggestions.length > 0;
+  // Workflow is done when there's no pending slot AND at least one item was
+  // actually completed (not just skipped). Independent of suggestions so Fix 5b
+  // clearing cards doesn't suppress the completion banner. Skipped-only flows
+  // do not show "All items completed!" because skip route doesn't mark the
+  // session done.
+  const isComplete = !currentSlot && Object.values(itemStatuses).some((s) => s.status === "completed");
 
   return (
     <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
@@ -2147,7 +2194,13 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                 <p className="text-sm font-medium">Waiting for AI context...</p>
                 <p className="text-xs mt-1">Suggestions will appear after AI data is received</p>
               </div>
-            ) : suggestions.length === 0 ? (
+            ) : suggestions.length === 0 && !isComplete && currentSlot && generatingSuggestion ? (
+              <div className="text-center text-muted-foreground py-8">
+                <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-40 animate-spin" />
+                <p className="text-sm font-medium">Generating suggestion...</p>
+                <p className="text-xs mt-1">One moment</p>
+              </div>
+            ) : suggestions.length === 0 && !isComplete ? (
               <div className="text-center text-muted-foreground py-8">
                 <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Waiting for workflow...</p>

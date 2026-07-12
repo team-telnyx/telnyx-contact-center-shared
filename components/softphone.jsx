@@ -28,6 +28,7 @@ import { NumberSelectionModal } from "@/components/contact-center/NumberSelectio
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { notify } from "@/components/ToastNotify";
 import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
+import { useExperimentalFeatures } from "@/lib/experimental-features-client";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -85,6 +86,7 @@ function isValidDialTo(value) {
 
 export function Softphone() {
   const { client, region, regions, setRegion } = useTelnyx();
+  const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
 
   // Zustand stores - call state (shared with mini phone)
   const activeCall = useActiveCall();
@@ -174,6 +176,7 @@ export function Softphone() {
     : fromNumber;
 
   useEffect(() => {
+    if (!experimentalFeaturesEnabled) return;
     const service = getHeadsetControlService();
     if (!service) return;
 
@@ -207,6 +210,7 @@ export function Softphone() {
     isRinging,
     outboundCallerName,
     toNumber,
+    experimentalFeaturesEnabled,
   ]);
 
 

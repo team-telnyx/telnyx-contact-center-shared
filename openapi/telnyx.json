@@ -4428,6 +4428,68 @@
         "x-latency-category": "responsive"
       }
     },
+    "/ai/anthropic/v1/messages": {
+      "post": {
+        "tags": [
+          "Anthropic Messages"
+        ],
+        "summary": "Create a message (Anthropic-compatible)",
+        "description": "Send a message to a language model using the Anthropic Messages API format. This endpoint is compatible with the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) and may be used with the Anthropic JS or Python SDK by setting the base URL to `https://api.telnyx.com/v2/ai/anthropic`.\n\nThe endpoint translates Anthropic-format requests into Telnyx's inference internals, then translates the response back to the Anthropic message shape. Streaming responses use Anthropic SSE event types (`message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`).",
+        "operationId": "create_anthropic_message",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnthropicMessageRequest"
+              },
+              "example": {
+                "model": "zai-org/GLM-5.2",
+                "system": "You are a friendly chatbot.",
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "Hello, world!"
+                  }
+                ],
+                "max_tokens": 1024
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "An Anthropic-format message response with `type: \"message\"`, `role`, `content`, `stop_reason`, `stop_sequence`, and `usage`. When `stream` is true, the response is a text/event-stream of Anthropic SSE events."
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Anthropic-format Server-Sent Events stream."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
     "/ai/assistants": {
       "get": {
         "tags": [
@@ -68246,13 +68308,13 @@
             "created_before": {
               "type": "string",
               "format": "date-time",
-              "example": "2021-01-05T00:00:00Z",
+              "example": "2021-01-06T00:00:00Z",
               "description": "Filter for audit events created before a specific date."
             },
             "created_after": {
               "type": "string",
               "format": "date-time",
-              "example": "2021-01-05T00:00:00Z",
+              "example": "2021-01-06T00:00:00Z",
               "description": "Filter for audit events created after a specific date."
             }
           }
@@ -75042,6 +75104,132 @@
             "rtp_timeout": 30
           }
         }
+      },
+      "AnthropicMessageRequest": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The model to use for generating the response, for example `zai-org/GLM-5.2` or another model available from the Telnyx models endpoint."
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "The messages to send to the model, following the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) format."
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "The maximum number of tokens to generate in the response."
+          },
+          "system": {
+            "description": "System prompt. Can be a string or an array of content blocks following the Anthropic API format.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            ]
+          },
+          "stream": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to stream the response as Anthropic-format Server-Sent Events."
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Amount of randomness injected into the response. Ranges from 0 to 1."
+          },
+          "top_p": {
+            "type": "number",
+            "description": "Nucleus sampling parameter. Use temperature or top_p, but not both."
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "Top-k sampling parameter. Only sample from the top K options for each subsequent token."
+          },
+          "stop_sequences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Custom sequences that will cause the model to stop generating."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "An object describing metadata about the request."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Definitions of tools that the model may use, following the Anthropic API format."
+          },
+          "tool_choice": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Controls how the model uses tools, following the Anthropic API format."
+          },
+          "thinking": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Extended thinking configuration for models that support it. Set `type` to `enabled` to turn on extended thinking."
+          },
+          "api_key_ref": {
+            "type": "string",
+            "description": "If you are using an external inference provider, this field allows you to pass along a reference to your API key. After creating an [integration secret](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret) for your API key, pass the secret's `identifier` in this field."
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "List of MCP (Model Context Protocol) servers to make available to the model."
+          },
+          "fallback_config": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Configuration for model fallback behavior when the primary model is unavailable."
+          },
+          "billing_group_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The billing group ID to associate with this request."
+          },
+          "timeout": {
+            "type": "number",
+            "default": 300.0,
+            "description": "Request timeout in seconds."
+          },
+          "max_retries": {
+            "type": "integer",
+            "description": "Maximum number of retries for the request."
+          },
+          "service_tier": {
+            "type": "string",
+            "description": "Service tier for the request."
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "messages",
+          "max_tokens"
+        ],
+        "title": "AnthropicMessageRequest",
+        "additionalProperties": true,
+        "description": "Anthropic Messages-compatible request with Telnyx extensions."
       },
       "ApplicationName": {
         "title": "Application Name",

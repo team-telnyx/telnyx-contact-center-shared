@@ -1,0 +1,40 @@
+---
+title: MCP Servers
+description: Connect remote Model Context Protocol servers, configure authentication, discover tools, and control tool access.
+audiences: [admin, owner]
+keywords: [MCP, server, tool, OAuth, bearer, API key, discovery]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+MCP Servers connects Contact Center to external tools exposed through the Model Context Protocol. Open it from **Admin → Configuration → MCP Servers** or from the **AI Assistants** rail. The `rail=ai` URL keeps the AI rail visible; the default URL uses the Configuration rail.
+
+Each server card shows its configuration and allowed tools. Expand the card to inspect tool names; select a tool to view its description, required input properties, input/output schemas, schema hash, discovery time, and raw metadata.
+
+## Add or edit a server
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Name** | Yes | Recognizable connection name. |
+| **Type** | Yes | SSE or HTTP transport. |
+| **URL** | Yes | Remote MCP endpoint. Use HTTPS for external servers. |
+| **Authentication Type** | No | None, Bearer token, OAuth Authorization Code with PKCE, OAuth Client Credentials, API-key header, or Custom header. |
+| **Secret** | Depends on auth | Selects a local encrypted secret; raw credentials are not entered into the server record. |
+| **Header Name / Scheme / Resource URL** | Depends on auth | Header or OAuth metadata required by the selected method. |
+| **Allowed Tools** | No | Explicit allowlist of discovered tools available to consumers. |
+
+## Connect and authenticate
+
+Select **Connect** after entering name, type, and URL. This detects authentication requirements and attempts tool discovery. For Authorization Code OAuth, connect first, review the detected resource, then select **Authenticate**. After the callback, review tools and save the final configuration.
+
+OAuth client credentials may be stored as JSON containing `client_id` and `client_secret`, or in the supported `client_id:client_secret` format. For non-Telnyx OAuth resources, provide the resource URL when required.
+
+## Tool discovery and allowlisting
+
+Select **Load Tools** or **Refresh Tools**, review descriptions and JSON schemas, then select only the tools the application should be allowed to call. **Select All** is convenient but broadens integration capability; apply least privilege.
+
+Discovery proves that metadata can be read with the current connection. It does not guarantee every tool invocation will succeed with every argument or downstream permission.
+
+## Delete and troubleshoot
+
+Deleting a server removes its local connection and allowed-tool configuration. Check assistants and workflows for dependencies first. Connection errors commonly indicate an incorrect URL/transport, missing or expired secret, OAuth session problem, invalid client, or insufficient remote scope.

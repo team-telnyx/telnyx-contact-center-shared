@@ -54,6 +54,20 @@ function getAiCallIdFromEvents(events) {
   return null;
 }
 
+function findNestedValue(input, keys, seen = new Set()) {
+  if (!input || typeof input !== "object" || seen.has(input)) return "";
+  seen.add(input);
+  for (const key of keys) {
+    const value = input[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value);
+  }
+  for (const value of Object.values(input)) {
+    const found = findNestedValue(value, keys, seen);
+    if (found) return found;
+  }
+  return "";
+}
+
 function CopyInline({ value }) {
   const [copied, setCopied] = useState(false);
   async function doCopy() {
@@ -94,20 +108,20 @@ async function fetchConversationByCallControlId(callControlId, useDemoApiKey = f
   if (useDemoApiKey) {
     params.set("useDemoApiKey", "true");
   }
-  
+
   try {
     const res = await fetch(`/api/ai/conversations?${params.toString()}`, {
       cache: "no-store",
     });
     const data = await res.json();
-    
+
     if (res.ok && data?.ok) {
       const items = Array.isArray(data?.items) ? data.items : [];
       if (items.length > 0) {
         return { ok: true, conversation: items[0], status: res.status };
       }
     }
-    
+
     return { ok: false, conversation: null, status: res.status };
   } catch (err) {
     return { ok: false, conversation: null, status: 0 };
@@ -116,6 +130,7 @@ async function fetchConversationByCallControlId(callControlId, useDemoApiKey = f
 
 export default function AiConversationSheet({
   interaction,
+  recording: suppliedRecording = null,
   triggerClassName,
   iconClassName,
   stopPropagation = false,
@@ -167,7 +182,7 @@ export default function AiConversationSheet({
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [usedDemoApiKey, setUsedDemoApiKey] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [recording, setRecording] = useState(null);
+  const [recording, setRecording] = useState(suppliedRecording);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -275,7 +290,7 @@ export default function AiConversationSheet({
               conversationFound = true;
             }
           }
-          
+
           // If not found and this is an AI call, try with demo API key
           if (!conversationFound && hasAiCallControlId && (!res.ok || res.status === 403 || res.status === 404)) {
             const demoRes = await fetch(
@@ -294,7 +309,7 @@ export default function AiConversationSheet({
               }
             }
           }
-          
+
           if (!cancelled && !conversationFound) {
             setConversation(null);
           }
@@ -303,7 +318,7 @@ export default function AiConversationSheet({
           // Try agent_call_control_id first (matches the recording lookup)
           let result = await fetchConversationByCallControlId(agentCallControlId, false);
           let shouldTryDemo = !result.ok || result.status === 403 || result.status === 404;
-          
+
           if (!cancelled && result.ok && result.conversation) {
             setConversation(result.conversation);
             conversationFound = true;
@@ -319,7 +334,7 @@ export default function AiConversationSheet({
                 shouldTryDemo = true;
               }
             }
-            
+
             // If still not found and this is an AI call, try with demo API key
             if (!conversationFound && hasAiCallControlId && shouldTryDemo) {
               // Try with agent_call_control_id on demo account
@@ -338,7 +353,7 @@ export default function AiConversationSheet({
                 }
               }
             }
-            
+
             if (!cancelled && !conversationFound) {
               setConversation(null);
             }
@@ -376,35 +391,56 @@ export default function AiConversationSheet({
 
   useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
 
     const fetchRecording = async () => {
-      // Fetch recording using ONLY ai_call_control_id from metadata
-      // This corresponds to the call_control_id passed in X-AI-Call-ID header
-      // Do NOT use agent_call_control_id - only use ai_call_control_id
-      if (!aiCallControlId) {
-        setRecording(null);
+      if (suppliedRecording) {
+        if (!cancelled) setRecording(suppliedRecording);
         return;
       }
 
       try {
-        // Use the new call_control_id parameter - endpoint will fetch call_session_id internally
-        const recordingsRes = await fetch(
-          `/api/voice/recordings?call_control_id=${encodeURIComponent(
-            aiCallControlId,
-          )}`,
-          { cache: "no-store" },
+        let callSessionId = findNestedValue(
+          [conversation, interaction],
+          ["call_session_id", "telnyx_call_session_id"],
         );
+        let callControlId = aiCallControlId || findNestedValue(
+          [conversation, interaction],
+          ["ai_call_control_id", "call_control_id"],
+        );
+
+        if (!callSessionId && conversationId) {
+          const logsResponse = await fetch(
+            `/api/ai/conversations/${encodeURIComponent(conversationId)}/webhook-logs?page[size]=100`,
+            { cache: "no-store" },
+          );
+          const logsData = await logsResponse.json().catch(() => ({}));
+          if (logsResponse.ok && logsData?.ok) {
+            callSessionId = findNestedValue(logsData.data, ["call_session_id", "telnyx_call_session_id"]);
+            callControlId ||= findNestedValue(logsData.data, ["ai_call_control_id", "call_control_id"]);
+          }
+        }
+
+        const recordingQuery = callSessionId
+          ? `call_session_id=${encodeURIComponent(callSessionId)}`
+          : callControlId
+          ? `call_control_id=${encodeURIComponent(callControlId)}`
+          : "";
+        if (!recordingQuery) {
+          if (!cancelled) setRecording(null);
+          return;
+        }
+
+        const recordingsRes = await fetch(`/api/voice/recordings?${recordingQuery}`, { cache: "no-store" });
         const recordingsData = await recordingsRes.json();
 
-        if (
+        if (!cancelled &&
           recordingsData.ok &&
           recordingsData.data &&
           recordingsData.data.length > 0
         ) {
-          // Found recording for the AI call control ID - use it
           setRecording(recordingsData.data[0]);
-        } else {
-          // No recording found for this call_control_id
+        } else if (!cancelled) {
           setRecording(null);
         }
       } catch (error) {
@@ -412,12 +448,13 @@ export default function AiConversationSheet({
           "[AiConversationSheet] Error fetching recording by ai_call_control_id:",
           error,
         );
-        setRecording(null);
+        if (!cancelled) setRecording(null);
       }
     };
 
     fetchRecording();
-  }, [isOpen, aiCallControlId]);
+    return () => { cancelled = true; };
+  }, [isOpen, aiCallControlId, suppliedRecording, conversation, conversationId, interaction]);
 
   useEffect(() => {
     if (!recording || !waveformRef.current || !isOpen) return;
@@ -709,8 +746,9 @@ export default function AiConversationSheet({
                 hasAiCallControlId={hasAiCallControlId}
                 onMessagesLoaded={setMessages}
                 onSeek={(timeInSeconds) => {
-                  if (wavesurferRef.current && duration > 0) {
-                    const seekPosition = Math.min(timeInSeconds / duration, 1);
+                  const playbackDuration = wavesurferRef.current?.getDuration?.() || duration;
+                  if (wavesurferRef.current && playbackDuration > 0) {
+                    const seekPosition = Math.min(timeInSeconds / playbackDuration, 1);
                     wavesurferRef.current.seekTo(seekPosition);
                     if (!isPlaying) {
                       wavesurferRef.current.play();

@@ -1,0 +1,35 @@
+---
+title: Web Pages
+description: Configure embedded external pages and safely resolve secret placeholders in their URLs.
+audiences: [admin, owner]
+keywords: [web page, iframe, URL, secret placeholder, preview]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Web Pages defines external resources that can be embedded or opened from the contact-center experience. Open **Admin → Configuration**, then select **Web Pages** in the rail.
+
+The list shows **Name**, **URL**, **Description**, **Status**, **Order**, and edit/delete actions. Use **Refresh** or **New Web Page**.
+
+## Create or edit a page
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Name** | Yes | Visible page name. |
+| **Description** | No | Purpose and intended audience. |
+| **URL** | Yes | Fully qualified URL. Secret placeholders are allowed. |
+| **Icon** | No | Optional icon identifier. |
+| **Order Index** | No | Numeric display order; default is 0. |
+| **Active** | No | Controls whether the page is available for use. |
+
+URLs are validated before saving. Type `{{` to select a configured secret and insert `{{secret_name}}`. The original URL keeps the reference; secret resolution is performed server-side for preview and runtime use.
+
+## Preview and browser restrictions
+
+The preview uses a resolved URL when placeholders are present. A page may still refuse to render because of its own `X-Frame-Options`, Content Security Policy, authentication, or network restrictions. A failed embedded preview does not necessarily mean the URL itself is unavailable.
+
+Never put raw credentials directly in the URL. Query-string credentials may be exposed to the target server, browser history, proxies, or logs even when inserted from a secret.
+
+## Delete a page
+
+Select the delete action and confirm. Deletion cannot be undone. Turn **Active** off when the definition should be retained for later reuse or audit.

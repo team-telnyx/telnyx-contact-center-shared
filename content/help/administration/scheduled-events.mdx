@@ -1,0 +1,43 @@
+---
+title: Scheduled Events
+description: Schedule AI assistant calls and SMS messages, import events from CSV, and review execution results.
+audiences: [admin, owner]
+keywords: [scheduled event, AI assistant, call, SMS, retry, CSV]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Scheduled Events initiate a future phone call or SMS conversation with a selected AI assistant. Open **Admin → AI Assistants**, then select **Scheduled Events** in the rail. The underlying URL remains in the supervisor route, but the page is presented inside the AI Assistants workspace.
+
+## Review events
+
+Select an **Assistant** to load events, then optionally filter by **Channel**, **From Number**, and **To Number**. **Clear** resets filters and **Refresh** reloads results.
+
+The table shows **Scheduled At**, **Channel**, **Assistant**, **From**, **To**, **Status**, **Duration**, and actions. Actions can open the related AI conversation, display full event details, or permanently delete the event. Use 10, 25, 50, or 100 records per page.
+
+## Add an event
+
+Select **Add Event** and complete the sheet.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **AI Assistant** | Yes | Assistant that executes the event. |
+| **Channel** | Yes | **Call** (`phone_call`) or **SMS** (`sms_chat`). |
+| **From Number** | Yes | Number assigned to the selected assistant. |
+| **To Number** | Yes | Recipient in E.164 format, for example `+15559876543`. |
+| **Scheduled Date & Time** | Yes | Local date/time converted to ISO 8601 when saved. Verify the browser timezone before scheduling. |
+| **Max Client Error Retries** | No | Integer from 0 to 10. Retries busy, no-answer, failed, or canceled attempts. |
+| **Retry Interval (seconds)** | When retries > 0 | Integer from 60 to 86,400 seconds. |
+| **Message Text** | For SMS | SMS body; shown only for the SMS channel. |
+
+Select **Schedule Event** to create it. No number is offered if the assistant has no assigned phone numbers.
+
+## CSV import
+
+Select **Template** to download the expected format, then **Import CSV** to upload it. Required columns are `assistant_id`, `telnyx_conversation_channel`, `telnyx_end_user_target`, `telnyx_agent_target`, and `scheduled_at_fixed_datetime`. Optional retry fields follow the same limits as the sheet; `text` is required for `sms_chat`.
+
+Review the import result before assuming every row was accepted. Use ISO 8601 timestamps to avoid timezone ambiguity.
+
+## Delete and audit
+
+Deletion cannot be undone. Open the preview first when you need the event ID, schedule, retry settings, error information, or conversation link for an operational investigation.

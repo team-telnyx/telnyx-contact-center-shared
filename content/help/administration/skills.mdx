@@ -1,0 +1,108 @@
+---
+title: Skills
+description: Define reusable agent capabilities and manage the skill catalog used by skills-based routing.
+audiences: [admin, owner]
+keywords: [skills, proficiency, category, agents, skill-based routing]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Skills represent capabilities such as a language, product area, certification, or support specialization. Assign skills and proficiency levels to users, then use **Skill-based** queue routing to match calls with qualified agents.
+
+## Open the Skills menu
+
+Open **Admin → Configuration**, then select **Skills** in the section rail. Only users with the **Admin** or **Owner** role can use this page.
+
+The badge beside the title shows the total number of skills matching the current filters.
+
+## Find and review skills
+
+| Control | What it does |
+| --- | --- |
+| **Name** | Searches skill name and description. The match is not case-sensitive. |
+| **Category** | Filters by an exact category. Choices are collected from the skills on the currently loaded page. |
+| **Active** | Shows all, active, or inactive skills. |
+| **Clear** | Resets all filters. |
+| **Refresh** | Reloads the list. |
+| **New Skill** | Opens a blank create-skill sheet. |
+
+| Column | Meaning |
+| --- | --- |
+| **Name** | Unique skill name. |
+| **Category** | Optional grouping used to organize the catalog. |
+| **Active** | Whether the skill is available in active-skill selectors. |
+| **Description** | Optional explanation of what the skill represents. Long descriptions are shortened in the list. |
+| **Actions** | Edit or delete the skill. |
+
+Use **Rows per page** to display 10, 25, 50, or 100 rows and use the page buttons to navigate.
+
+## Create a skill
+
+1. Select **New Skill**.
+2. Leave **Active** on if the skill should be immediately assignable.
+3. Enter a unique **Name**.
+4. Optionally enter a **Category** and **Description**.
+5. Select **Save Changes**.
+
+## Skill fields
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Active** | No | Controls whether the skill appears in selectors that request active skills. New skills are active by default. |
+| **Name** | Yes | Unique label used in user assignments and routing configuration. Leading and trailing spaces are removed. |
+| **Category** | No | Free-text grouping such as `Language`, `Customer Service`, or `Technical`. Use consistent spelling and capitalization because filtering uses the exact stored category. |
+| **Description** | No | Short explanation of the capability and the criteria an agent should meet before receiving it. |
+
+The form refuses to save an empty name. The API also rejects duplicate names.
+
+## Plan proficiency levels
+
+Proficiency is assigned on the user, not on the skill definition. Use a consistent five-level rubric across the organization. For example:
+
+| Level | Suggested meaning |
+| ---: | --- |
+| 1 | Basic awareness; suitable only for simple cases. |
+| 2 | Can handle common cases with support. |
+| 3 | Independent working proficiency. |
+| 4 | Advanced; handles complex cases. |
+| 5 | Expert; suitable for the most demanding cases. |
+
+Document your own rubric and apply it consistently. Routing compares the stored numeric level, so inconsistent scoring reduces match quality.
+
+## Assign a skill to a user
+
+1. Open **Admin → Configuration → Users**.
+2. Edit the user.
+3. In **Skills & Proficiency**, select **Add Skill**.
+4. Choose the skill and select one to five stars.
+5. Save the user.
+
+Only active skills are offered in the user sheet. The Users table shows the number of assigned skills; select its information icon to review skill details and proficiency.
+
+## Use a skill in routing
+
+1. Assign the skill to suitable users and set proficiency.
+2. Configure a queue with **Skill-based** routing.
+3. Ensure the incoming call receives the intended skill requirements in its routing path.
+4. Optionally configure skill relaxation for long-waiting calls.
+5. Test both a qualified and an unqualified agent scenario.
+
+An active skill definition alone does not affect routing. It must be assigned to users and required by the call's routing context.
+
+## Edit a skill
+
+Select the green edit icon, change the fields, and select **Save Changes**. Renaming a skill preserves its identifier, so existing user assignments continue to refer to the same skill.
+
+Turning **Active** off is the preferred way to retire a skill without immediately removing its definition. Existing stored assignments may remain, but the skill will no longer appear in selectors that load active skills.
+
+## Delete a skill
+
+1. Select the red delete icon.
+2. Review the skill name in the confirmation dialog.
+3. Select **Delete** to permanently remove it.
+
+Deletion cannot be undone. A skill cannot be deleted while it is assigned to one or more users. Remove it from every user first, or turn **Active** off if the historical definition should be retained.
+
+## Recommended verification
+
+After changing the catalog, edit a test user and confirm the expected active skill appears. Assign a proficiency, save, and place a controlled call through a Skill-based queue to verify both matching and any relaxation policy.

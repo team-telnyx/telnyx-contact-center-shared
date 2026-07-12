@@ -1,0 +1,30 @@
+---
+title: Logging
+description: Inspect live and archived logs and configure runtime logging levels, topics, files, and temporary presets.
+audiences: [admin, owner]
+keywords: [logging, live logs, JSONL, level, topic, preset, troubleshooting]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → System**, then select **Logging**. The nested rail contains Live, Files, Settings, and Exit.
+
+## Live
+
+The Live viewer filters by file/source, level, one or more topics, node name, run ID, text, date range, and result limit. Filters are retained locally for the administrator's browser. Expand an entry to inspect structured payload data and copy details for an incident record.
+
+Levels run from trace and debug through info, warn, error, and fatal. A high volume of trace/debug logs can expose operational detail and consume storage; enable them only for a bounded investigation.
+
+## Files
+
+Files lists available JSONL log files, size, and modification time. Select a file to inspect entries. A truncated result means the server-side cap was reached, not that the file ends at that entry.
+
+## Settings
+
+Configure global and topic-specific levels, console/file output, rotation mode, retention and size limits exposed by the runtime. Topic groups provide select/clear actions for related subsystems.
+
+Presets include normal production logging, temporary STT debug, and errors-only modes. Temporary presets use a TTL and should revert after the configured duration. Confirm the effective configuration and generated files after saving.
+
+## Sensitive information
+
+Although the logger applies redaction rules, treat logs as sensitive. Do not paste API keys, bearer tokens, secret values, customer data, or recordings into search fields or external tickets. Share only the minimum excerpt required for diagnosis.

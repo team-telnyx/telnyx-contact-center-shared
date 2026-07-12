@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
 import DataSourcesPageClient from "./page-client";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export default function DataSourcesPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader title="Data Sources" badges={<Badge variant="secondary">Knowledge hub</Badge>} />
-      <AdminPageContent>
+      <ConfigurationSectionPage activeId="data-sources">
         <div className="space-y-4">
           <Suspense
             fallback={
@@ -28,7 +29,7 @@ export default function DataSourcesPage() {
             <DataSourcesPageClient />
           </Suspense>
         </div>
-      </AdminPageContent>
+      </ConfigurationSectionPage>
     </AdminPageShell>
   );
 }

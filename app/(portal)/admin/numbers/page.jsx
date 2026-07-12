@@ -1,6 +1,7 @@
 "use client";
 
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +16,7 @@ export default function NumbersPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader title="Phone Numbers" badges={<Badge variant="secondary">Number inventory</Badge>} />
-      <AdminPageContent>
+      <ConfigurationSectionPage activeId="numbers">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
@@ -50,8 +51,7 @@ export default function NumbersPage() {
         </CardContent>
       </Card>
         </div>
-      </AdminPageContent>
+      </ConfigurationSectionPage>
     </AdminPageShell>
   );
 }
-

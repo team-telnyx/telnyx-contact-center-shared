@@ -94,6 +94,12 @@ export async function PUT(request, { params }) {
   );
   maybeSet("active", body.active != null ? Boolean(body.active) : undefined);
   maybeSet(
+    "experimentalFeatures",
+    body.experimentalFeatures != null
+      ? Boolean(body.experimentalFeatures)
+      : undefined,
+  );
+  maybeSet(
     "authStrategy",
     body.authStrategy != null ? String(body.authStrategy) : undefined
   );

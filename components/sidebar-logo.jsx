@@ -2,9 +2,14 @@
 
 import Image from "next/image";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { cn } from "@/lib/utils";
 
-export function SidebarLogo() {
+export function SidebarLogo({ className }) {
   const { sidebarLogoUri, loading } = useAppSettings();
+  const logoClassName = cn(
+    "block h-auto max-h-full w-auto max-w-full object-contain brightness-0 dark:brightness-100",
+    className,
+  );
 
   if (loading) {
     return (
@@ -14,8 +19,7 @@ export function SidebarLogo() {
         width={250}
         height={50}
         priority
-        style={{ width: "auto", height: "auto" }}
-        className="brightness-0 dark:brightness-100"
+        className={logoClassName}
       />
     );
   }
@@ -25,8 +29,7 @@ export function SidebarLogo() {
       <img
         src={sidebarLogoUri}
         alt="Brand Logo"
-        style={{ width: "auto", height: "auto", maxHeight: "50px" }}
-        className="brightness-0 dark:brightness-100"
+        className={logoClassName}
       />
     );
   }
@@ -38,8 +41,7 @@ export function SidebarLogo() {
       width={250}
       height={50}
       priority
-      style={{ width: "auto", height: "auto" }}
-      className="brightness-0 dark:brightness-100"
+      className={logoClassName}
     />
   );
 }

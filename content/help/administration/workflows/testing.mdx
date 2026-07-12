@@ -1,0 +1,16 @@
+---
+title: Workflow test module
+description: Run chat and voice scenarios and inspect item completion and slot extraction.
+audiences: [admin, owner]
+keywords: [workflow test, persona, scenario, voice test]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Test** from the workflow editor. The module uses the same conversation-analysis path as the live Agent Assist workflow and displays messages, item statuses, and filled slots.
+
+Choose or generate a persona/scenario, then run a chat or voice test. Automatic voice mode uses generated customer responses and TTS injection; manual voice mode uses the microphone. The test keeps generated customer data consistent for the session and waits for analysis before the next automatic turn.
+
+During a run, verify which speaker completed each item, the extracted value, confidence/alternatives, and whether the workflow advances in the intended order. Use Reset to start with clean item and slot state; stopping a run prevents further messages in that session.
+
+Run at least one scripted happy path and adversarial cases: out-of-order answers, corrections, silence, unknown information, ambiguous names, multiple slots in one sentence, low-confidence audio, and an early conversation end. AI-generated scenarios are test aids, not acceptance evidence; preserve expected inputs and results separately for repeatable regression checks.

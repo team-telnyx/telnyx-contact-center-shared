@@ -14,7 +14,7 @@ async function requireAdmin() {
   if (id) user = await PgDb.findUserById(id);
   if (!user && email) user = await PgDb.findUserByUsername(email);
   if (!user) return null;
-  if (!isAdmin(user)) return null;
+  if (!isAdmin(user) || user.experimental_features !== true) return null;
   return user;
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -186,7 +187,7 @@ export default function AdminQueuesPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader title="Queues" badges={<Badge variant="secondary">{total} queues</Badge>} actions={headerActions} />
-      <AdminPageContent>
+      <ConfigurationSectionPage activeId="queues">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
@@ -454,7 +455,7 @@ export default function AdminQueuesPage() {
         onSaveComplete={load}
       />
         </div>
-      </AdminPageContent>
+      </ConfigurationSectionPage>
     </AdminPageShell>
   );
 }

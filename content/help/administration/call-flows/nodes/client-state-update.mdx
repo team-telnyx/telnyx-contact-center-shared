@@ -1,0 +1,8 @@
+---
+title: Update Client State
+description: Store structured client state on the current call.
+---
+
+**Update Client State** writes a configured value/object for later call operations and webhook events. Build the state from trusted variables or an expression.
+
+Keep it small, version keys that downstream consumers depend on, and avoid credentials or unnecessary personal data. Subsequent expressions can read it through `{{client_state...}}` where available.

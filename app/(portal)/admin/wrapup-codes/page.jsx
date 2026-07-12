@@ -1,6 +1,7 @@
 "use client";
 
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -142,7 +143,7 @@ export default function AdminWrapupCodesPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader title="Wrapup Codes" badges={<Badge variant="secondary">{total} codes</Badge>} actions={headerActions} />
-      <AdminPageContent>
+      <ConfigurationSectionPage activeId="wrapup-codes">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
@@ -409,8 +410,7 @@ export default function AdminWrapupCodesPage() {
         onSave={load}
       />
         </div>
-      </AdminPageContent>
+      </ConfigurationSectionPage>
     </AdminPageShell>
   );
 }
-

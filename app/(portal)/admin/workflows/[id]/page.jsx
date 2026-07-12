@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AutomationsSectionPage } from "@/components/admin/AutomationsSectionNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,16 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -37,7 +48,6 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
-  IconArrowLeft,
   IconDeviceFloppy,
   IconGitBranch,
   IconLoader2,
@@ -114,7 +124,10 @@ export default function WorkflowEditorPage() {
   const [stages, setStages] = useState([]);
   const [selectedStageId, setSelectedStageId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [itemEditorDirty, setItemEditorDirty] = useState(false);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const navigationConfirmedRef = useRef(false);
 
   // Edit states
   const [editingWorkflow, setEditingWorkflow] = useState(false);
@@ -697,7 +710,6 @@ export default function WorkflowEditorPage() {
 
       setWorkflow(data.workflow);
       setEditingWorkflow(false);
-      setHasChanges(false);
       notify({
         title: "Workflow saved",
         description: "Changes have been saved successfully.",
@@ -713,6 +725,75 @@ export default function WorkflowEditorPage() {
       setSaving(false);
     }
   }
+
+  const workflowDetailsDirty = Boolean(
+    workflow && (
+      workflowForm.name !== (workflow.name || "") ||
+      workflowForm.description !== (workflow.description || "") ||
+      workflowForm.category !== (workflow.category || "") ||
+      workflowForm.is_active !== Boolean(workflow.is_active) ||
+      workflowForm.llm_model !== (workflow.llm_model || "openai/gpt-4o") ||
+      Number(workflowForm.llm_confidence_threshold) !== Number(workflow.llm_confidence_threshold ?? 0.95) ||
+      JSON.stringify(workflowForm.data_action_buttons || []) !== JSON.stringify(workflow.data_action_buttons || [])
+    )
+  );
+  const editedStage = stages.find((stage) => stage.id === editingStageId);
+  const hasUnsavedChanges = Boolean(
+    workflowDetailsDirty ||
+    itemEditorDirty ||
+    (editedStage && editingStageName !== editedStage.name) ||
+    (showNewStageDialog && newStageName.trim()) ||
+    (showNewItemDialog && Object.values(newItemForm).some((value) => String(value || "").trim()))
+  );
+
+  useEffect(() => {
+    const beforeUnload = (event) => {
+      if (!hasUnsavedChanges || navigationConfirmedRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const handleDocumentNavigation = (event) => {
+      if (!hasUnsavedChanges || navigationConfirmedRef.current) return;
+      const anchor = event.target?.closest?.("a[href]");
+      if (!anchor || anchor.target || anchor.hasAttribute("download")) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+      event.preventDefault();
+      setPendingNavigation(href);
+      setShowExitDialog(true);
+    };
+    document.addEventListener("click", handleDocumentNavigation, true);
+    return () => document.removeEventListener("click", handleDocumentNavigation, true);
+  }, [hasUnsavedChanges]);
+
+  const requestNavigation = useCallback((href) => {
+    if (hasUnsavedChanges && !navigationConfirmedRef.current) {
+      setPendingNavigation(href);
+      setShowExitDialog(true);
+      return;
+    }
+    router.push(href);
+  }, [hasUnsavedChanges, router]);
+
+  const confirmExit = useCallback(() => {
+    const target = pendingNavigation || "/admin/workflows";
+    navigationConfirmedRef.current = true;
+    setShowExitDialog(false);
+    setPendingNavigation(null);
+    if (/^https?:\/\//.test(target)) window.location.href = target;
+    else router.push(target);
+  }, [pendingNavigation, router]);
+
+  const cancelExit = useCallback(() => {
+    setShowExitDialog(false);
+    setPendingNavigation(null);
+  }, []);
 
   // Add new stage
   async function addStage() {
@@ -991,129 +1072,134 @@ export default function WorkflowEditorPage() {
     return (
       <AdminPageShell>
         <AdminPageHeader title="Workflow Editor" badges={<Badge variant="secondary">Loading</Badge>} />
-        <AdminPageContent>
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-48" />
-            <div className="grid grid-cols-3 gap-4">
-              <Skeleton className="h-[600px]" />
-              <Skeleton className="h-[600px]" />
-              <Skeleton className="h-[600px]" />
+        <AutomationsSectionPage activeId="workflows">
+          <AdminPageContent>
+            <div className="space-y-4">
+              <Skeleton className="h-8 w-48" />
+              <div className="grid grid-cols-3 gap-4">
+                <Skeleton className="h-[600px]" />
+                <Skeleton className="h-[600px]" />
+                <Skeleton className="h-[600px]" />
+              </div>
             </div>
-          </div>
-        </AdminPageContent>
+          </AdminPageContent>
+        </AutomationsSectionPage>
       </AdminPageShell>
     );
   }
+
+  const workflowActions = (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setEditingWorkflow(true)}
+      >
+        <IconEdit className="size-4 mr-1" />
+        Edit Details
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setShowCreateAgentSheet(true)}
+        disabled={!!workflow?.ai_assistant_id && assistantExists}
+        title={
+          workflow?.ai_assistant_id && assistantExists
+            ? "AI Agent already created"
+            : "Create AI Agent"
+        }
+      >
+        <IconRobot className="size-4 mr-1" />
+        Create AI Agent
+      </Button>
+      {workflow?.ai_assistant_id && assistantExists && (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowUpdateConfirmDialog(true)}
+            disabled={updatingAssistant}
+            title="Sync assistant instructions with current workflow"
+          >
+            {updatingAssistant ? (
+              <IconLoader2 className="size-4 mr-1 animate-spin" />
+            ) : (
+              <IconRefresh className="size-4 mr-1" />
+            )}
+            Update AI Agent
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDeleteAgentDialog(true)}
+            disabled={deletingAgent}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            title="Delete AI Agent and associated insights"
+          >
+            {deletingAgent ? (
+              <IconLoader2 className="size-4 mr-1 animate-spin" />
+            ) : (
+              <IconTrash className="size-4 mr-1" />
+            )}
+            Delete AI Agent
+          </Button>
+        </>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => requestNavigation(`/admin/workflows/${workflowId}/test`)}
+        disabled={!workflow?.ai_assistant_id || !assistantExists}
+        title={
+          !workflow?.ai_assistant_id || !assistantExists
+            ? "Create an AI Agent first"
+            : "Test AI Agent"
+        }
+      >
+        <IconTestPipe2 className="size-4 mr-1" />
+        Test AI Agent
+      </Button>
+    </>
+  );
 
   return (
     <AdminPageShell>
       <AdminPageHeader
         title={workflow?.name || "Workflow Editor"}
-        badges={workflow?.is_active ? (
-          <Badge className="border-green-500 text-green-600" variant="outline">Active</Badge>
-        ) : (
-          <Badge className="border-gray-400 text-gray-500" variant="outline">Inactive</Badge>
-        )}
-      />
-      <AdminPageContent className="flex flex-col">
-        <div className="flex min-h-[calc(100vh-220px)] flex-1 flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/admin/workflows")}
-          >
-            <IconArrowLeft className="size-4 mr-1" />
-            Back
-          </Button>
-          <div className="flex items-center gap-2">
-            <IconGitBranch className="size-5 text-telnyx-green" />
-            <span className="text-lg font-semibold">{workflow?.name}</span>
-            {workflow?.is_active ? (
-              <Badge className="border-green-500 text-green-600" variant="outline">
-                Active
-              </Badge>
-            ) : (
-              <Badge className="border-gray-400 text-gray-500" variant="outline">
-                Inactive
-              </Badge>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditingWorkflow(true)}
-          >
-            <IconEdit className="size-4 mr-1" />
-            Edit Details
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCreateAgentSheet(true)}
-            disabled={!!workflow?.ai_assistant_id && assistantExists}
-            title={
-              workflow?.ai_assistant_id && assistantExists
-                ? "AI Agent already created"
-                : "Create AI Agent"
-            }
-          >
-            <IconRobot className="size-4 mr-1" />
-            Create AI Agent
-          </Button>
-          {workflow?.ai_assistant_id && assistantExists && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowUpdateConfirmDialog(true)}
-                disabled={updatingAssistant}
-                title="Sync assistant instructions with current workflow"
-              >
-                {updatingAssistant ? (
-                  <IconLoader2 className="size-4 mr-1 animate-spin" />
-                ) : (
-                  <IconRefresh className="size-4 mr-1" />
-                )}
-                Update AI Agent
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDeleteAgentDialog(true)}
-                disabled={deletingAgent}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                title="Delete AI Agent and associated insights"
-              >
-                {deletingAgent ? (
-                  <IconLoader2 className="size-4 mr-1 animate-spin" />
-                ) : (
-                  <IconTrash className="size-4 mr-1" />
-                )}
-                Delete AI Agent
-              </Button>
-            </>
+        badges={<>
+          {workflow?.is_active ? (
+            <Badge className="border-green-500 text-green-600" variant="outline">Active</Badge>
+          ) : (
+            <Badge className="border-gray-400 text-gray-500" variant="outline">Inactive</Badge>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/admin/workflows/${workflowId}/test`)}
-            disabled={!workflow?.ai_assistant_id || !assistantExists}
-            title={
-              !workflow?.ai_assistant_id || !assistantExists
-                ? "Create an AI Agent first"
-                : "Test AI Agent"
-            }
-          >
-            <IconTestPipe2 className="size-4 mr-1" />
-            Test AI Agent
-          </Button>
-        </div>
-      </div>
+          {hasUnsavedChanges ? (
+            <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge>
+          ) : null}
+        </>}
+        actions={workflowActions}
+      />
+      <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to leave? All
+              unsaved changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelExit}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmExit}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Leave without saving
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AutomationsSectionPage activeId="workflows" onNavigate={requestNavigation}>
+        <div className="flex h-full min-h-0 flex-col">
 
       {/* Main Content - 3 Column Layout (equal widths) */}
       <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
@@ -1269,6 +1355,7 @@ export default function WorkflowEditorPage() {
                 <ItemEditor
                   item={selectedItem}
                   onSave={(updates) => updateItem(selectedItem.id, updates)}
+                  onDirtyChange={setItemEditorDirty}
                 />
               </div>
             )}
@@ -1902,7 +1989,7 @@ export default function WorkflowEditorPage() {
         </DialogContent>
       </Dialog>
         </div>
-      </AdminPageContent>
+      </AutomationsSectionPage>
     </AdminPageShell>
   );
 }
@@ -1947,7 +2034,7 @@ function getHintColor(index) {
 }
 
 // Item Editor Component with all slot fields
-function ItemEditor({ item, onSave }) {
+function ItemEditor({ item, onSave, onDirtyChange }) {
   // Determine default completion_trigger based on type
   const getDefaultCompletionTrigger = (itemType) => {
     if (itemType === "slot") return "customer";
@@ -2009,6 +2096,11 @@ function ItemEditor({ item, onSave }) {
       form.completion_trigger !== (item.completion_trigger || defaultTrigger);
     setHasChanges(changed);
   }, [form, item]);
+
+  useEffect(() => {
+    onDirtyChange?.(hasChanges);
+    return () => onDirtyChange?.(false);
+  }, [hasChanges, onDirtyChange]);
 
   function addOption() {
     if (!newOption.trim()) return;

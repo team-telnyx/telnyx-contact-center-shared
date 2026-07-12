@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { normalizeAssistantPayload } from "@/lib/ai/assistant-payload.mjs";
+import { telnyxErrorDetail } from "@/lib/telnyx-error.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ export async function GET(request) {
     if (!res.ok) {
       const text = await res.text();
       return NextResponse.json(
-        { ok: false, error: `Telnyx API error: ${res.status} ${text}` },
+        { ok: false, error: telnyxErrorDetail(text, `Telnyx API error: ${res.status}`) },
         { status: 502, headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -52,8 +54,8 @@ export async function GET(request) {
       if (pool) {
         try {
           const { rows } = await pool.query(
-            `SELECT DISTINCT ai_assistant_id 
-             FROM aa_workflows 
+            `SELECT DISTINCT ai_assistant_id
+             FROM aa_workflows
              WHERE ai_assistant_id IS NOT NULL AND ai_assistant_id != ''`
           );
           const workflowAssistantIds = new Set(
@@ -106,11 +108,7 @@ export async function POST(request) {
     }
 
     const payloadRaw = await request.json().catch(() => ({}));
-    const payload = { ...payloadRaw };
-    if (payload.greetings && !payload.greeting) {
-      payload.greeting = payload.greetings;
-      delete payload.greetings;
-    }
+    const payload = normalizeAssistantPayload(payloadRaw);
 
     const res = await fetch(buildTelnyxV2Url("/ai/assistants"), {
       method: "POST",
@@ -125,7 +123,7 @@ export async function POST(request) {
     const text = await res.text();
     if (!res.ok) {
       return NextResponse.json(
-        { ok: false, error: `Telnyx API error: ${res.status} ${text}` },
+        { ok: false, error: telnyxErrorDetail(text, `Telnyx API error: ${res.status}`) },
         { status: 502, headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -148,4 +146,3 @@ export async function POST(request) {
     );
   }
 }
-

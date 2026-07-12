@@ -1,0 +1,42 @@
+---
+title: Wrapup Codes
+description: Configure the disposition codes agents select after contact-center interactions.
+audiences: [admin, owner]
+keywords: [wrapup, disposition, outcome, interaction, queue]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Wrapup Codes classify the outcome of an interaction, for example **Resolved**, **Escalated**, or **Callback Required**. Open **Admin → Configuration**, then select **Wrapup Codes** in the rail.
+
+## List controls and columns
+
+Search by name or description, filter by **Active**, then use **Clear**, **Refresh**, or **New Wrapup Code**. The table shows **Name**, **Icon**, **Active**, **Default**, **Display Order**, **Description**, and actions. Pagination supports 10, 25, 50, or 100 rows.
+
+## Create or edit a code
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Active** | No | Controls whether the code is available for current use. |
+| **Default** | No | Makes this the system default. Saving a new default automatically clears the previous default. |
+| **Name** | Yes | Unique disposition label shown to agents. |
+| **Icon** | No | Visual symbol shown with the code. |
+| **Icon Color** | No | Rendering color for the icon. |
+| **Display Order** | No | Numeric sort order; lower numbers appear first. Default is 0. |
+| **Description** | No | Guidance describing when agents should select this outcome. |
+
+Select **Save Changes**. Empty or duplicate names are rejected.
+
+## Assign codes to queues
+
+Edit a queue and select the permitted codes in its **Wrapup Codes** section. Queue assignment limits the choices presented after calls handled through that queue.
+
+## Delete a code
+
+Deletion is blocked when the code:
+
+- is the current default;
+- is assigned to one or more queues; or
+- is already stored on one or more interactions.
+
+Remove queue assignments first. For codes that must remain for reporting history, turn **Active** off instead of deleting them.

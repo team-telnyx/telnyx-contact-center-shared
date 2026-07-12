@@ -4,60 +4,43 @@
  */
 
 import { NextResponse } from "next/server";
-import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
-
-const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
-const TELNYX_API_BASE = "https://api.telnyx.com/v2";
+import { buildTelnyxV2Url } from "@/lib/telnyx";
 
 export async function GET() {
   try {
-    const response = await fetch(`${TELNYX_API_BASE}/ai/models`, {
+    const apiKey = process.env.TELNYX_API_KEY;
+    if (!apiKey) return NextResponse.json({ ok: false, error: "Missing TELNYX_API_KEY" }, { status: 500 });
+    const response = await fetch(buildTelnyxV2Url("/ai/models"), {
       headers: {
-        Authorization: `Bearer ${TELNYX_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
+      cache: "no-store",
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
-        { error: "Failed to fetch models" },
-        { status: response.status }
+        { ok: false, error: `Telnyx API error: ${response.status} ${errorText}` },
+        { status: 502 }
       );
     }
 
     const data = await response.json();
-    
+
     // Filter to text-generation models (note: some have "text-generation", others "text generation")
-    const chatModels = (data.data || [])
-      .filter((model) => {
-        const task = (model.task || "").toLowerCase().replace("-", " ");
-        return task.includes("text generation") && model.context_length >= 4000;
-      })
-      .map((model) => ({
-        id: model.id,
-        name: model.id,
-        organization: model.organization,
-        parameters: model.parameters_str || "unknown",
-        context_length: model.context_length,
-        tier: model.tier,
-        recommended: model.recommended_for_assistants || false,
-      }))
-      .sort((a, b) => {
-        // Sort: recommended first, then by organization (openai, anthropic, google first), then by name
-        if (a.recommended !== b.recommended) return b.recommended - a.recommended;
-        const orgOrder = { openai: 0, anthropic: 1, google: 2, groq: 3, "xai-org": 4 };
-        const orgDiff = (orgOrder[a.organization] ?? 99) - (orgOrder[b.organization] ?? 99);
-        if (orgDiff !== 0) return orgDiff;
-        return a.name.localeCompare(b.name);
-      });
+    const models = Array.isArray(data?.data) ? data.data.map((model) => ({
+      id: model?.id || "",
+      name: model?.name || model?.id || "",
+      recommended_for_assistants: model?.recommended_for_assistants === true,
+      raw: model || null,
+    })).filter((model) => model.id) : [];
 
     return NextResponse.json({
       ok: true,
-      models: chatModels,
+      models,
     });
   } catch (error) {
-    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to fetch models" },
       { status: 500 }

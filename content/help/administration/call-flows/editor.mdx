@@ -1,0 +1,24 @@
+---
+title: Visual editor
+description: Navigate the canvas, configure nodes, connect handles, and manage a flow graph.
+audiences: [admin, owner]
+keywords: [canvas, node editor, handles, graph]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+The editor consists of a node library, canvas, node configuration panel, and flow-level actions. Add a node, select it, configure its fields, then connect an output handle to the next node.
+
+## Canvas rules
+
+- An output handle represents a specific event or result, such as **Answered**, **No answer**, **Success**, **Error**, or a condition branch.
+- Connect each operational outcome that needs handling. An explicit output without a matching edge ends that path.
+- More than one edge from the same output starts downstream branches in parallel. Use this deliberately; it is not an implicit priority order.
+- Use **Flow End** for an intentional application-flow end and **Hangup Call** when the call itself must be disconnected.
+- Keep labels and node positions meaningful. A readable left-to-right happy path with error branches below it is easier to operate.
+
+## Editing safely
+
+Select a node to see its fields. Required values, variable names, expressions, and connections are checked by flow validation. Save after related changes, but validate the complete graph before assignment or production use.
+
+Use **Manage Global Variables** for flow-wide constants. Use edge mappings when a source node returns structured output and only selected properties should enter the runtime variable scope.

@@ -1,0 +1,22 @@
+---
+title: Agent Desktop and interactions
+description: Read the interaction list, select work, and understand the detail panel.
+audiences: [agent, supervisor, admin, owner]
+keywords: [agent desktop, interaction list, ringing, call state]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+**Desktop** shows current interactions in the left panel and details for the selected interaction in the main workspace. Entries combine authoritative interaction records with live WebRTC state, so mute and hold indicators can update immediately.
+
+An interaction can show caller identity/number, direction, queue, state, duration, and current mute/hold condition. Select a row to keep its content in view. Answer and Reject are intentionally located in WebRTC Phone, not in the interaction list.
+
+The detail view is determined by Call Flow Agent Assist configuration:
+
+- **KB Articles** is the default and shows live knowledge suggestions;
+- **Workflows** shows the guided staged workflow;
+- **Forms** opens configured or auto-open queue forms;
+- **Web Pages** opens approved external pages;
+- disabled Agent Assist shows an explicit disabled message.
+
+Ringing entries removed after timeout/re-enqueue must not be answered from stale browser state. When status becomes Agent Not Answering, stale ringing interactions are cleared. Completed, abandoned, and ended calls are removed from the active list after lifecycle processing.

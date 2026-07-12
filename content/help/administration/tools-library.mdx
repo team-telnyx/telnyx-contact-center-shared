@@ -1,0 +1,43 @@
+---
+title: Tools Library
+description: Create reusable assistant tools, test webhooks, and assign tools to AI assistants.
+audiences: [admin, owner]
+keywords: [AI tool, webhook, transfer, handoff, retrieval, DTMF]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → AI Assistants**, then select **Tools Library** in the rail. The library stores reusable tools independently from any one assistant.
+
+## Find and manage tools
+
+Search by tool name and use **Clear**, **Refresh**, or **New Tool**. The table shows display name, ID, type, creation date, and actions. You can copy IDs, test webhook tools, assign a tool to assistants, edit, or permanently delete it.
+
+## Create a tool
+
+Every tool has a **Display Name**, **Tool Type**, and type-specific configuration.
+
+| Type | Purpose |
+| --- | --- |
+| **Webhook** | Calls an HTTP endpoint. Configure name, description, URL, method, timeout/async mode, headers, path/query/body schemas, dynamic-variable mappings, and filler messages. |
+| **Hangup** | Ends the call, optionally with a closing message. |
+| **Transfer** | Transfers to an E.164 number or SIP URI, with targets, headers, and optional warm-transfer instructions. |
+| **Handoff** | Hands the conversation to another AI assistant. |
+| **Send Message** | Sends an SMS/MMS message during the conversation. |
+| **Invite** | Adds a third party to a call and configures targets, headers, and answering-machine behavior. |
+| **SIP Refer** | Transfers via SIP REFER with authentication and headers. |
+| **Send DTMF** | Lets the assistant send DTMF tones. |
+| **Retrieval** | Searches selected knowledge buckets. |
+| **Skip Turn** | Skips the assistant response for the current turn. |
+
+For webhook secrets, insert a reference from Secrets instead of typing credentials directly. Async webhooks do not wait for a response, so response fields cannot drive the current turn.
+
+## Test and assign
+
+Use the flask action to provide sample parameters and inspect the resolved URL, method, headers, status, duration, and response. Testing can call an external system; use safe test records and non-production endpoints when possible.
+
+The assignment sheet searches assistants by name, model, or ID. Selecting assistants adds the tool to each assistant; verify its instructions and required parameters in the assistant's Integrations section afterward.
+
+## Delete safely
+
+Deletion cannot be undone and may leave assistants or workflows expecting a missing capability. Remove assignments and update prompts/workflows before deleting a tool.

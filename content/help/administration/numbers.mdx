@@ -1,0 +1,46 @@
+---
+title: Numbers
+description: Review owned phone numbers, configure voice and messaging assignments, and search for new Telnyx numbers.
+audiences: [admin, owner]
+keywords: [phone number, Telnyx, purchase, connection, messaging profile, recording]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → Configuration**, then select **Numbers** in the rail. The page has **My Numbers** and **Search & Order** tabs.
+
+## My Numbers
+
+Search by phone number, filter by **Type**, **Status**, and **Country**, then use **Clear** or **Refresh**. Types include Local, Toll Free, Mobile, and National. Status filters include Active, Purchase Pending, Port Pending, and Emergency Only.
+
+The table shows the number, type, status, voice connection, messaging profile, AI assistant assignment, country, and actions. Voice connections and messaging profiles can be changed inline; review the confirmation dialog before applying the update.
+
+### Edit a number
+
+| Setting | Description |
+| --- | --- |
+| **Voice Connection** | Routes voice traffic through the selected Telnyx connection; select None to clear it. |
+| **Messaging Profile** | Associates SMS/MMS traffic with a Telnyx messaging profile; select None to clear it. |
+| **Enable Recording** | Enables inbound call recording for the number. |
+| **Format** | MP3 or WAV. |
+| **Channels** | Single mixed channel or dual separated channels. |
+| **Tags** | Free-form unique labels used to organize the number. |
+| **Prevent Deletion** | Protects the number from the delete action. |
+
+The sheet also shows read-only number, status, type, purchase date, and country information.
+
+### Delete a number
+
+Deleting an owned number is permanent from the application perspective and can affect live routing. The delete button is unavailable while **Prevent Deletion** is enabled. Remove dependencies from call flows, assistants, users, voice connections, and messaging before deletion.
+
+## Search & Order
+
+Current search is scoped to the United States. Choose **Area Code** or **State / Region**, a number type, and desired features such as Voice, SMS, MMS, Fax, Emergency, HD Voice, or International SMS.
+
+Advanced filters include number prefix/substring/suffix, result limit, Best Effort, Quickship, Reservable Numbers, excluding held or previously owned numbers, Telnyx Bundle, and a requested consecutive-number count.
+
+Results show number, type, features, locality, upfront cost, and monthly cost. Select one or more results, choose **Order Number(s)**, review the confirmation and charges, then confirm. Purchasing is an external billable action; do not treat a search result as reserved until the order succeeds. Review the returned Order ID and status.
+
+## Verification
+
+After assigning or purchasing a number, confirm its Telnyx status, connection/profile assignment, associated assistant or call flow, and place controlled inbound and outbound tests for every enabled channel.

@@ -1,0 +1,20 @@
+---
+title: Active-call controls and DTMF
+description: Use mute, hold, end, transfer, and keypad actions safely during a connected call.
+audiences: [agent, supervisor, admin, owner]
+keywords: [mute, hold, hangup, DTMF, call controls]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+| Control | Effect |
+| --- | --- |
+| Mute / Unmute | Stops or restores local microphone audio. It does not place the remote party on hold. |
+| Hold / Unhold | Places or restores the remote call leg using call control. The title state changes to **On Hold**. |
+| End | Hangs up the connected call and starts downstream lifecycle/wrap-up processing where applicable. |
+| Transfer | Opens destination and consult controls. |
+| DTMF | Expands a `0–9`, `*`, `#` keypad. Digits are enabled only while a call is active and appear in the local buffer. |
+
+Mute and hold indicators are also reflected in Agent Desktop interaction rows. Wait for the UI state to update before clicking the same control repeatedly. For PCI or other sensitive workflows, DTMF display/log handling must follow organizational policy.
+
+Hiding the floating phone does not end a call. Always use **End** or the correct transfer completion action when the call must disconnect.

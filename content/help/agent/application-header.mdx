@@ -1,0 +1,23 @@
+---
+title: Application header
+description: Understand every control visible in the shared application header.
+audiences: [agent, supervisor, admin, owner]
+keywords: [header, status, queues, campaigns, docs, phone]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+The header remains available while navigating the application.
+
+| Control | Function |
+| --- | --- |
+| Sidebar button | Expands or collapses the main left menu. |
+| Docs | Opens the documentation center. Press **F1** for contextual screen help. |
+| Status selector | Shows the current agent status and allows selection of statuses marked user-selectable. |
+| Campaigns `active/total` | Activates eligible outbound campaigns and shows campaign state/mode. |
+| Queues `active/total` | Activates queues and shows each queue routing strategy. |
+| WebRTC Phone | Opens or hides the shared browser phone and reflects its current call state. |
+
+Agent controls appear only for a user who has the `agent` role. Supervisor, admin, or owner access does not automatically show them unless that same account also has the agent role.
+
+Status, queue, and campaign changes are updated in real time. If the shared event stream is unavailable, status uses fallback polling. A newly created queue can generate a **New queue available** notification; it is not activated automatically.

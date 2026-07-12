@@ -1,0 +1,22 @@
+---
+title: WebRTC Phone troubleshooting
+description: Diagnose permission, device, ringing, audio, profile, transfer, and stale-call problems.
+audiences: [agent, supervisor, admin, owner]
+keywords: [webrtc troubleshooting, no audio, microphone, ringing]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+| Symptom | Checks |
+| --- | --- |
+| Phone does not open | Use the header phone control; reload only if the UI provider no longer responds. |
+| WebRTC URI unavailable | Ask an administrator to verify the profile `telephony_user_name`. |
+| Call button disabled | Select a destination and confirm the WebRTC client/profile is ready. |
+| No microphone audio | Check site permission, OS input permission, mute state, selected device, and whether another app has exclusive access. |
+| No remote audio | Check browser autoplay/output policy, selected speaker, OS mixer, headset connection, and browser output-routing support. |
+| No inbound offer | For agents, verify status, queue activation, skills, queue eligibility, browser endpoint, and that the call has not already timed out/re-enqueued. |
+| Region selector disabled | Finish the active call; region changes are intentionally blocked during a call. |
+| Transfer/consult fails | Verify the call is connected, target is valid, interaction/call-control metadata exists, and target infrastructure is reachable. |
+| UI remains on an ended call | Wait for lifecycle events, compare Agent Desktop/server state, then refresh. Do not initiate another operation from a stale call. |
+
+When reporting a fault, include timestamp/timezone, user, interaction ID, direction, selected devices, displayed call state, target type, and exact notification text. Do not include credentials or unnecessary customer data.

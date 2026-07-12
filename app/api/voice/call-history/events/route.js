@@ -56,15 +56,9 @@ export async function GET(request) {
     }
 
     const data = await res.json();
-    const rows = (data.data || []).map((event) => ({
-      ...event,
-      occurred_at: event.event_timestamp || event.occurred_at,
-      payload: event.metadata || event.payload || {},
-    }));
-
     return NextResponse.json({
       ok: true,
-      data: rows,
+      data: data.data || [],
       meta: data.meta || {},
     });
   } catch (error) {
@@ -75,4 +69,3 @@ export async function GET(request) {
     );
   }
 }
-

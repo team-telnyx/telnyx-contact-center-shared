@@ -19,10 +19,11 @@ import ReactFlow, {
   Position,
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
+  getSmoothStepPath,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AutomationsSectionPage } from "@/components/admin/AutomationsSectionNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,7 +82,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  IconArrowLeft,
   IconDeviceFloppy,
   IconAlertTriangle,
   IconAlertCircle,
@@ -186,6 +186,7 @@ import useCallFlowMonitorStore, {
   useFlowEvents,
   useFlowCurrentCallControlId,
 } from "@/lib/stores/call-flow-monitor-store";
+import { useExperimentalFeatures } from "@/lib/experimental-features-client";
 
 // Icon mapping for node types
 const iconMap = {
@@ -1075,13 +1076,19 @@ function CustomEdge({
   selected,
   data,
 }) {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  // Route connections outside the source and target cards before turning.
+  // This is especially important for right-to-left (backward) connections:
+  // a regular Bezier curve can double back underneath either node, whereas a
+  // smooth-step path keeps clearance around both handles and rounds the turns.
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
+    borderRadius: 28,
+    offset: 36,
   });
 
   const isActive = data?.isActive || false;
@@ -1355,7 +1362,7 @@ export default function FlowBuilderPage() {
   const [isFlowDefault, setIsFlowDefault] = useState(false);
   const [userVoiceAppId, setUserVoiceAppId] = useState(null);
   const [userVoiceAppName, setUserVoiceAppName] = useState("");
-  const [userEmail, setUserEmail] = useState("");
+  const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -1445,6 +1452,7 @@ export default function FlowBuilderPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null);
+  const navigationConfirmedRef = useRef(false);
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
   const [webhookUpdateInfo, setWebhookUpdateInfo] = useState(null);
   const [showDescriptionDialog, setShowDescriptionDialog] = useState(false);
@@ -1788,26 +1796,6 @@ export default function FlowBuilderPage() {
     loadFlow();
   }, [flowId]);
 
-  // Load user profile for queue name extraction
-  useEffect(() => {
-    async function loadUserProfile() {
-      try {
-        const res = await fetch("/api/user/profile");
-        const data = await res.json();
-        if (res.ok && data?.ok && data.data) {
-          // Store user email for queue name extraction
-          if (data.data.email || data.data.username) {
-            setUserEmail(data.data.email || data.data.username);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading user profile:", error);
-      }
-    }
-
-    loadUserProfile();
-  }, []);
-
   // Load enabled and active queues for enqueue node
   useEffect(() => {
     async function loadQueues() {
@@ -2001,7 +1989,7 @@ export default function FlowBuilderPage() {
   // Warn before closing browser tab/window
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (hasUnsavedChanges) {
+      if (hasUnsavedChanges && !navigationConfirmedRef.current) {
         e.preventDefault();
         e.returnValue = "";
         return "";
@@ -2010,6 +1998,22 @@ export default function FlowBuilderPage() {
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const handleDocumentNavigation = (event) => {
+      if (!hasUnsavedChanges || navigationConfirmedRef.current) return;
+      const anchor = event.target?.closest?.("a[href]");
+      if (!anchor || anchor.target || anchor.hasAttribute("download")) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+      event.preventDefault();
+      setPendingNavigation(href);
+      setShowExitDialog(true);
+    };
+
+    document.addEventListener("click", handleDocumentNavigation, true);
+    return () => document.removeEventListener("click", handleDocumentNavigation, true);
   }, [hasUnsavedChanges]);
 
   // Load existing monitoring data from server on mount (if any)
@@ -2307,24 +2311,26 @@ export default function FlowBuilderPage() {
     }
   }
 
-  const handleBackClick = useCallback(() => {
-    if (hasUnsavedChanges) {
+  const requestNavigation = useCallback((href) => {
+    if (hasUnsavedChanges && !navigationConfirmedRef.current) {
+      setPendingNavigation(href);
       setShowExitDialog(true);
-      setPendingNavigation("/admin/call-flows");
-    } else {
-      router.push("/admin/call-flows");
+      return;
     }
+    router.push(href);
   }, [hasUnsavedChanges, router]);
 
-  const handleConfirmExit = useCallback(() => {
+  const confirmExit = useCallback(() => {
+    const target = pendingNavigation || "/admin/call-flows";
+    navigationConfirmedRef.current = true;
     setShowExitDialog(false);
+    setPendingNavigation(null);
     setHasUnsavedChanges(false);
-    if (pendingNavigation) {
-      router.push(pendingNavigation);
-    }
+    if (/^https?:\/\//.test(target)) window.location.href = target;
+    else router.push(target);
   }, [pendingNavigation, router]);
 
-  const handleCancelExit = useCallback(() => {
+  const cancelExit = useCallback(() => {
     setShowExitDialog(false);
     setPendingNavigation(null);
   }, []);
@@ -2686,16 +2692,18 @@ export default function FlowBuilderPage() {
     return (
       <AdminPageShell>
         <AdminPageHeader title="Call Flow Editor" badges={<Badge variant="secondary">Authorizing</Badge>} />
-        <AdminPageContent>
-          <Card className="w-full">
-            <CardContent className="space-y-4 pt-6">
-              <div className="space-y-2">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-96 w-full" />
-              </div>
-            </CardContent>
-          </Card>
-        </AdminPageContent>
+        <AutomationsSectionPage activeId="call-app-flows">
+          <AdminPageContent>
+            <Card className="w-full">
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-96 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          </AdminPageContent>
+        </AutomationsSectionPage>
       </AdminPageShell>
     );
   }
@@ -2704,14 +2712,16 @@ export default function FlowBuilderPage() {
     return (
       <AdminPageShell>
         <AdminPageHeader title="Call Flow Editor" badges={<Badge variant="secondary">Loading</Badge>} />
-        <AdminPageContent>
-          <div className="flex h-full items-center justify-center">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <IconLoader2 className="h-4 w-4 text-green-500 animate-spin" />
-              <span>Loading flow...</span>
+        <AutomationsSectionPage activeId="call-app-flows">
+          <AdminPageContent>
+            <div className="flex h-full items-center justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <IconLoader2 className="h-4 w-4 text-green-500 animate-spin" />
+                <span>Loading flow...</span>
+              </div>
             </div>
-          </div>
-        </AdminPageContent>
+          </AdminPageContent>
+        </AutomationsSectionPage>
       </AdminPageShell>
     );
   }
@@ -2730,8 +2740,8 @@ export default function FlowBuilderPage() {
           <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>
         )}
       />
-      <AdminPageContent>
-        <Card className="w-full" style={{ height: "calc(100vh - 220px)" }}>
+      <AutomationsSectionPage activeId="call-app-flows" onNavigate={requestNavigation}>
+        <Card className="h-full w-full">
         <CardContent className="p-0 h-full">
           <div className="flex h-full">
             {/* Left Sidebar - Node Palette & Variables */}
@@ -2795,9 +2805,6 @@ export default function FlowBuilderPage() {
               {/* Top Toolbar */}
               <div className="border-b bg-card p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4 flex-1">
-                  <Button variant="ghost" size="icon" onClick={handleBackClick}>
-                    <IconArrowLeft className="h-4 w-4" />
-                  </Button>
                   <div className="flex items-center gap-2 flex-1 max-w-md">
                     <Input
                       value={flowName}
@@ -3262,7 +3269,7 @@ export default function FlowBuilderPage() {
                             "StreamingStartNodeEditor" ? (
                             <StreamingStartNodeEditor
                               config={nodeConfig}
-                              currentUserEmail={userEmail}
+                              experimentalFeaturesEnabled={experimentalFeaturesEnabled}
                               availableVariables={getAllVariableNames({
                                 nodes,
                                 edges,
@@ -3657,7 +3664,7 @@ export default function FlowBuilderPage() {
                             "AnswerNodeEditor" ? (
                             <AnswerNodeEditor
                               config={nodeConfig}
-                              currentUserEmail={userEmail}
+                              experimentalFeaturesEnabled={experimentalFeaturesEnabled}
                               hasCallerLanguageParameterBefore={hasCallerLanguageParameterBeforeNode(selectedNode.id)}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
@@ -3769,7 +3776,7 @@ export default function FlowBuilderPage() {
                             "AgentAssistNodeEditor" ? (
                             <AgentAssistNodeEditor
                               config={nodeConfig}
-                              currentUserEmail={userEmail}
+                              experimentalFeaturesEnabled={experimentalFeaturesEnabled}
                               availableVariables={getAllVariableNames({
                                 nodes,
                                 edges,
@@ -4378,7 +4385,6 @@ export default function FlowBuilderPage() {
         </CardContent>
       </Card>
 
-      {/* Exit Confirmation Dialog */}
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -4389,11 +4395,9 @@ export default function FlowBuilderPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelExit}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel onClick={cancelExit}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleConfirmExit}
+              onClick={confirmExit}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Leave without saving
@@ -4851,7 +4855,7 @@ export default function FlowBuilderPage() {
           </div>
         </div>
       )}
-      </AdminPageContent>
+      </AutomationsSectionPage>
     </AdminPageShell>
   );
 }

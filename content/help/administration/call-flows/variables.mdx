@@ -1,0 +1,35 @@
+---
+title: Variables and runtime data
+description: Use global, custom, payload, response, client-state, and edge-defined variables.
+audiences: [admin, owner]
+keywords: [variables, global variables, payload, response, runtime]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Variables carry data between nodes. Reference a value with `{{variable_name}}`; use dots and array indexes for nested data, for example `{{customer.address.city}}` or `{{rows[0].first_name}}`.
+
+## Variable scopes
+
+| Scope | Reference | How it is created |
+| --- | --- | --- |
+| Global | `{{global.support_number}}` | **Manage Global Variables** in the flow editor. |
+| Runtime/custom | `{{customer_id}}` | Set Variable, response mapping, or an edge mapping. |
+| Initiator payload | `{{payload.customer.id}}` or configured alias | Incoming webhook, HTTP, form, or campaign payload. |
+| Node response | `{{response.body.id}}` or configured response variable | HTTP Request, MCP Tool, or Data Action output. |
+| Client state | `{{client_state.case_id}}` | Current call client-state object. |
+
+Global values are merged into execution context and are best for stable, non-secret defaults. A global name must start with a letter or underscore and contain only letters, numbers, and underscores. Names must be unique and cannot be JavaScript reserved words.
+
+## Custom variables
+
+Use **Set Variable** to compute a reusable value. Prefer descriptive `snake_case` names and one semantic meaning per variable. Integration nodes can save their complete response under a configured response variable; edge mappings can expose only selected paths under custom names.
+
+Initiators also expose aliases. The defaults include `call_payload`, `request_payload`, and `form_payload`; outbound executions can expose `contact_data` and `contact_record`. Confirm the configured alias on the initiator rather than assuming a default.
+
+## Avoid data errors
+
+- Do not reuse a name for a different data type later in the graph.
+- Treat missing paths as a normal branch condition before using the value.
+- Keep credentials in Secrets, not global variables.
+- Map the smallest useful response shape; large payloads make expressions and logs harder to inspect.

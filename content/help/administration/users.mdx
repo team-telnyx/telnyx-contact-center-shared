@@ -1,0 +1,146 @@
+---
+title: Users
+description: Create and manage contact-center users, roles, invitations, phone numbers, queue assignments, and skills.
+audiences: [admin, owner]
+keywords: [users, agents, roles, invite, verified, active, phone number, queue assignment, proficiency]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+The Users menu controls who can sign in, which parts of the contact center they may use, and which calls they are eligible to receive.
+
+## Open the Users menu
+
+Open **Admin → Configuration**, then select **Users** in the section rail. Only users with the **Admin** or **Owner** role can use this page.
+
+The badge beside the title shows the total number of users matching the current filters.
+
+## Find and review users
+
+| Control | What it does |
+| --- | --- |
+| **Name** | Searches username/email, first name, last name, nickname, and mobile number. The match is not case-sensitive. |
+| **Role** | Filters by a role assigned to the user. The choices are built from roles present on the currently loaded page. |
+| **Clear** | Resets the search and role filter. |
+| **Refresh** | Reloads the current list. |
+| **Add User** | Opens the create-user sheet. |
+
+| Column | Meaning |
+| --- | --- |
+| **Name** | First and last name. If those are empty, the nickname is shown. |
+| **Username** | Login identifier, normally the user's email address. |
+| **Roles** | One or more access roles assigned to the account. |
+| **Skills** | Number of assigned skills. Select the information icon to see skill names, descriptions, and proficiency from one to five stars. |
+| **Verified** | Whether the account is marked as verified. |
+| **Actions** | Edit or delete the user. |
+
+Use **Rows per page** to display 10, 20, 30, 40, or 50 rows and use the page buttons to move through the result set.
+
+## Create a user
+
+1. Select **Add User**.
+2. Enter the required email, first name, and last name.
+3. Choose one or more roles.
+4. Decide whether to send an invitation email.
+5. Select **Create User**.
+
+The email must contain a domain and must be unique. If active allowed domains are configured under **Configuration → Domains**, the email domain must match one of them.
+
+<DocsCallout title="Complete routing setup after creation" tone="warning">
+  A newly created account is stored as inactive and unverified. Reopen the user with the edit action to activate or verify it and to persist queue assignments, skills, SMS number, and voice number. The creation sheet displays these controls, but the current create-user operation does not persist them.
+</DocsCallout>
+
+## Invitation
+
+| Control or status | Description |
+| --- | --- |
+| **Send invite email after creation** | Selected by default. Creates a one-time setup token and attempts to email the user a password-setup link. |
+| **Not invited** | No invitation has been generated. |
+| **Pending** | An invitation was sent but has not been accepted. The sheet shows sent and expiry times. |
+| **Accepted** | The invitation was used successfully. It cannot be resent from the sheet. |
+| **Expired** | The invitation token is no longer valid. Send a new invitation. |
+| **Send Invite / Resend Invite** | Generates a new token and invalidates the previous one. |
+
+Invitation links expire after seven days. Creating the user still succeeds if email delivery fails, so verify the visible invitation state and your outbound-email configuration when the recipient does not receive the message.
+
+## Account status
+
+| Field | Description |
+| --- | --- |
+| **Verified** | Marks the identity as verified. This is an administrative account flag, not the agent's live availability state. |
+| **Active** | Enables the account for normal use. Use this to suspend access without deleting the user and their configuration. |
+
+## Basic Information
+
+| Field | Required | Description |
+| --- | --- | --- |
+| **Username (email)** | On creation | Login identifier and invitation destination. Use a unique valid email from an allowed domain. |
+| **First name** | On creation | User's given name, shown in lists and assignments. |
+| **Last name** | On creation | User's family name, shown in lists and assignments. |
+| **Nickname** | No | Alternative display name used when a full name is unavailable. |
+
+When editing an existing user, changing **Username** changes the login identifier. Confirm the new address with the user and make sure it remains unique.
+
+## Contact Information
+
+| Field | Description |
+| --- | --- |
+| **Mobile** | User's contact mobile number. It is included in the Users page search. |
+| **SMS number** | Number associated with the user for SMS-related contact-center functions. |
+| **Voice Number — From Telnyx** | Selects a number from the Telnyx number inventory. Search by number or friendly name. Numbers already used by another user are marked **assigned**, but remain selectable. Choose **None** to clear the value. |
+| **Voice Number — Custom** | Accepts a manually entered number. Use E.164 format, for example `+12025551234`. |
+
+The number picker does not prevent two users from selecting the same number. Treat the **assigned** label as a warning and confirm the intended ownership before saving.
+
+## Roles
+
+A user may have more than one role.
+
+| Role | Typical access |
+| --- | --- |
+| **Agent** | Handles assigned queue work in the agent workspace. |
+| **Supervisor** | Monitors contact-center activity and agent performance. |
+| **Admin** | Configures administrative resources, including users, queues, and skills. |
+| **Owner** | Highest administrative role. Owner accounts are protected from deletion. |
+
+Assign the minimum access needed. Removing a role affects authorization after the updated user session is evaluated again.
+
+## Queue Assignments
+
+Select each enabled queue in which the user should participate. The list shows the queue's display name or internal name and its description.
+
+When you save an existing user:
+
+- newly selected queues are enabled for the user with priority one;
+- cleared queues are deactivated for the user rather than silently left active;
+- routing state for affected queues is re-evaluated asynchronously.
+
+Queue membership alone does not guarantee that calls will be offered. The user must also be active, available for routing, and satisfy any skill requirements.
+
+## Skills & Proficiency
+
+Select **Add Skill**, choose an active skill, and set proficiency from one to five stars. One star is the lowest level and five stars is the highest.
+
+Each skill can be assigned only once. Before saving, every added row must contain a selected skill; delete an incomplete row with the trash icon. **Add Skill** becomes unavailable after every active skill has been assigned.
+
+Changing skills triggers an asynchronous re-evaluation of waiting interactions and queue waiting reasons. A newly qualified agent may therefore become eligible for work that is already waiting.
+
+## Edit a user
+
+1. Select the green edit icon.
+2. Review account, contact, role, queue, and skill settings.
+3. Select **Save Changes**.
+
+Select **Cancel** or close the sheet to leave without saving.
+
+## Delete a user
+
+1. Select the red delete icon.
+2. Review the username in the confirmation dialog.
+3. Select **Delete** to permanently remove the account.
+
+Deletion cannot be undone. Owner accounts cannot be deleted; their delete action is disabled and the API also enforces this protection. To retain history and configuration while preventing access, turn **Active** off instead.
+
+## Recommended onboarding check
+
+After creating a user, reopen the account and confirm **Active**, **Verified**, roles, queue assignments, skills, voice number, and invitation status. Then have the user sign in and place a controlled queue call to confirm that routing and telephony are working as intended.

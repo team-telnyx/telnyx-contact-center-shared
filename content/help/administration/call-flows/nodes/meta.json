@@ -1,0 +1,12 @@
+{
+  "title": "Nodes",
+  "pages": [
+    "index", "incoming-call", "http-request", "form-submit", "outbound-campaign",
+    "dial", "answer", "hangup", "reject", "noise-suppression-start", "noise-suppression-stop", "switch-supervisor-role", "transfer", "bridge", "set-queue-options", "enqueue", "leave-queue", "client-state-update", "refer",
+    "speak", "play-audio", "gather", "gather-speak",
+    "ai-assistant-start", "ai-assistant-stop", "agent-assist",
+    "record-start", "record-stop", "record-pause", "record-resume", "transcription-start", "transcription-stop", "streaming-start", "streaming-stop",
+    "condition", "switch", "set-variable", "logic-gate", "flow-end",
+    "http-request-action", "form-submit-status", "mcp-tool", "data-action"
+  ]
+}

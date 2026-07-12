@@ -15,7 +15,7 @@ test("Admin logging page follows SectionRail three-pane workspace layout", async
   assert.match(page, /\{ id: "files", label: "Files", icon: IconFileText/);
   assert.match(page, /\{ id: "settings", label: "Settings", icon: IconSettings/);
   assert.match(page, /<main className=\{SECTION_RAIL_PAGE_GRID_CLASS\}/);
-  assert.match(page, /<SectionRail items=\{NAV_ITEMS\} activeId=\{active\}/);
+  assert.match(page, /<SectionRail fixedItems=\{\[SYSTEM_EXIT_ITEM\]\} items=\{NAV_ITEMS\} activeId=\{active\}/);
   assert.match(page, /gridTemplateColumns: `\$\{SECTION_RAIL_WIDTH\} minmax\(0,1fr\) 380px`/);
   assert.match(page, /<aside className="min-h-0 overflow-hidden rounded-2xl border bg-card\/92/);
 });

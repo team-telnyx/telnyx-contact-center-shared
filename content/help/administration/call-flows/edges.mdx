@@ -1,0 +1,25 @@
+---
+title: Edges and variable mappings
+description: Route execution by output handle and map source-node data into custom variables.
+audiences: [admin, owner]
+keywords: [edge, branch, mapping, source path]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+An edge connects one node output to a target node. Its source handle determines which result activates it. If several edges match the same output, their targets execute in parallel.
+
+## Variable Mapper
+
+An edge mapping contains **Variable name**, **Source path**, and an optional description. The mapper can discover paths from Telnyx webhook/output schemas, an HTTP trigger sample, an HTTP action test response, a Data Action schema, or an MCP response.
+
+For HTTP initiators, GET samples are rooted at `query`; POST bodies are rooted at `payload`. Select the exact path and accept or edit the suggested `snake_case` variable name. The name must be valid and unique on that edge.
+
+Mapped values are merged into runtime state when the edge is followed and are then available as `{{variable_name}}`. A mapping on a branch that did not run does not exist on another branch.
+
+## Recommendations
+
+- Map stable response contracts, not display text or incidental metadata.
+- Give error and timeout outputs dedicated edges.
+- Do not create parallel branches that write conflicting values unless the downstream design explicitly handles the race.
+- Document whether a path may be absent and branch before consuming it.

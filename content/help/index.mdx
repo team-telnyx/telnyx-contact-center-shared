@@ -1,0 +1,104 @@
+---
+title: Telnyx Contact Center Docs
+description: Guides for running, configuring, and operating the Telnyx Contact Center.
+audiences: [agent, supervisor, admin, owner]
+keywords: [help, documentation, contact center, setup]
+owner: contact-center
+lastReviewed: 2026-07-11
+full: true
+---
+
+<div className="help-home">
+  <section className="help-hero">
+    <p className="help-eyebrow">Telnyx Contact Center</p>
+    <h1>Build, run, and operate a voice-first contact center</h1>
+    <div className="help-hero-description">
+      Configure routing, manage agent workspaces, monitor live operations, and
+      deploy a Telnyx-wired stack from one documentation hub.
+    </div>
+  </section>
+
+  <DocsCardGrid>
+    <DocsSectionCard
+      title="Quick Start"
+      description="Install the workspace, prepare PostgreSQL, and start the contact center locally in a few commands."
+      href="/help/setup"
+      icon="setup"
+      tone="green"
+      command="yarn dev"
+      cta="Open setup"
+    />
+    <DocsSectionCard
+      title="Admin"
+      description="Configure users, queues, skills, call flows, AI assistants, tools, insights, phone numbers, and data sources."
+      href="/help/administration"
+      icon="admin"
+      tone="blue"
+      cta="Open admin docs"
+    />
+    <DocsSectionCard
+      title="Agent"
+      description="Handle voice interactions, use WebRTC controls, review customer context, and complete wrap-up work."
+      href="/help/agent"
+      icon="agent"
+      tone="purple"
+      cta="Open agent docs"
+    />
+    <DocsSectionCard
+      title="Supervisor"
+      description="Monitor live operations, analyze historical performance, inspect call history, and review quality."
+      href="/help/supervisor"
+      icon="supervisor"
+      tone="amber"
+      cta="Open supervisor docs"
+    />
+    <DocsSectionCard
+      title="WebRTC Phone"
+      description="Configure browser audio, handle calls, use DTMF, and perform transfers or consult calls from any workspace."
+      href="/help/webrtc-phone"
+      icon="agent"
+      tone="green"
+      cta="Open phone guide"
+    />
+  </DocsCardGrid>
+
+  <section className="help-home-panels">
+    <div className="help-home-panel">
+      <h2>Quick start</h2>
+      <DocsTerminal>{`yarn install
+cp sample.env .env.local
+yarn ensure:pg
+yarn dev`}</DocsTerminal>
+      <div className="help-home-panel-copy">
+        The local app runs at <code>http://localhost:3000</code>. Use Setup for
+        the complete environment, database, Docker, and deployment reference.
+      </div>
+    </div>
+
+    <div className="help-home-panel help-home-panel-accent">
+      <h2>Deploy from the wizard</h2>
+      <div className="help-home-panel-copy">
+        The deployment wizard can provision Local Docker, AWS, Azure, or GCP
+        targets, bootstrap Telnyx resources, generate secrets, and print the
+        owner login plus inbound number.
+      </div>
+      <DocsTerminal>{`./deploy/cc up`}</DocsTerminal>
+    </div>
+  </section>
+
+  <DocsFeatureGrid>
+    <DocsFeature title="Contextual help" tone="blue">
+      Choose <strong>Help</strong> in the application header or press
+      <strong> F1</strong>. On supported screens, the panel opens the relevant
+      field or screen guide.
+    </DocsFeature>
+    <DocsFeature title="Role-aware navigation" tone="green">
+      Documentation pages are filtered by session role, so agents, supervisors,
+      admins, and owners see the sections they can use.
+    </DocsFeature>
+    <DocsFeature title="Recent changes" tone="purple">
+      Use the top-bar Changelog to review short release notes derived from the
+      latest merged PRs.
+    </DocsFeature>
+  </DocsFeatureGrid>
+</div>

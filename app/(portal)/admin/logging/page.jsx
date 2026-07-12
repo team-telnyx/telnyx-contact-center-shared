@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   IconActivity,
   IconAdjustmentsHorizontal,
@@ -18,6 +19,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { SYSTEM_EXIT_ITEM } from "@/components/admin/SystemSectionNav";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -186,6 +188,7 @@ function mutableConfigPayload(config) {
 }
 
 export default function AdminLoggingPage() {
+  const router = useRouter();
   const [active, setActive] = React.useState("live");
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -481,7 +484,7 @@ export default function AdminLoggingPage() {
       <AdminPageHeader title="Logging" actions={headerActions} />
       <LoggingConfirmationDialog confirmation={confirmation} onCancel={closeConfirmation} onConfirm={runConfirmedAction} saving={saving} />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
-        <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Logging sections" />
+        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel="Logging sections" />
         <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">
           <div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3">
             <div className="min-w-0">

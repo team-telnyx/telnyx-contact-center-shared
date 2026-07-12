@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AiAssistantsSectionPage } from "@/components/assistants/AiAssistantsSectionNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,7 +43,7 @@ function ServerTypeBadge({ type }) {
   );
 }
 
-export default function AdminMCPServersPage() {
+function AdminMCPServersPageContent() {
   const [loading, setLoading] = React.useState(true);
   const [rows, setRows] = React.useState([]);
   const [expandedServers, setExpandedServers] = React.useState(new Set());
@@ -135,7 +136,7 @@ export default function AdminMCPServersPage() {
         badges={<Badge variant="secondary">{rows.length} servers</Badge>}
         actions={headerActions}
       />
-      <AdminPageContent>
+      <AiAssistantsSectionPage activeId="mcp-servers">
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-3 pt-6">
@@ -200,7 +201,7 @@ export default function AdminMCPServersPage() {
                           <DialogHeader>
                             <DialogTitle>Delete MCP server?</DialogTitle>
                             <DialogDescription>
-                              This removes "{server.name}" from the configured MCP servers list.
+                              This removes &quot;{server.name}&quot; from the configured MCP servers list.
                             </DialogDescription>
                           </DialogHeader>
                           <div className="flex justify-end gap-2 pt-2">
@@ -216,7 +217,7 @@ export default function AdminMCPServersPage() {
             </CardContent>
           </Card>
         </div>
-      </AdminPageContent>
+      </AiAssistantsSectionPage>
       <MCPServerEditorSheet
         open={Boolean(sheetServerId)}
         serverId={sheetServerId}
@@ -235,4 +236,8 @@ export default function AdminMCPServersPage() {
       />
     </AdminPageShell>
   );
+}
+
+export default function AdminMCPServersPage() {
+  return <AdminMCPServersPageContent />;
 }

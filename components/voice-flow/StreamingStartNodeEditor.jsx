@@ -185,21 +185,15 @@ const GEMINI_MODEL_OPTIONS = [
   { value: "gemini-2.5-flash-native-audio-preview-09-2025", label: "Gemini 2.5 Flash Native Audio (Sep 2025)" },
 ];
 
-// Gate for experimental streaming providers: only shown to the user whose
-// email matches NEXT_PUBLIC_EXPERIMENTAL_USER. If that env var is unset,
-// the gate matches nobody and the features stay hidden for everyone — this
-// file ships with no hardcoded identity.
-const EXPERIMENTAL_USER = process.env.NEXT_PUBLIC_EXPERIMENTAL_USER || "";
 const EXPERIMENTAL_PROVIDERS = [];
 
 export default function StreamingStartNodeEditor({
   config = {},
   onChange,
-  currentUserEmail,
+  experimentalFeaturesEnabled = false,
   availableVariables = [],
   hasCallerLanguageParameterBefore = false,
 }) {
-  const isExperimentalUser = Boolean(EXPERIMENTAL_USER) && currentUserEmail === EXPERIMENTAL_USER;
   const initialProvider =
     config.ai_streaming_provider === "telnyx-stt" ||
     AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
@@ -434,7 +428,7 @@ export default function StreamingStartNodeEditor({
           <SelectContent>
             {PROVIDER_OPTIONS.filter(
               (opt) =>
-                !EXPERIMENTAL_PROVIDERS.includes(opt.value) || isExperimentalUser
+                !EXPERIMENTAL_PROVIDERS.includes(opt.value) || experimentalFeaturesEnabled
             ).map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}

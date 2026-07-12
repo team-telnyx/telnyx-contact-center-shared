@@ -12,7 +12,8 @@ test("softphone mini owns the headset control trigger immediately before contact
   const softphoneMini = src("components/softphone-mini.jsx");
   assert.doesNotMatch(siteHeader, /HeadsetStatusBadge/);
   assert.match(softphoneMini, /from\s+["']@\/components\/headsets\/HeadsetStatusBadge["']/);
-  assert.match(softphoneMini, /<HeadsetStatusBadge\s*\/?>\s*<button[\s\S]*?title="Select number from contacts"/);
+  assert.match(softphoneMini, /experimentalFeaturesEnabled \? <HeadsetStatusBadge\s*\/> : null/);
+  assert.match(softphoneMini, /HeadsetStatusBadge[\s\S]*?title="Select number from contacts"/);
 });
 
 test("headset UI uses the shared Jabra/EPOS service and a right-side sheet", () => {

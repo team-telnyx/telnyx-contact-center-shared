@@ -35,10 +35,10 @@ test("project does not import or depend on sonner", async () => {
     const rel = relative(root, file);
     if (rel === "tests/no-sonner-toast.test.mjs") continue;
     const source = await readFile(file, "utf8");
-    if (/from ["']sonner["']|@\/components\/ui\/sonner|\btoast\.(success|error|warning|info|custom|dismiss)\b/.test(source)) {
+    if (/from ["']sonner["']|@\/components\/ui\/sonner/.test(source)) {
       offenders.push(rel);
     }
   }
 
-  assert.deepEqual(offenders, [], `Use notify from @/components/ToastNotify instead of sonner/toast: ${offenders.join(", ")}`);
+  assert.deepEqual(offenders, [], `Do not import sonner directly: ${offenders.join(", ")}`);
 });

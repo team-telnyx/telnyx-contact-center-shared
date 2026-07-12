@@ -1,0 +1,4 @@
+{
+  "title": "Agent workspace",
+  "pages": ["index", "application-header", "status-and-queues", "desktop", "handling-calls", "agent-assist", "wrapup", "dashboard", "data-sources", "outbound-campaigns"]
+}

@@ -1,0 +1,29 @@
+---
+title: Outbound Dialer
+description: Detailed map of campaigns, lists, compliance controls, live calls, history, and settings.
+audiences: [owner]
+keywords: [outbound dialer, campaigns, DNC, attempt controls, time sets]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Outbound Dialer is currently shown to the Owner role. Its rail contains:
+
+| Section | Function |
+| --- | --- |
+| Dashboard | Running campaigns, contact inventory, active/ringing calls, realtime answered/failed signals, and start/pause/resume/stop/recycle controls. |
+| Live Calls | Filter active campaign calls by campaign/status; optionally keep disconnected calls visible for 60 seconds; open details or supervise/disconnect where available. |
+| Campaigns | Define channel (voice), mode, handler target, contact list, From-number rotation, DNC/filter/time set, attempt control, pacing, concurrency, retry, AMD, and attached form/workflow mappings. |
+| Contact Lists | Create a list, upload CSV, preview rows, map phone/email/WhatsApp fields, validate, and inspect import counts. |
+| DNC | Import suppression records, choose match strategy/columns, and activate or pause governance. |
+| Filters | Build contact-list eligibility conditions and test the result before campaign use. |
+| Time Sets | Define callable days/windows and timezone. Contact-time enforcement must match compliance requirements. |
+| Disposition codes | Map wrap-up codes to complete, right-party contact, retry/callback, number-uncallable, or contact-uncallable/DNC outcomes. |
+| Attempt Controls | Configure reset period/timezone, contact and number caps, outcome-specific recall delays, and phone-type rules. |
+| History | Inspect attempts and outcomes for a selected campaign. |
+| Event Viewer | Filter the campaign event timeline by event type. |
+| Settings | Configure global agent/line limits, utilization, CPS, abandon threshold, maximum attempts, dial timeout, callable defaults, and allowed From numbers. |
+
+Save prerequisites are marked in the campaign editor. Do not run a campaign until its list is validated, destination field is mapped, From-number slots cover retries, DNC/filter/time controls are attached, handler exists, and test calls confirm disposition and retry behavior.
+
+Archive removes an item from active lists without erasing historical references. Campaign start/stop and live disconnect actions affect external calls and should follow change-control procedures.

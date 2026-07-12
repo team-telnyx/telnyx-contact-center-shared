@@ -32,6 +32,7 @@ import { NumberSelectionModal } from "@/components/contact-center/NumberSelectio
 import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
 import { HEADSET_COMMANDS } from "@/lib/headsets/headset-control-service.mjs";
 import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
+import { useExperimentalFeatures } from "@/lib/experimental-features-client";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -71,6 +72,7 @@ function isValidDialTo(value) {
 export default function SoftphoneMini() {
   const { client } = useTelnyx();
   const { toggle } = usePhoneUi();
+  const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
 
   // Zustand stores - call state
   const activeCall = useActiveCall();
@@ -146,6 +148,7 @@ export default function SoftphoneMini() {
   const shouldMarqueeMiniInput = Boolean(isIncomingCall && incomingCallerDisplay && incomingCallerDisplay.length > 18);
 
   useEffect(() => {
+    if (!experimentalFeaturesEnabled) return;
     const service = getHeadsetControlService();
     if (!service) return;
 
@@ -190,9 +193,11 @@ export default function SoftphoneMini() {
     isRinging,
     outboundCallerName,
     toNumber,
+    experimentalFeaturesEnabled,
   ]);
 
   useEffect(() => {
+    if (!experimentalFeaturesEnabled) return;
     const service = getHeadsetControlService();
     if (!service) return;
 
@@ -217,7 +222,7 @@ export default function SoftphoneMini() {
         toggleHold();
       }
     });
-  }, [activeCall, callUI.isHeld, callUI.isMuted, isRinging]);
+  }, [activeCall, callUI.isHeld, callUI.isMuted, experimentalFeaturesEnabled, isRinging]);
 
   const fromRef = useRef("");
   const audioRef = useRef(null);
@@ -1533,7 +1538,7 @@ export default function SoftphoneMini() {
       }`}
     >
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
-      <HeadsetStatusBadge />
+      {experimentalFeaturesEnabled ? <HeadsetStatusBadge /> : null}
       <button
         className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white hover:bg-zinc-700"
         title="Select number from contacts"

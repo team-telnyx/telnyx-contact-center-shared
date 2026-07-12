@@ -1,0 +1,4 @@
+{
+  "title": "Supervisor workspace",
+  "pages": ["index", "monitoring", "analytics", "call-history", "quality", "outbound-dialer", "operating-practices"]
+}

@@ -1,0 +1,36 @@
+---
+title: Statuses, queues, and campaign activation
+description: Change availability and control which inbound and outbound work can be routed to the agent.
+audiences: [agent, supervisor, admin, owner]
+keywords: [agent status, available, busy, queue activation, campaigns]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+## Manual status change
+
+Open the status selector and choose one of the statuses configured by an administrator as **User Selectable**. The dropdown shows the configured icon and color. System-only statuses remain visible when current but are disabled and cannot be selected manually.
+
+Common system lifecycle transitions are:
+
+| Event | Resulting status |
+| --- | --- |
+| A queued call starts ringing or connects | Busy |
+| Agent rejects or does not answer an offered call | Agent Not Answering |
+| An answered call disconnects | Wrapup |
+| Caller abandons before answer | Available |
+| Wrap-up finishes successfully | Available |
+
+Configured names may include other user-selectable break or away statuses. Do not attempt to override Busy or Wrapup during active work. A requested transition may immediately be replaced by Busy if routing offers a call at the same moment.
+
+## Queue activation
+
+Choose **Queues (`active/total`)**. Check a queue to activate or uncheck it to deactivate. Each row identifies the queue and its routing strategy: FIFO, Skill-based, Priority-based, or another configured strategy. A spinner indicates a pending update; on error the UI restores server state.
+
+Activation means the agent opts into that assigned queue; it does not guarantee eligibility. Routing can additionally require Available status, matching skills/proficiency, queue configuration, capacity, and an active WebRTC endpoint.
+
+## Campaign activation
+
+Choose **Campaigns `active/total`** and check campaigns the agent should handle. Each row displays runtime state (running, paused, or stopped) and mode such as Preview or Progressive. Activation opts the agent into a campaign; a paused/stopped campaign does not deliver work even when checked.
+
+Review the counter after every change. If it does not update, wait for the save spinner and refresh only after an error or prolonged stale state.

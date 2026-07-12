@@ -1,0 +1,24 @@
+---
+title: Data slots
+description: Configure slot names, types, options, validation, confidence, and prefill data.
+audiences: [admin, owner]
+keywords: [slot, slot filling, extraction, confidence, prefill]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+A Data Slot stores a value extracted from the conversation. Set a stable **Slot Name** in `snake_case`, select the data type, and add validation instructions that describe the accepted meaning and format.
+
+| Type | Recommendation |
+| --- | --- |
+| Text | Use for names, identifiers, and notes; describe what the text represents. |
+| Number | Ask for one numeric quantity and define units separately. |
+| Date | State the source wording and desired date format. |
+| Email | Clarify whether spelling confirmation is required. |
+| Phone | Define country/extension handling. |
+| Select | Add mutually exclusive canonical options; the model chooses the closest match. |
+| Yes/No | Use for one factual proposition; negative answers are valid `false`, not missing data. |
+
+One utterance can fill several slots. Separate first and last name only when separate values are operationally required. Notes/details slots accumulate substantive utterances instead of overwriting earlier text. When the customer explicitly does not know or have a value, the analyzer may capture `N/A` so a required workflow does not stall.
+
+Low-confidence values remain unconfirmed until the configured confidence threshold is met or the agent confirms/edits them; alternatives can be offered. Prefill data supplied as `workflow_data` is matched by exact slot name, so names must be stable across Call Flow mappings and workflow versions.

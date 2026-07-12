@@ -4,11 +4,13 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { requireAiApiKey } from "@/app/api/_utils/ai-auth";
 import { randomUUID } from "crypto";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
-async function requireAdmin() {
+async function requireAuth(request) {
+  if (requireAiApiKey(request).ok) return { type: "api_key", user: null };
   const session = await getServerSession(authOptions);
   const id = session?.user?.id || null;
   const email = session?.user?.email || null;
@@ -18,12 +20,12 @@ async function requireAdmin() {
   if (!user && email) user = await PgDb.findUserByUsername(email);
   if (!user) return null;
   if (!isAdmin(user)) return null;
-  return user;
+  return { type: "session", user };
 }
 
 export async function GET(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const auth = await requireAuth(request);
+  if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const pool = getPostgresPool();
   if (!pool)
@@ -105,8 +107,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const auth = await requireAuth(request);
+  if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const pool = getPostgresPool();
   if (!pool)
@@ -153,7 +155,7 @@ export async function POST(request) {
     }
 
     const id = randomUUID();
-    const username = user.username || user.email || "system";
+    const username = auth.user?.username || auth.user?.email || "ai-assistant";
     const publishedAt =
       status === "Published" ? new Date().toISOString() : null;
 
@@ -195,4 +197,3 @@ export async function POST(request) {
     );
   }
 }
-

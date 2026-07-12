@@ -1,0 +1,35 @@
+---
+title: Media Library
+description: Upload, preview, and remove audio assets used by queues and voice experiences.
+audiences: [admin, owner]
+keywords: [media, audio, MP3, WAV, hold music, upload]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Open **Admin → Configuration**, then select **Media Library** in the rail. Search by media name or content type, then use **Clear**, **Refresh**, or **Upload Media**.
+
+The table shows **Media Name**, **Content Type**, **Created At**, **Expires At**, and actions. Use the play action to preview an asset. Pagination supports 10, 25, 50, or 100 rows.
+
+## Upload media
+
+1. Select **Upload Media**.
+2. Enter a unique **Media Name** or accept the name generated from the selected filename.
+3. Drag an audio file into the upload area or choose it with the file picker.
+4. Select **Upload**.
+
+| Requirement | Rule |
+| --- | --- |
+| File format | MP3 or WAV, validated by MIME type or extension. |
+| File size | Less than or equal to 20 MB. |
+| Media name | 1–255 characters; letters, numbers, dots, dashes, and underscores only. |
+| Uniqueness | The media name must not already exist. Upload does not overwrite an existing asset. |
+| Expiration | Files uploaded by this sheet never expire. |
+
+## Use an asset
+
+Edit a queue and select the asset under **Queue Hold Music**. The selected file loops while calls wait and can be combined with TTS queue-position announcements.
+
+## Delete an asset
+
+Deletion is permanent. Before confirming, remove or replace references from queues, voice flows, assistants, or any other integration. Deleting a referenced asset can leave a configuration pointing to unavailable media.

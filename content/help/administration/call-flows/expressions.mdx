@@ -1,0 +1,37 @@
+---
+title: Expression editor
+description: Build, validate, and test expressions used by logical and data nodes.
+audiences: [admin, owner]
+keywords: [expression editor, functions, conditions, templates]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+The Expression Editor inserts variables and functions, validates the expression, and runs it against a test payload before applying it.
+
+## Syntax
+
+Use `{{variable}}` for runtime values. Expressions may combine references with JavaScript-style arithmetic, comparison, and boolean operators. Condition fields also support `===`, `!==`, `>`, `<`, `>=`, `<=`, `contains`, `startsWith`, and `endsWith` with string, number, or boolean operands.
+
+Examples:
+
+```text
+{{global.country_prefix}} + {{customer.phone}}
+toUpperCase(trim({{payload.customer.name}}))
+ifThen({{attempts}} >= 3, "limit", "continue")
+first(filter({{response.body.rows}}, "active"))
+```
+
+## Function groups
+
+- Text: `substring`, `toUpperCase`, `toLowerCase`, `trim`, `replace`, `concat`, `length`, `indexOf`, `startsWith`, `endsWith`, `contains`.
+- Numbers: `round`, `abs`, `min`, `max`, `floor`, `ceil`.
+- Date/time: `now`, `formatDate`, `addMinutes`, `diffMinutes`.
+- Logic/conversion: `ifThen`, `isEmpty`, `isNull`, `toString`, `toNumber`, `toBoolean`, `parseJSON`, `stringifyJSON`.
+- Arrays: `arrayLength`, `first`, `last`, `at`, `find`, `findValue`, `filter`, `map`, `includes`, `some`, `every`, `join`, `slice`, `reverse`, `sort`, `unique`.
+
+## Test procedure
+
+Choose a saved payload or paste representative JSON, run the expression, and inspect the result type as well as its value. The editor reports unmatched braces, unknown variables, and syntax/runtime errors. Special runtime roots such as `global`, `payload`, and `response` are resolved at execution, so test data should reproduce their expected shape.
+
+Test empty strings, nulls, missing arrays, zero, `false`, and malformed external responses. An expression that works only for the happy-path sample is not production-ready.

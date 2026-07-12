@@ -1,0 +1,8 @@
+---
+title: Remove Call from Queue
+description: Remove the current call from its queue.
+---
+
+This node removes an enqueued call, for example before transfer, voicemail, callback handling, or hangup.
+
+Use it only when queue membership exists. Add a safe path for already-dequeued or connected calls and continue cleanup even if removal reports a stale-state error.

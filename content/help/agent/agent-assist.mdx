@@ -1,0 +1,16 @@
+---
+title: Agent Assist and workflows
+description: Use knowledge suggestions, guided workflow items, slots, confirmations, and interaction-specific assistance.
+audiences: [agent, supervisor, admin, owner]
+keywords: [agent assist, workflow, slots, knowledge suggestions]
+owner: contact-center
+lastReviewed: 2026-07-11
+---
+
+Agent Assist content is selected by the call flow and interaction metadata. Keep the correct interaction selected because transcript analysis, suggestions, forms, and workflows are interaction-specific.
+
+In KB mode, suggestions are generated from live transcript/context and the configured knowledge source. Verify an article before communicating its content; a suggestion is not proof that it applies.
+
+In Workflow mode, stages and items guide the conversation. Data slots can be filled from customer speech or prefilled by Call Flow data. Values below the confidence threshold require review. Confirm or edit incorrect values, use offered alternatives where appropriate, and do not complete required items merely to advance. A negative boolean is a valid answer, and an explicit unknown value may be represented as `N/A`.
+
+Workflow actions can invoke configured data operations and forms. Read returned status messages and retry only when the operation is safe to repeat. A read-back/confirmation step should be completed with the customer before final submission when configured.
