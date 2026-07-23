@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { describe, it, before } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, rm, writeFile, cp } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, cp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,15 +14,31 @@ const COMPOSE_DIR = join(REPO_ROOT, 'docker', 'production');
 
 let dockerComposeAvailable = false;
 
-async function composeConfig(envOverrides = {}, { profile } = {}) {
+async function composeConfig(envOverrides = {}, { profile, localOverride = false } = {}) {
+  const tmp = await mkdtemp(join(tmpdir(), 'cc-compose-config-'));
+  const workDir = join(tmp, 'production');
+  await cp(COMPOSE_DIR, workDir, { recursive: true });
+  await writeFile(join(workDir, '.env'), [
+    'POSTGRES_DB=x',
+    'POSTGRES_USER=x',
+    'POSTGRES_PASSWORD=x',
+    'COMPOSE_PROFILES=with-pg',
+    ...Object.entries(envOverrides).map(([key, value]) => `${key}=${value}`),
+    '',
+  ].join('\n'), 'utf8');
   const args = ['compose', '-f', 'compose.yaml'];
+  if (localOverride) args.push('-f', 'compose.local.yaml');
   if (profile) args.push('--profile', profile);
   args.push('config');
-  const { stdout } = await execFileAsync('docker', args, {
-    cwd: COMPOSE_DIR,
-    env: { ...process.env, ...envOverrides },
-  });
-  return stdout;
+  try {
+    const { stdout } = await execFileAsync('docker', args, {
+      cwd: workDir,
+      env: { ...process.env, ...envOverrides },
+    });
+    return stdout;
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 }
 
 describe('docker/production/compose.yaml parametrization', () => {
@@ -33,6 +49,34 @@ describe('docker/production/compose.yaml parametrization', () => {
     } catch {
       dockerComposeAvailable = false;
     }
+  });
+
+  it('uses SCRAM for fresh bundled Postgres volumes and never configures trust', async () => {
+    const source = await readFile(join(COMPOSE_DIR, 'compose.yaml'), 'utf8');
+    const postgresBlock = source.slice(source.indexOf('  postgres:'), source.indexOf('\n  app:'));
+    assert.match(postgresBlock, /POSTGRES_HOST_AUTH_METHOD:\s*scram-sha-256/);
+    assert.match(postgresBlock, /POSTGRES_INITDB_ARGS:\s*["']--auth-host=scram-sha-256["']/);
+    assert.doesNotMatch(postgresBlock, /POSTGRES_HOST_AUTH_METHOD:\s*trust/);
+    assert.match(postgresBlock, /psql -h 127\.0\.0\.1/);
+  });
+
+  it('does not publish PostgreSQL from the base production compose file', async (t) => {
+    const source = await readFile(join(COMPOSE_DIR, 'compose.yaml'), 'utf8');
+    const postgresBlock = source.slice(source.indexOf('  postgres:'), source.indexOf('\n  app:'));
+    assert.doesNotMatch(postgresBlock, /^\s+ports:/m);
+    if (!dockerComposeAvailable) return t.skip('docker compose not available in this environment');
+    const rendered = await composeConfig();
+    const renderedPostgres = rendered.slice(rendered.indexOf('  postgres:'), rendered.indexOf('\n  app:'));
+    assert.doesNotMatch(renderedPostgres, /published:/);
+  });
+
+  it('publishes bundled PostgreSQL only on loopback through the Local override', async (t) => {
+    const source = await readFile(join(COMPOSE_DIR, 'compose.local.yaml'), 'utf8');
+    assert.match(source, /127\.0\.0\.1:\$\{POSTGRES_HOST_PORT:-5432\}:5432/);
+    if (!dockerComposeAvailable) return t.skip('docker compose not available in this environment');
+    const rendered = await composeConfig({ POSTGRES_HOST_PORT: '55432' }, { localOverride: true });
+    assert.match(rendered, /host_ip: 127\.0\.0\.1/);
+    assert.match(rendered, /published: "55432"/);
   });
 
   it('defaults to named volumes (cc_media, cc_logs) when CC_MEDIA_PATH/CC_LOGS_PATH are unset', async (t) => {

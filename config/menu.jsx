@@ -98,7 +98,7 @@ export const menuConfig = {
         {
           title: "System",
           description: "Control platform operations and appearance",
-          url: "/admin/system",
+          url: "/admin/system/dashboard",
           activeUrls: ["/admin/call-generator", "/admin/logging", "/admin/phones-provisioning", "/settings"],
           icon: IconSettings,
           role_access: ["admin", "owner"],

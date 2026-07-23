@@ -174,11 +174,20 @@ describe("headset control service", () => {
 describe("Jabra adapter contract", () => {
   it("uses Jabra Easy Call Control multi-call semantics and WebHID pairing hook", async () => {
     const calls = [];
+    let resolveIncomingCall;
     const fakeMultiCallControl = {
-      signalIncomingCall: async (timeout) => calls.push(["signalIncomingCall", timeout]),
+      signalIncomingCall: (timeout) => {
+        calls.push(["signalIncomingCall", timeout]);
+        return new Promise((resolve) => { resolveIncomingCall = resolve; });
+      },
+      acceptIncomingCall: async () => { calls.push(["acceptIncomingCall"]); resolveIncomingCall?.(true); },
+      rejectIncomingCall: async () => { calls.push(["rejectIncomingCall"]); resolveIncomingCall?.(false); },
+      startCall: async () => calls.push(["startCall"]),
       endCall: async () => calls.push(["endCall"]),
-      setMute: async (value) => calls.push(["setMute", value]),
-      setHold: async (value) => calls.push(["setHold", value]),
+      mute: async () => calls.push(["mute"]),
+      unmute: async () => calls.push(["unmute"]),
+      hold: async () => calls.push(["hold"]),
+      resume: async () => calls.push(["resume"]),
       ongoingCalls: { subscribe() { return { unsubscribe() {} }; } },
       muteState: { subscribe() { return { unsubscribe() {} }; } },
       holdState: { subscribe() { return { unsubscribe() {} }; } },
@@ -205,8 +214,14 @@ describe("Jabra adapter contract", () => {
     const adapter = createJabraAdapter({ jabra: fakeJabra, partnerKey: "pk", appId: "telnyx-cc", appName: "Telnyx Contact Center", incomingRingTimeoutMs: 45000 });
     await adapter.init();
     await adapter.requestPermission();
-    await adapter.setSoftphoneState({ ringing: true, muted: true, held: true, active: false });
+    await adapter.setSoftphoneState({ ringing: true, muted: false, held: false, active: false });
+    await adapter.setSoftphoneState({ ringing: false, muted: true, held: true, active: true });
+    await adapter.setSoftphoneState({ ringing: false, muted: false, held: false, active: true });
     await adapter.setSoftphoneState({ ringing: false, muted: false, held: false, active: false });
+    await adapter.setSoftphoneState({ direction: "outgoing", ringing: false, active: true });
+    await adapter.setSoftphoneState({ direction: "outgoing", ringing: false, active: false });
+    await adapter.setSoftphoneState({ direction: "incoming", ringing: true, active: false });
+    await adapter.setSoftphoneState({ direction: "incoming", ringing: false, active: false });
 
     assert.deepEqual(calls, [
       ["createApi", "transport", "telnyx-cc", "Telnyx Contact Center"],
@@ -214,18 +229,26 @@ describe("Jabra adapter contract", () => {
       ["start"],
       ["webHidPairing"],
       ["signalIncomingCall", 45000],
-      ["setMute", true],
-      ["setHold", true],
+      ["acceptIncomingCall"],
+      ["mute"],
+      ["hold"],
+      ["unmute"],
+      ["resume"],
       ["endCall"],
-      ["setMute", false],
-      ["setHold", false],
+      ["startCall"],
+      ["endCall"],
+      ["signalIncomingCall", 45000],
+      ["rejectIncomingCall"],
     ]);
   });
 
-  it("emits Jabra answer/reject results and uses unmute/resume fallbacks", async () => {
+  it("maps Jabra string enums and emits answer plus physical hangup", async () => {
     const calls = [];
     const emitted = [];
     let resolveIncomingCall;
+    let emitMute;
+    let emitHold;
+    let emitOngoingCalls;
     const incomingCallResult = new Promise((resolve) => { resolveIncomingCall = resolve; });
     const fakeMultiCallControl = {
       signalIncomingCall: (timeout) => { calls.push(["signalIncomingCall", timeout]); return incomingCallResult; },
@@ -234,8 +257,9 @@ describe("Jabra adapter contract", () => {
       unmute: async () => calls.push(["unmute"]),
       hold: async () => calls.push(["hold"]),
       resume: async () => calls.push(["resume"]),
-      muteState: { subscribe() { return { unsubscribe() {} }; } },
-      holdState: { subscribe() { return { unsubscribe() {} }; } },
+      muteState: { subscribe(cb) { emitMute = cb; return { unsubscribe() {} }; } },
+      holdState: { subscribe(cb) { emitHold = cb; return { unsubscribe() {} }; } },
+      ongoingCalls: { subscribe(cb) { emitOngoingCalls = cb; return { unsubscribe() {} }; } },
       swapRequest: { subscribe() { return { unsubscribe() {} }; } },
     };
     const fakeJabra = {
@@ -256,22 +280,28 @@ describe("Jabra adapter contract", () => {
     const adapter = createJabraAdapter({ jabra: fakeJabra, incomingRingTimeoutMs: 45000 });
     adapter.onCommand((command) => emitted.push(command));
     await adapter.init();
-    await adapter.setSoftphoneState({ ringing: true, muted: true, held: true, active: false });
-    await adapter.setSoftphoneState({ ringing: false, muted: false, held: false, active: false });
+    await adapter.setSoftphoneState({ ringing: true, active: false });
 
     resolveIncomingCall(true);
     await incomingCallResult;
     await new Promise((resolve) => setTimeout(resolve, 0));
+    await adapter.setSoftphoneState({ ringing: false, active: true });
+    emitMute("unmuted");
+    emitHold("not-on-hold");
+    emitMute("muted");
+    emitHold("on-hold");
+    emitOngoingCalls(1);
+    emitOngoingCalls(0);
 
-    assert.deepEqual(calls, [
-      ["signalIncomingCall", 45000],
-      ["mute"],
-      ["hold"],
-      ["endCall"],
-      ["unmute"],
-      ["resume"],
+    assert.deepEqual(calls, [["signalIncomingCall", 45000]]);
+    assert.deepEqual(emitted, [
+      { type: HEADSET_COMMANDS.ANSWER, source: "headset" },
+      { type: HEADSET_COMMANDS.MUTE, muted: false, source: "headset" },
+      { type: HEADSET_COMMANDS.HOLD, held: false, source: "headset" },
+      { type: HEADSET_COMMANDS.MUTE, muted: true, source: "headset" },
+      { type: HEADSET_COMMANDS.HOLD, held: true, source: "headset" },
+      { type: HEADSET_COMMANDS.HANGUP, source: "headset" },
     ]);
-    assert.deepEqual(emitted, [{ type: HEADSET_COMMANDS.ANSWER, source: "headset" }]);
   });
 
   it("emits a Jabra reject command when the headset rejects an incoming call", async () => {
@@ -280,6 +310,7 @@ describe("Jabra adapter contract", () => {
     const incomingCallResult = new Promise((resolve) => { resolveIncomingCall = resolve; });
     const fakeMultiCallControl = {
       signalIncomingCall: () => incomingCallResult,
+      ongoingCalls: { subscribe() { return { unsubscribe() {} }; } },
       muteState: { subscribe() { return { unsubscribe() {} }; } },
       holdState: { subscribe() { return { unsubscribe() {} }; } },
       swapRequest: { subscribe() { return { unsubscribe() {} }; } },
@@ -365,11 +396,36 @@ describe("EPOS adapter contract", () => {
     assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection"]);
     assert.equal(sent[0].SPName, "Telnyx Contact Center");
     assert.equal(sent[0].RedialSupport, "No");
-    assert.equal(sent[0].OffHookSupport, "No");
+    assert.equal(sent[0].OffHookSupport, "Yes");
     assert.equal(sent[0].DNDOption, "No");
 
     socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
     assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn"]);
+  });
+
+  it("does not continue the EPOS handshake after a rejected acknowledgement", async () => {
+    const sent = [];
+    const diagnostics = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 1;
+        queueMicrotask(() => this.onopen?.());
+      }
+      send(payload) { sent.push(JSON.parse(payload)); }
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0 });
+    adapter.onDiagnostic((diagnostic) => diagnostics.push(diagnostic));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 7 }) });
+
+    assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection"]);
+    assert.equal(diagnostics.some((item) => item.level === "error" && /rejected/.test(item.message)), true);
   });
 
   it("sends SDK-service websocket messages for call, mute, hold, and resume state after handshake", async () => {
@@ -418,8 +474,8 @@ describe("EPOS adapter contract", () => {
       "CallEnded",
     ]);
     assert.equal(sent[4].CallID, "call-1");
-    assert.equal(sent[6].CallID, undefined);
-    assert.equal(sent[10].CallID, undefined);
+    assert.equal(sent[6].CallID, "call-1");
+    assert.equal(sent[10].CallID, "call-1");
   });
 
   it("queues EPOS softphone state until the login acknowledgement completes", async () => {
@@ -875,4 +931,3 @@ describe("EPOS adapter contract", () => {
     ]);
   });
 });
-

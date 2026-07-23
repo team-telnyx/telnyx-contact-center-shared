@@ -67,6 +67,7 @@ import { resolveSuggestedResponseTarget } from "@/lib/agent-assist/suggestion-ta
 import { hasSlotValue, pickSlotValue, formatSlotDisplay } from "@/lib/agent-assist/slot-display.mjs";
 import { upsertSuggestionByTarget } from "@/lib/agent-assist/suggestion-dedup.mjs";
 import { findTranscriptIdForUtterance } from "@/lib/agent-assist/slot-utterance-match.mjs";
+import { isReadBackItem } from "@/lib/agent-assist/readback.mjs";
 
 /**
  * AgentAssistWorkflow Component
@@ -97,6 +98,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     setAiAssisted,
     setAiDataLoading,
     applyAiHandoffData,
+    clearSession,
   } = useWorkflowStore();
 
   // Get transcriptions and call state from active call store
@@ -108,7 +110,16 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   // AI Handoff polling timeout ref
   const aiPollTimeoutRef = useRef(null);
   const aiPollCountRef = useRef(0);
-  const analyzedTranscriptionIdsRef = useRef(new Set());
+  // Map transcript id -> last analyzed text. Coalesced Flux fragments reuse the
+  // same bubble id with longer text; comparing text lets us re-queue analyze.
+  const analyzedTranscriptionIdsRef = useRef(new Map());
+  // Guards the "Initialize workflow session" effect below against React Strict
+  // Mode's double-invoke-on-mount: InteractionDetail fully unmounts this
+  // component whenever `interaction` is momentarily falsy between calls, so
+  // every new call is a fresh mount, and Strict Mode runs the effect twice.
+  // Without this, both copies call fetchSession then (finding nothing yet)
+  // both call startWorkflow for the same interaction — the loser gets a 409.
+  const initializedSessionKeyRef = useRef(null);
   const [dataActionStatuses, setDataActionStatuses] = useState({});
   const [disabledButtonIds, setDisabledButtonIds] = useState(new Set());
   const [headerActionsTarget, setHeaderActionsTarget] = useState(null);
@@ -215,53 +226,33 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     }
   }, [aiCallControlId, aiHandoff.isAiAssisted, setAiAssisted]);
 
-  // SSE subscription for ai_handoff_data events
+  // Listen for ai_handoff_data events forwarded by ContactCenterStreamProvider
   useEffect(() => {
     if (!interactionId) return;
 
-    // Subscribe to SSE for AI handoff data
-    let eventSource = null;
-    try {
-      eventSource = new EventSource("/api/contact-center/agent/stream");
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === "ai_handoff_data" && data.interactionId === interactionId) {
-            console.log("[AgentAssistWorkflow] Received AI handoff data via SSE:", data);
-            
-            // Apply the AI data to workflow state
-            applyAiHandoffData(data.data);
-            
-            // Count pre-filled slots
-            const slotCount = Object.keys(data.data?.slots_filled || {}).length;
-            notify({
-              title: "🤖 AI data received",
-              description: slotCount > 0 
-                ? `${slotCount} slot${slotCount !== 1 ? 's' : ''} pre-filled`
-                : "Call summary and sentiment available",
-              variant: "success",
-            });
-            
-            // Cancel any pending polling
-            if (aiPollTimeoutRef.current) {
-              clearTimeout(aiPollTimeoutRef.current);
-              aiPollTimeoutRef.current = null;
-            }
-          }
-        } catch (e) {
-          // Ignore parse errors for non-JSON messages
-        }
-      };
-    } catch (err) {
-      console.error("[AgentAssistWorkflow] Failed to set up SSE:", err);
-    }
+    const handleAiHandoff = (event) => {
+      const data = event.detail;
+      if (data?.interactionId !== interactionId) return;
 
-    return () => {
-      if (eventSource) {
-        eventSource.close();
+      applyAiHandoffData(data.data);
+
+      const slotCount = Object.keys(data.data?.slots_filled || {}).length;
+      notify({
+        title: "🤖 AI data received",
+        description: slotCount > 0
+          ? `${slotCount} slot${slotCount !== 1 ? "s" : ""} pre-filled`
+          : "Call summary and sentiment available",
+        variant: "success",
+      });
+
+      if (aiPollTimeoutRef.current) {
+        clearTimeout(aiPollTimeoutRef.current);
+        aiPollTimeoutRef.current = null;
       }
     };
+
+    window.addEventListener("contact-center:ai-handoff-data", handleAiHandoff);
+    return () => window.removeEventListener("contact-center:ai-handoff-data", handleAiHandoff);
   }, [interactionId, applyAiHandoffData]);
 
   // Polling fallback for AI data when SSE hasn't delivered
@@ -435,6 +426,20 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     if (!interactionId) return;
     if (interaction?.metadata?.preview_only === true) return;
 
+    // Skip if this exact interaction+workflow was already (or is already being)
+    // initialized — see initializedSessionKeyRef declaration above for why.
+    const sessionKey = `${interactionId}:${workflowId}`;
+    if (initializedSessionKeyRef.current === sessionKey) return;
+    initializedSessionKeyRef.current = sessionKey;
+
+    // Eagerly clear stale state from any previous call so the suggestion resolver
+    // never reads old slotsFilled / itemStatuses while fetchSession is in flight.
+    // Passing interactionId sets activeInteractionId immediately, so a
+    // late-arriving fetchSession/analyzeTranscript response from the PREVIOUS
+    // call can recognize it's stale once it resolves and skip applying itself.
+    clearSession(interactionId);
+    analyzedTranscriptionIdsRef.current = new Map();
+
     fetchSession(interactionId).then((existingSession) => {
       if (!existingSession && workflowId) {
         startWorkflow(interactionId, workflowId).catch((err) => {
@@ -444,19 +449,22 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     }).catch((err) => {
       console.error("[AgentAssistWorkflow] Failed to fetch session:", err);
     });
-  }, [interactionId, workflowId, interaction?.metadata?.preview_only, fetchSession, startWorkflow]);
+  }, [interactionId, workflowId, interaction?.metadata?.preview_only, fetchSession, startWorkflow, clearSession]);
 
   // Analyze new transcriptions as they come in
   useEffect(() => {
     if (!session || transcriptions.length === 0) return;
     if (assistConfig.auto_detect_completion === false) return;
 
-    const finalTranscriptionsToAnalyze = transcriptions.filter(
-      (transcription) =>
-        transcription?.isFinal &&
-        transcription?.id &&
-        !analyzedTranscriptionIdsRef.current.has(transcription.id)
-    );
+    const needsAnalyze = (transcription) => {
+      if (!transcription?.isFinal || !transcription?.id) return false;
+      const prevText = analyzedTranscriptionIdsRef.current.get(transcription.id);
+      if (prevText === undefined) return true;
+      // Coalesce grew the bubble — re-analyze the merged utterance.
+      return String(prevText) !== String(transcription.transcript || "");
+    };
+
+    const finalTranscriptionsToAnalyze = transcriptions.filter(needsAnalyze);
     if (finalTranscriptionsToAnalyze.length === 0) return;
 
     const analyzeIfNew = async () => {
@@ -469,29 +477,40 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       // batch up-front here also prevents a second timer, scheduled while the
       // first /analyze is still awaiting, from re-dispatching this batch's
       // later utterances concurrently and clobbering slots_filled.
-      const batch = finalTranscriptionsToAnalyze.filter(
-        (t) => !analyzedTranscriptionIdsRef.current.has(t.id)
-      );
-      for (const t of batch) analyzedTranscriptionIdsRef.current.add(t.id);
-
-      for (const transcription of batch) {
-        try {
-          // Preceding final utterances (usually the agent's question) give the
-          // analyzer the context to interpret a bare answer like "No"/"ICU".
-          const at = transcriptions.findIndex((t) => t.id === transcription.id);
-          const recentContext = (at > 0 ? transcriptions.slice(0, at) : [])
-            .filter((t) => t?.isFinal && t?.transcript)
-            .slice(-4)
-            .map((t) => ({ speaker: t.track, text: t.transcript }));
-          await analyzeTranscript(
-            transcription.transcript,
-            transcription.track,
-            recentContext
-          );
-        } catch (err) {
-          console.error("[AgentAssistWorkflow] Analysis error:", err);
-        }
+      const batch = finalTranscriptionsToAnalyze.filter(needsAnalyze);
+      for (const t of batch) {
+        analyzedTranscriptionIdsRef.current.set(t.id, t.transcript || "");
       }
+
+      // Fire all utterances in this batch at once instead of awaiting each in
+      // turn: with N utterances landing close together (e.g. a caller
+      // answering several questions in one breath), sequential awaits meant
+      // N x ~3s LLM round trips before the checklist finished updating.
+      // Running them in parallel bounds the wait to the slowest single call.
+      // Safe to parallelize: each call is still one utterance / one explicit
+      // speaker (no prompt changes), and the server's slot merge is already
+      // written to handle out-of-order/concurrent analyze responses (see
+      // "MERGE into existing state" in workflow-store's analyzeTranscript).
+      await Promise.all(
+        batch.map(async (transcription) => {
+          try {
+            // Preceding final utterances (usually the agent's question) give the
+            // analyzer the context to interpret a bare answer like "No"/"ICU".
+            const at = transcriptions.findIndex((t) => t.id === transcription.id);
+            const recentContext = (at > 0 ? transcriptions.slice(0, at) : [])
+              .filter((t) => t?.isFinal && t?.transcript)
+              .slice(-4)
+              .map((t) => ({ speaker: t.track, text: t.transcript }));
+            await analyzeTranscript(
+              transcription.transcript,
+              transcription.track,
+              recentContext
+            );
+          } catch (err) {
+            console.error("[AgentAssistWorkflow] Analysis error:", err);
+          }
+        })
+      );
     };
 
     const timer = setTimeout(analyzeIfNew, 500);
@@ -1657,12 +1676,18 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
     : "text-amber-600 dark:text-amber-400 border-amber-500/40 bg-amber-500/10";
 
   const translation = transcription.translation;
-  const showTranslation = Boolean(translation?.text);
+  // Hide identity translations (same language / model echo) — they look like
+  // duplicate transcript bubbles under the original line.
+  const translationText = String(translation?.text || "").replace(/\s+/g, " ").trim();
+  const originalText = String(transcription.transcript || "").replace(/\s+/g, " ").trim();
+  const showTranslation =
+    Boolean(translationText) &&
+    translationText.toLowerCase() !== originalText.toLowerCase();
   const autoSendEnabled = translationConfig?.auto_send_response === true;
   const manualAllowed = showTranslation && !autoSendEnabled;
 
   const handleSpeakTranslation = async () => {
-    if (!manualAllowed || !interactionId || !transcription.callControlId || !translation?.text) return;
+    if (!manualAllowed || !interactionId || !transcription.callControlId || !translationText) return;
 
     try {
       setIsSpeaking(true);
@@ -1672,7 +1697,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
         body: JSON.stringify({
           interactionId,
           sourceCallControlId: transcription.callControlId,
-          text: translation.text,
+          text: translationText,
           targetLanguage: translation.targetLanguage || null,
           targetLeg: isCustomer ? "agent" : "caller",
         }),
@@ -1724,7 +1749,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
           isCustomer ? "rounded-tl-sm" : "rounded-tr-sm"
         }`}>
           <div className="flex items-center gap-2">
-            <p className="text-sm leading-relaxed flex-1">{translation.text}</p>
+            <p className="text-sm leading-relaxed flex-1">{translationText}</p>
             {manualAllowed && (
               <Button
                 type="button"
@@ -1810,7 +1835,9 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
         itemPromptHint: item.prompt_hint,
         itemHints: Array.isArray(item.hints) ? item.hints : [],
         itemType: item.type,
+        slotName: item.slot_name || null,
         slotOptions: Array.isArray(item.slot_options) ? item.slot_options : null,
+        suggestionTemplate: item.suggestion_template || item.suggestionTemplate || null,
         workflowId: session?.workflow_id,
         agentName: session?.agent_name || "the agent",
         brandName: session?.brand_name,
@@ -1975,6 +2002,29 @@ function getHumanAgentIntroIdentity({ labelIdentity, promptHint, agentName }) {
 }
 
 
+// Merge in every pending correction's proposed value on top of the confirmed
+// slots_filled map, keyed by slot_name. Used ONLY for the read-back summary:
+// a correction candidate is deliberately NOT written to slots_filled until
+// confirmed (see analyze/route.js), but the read-back message should show
+// what the record WOULD be if every pending correction is accepted, not the
+// stale value(s) being corrected — the whole point of showing it again is to
+// have the caller review the updated summary as a whole.
+function mergeReadBackSlots(stages, itemStatuses, slotsFilled) {
+  const merged = { ...slotsFilled };
+  for (const stage of stages || []) {
+    for (const item of stage?.items || []) {
+      if (item?.type !== "slot" || !item.slot_name) continue;
+      const status = itemStatuses?.[item.id];
+      if (!status?.is_correction) continue;
+      const value = status.extracted_value ?? status.value;
+      if (value !== null && value !== undefined && value !== "") {
+        merged[item.slot_name] = value;
+      }
+    }
+  }
+  return merged;
+}
+
 /**
  * Suggested Response Card - Accumulating list of suggestions
  */
@@ -2001,6 +2051,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   const session = useWorkflowStore((state) => state.session);
   const slotsFilled = useWorkflowStore((state) => state.slotsFilled);
   const itemStatuses = useWorkflowStore((state) => state.itemStatuses);
+  const stages = useWorkflowStore((state) => state.stages);
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
 
   // Fix 2: When AI handoff data arrives mid-session (race condition), reset suggestions
@@ -2032,11 +2083,36 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     // explicit_match across utterances). Including either would bypass the dedup
     // Set and generate a second suggestion for the same item on every new
     // transcription.
+    //
+    // The read-back item is a special case: its suggestion text is a SUMMARY
+    // built from every OTHER collected slot (see buildReadBackSuggestion),
+    // not from this item's own itemStatus — which stays "none" the whole
+    // call. Without factoring slotsFilled into ITS key, the dedup Set (keyed
+    // on item.id + mode + itemStatus, all unchanged) would permanently block
+    // regenerating it, so a later correction to any slot (e.g. destination
+    // facility) never refreshes the read-back panel, which keeps showing the
+    // value being corrected.
+    //
+    // Uses the MERGED (slotsFilled + pending corrections) map, not raw
+    // slotsFilled: a correction candidate's proposed value lives only in
+    // itemStatuses (is_correction) until confirmed — it never touches
+    // slots_filled — so keying on raw slotsFilled would miss the moment a
+    // NEW correction is first suggested (only itemStatuses changed).
+    const isReadBackTarget = isReadBackItem({
+      itemType: item.type,
+      itemLabel: item.label,
+      itemPromptHint: item.prompt_hint,
+      itemHints: item.hints,
+    });
+    const readBackSlots = isReadBackTarget
+      ? mergeReadBackSlots(stages, itemStatuses, slotsFilled)
+      : slotsFilled;
     const targetKey = [
       item.id,
       targetMode || "default",
       blockedItem?.id || "none",
       itemStatus?.extracted_value ?? itemStatus?.value ?? "none",
+      isReadBackTarget ? JSON.stringify(readBackSlots) : "",
     ].join(":");
 
     // Only generate for a target key we haven't already generated for. A set
@@ -2071,9 +2147,26 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     if (staleKey) {
       generatedTargetKeysRef.current.delete(staleKey);
     }
-    if (!generatedTargetKeysRef.current.has(targetKey)) {
-      generatedTargetKeysRef.current.add(targetKey);
-      
+    // The read-back target bypasses the "already generated" Set gate entirely
+    // and just always regenerates on every dependency change. It's a free,
+    // instant deterministic template (no LLM call), so there's no cost to
+    // regenerating on every render where something relevant changed — and
+    // this sidesteps a whole class of key-comparison bugs (React can apply
+    // itemStatuses and slots_filled from the SAME analyze response in
+    // separate renders, so the effect can transiently run with an
+    // inconsistent in-between snapshot, e.g. is_correction already cleared
+    // but slots_filled not yet updated — producing a key equal to neither the
+    // pre- nor post-correction key, and various historical variants of this
+    // logic have each let some such interleaving silently skip regenerating
+    // the final, correct content). Not adding a read-back key to the Set also
+    // avoids it growing by one entry per distinct snapshot for the rest of
+    // the call. Correctness is guaranteed downstream instead: the .then()
+    // freshness check below discards a response whose snapshot has gone
+    // stale by the time it resolves, and upsertSuggestionByTarget is a no-op
+    // when the regenerated text is identical to what's already displayed.
+    if (isReadBackTarget || !generatedTargetKeysRef.current.has(targetKey)) {
+      if (!isReadBackTarget) generatedTargetKeysRef.current.add(targetKey);
+
       // Generate suggestion asynchronously
       // Mark handoff greeting as sent immediately (before async) to prevent
       // race condition where concurrent calls see isFirstItem=true multiple times
@@ -2083,7 +2176,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       setGeneratingSuggestion(true);
       generateSuggestion(stage, item, session, transcriptions, {
         isAiAssisted,
-        slotsFilled,
+        slotsFilled: readBackSlots,
         isFirstItem,
         targetMode,
         conversationContext,
@@ -2096,6 +2189,25 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
           // discard the suggestion. Read store state directly (not a ref or
           // closure) so this check is never stale at promise resolution time.
           if (useWorkflowStore.getState().itemStatuses[item.id]?.status === "completed") return;
+          // Fix 6 (read-back specific): Fix 5 only catches THIS item's own
+          // status flipping to completed — but the read-back item's status
+          // barely changes even as its CONTENT changes across corrections (a
+          // confirmed correction updates slots_filled, not this item's
+          // status). Two overlapping requests for the read-back item can
+          // therefore both be in flight against DIFFERENT snapshots (e.g. one
+          // requested before a correction confirmed, one after); if the OLDER
+          // one resolves LAST, it would otherwise win the race and display
+          // outdated values even though the underlying data is already
+          // correct (reported live: a confirmed DOB correction, and
+          // separately a confirmed IV-drips correction, both reverting to
+          // their old/blank value in the read-back text after being
+          // confirmed). Discard if the merged slots have moved on since this
+          // request was made.
+          if (isReadBackTarget) {
+            const latestState = useWorkflowStore.getState();
+            const latestReadBackSlots = mergeReadBackSlots(latestState.stages, latestState.itemStatuses, latestState.slotsFilled);
+            if (JSON.stringify(latestReadBackSlots) !== JSON.stringify(readBackSlots)) return;
+          }
           setSuggestions((prev) => {
             // Upsert by target (slot + mode): a low-confidence slot whose value is
             // refined on re-analysis UPDATES its guide in place instead of
@@ -2117,7 +2229,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
           if (generatingSuggestionCountRef.current === 0) setGeneratingSuggestion(false);
         });
     }
-  }, [currentSlot, session, transcriptions, onSuggestionsChange, isAiAssisted, aiDataLoading, slotsFilled]);
+  }, [currentSlot, session, transcriptions, onSuggestionsChange, isAiAssisted, aiDataLoading, slotsFilled, itemStatuses, stages]);
 
   // Fix 5b: "resolves before" cleanup — when a suggestion was appended BEFORE
   // analyze marked the item completed, getState() in .then couldn't catch it.

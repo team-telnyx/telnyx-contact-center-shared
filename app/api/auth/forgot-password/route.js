@@ -1,24 +1,23 @@
 import { NextResponse } from "next/server";
-import { PgDb } from "@/lib/pgdb";
-import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
+import { requestPasswordReset } from "@/lib/password-reset";
+import { logAuthEvent } from "@/lib/auth-logging.mjs";
 
 export async function POST(request) {
-  try {
-    const { email } = await request.json();
-    const normalizedEmail = normalizeAuthEmail(email);
-    logAuthEvent("info", "password_reset_requested", { email: normalizedEmail, source: "api" });
-    if (!normalizedEmail) {
-      logAuthEvent("warn", "password_reset_request_failed", { reason: "missing_email", source: "api" });
-      return NextResponse.json({ error: "Missing email" }, { status: 400 });
-    }
-    await PgDb.findUserByUsername(normalizedEmail);
-    // No-op for security: always respond OK
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    logAuthEvent("error", "password_reset_request_failed", { reason: "server_error", source: "api", ...authErrorPayload(err) });
-    return NextResponse.json(
-      { error: "Failed to request reset" },
-      { status: 500 }
-    );
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    logAuthEvent("warn", "password_reset_request_failed", {
+      reason: "invalid_json",
+      source: "api",
+    });
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+
+  const result = await requestPasswordReset(body.email, { source: "api" });
+  if (result.ok) {
+    return NextResponse.json({ ok: true });
+  }
+  return NextResponse.json(
+    { error: result.error },
+    { status: result.status || 500 },
+  );
 }

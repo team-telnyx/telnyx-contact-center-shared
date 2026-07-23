@@ -124,6 +124,7 @@ export default function SoftphoneMini() {
   const [interaction, setInteraction] = useState(null);
   const [outboundCallerName, setOutboundCallerName] = useState("");
   const headsetStatePublishVersionRef = useRef(0);
+  const headsetCommandHandlersRef = useRef({});
   const formatCallerIdentity = (name, number) => {
     const normalizedName = String(name || "").trim();
     const normalizedNumber = String(number || "").trim();
@@ -146,6 +147,14 @@ export default function SoftphoneMini() {
   const isOutboundCall = activeCall && activeCallDirection === "outbound";
   const miniInputDisplay = isIncomingCall && incomingCallerDisplay ? incomingCallerDisplay : toInput;
   const shouldMarqueeMiniInput = Boolean(isIncomingCall && incomingCallerDisplay && incomingCallerDisplay.length > 18);
+
+  headsetCommandHandlersRef.current = {
+    answer: handleAnswerCall,
+    reject: handleRejectCall,
+    hangup,
+    mute: toggleMute,
+    hold: toggleHold,
+  };
 
   useEffect(() => {
     if (!experimentalFeaturesEnabled) return;
@@ -202,27 +211,29 @@ export default function SoftphoneMini() {
     if (!service) return;
 
     return service.onCommand((command) => {
-      if (command.type === HEADSET_COMMANDS.ANSWER && isRinging) {
-        handleAnswerCall();
+      const current = useActiveCallStore.getState();
+      const handlers = headsetCommandHandlersRef.current;
+      if (command.type === HEADSET_COMMANDS.ANSWER && current.ui.isRinging) {
+        handlers.answer?.();
         return;
       }
-      if (command.type === HEADSET_COMMANDS.REJECT && isRinging) {
-        handleRejectCall();
+      if (command.type === HEADSET_COMMANDS.REJECT && current.ui.isRinging) {
+        handlers.reject?.();
         return;
       }
-      if (command.type === HEADSET_COMMANDS.HANGUP && activeCall) {
-        hangup();
+      if (command.type === HEADSET_COMMANDS.HANGUP && current.call) {
+        handlers.hangup?.();
         return;
       }
-      if (command.type === HEADSET_COMMANDS.MUTE && activeCall && command.muted !== callUI.isMuted) {
-        toggleMute();
+      if (command.type === HEADSET_COMMANDS.MUTE && current.call && command.muted !== current.ui.isMuted) {
+        handlers.mute?.();
         return;
       }
-      if (command.type === HEADSET_COMMANDS.HOLD && activeCall && command.held !== callUI.isHeld) {
-        toggleHold();
+      if (command.type === HEADSET_COMMANDS.HOLD && current.call && command.held !== current.ui.isHeld) {
+        handlers.hold?.();
       }
     });
-  }, [activeCall, callUI.isHeld, callUI.isMuted, experimentalFeaturesEnabled, isRinging]);
+  }, [experimentalFeaturesEnabled]);
 
   const fromRef = useRef("");
   const audioRef = useRef(null);
@@ -1285,10 +1296,12 @@ export default function SoftphoneMini() {
       const isMuted = callUI.isMuted;
 
       if (!isMuted) {
-        activeCall.muteAudio?.() || activeCall.mute?.();
+        const mute = activeCall.muteAudio || activeCall.mute;
+        await mute?.call(activeCall);
         storeSetMuted(true);
       } else {
-        activeCall.unmuteAudio?.() || activeCall.unmute?.();
+        const unmute = activeCall.unmuteAudio || activeCall.unmute;
+        await unmute?.call(activeCall);
         storeSetMuted(false);
       }
     } catch (err) {
@@ -1303,12 +1316,14 @@ export default function SoftphoneMini() {
       const isHeld = callUI.isHeld;
 
       if (isHeld) {
-        activeCall.unhold?.() || activeCall.resume?.();
+        const resume = activeCall.unhold || activeCall.resume;
+        await resume?.call(activeCall);
         // Update status before clearing held state so resume metrics close the hold interval
         updateStatus("active");
         storeSetHeld(false);
       } else {
-        activeCall.hold?.() || activeCall.pause?.();
+        const hold = activeCall.hold || activeCall.pause;
+        await hold?.call(activeCall);
         storeSetHeld(true);
         // Update status to 'held' to track hold start
         updateStatus("held");

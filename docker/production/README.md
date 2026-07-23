@@ -8,6 +8,7 @@ This directory contains the Docker production configuration for Telnyx Contact C
 docker/production/
 ├── Dockerfile         # Multi-stage production build
 ├── compose.yaml       # Docker Compose: app + PostgreSQL
+├── compose.local.yaml # Local-only loopback port for PostgreSQL
 ├── sample.env         # Environment variable template (copy to .env)
 └── init-schema.sql    # PostgreSQL initialization script
 ```
@@ -30,15 +31,19 @@ cp sample.env .env
 Or manually:
 
 ```bash
-docker compose up --build -d
+docker compose -f compose.yaml -f compose.local.yaml up --build -d
 ```
+
+`compose.yaml` does not publish PostgreSQL. The Local override binds it only
+to `127.0.0.1` and supports `POSTGRES_HOST_PORT` when a native Postgres already
+uses `5432`.
 
 ## Logging
 
 The app writes structured JSON logs to stdout. Read them with:
 
 ```bash
-docker compose logs -f app
+docker compose -f compose.yaml -f compose.local.yaml logs -f app
 ```
 
 Optional log-level and file-sink configuration via environment variables:

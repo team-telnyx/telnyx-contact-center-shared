@@ -46,8 +46,16 @@ test("analyzer threads currentTarget into the system prompt", async () => {
 
 test("live + test analyze routes compute and pass the current-target slot", async () => {
   const live = await read("../app/api/agent-assist/workflow/analyze/route.js");
-  // Current target = earliest still-open slot.
-  assert.match(live, /i\.type === "slot" && i\.current_status === "pending"/);
+  // Current target = earliest still-open OR still-unconfirmed ("suggested")
+  // slot — a low-confidence capture isn't confirmed yet, and treating it as
+  // "moved on" let a bare repeat/clarification of it get misattributed to
+  // whatever slot comes next (reported live: a repeated sending-physician
+  // name bled into receiving_physician once sending_physician was merely
+  // "suggested", not yet confirmed).
+  assert.match(
+    live,
+    /i\.type === "slot" && \(i\.current_status === "pending" \|\| i\.current_status === "suggested"\)/
+  );
   assert.match(live, /analyzeWorkflowTranscript\(\{[\s\S]*?currentTarget,/);
   const testRoute = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
   assert.match(testRoute, /const currentTarget =/);

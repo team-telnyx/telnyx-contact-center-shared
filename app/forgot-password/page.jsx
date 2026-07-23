@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { notify } from "@/components/ToastNotify";
 import { forgotPasswordAction } from "@/app/actions/auth";
+import { AuthBrandLogo } from "@/components/auth-brand-logo";
+import { AuthRightImage } from "@/components/auth-right-image";
 
 export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
@@ -52,15 +53,7 @@ export default function ForgotPasswordPage() {
         <div className="flex justify-center gap-2 md:justify-start">
           <div className="flex justify-center w-full">
             <div className="flex flex-col items-center w-full justify-center">
-              <Image
-                src="/telnyx_green_transparent.png"
-                alt="Telnyx LLC"
-                width={400}
-                height={50}
-                style={{ width: "auto", height: "auto" }}
-                priority
-                className="brightness-0 dark:invert"
-              />
+              <AuthBrandLogo />
               <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
                 Contact Center
               </span>
@@ -72,7 +65,7 @@ export default function ForgotPasswordPage() {
             <form onSubmit={onSubmit} className={cn("w-full space-y-4")}>
               <h1 className="text-2xl font-bold">Forgot your password?</h1>
               <p className="text-sm text-muted-foreground">
-                Enter your email address and well send you a reset link.
+                Enter your email address and we’ll send you a reset link.
               </p>
               <div className="grid gap-2">
                 <Label htmlFor="username">Email address</Label>
@@ -93,15 +86,7 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
       <div className="bg-muted relative hidden lg:block m-5 rounded-xl overflow-hidden">
-        <Image
-          src="/cc_space.jpg"
-          alt="Contact Center"
-          className="absolute inset-0 h-full w-full object-cover grayscale"
-          width={1000}
-          height={1000}
-          style={{ width: "100%", height: "100%" }}
-          priority
-        />
+        <AuthRightImage />
       </div>
     </div>
   );

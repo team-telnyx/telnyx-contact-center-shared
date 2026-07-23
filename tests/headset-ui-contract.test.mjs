@@ -39,12 +39,12 @@ test("headset sheet ships EPOS BTD 800 and MB Pro 2 catalog artwork", () => {
   assert.match(catalog, /\/images\/headsets\/epos\/mb-pro-2\.png/);
 });
 
-test("softphone publishes headset state while mini softphone owns headset commands", () => {
+test("mini softphone is the single owner of headset state and commands", () => {
   const softphone = src("components/softphone.jsx");
   const softphoneMini = src("components/softphone-mini.jsx");
 
-  assert.match(softphone, /getHeadsetControlService/);
-  assert.match(softphone, /setSoftphoneState/);
+  assert.doesNotMatch(softphone, /getHeadsetControlService/);
+  assert.doesNotMatch(softphone, /setSoftphoneState/);
   assert.doesNotMatch(softphone, /onCommand/);
   assert.doesNotMatch(softphone, /HEADSET_COMMANDS\./);
 

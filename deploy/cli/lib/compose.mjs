@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 // Thin wrapper around `docker compose` for the Local target, scoped to
-// docker/production/compose.yaml. Kept as a small pure-ish module (all real
+// docker/production/compose.yaml plus its Local-only override. Kept as a small pure-ish module (all real
 // process execution goes through `execImpl`) so wizard.mjs's orchestration
 // logic can be tested without actually invoking Docker.
 
@@ -15,8 +15,11 @@ const execFileAsync = promisify(execFile);
  * 2.24+). The `excludeProfiles` form is what we use to *suppress* a service
  * (e.g. drop the bundled Postgres when the wizard is pointing at an existing one).
  */
-export function composeArgs(subcommand, { profile, profiles, excludeProfiles } = {}) {
+export function composeArgs(subcommand, {
+  profile, profiles, excludeProfiles, localOverride = false,
+} = {}) {
   const args = ['compose', '-f', 'compose.yaml'];
+  if (localOverride) args.push('-f', 'compose.local.yaml');
   // Back-compat: callers/tests still pass `profile: 'cloud'` (singular). Treat it
   // as the one-element `profiles` array; newer callers should pass `profiles: [...]`
   // (compose v2 supports repeated `--profile` for OR semantics).
@@ -28,22 +31,24 @@ export function composeArgs(subcommand, { profile, profiles, excludeProfiles } =
 }
 
 export async function composeUp({ cwd, build = true, profiles, excludeProfiles, execImpl = execFileAsync } = {}) {
-  const args = composeArgs(['up', '-d', ...(build ? ['--build'] : [])], { profiles, excludeProfiles });
+  const args = composeArgs(['up', '-d', ...(build ? ['--build'] : [])], {
+    profiles, excludeProfiles, localOverride: true,
+  });
   return execImpl('docker', args, { cwd });
 }
 
 export async function composeDown({ cwd, volumes = false, execImpl = execFileAsync } = {}) {
-  const args = composeArgs(['down', ...(volumes ? ['-v'] : [])]);
+  const args = composeArgs(['down', ...(volumes ? ['-v'] : [])], { localOverride: true });
   return execImpl('docker', args, { cwd });
 }
 
 export async function composeLogs({ cwd, follow = false, tail = 200, execImpl = execFileAsync } = {}) {
-  const args = composeArgs(['logs', `--tail=${tail}`, ...(follow ? ['-f'] : [])]);
+  const args = composeArgs(['logs', `--tail=${tail}`, ...(follow ? ['-f'] : [])], { localOverride: true });
   return execImpl('docker', args, { cwd });
 }
 
 export async function composePs({ cwd, execImpl = execFileAsync } = {}) {
-  const args = composeArgs(['ps', '--format', 'json']);
+  const args = composeArgs(['ps', '--format', 'json'], { localOverride: true });
   return execImpl('docker', args, { cwd });
 }
 

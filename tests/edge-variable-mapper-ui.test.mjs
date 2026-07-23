@@ -42,7 +42,7 @@ test("HTTP response payload paths include nested array item fields", async () =>
         rows: [
           {
             id: "a96fcf27-46eb-4bde-bbb0-0bbfaee57eb6",
-            username: "abdullah@telnyx.com",
+            username: "user@example.com",
             first_name: "John",
             last_name: "Wick",
             custom_data: null,

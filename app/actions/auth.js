@@ -262,61 +262,8 @@ export async function signupAction(formData) {
 }
 
 export async function forgotPasswordAction(formData) {
-  try {
-    const username = normalizeAuthEmail(formData.get("username"));
-    logAuthEvent("info", "password_reset_requested", { email: username, source: "server_action" });
-    if (!username) {
-      logAuthEvent("warn", "password_reset_request_failed", { reason: "missing_email", source: "server_action" });
-      return { ok: false, error: "Missing email" };
-    }
-
-    // Find user
-    const user = await PgDb.findUserByUsername(username);
-
-    // For security, don't disclose if user exists or not
-    if (!user) {
-      // Return success even if user doesn't exist
-      logAuthEvent("info", "password_reset_request_hidden_user", { email: username, userExists: false, source: "server_action" });
-      return { ok: true };
-    }
-
-    // Generate secure random token
-    const resetToken = randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
-
-    // Save token to database
-    await PgDb.updateUserById(user.id, {
-      reset_password_token: resetToken,
-      reset_password_token_expires: expiresAt.toISOString(),
-    });
-
-    // Send password reset email
-    const { sendPasswordResetEmail } = await import(
-      "@/lib/email-notifications"
-    );
-    const userName =
-      [user.first_name, user.last_name].filter(Boolean).join(" ") ||
-      user.username;
-
-    const emailResult = await sendPasswordResetEmail(
-      username,
-      userName,
-      resetToken
-    );
-
-    if (!emailResult.success) {
-      logAuthEvent("warn", "password_reset_email_failed", {
-        ...authUserPayload(user, username),
-        source: "server_action",
-        emailError: emailResult.error,
-      });
-      // Still return success to not disclose if email sending failed
-    } else {
-      logAuthEvent("info", "password_reset_email_sent", { ...authUserPayload(user, username), source: "server_action" });
-    }
-    return { ok: true };
-  } catch (err) {
-    logAuthEvent("error", "password_reset_request_failed", { reason: "server_error", source: "server_action", ...authErrorPayload(err) });
-    return { ok: false, error: "Failed to request reset" };
-  }
+  const { requestPasswordReset } = await import("@/lib/password-reset");
+  return requestPasswordReset(formData.get("username"), {
+    source: "server_action",
+  });
 }

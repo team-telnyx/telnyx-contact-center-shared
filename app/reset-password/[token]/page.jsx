@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 import { notify } from "@/components/ToastNotify";
+import { AuthBrandLogo } from "@/components/auth-brand-logo";
+import { AuthRightImage } from "@/components/auth-right-image";
 
 export default function ResetPasswordPage() {
   const params = useParams();
@@ -88,15 +89,7 @@ export default function ResetPasswordPage() {
           <div className="flex justify-center gap-2 md:justify-start">
             <div className="flex justify-center w-full">
               <div className="flex flex-col items-center w-full justify-center">
-                <Image
-                  src="/telnyx_green_transparent.png"
-                  alt="Telnyx LLC"
-                  width={400}
-                  height={50}
-                  style={{ width: "auto", height: "auto" }}
-                  priority
-                  className="brightness-0 dark:invert"
-                />
+                <AuthBrandLogo />
                 <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
                   Contact Center
                 </span>
@@ -120,15 +113,7 @@ export default function ResetPasswordPage() {
           </div>
         </div>
         <div className="bg-muted relative hidden lg:block m-5 rounded-xl overflow-hidden">
-          <Image
-            src="/cc_space.jpg"
-            alt="Contact Center"
-            className="absolute inset-0 h-full w-full object-cover grayscale"
-            width={1000}
-            height={1000}
-            style={{ width: "100%", height: "100%" }}
-            priority
-          />
+          <AuthRightImage />
         </div>
       </div>
     );
@@ -140,15 +125,7 @@ export default function ResetPasswordPage() {
         <div className="flex justify-center gap-2 md:justify-start">
           <div className="flex justify-center w-full">
             <div className="flex flex-col items-center w-full justify-center">
-              <Image
-                src="/telnyx_green_transparent.png"
-                alt="Telnyx LLC"
-                width={400}
-                height={50}
-                style={{ width: "auto", height: "auto" }}
-                priority
-                className="brightness-0 dark:invert"
-              />
+              <AuthBrandLogo />
               <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
                 Contact Center
               </span>
@@ -199,14 +176,7 @@ export default function ResetPasswordPage() {
         </div>
       </div>
       <div className="bg-muted relative hidden lg:block m-5 rounded-xl overflow-hidden">
-        <Image
-          src="/telnyx_main.png"
-          alt="Image"
-          className="absolute inset-0 h-full w-full object-cover grayscale brightness-[0.8]"
-          width={1000}
-          height={1000}
-          style={{ width: "100%", height: "100%" }}
-        />
+        <AuthRightImage />
       </div>
     </div>
   );

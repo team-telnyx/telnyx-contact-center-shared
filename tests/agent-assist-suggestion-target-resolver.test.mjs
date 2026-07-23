@@ -246,3 +246,264 @@ test("falls back to first open workflow item when conversation does not match an
   assert.equal(result.mode, "continue_workflow");
   assert.equal(result.reason, "first_open_item");
 });
+
+test("fallback does NOT resurface a stuck opening item (e.g. greeting) once real progress has been made via slots", () => {
+  // Reproduces the reported bug: an opening non-slot item ("ask-help") never
+  // got marked complete (its completion detection is heuristic/unreliable —
+  // see the file-level comment on leadSlot), but the call has since collected
+  // slots in TWO later stages. A generic utterance that doesn't strongly
+  // match any stage falls through to the fallback — it must continue from
+  // where the call actually is (the next open slot), not jump back to the
+  // never-resolved greeting from the very start of the call.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      // ask-help intentionally has no status entry — stuck open, like the
+      // real bug report.
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
+      "patient-name": { status: "completed", extracted_value: "Jane Doe" },
+    },
+    slotsFilled: { account_number: "12345", patient_name: "Jane Doe" },
+    transcriptions: finalConversation("Okay."),
+  });
+
+  assert.equal(result.stage.id, "stage-3");
+  assert.equal(result.item.id, "dob");
+  assert.equal(result.mode, "collect_missing_slot");
+  assert.equal(result.reason, "first_open_item");
+});
+
+test("a stuck opening item does NOT win a conversation-stage match near call wrap-up, once every slot is filled", () => {
+  // Reproduces the reported bug precisely: "Hi, thanks for calling, how can I
+  // help you today?" resurfaced in the LAST moment of the call, after every
+  // slot had already been filled via real conversation elsewhere. Once every
+  // slot has a value, leadStageOrder goes null and the sequential-leading
+  // clamp goes fully inert (by design, so confirmation/finalization logic can
+  // run) — but common closing language ("is there anything else I can help
+  // you with today", "thanks for calling") shares literal keywords with a
+  // greeting's own hint text, so it can win a fresh conversation-stage match
+  // on its own, with no other stage also matching this turn (so the
+  // `jumpedAhead` guard, which requires a later-stage match in the SAME
+  // turn, never engages either).
+  const closingStages = [
+    {
+      ...stages[0],
+      items: [
+        { ...stages[0].items[0], prompt_hint: "hello welcome thanks for calling" },
+        { ...stages[0].items[1], prompt_hint: "is there anything else I can help you with today" },
+      ],
+    },
+    stages[1],
+    stages[2],
+  ];
+
+  const result = resolveSuggestedResponseTarget({
+    stages: closingStages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      // ask-help intentionally has no status entry — stuck open, same as the
+      // real bug report.
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
+      "patient-name": { status: "completed", extracted_value: "Jane Doe" },
+      dob: { status: "completed", extracted_value: "1988-03-04" },
+      symptoms: { status: "completed", extracted_value: "high fever" },
+    },
+    slotsFilled: {
+      account_number: "12345",
+      patient_name: "Jane Doe",
+      date_of_birth: "1988-03-04",
+      symptoms: "high fever",
+    },
+    transcriptions: finalConversation(
+      "Is there anything else I can help you with today? Thanks so much for calling, have a great day!"
+    ),
+  });
+
+  assert.equal(result.stage.id, "stage-3");
+  assert.equal(result.item.id, "confirm-patient");
+  assert.notEqual(result.reason, "conversation_stage_match");
+});
+
+test("once every slot is filled, an explicit correction request targets the named completed slot directly", () => {
+  // Reproduces the reported gap: the caller says "the account number is
+  // incorrect, it should be 54321" at read-back. Before this fix, a completed
+  // slot was invisible to the resolver entirely (it only ever targets OPEN
+  // items) — the suggestion fell back to the read-back/confirm-all item's own
+  // line instead of asking what the corrected value should be.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
+      "patient-name": { status: "completed", extracted_value: "Jane Doe" },
+      dob: { status: "completed", extracted_value: "1988-03-04" },
+      symptoms: { status: "completed", extracted_value: "high fever" },
+    },
+    slotsFilled: {
+      account_number: "12345",
+      patient_name: "Jane Doe",
+      date_of_birth: "1988-03-04",
+      symptoms: "high fever",
+    },
+    transcriptions: finalConversation("The account number is incorrect, it should be 54321."),
+  });
+
+  assert.equal(result.stage.id, "stage-2");
+  assert.equal(result.item.id, "account-number");
+  assert.equal(result.mode, "collect_correction");
+  assert.equal(result.reason, "correction_requested");
+});
+
+test("without an explicit correction trigger, merely mentioning a completed slot's value again does NOT hijack the suggestion", () => {
+  // Guards against a false positive: the caller re-confirming a value ("yes,
+  // the account number is 12345, that's right") must not be mistaken for a
+  // correction request just because it names the slot.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
+      "patient-name": { status: "completed", extracted_value: "Jane Doe" },
+      dob: { status: "completed", extracted_value: "1988-03-04" },
+      symptoms: { status: "completed", extracted_value: "high fever" },
+    },
+    slotsFilled: {
+      account_number: "12345",
+      patient_name: "Jane Doe",
+      date_of_birth: "1988-03-04",
+      symptoms: "high fever",
+    },
+    transcriptions: finalConversation("Yes, the account number is 12345, that's right."),
+  });
+
+  assert.notEqual(result?.mode, "collect_correction");
+});
+
+test("correction-targeting stops once the read-back item has already been given the customer's final affirmative", () => {
+  // Reproduces the live report: agent asked "Can you confirm all information
+  // is correct?", customer said "Yes, all information is correct." (which
+  // completed the read-back item) — but earlier in the SAME rolling
+  // conversation window, the customer had said "No, something is not
+  // correct" while correcting the patient's date of birth. Before this fix,
+  // that older trigger phrase (still inside the last-8-utterances window)
+  // kept findCorrectionTargetSlot re-matching the now-fully-resolved DOB slot
+  // turn after turn, forever — permanently stuck, since that stale target
+  // also gets silently discarded downstream (the slot really is "completed"),
+  // so "Provide confirmation/reference number" never got a chance to show.
+  const readBackStages = [
+    {
+      id: "s1",
+      name: "Patient Information",
+      order_index: 0,
+      items: [
+        { id: "dob", type: "slot", label: "Patient date of birth", slot_name: "patient_dob", prompt_hint: "date of birth, DOB, born", order_index: 0 },
+      ],
+    },
+    {
+      id: "s2",
+      name: "Confirmation",
+      order_index: 1,
+      items: [
+        { id: "confirm-all", type: "question", label: "Confirm all information is correct", order_index: 0 },
+        { id: "provide-ref", type: "action", label: "Provide confirmation/reference number", order_index: 1 },
+      ],
+    },
+  ];
+  const result = resolveSuggestedResponseTarget({
+    stages: readBackStages,
+    itemStatuses: {
+      dob: { status: "completed", extracted_value: "1965-03-20" },
+      "confirm-all": { status: "completed", extracted_value: true },
+    },
+    slotsFilled: { patient_dob: "1965-03-20" },
+    transcriptions: finalConversation(
+      "No, something is not correct. Date of birth is March twentieth nineteen sixty five. Yes, all information is correct."
+    ),
+  });
+
+  assert.notEqual(result?.mode, "collect_correction");
+  assert.equal(result.stage.id, "s2");
+  assert.equal(result.item.id, "provide-ref");
+});
+
+test("a stuck opening item does NOT win a conversation-stage match MID-CALL either, once real progress has been made", () => {
+  // Reported live: "Hi, thanks for calling. How can I help you today?"
+  // resurfaced in the middle of Pickup Location questions — not at the end of
+  // the call. The earlier wrap-up fix only guarded the leadStageOrder-null
+  // (every slot filled) case; mid-call, leadStageOrder is still set (dob is
+  // still open), and the ONLY existing protection for a stale earlier-stage
+  // match (jumpedAhead) requires the SAME utterance to ALSO match a later
+  // stage. Here nothing else matches this turn, so without the fix the stuck
+  // "ask-help" item wins purely because it's the only match.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      // ask-help intentionally has no status entry — stuck open.
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
+      "patient-name": { status: "completed", extracted_value: "Jane Doe" },
+      // dob and symptoms remain open — this is mid-call, not read-back.
+    },
+    slotsFilled: { account_number: "12345", patient_name: "Jane Doe" },
+    transcriptions: finalConversation("Thanks, how can I help with that?"),
+  });
+
+  assert.notEqual(result?.stage?.id, "stage-1");
+  assert.equal(result.stage.id, "stage-3");
+  assert.equal(result.item.id, "dob");
+});
+
+test("a stuck opening item does NOT resurface on a QUIET turn (no stage match at all) once every slot is filled, in a real call", () => {
+  // Reported live: the greeting resurfaced between "Trip Notes & Air Safety"
+  // and read-back — i.e. right after the LAST slot was collected, on a turn
+  // that didn't happen to match any stage strongly at all (matchedStages
+  // empty), not via a coincidental keyword match. The earlier wrap-up fix
+  // only clamped the fallback when the primary loop had just suppressed a
+  // live stage match this same turn (suppressedStaleMatch) — a quiet/
+  // non-matching turn set that flag to its initial `false`, so the fallback
+  // fell back to `hasAnyCollectedSlot(...) ? leadStageOrder : null`, and
+  // leadStageOrder is ALSO null at this point (every slot filled) — so the
+  // floor silently evaluated to null (fully unclamped) regardless of real
+  // conversation history, letting firstOpenWorkflowItem walk back to the
+  // stuck opening item from the very start of the call.
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      // ask-help intentionally has no status entry — stuck open.
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "12345" },
+      "confirm-account": { status: "completed" },
+      "patient-name": { status: "completed", extracted_value: "Jane Doe" },
+      dob: { status: "completed", extracted_value: "1988-03-04" },
+      symptoms: { status: "completed", extracted_value: "high fever" },
+    },
+    slotsFilled: {
+      account_number: "12345",
+      patient_name: "Jane Doe",
+      date_of_birth: "1988-03-04",
+      symptoms: "high fever",
+    },
+    // Deliberately generic — must not match any stage (matchedStages empty) —
+    // while still being a REAL utterance in an ongoing call, unlike the
+    // AI-handoff case which has transcriptions: [] (nothing said at all).
+    transcriptions: finalConversation("Okay, one moment please."),
+  });
+
+  assert.notEqual(result?.stage?.id, "stage-1");
+  assert.equal(result.stage.id, "stage-3");
+  assert.equal(result.item.id, "confirm-patient");
+});

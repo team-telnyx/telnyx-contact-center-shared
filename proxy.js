@@ -41,33 +41,19 @@ export async function proxy(request) {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    const defaultAllowed = [
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-      "https://cc.domain.com",
-      "https://app.domain.com",
-    ];
+    const defaultAllowed =
+      process.env.NODE_ENV === "production"
+        ? []
+        : ["http://localhost:3000", "http://127.0.0.1:3000"];
     const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
+    const isAllowedOrigin = origin && allowedOrigins.has(origin);
 
     const setCors = (res) => {
       // Only allow requests from whitelisted origins
-      const isAllowedOrigin = origin && allowedOrigins.has(origin);
-
       if (isAllowedOrigin) {
         res.headers.set("Access-Control-Allow-Origin", origin);
         res.headers.set("Vary", "Origin");
         res.headers.set("Access-Control-Allow-Credentials", "true");
-        res.headers.set(
-          "Access-Control-Allow-Methods",
-          "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-        );
-        res.headers.set(
-          "Access-Control-Allow-Headers",
-          "Content-Type, Authorization, X-Requested-With, telnyx-ai-api-key"
-        );
-      } else if (request.method === "OPTIONS") {
-        // Handle preflight OPTIONS requests
-        res.headers.set("Access-Control-Allow-Origin", "*");
         res.headers.set(
           "Access-Control-Allow-Methods",
           "GET,POST,PUT,PATCH,DELETE,OPTIONS"
@@ -81,6 +67,9 @@ export async function proxy(request) {
     };
 
     if (request.method === "OPTIONS") {
+      if (origin && !isAllowedOrigin) {
+        return new NextResponse(null, { status: 403 });
+      }
       return setCors(new NextResponse(null, { status: 204 }));
     }
 
@@ -106,6 +95,6 @@ export async function proxy(request) {
 
 export const config = {
   matcher: [
-    "/((?!api|signin|signup|forgot-password|reset-password|activate|health|_next|favicon.ico).*)",
+    "/((?!signin|signup|forgot-password|reset-password|activate|health|_next|favicon.ico).*)",
   ],
 };

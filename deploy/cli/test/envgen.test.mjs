@@ -102,11 +102,16 @@ describe('envgen.mjs', () => {
     assert.strictEqual(named.values.POSTGRES_VOLUME_NAME, 'cc-prod-2026-07');
   });
 
-  it('generates distinct secrets on every call (NEXTAUTH_SECRET, POSTGRES_PASSWORD, SECRETS_ENCRYPTION_KEY)', () => {
-    const sampleEnvText = 'NEXTAUTH_SECRET=\nPOSTGRES_PASSWORD=\nSECRETS_ENCRYPTION_KEY=\n';
+  it('generates distinct authentication, database and encryption secrets on every call', () => {
+    const sampleEnvText = 'NEXTAUTH_SECRET=\nACCESS_JWT_SECRET=\nREFRESH_JWT_SECRET=\nJWT_SECRET=\nPOSTGRES_PASSWORD=\nSECRETS_ENCRYPTION_KEY=\n';
     const a = generateEnvFile({ sampleEnvText, answers: baseAnswers, target: 'local' });
     const b = generateEnvFile({ sampleEnvText, answers: baseAnswers, target: 'local' });
     assert.notStrictEqual(a.values.NEXTAUTH_SECRET, b.values.NEXTAUTH_SECRET);
+    assert.notStrictEqual(a.values.ACCESS_JWT_SECRET, b.values.ACCESS_JWT_SECRET);
+    assert.notStrictEqual(a.values.REFRESH_JWT_SECRET, b.values.REFRESH_JWT_SECRET);
+    assert.notStrictEqual(a.values.NEXTAUTH_SECRET, a.values.ACCESS_JWT_SECRET);
+    assert.notStrictEqual(a.values.ACCESS_JWT_SECRET, a.values.REFRESH_JWT_SECRET);
+    assert.strictEqual(a.values.JWT_SECRET, '');
     assert.notStrictEqual(a.values.POSTGRES_PASSWORD, b.values.POSTGRES_PASSWORD);
     assert.notStrictEqual(a.values.SECRETS_ENCRYPTION_KEY, b.values.SECRETS_ENCRYPTION_KEY);
   });

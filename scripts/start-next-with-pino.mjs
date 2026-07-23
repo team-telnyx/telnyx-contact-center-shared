@@ -10,6 +10,7 @@ import {
   tryLoadRuntimeLoggingConfigEarly,
 } from "../lib/logger/runtime-config.mjs";
 import { flushApplicationLogSinks } from "../lib/logger/app-log-sinks.mjs";
+import { validateJwtSecrets } from "../lib/jwt-secrets.mjs";
 import {
   allowsStreamingRole,
   allowsWebRole,
@@ -57,6 +58,15 @@ const logger = createDiagnosticLogger("platform.app", {
   getConfig: () => runtimeLoggingConfig,
 });
 
+try {
+  validateJwtSecrets();
+} catch (error) {
+  logger.error("authentication_secret_validation_failed", {
+    error: error?.message || String(error),
+  });
+  throw error;
+}
+
 logger.info("process_role_runtime_starting", {
   processRole,
   allowsWeb: allowsWebRole(processRole),
@@ -101,7 +111,11 @@ async function startWorkerOnlyRuntime() {
 }
 
 function startWebRuntime() {
-  const hostname = process.env.HOSTNAME || "0.0.0.0";
+  // Docker injects HOSTNAME as the container id. Binding Next.js to that name
+  // makes it listen only on the container's eth0 address, so an in-container
+  // healthcheck against localhost fails even though published host ports work.
+  // Use a dedicated override and otherwise listen on every container interface.
+  const hostname = process.env.APP_HOSTNAME || "0.0.0.0";
   const port = process.env.PORT || "3000";
   const args = ["next", "start", "--hostname", hostname, "--port", port];
 

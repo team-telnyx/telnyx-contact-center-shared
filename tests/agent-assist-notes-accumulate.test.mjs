@@ -59,8 +59,13 @@ test("live route keeps COMPLETED notes slots analyzable so later fragments accum
   // Completed notes slots are re-fetched and fed into the analyzer input (not pendingItems).
   assert.match(route, /ist\.status = 'completed' AND i\.type = 'slot'/);
   assert.match(route, /completedNotesItems = completedSlotRows\.filter/);
-  assert.match(route, /const analyzerItems = \[\.\.\.relevantPendingItems, \.\.\.completedNotesItems\]/);
-  assert.match(route, /pendingItems: analyzerItems/);
+  assert.match(route, /const analyzerItems = \[\.\.\.relevantPendingItems, \.\.\.completedNotesItems, \.\.\.correctionCandidateItems\]/);
+  // Stage-narrowing (workflow_analyzer_items_narrowed) trims relevantPendingItems
+  // to nearby stages, but completedNotesItems are re-added unconditionally
+  // afterward — a notes slot from an earlier stage must stay analyzable however
+  // far the conversation has moved on.
+  assert.match(route, /const narrowedAnalyzerItems = \[\.\.\.narrowedRelevantPendingItems, \.\.\.completedNotesItems, \.\.\.correctionCandidateItems\]/);
+  assert.match(route, /pendingItems: narrowedAnalyzerItems/);
   // The completion loop looks items up in analyzerItems and appends for a completed notes slot.
   assert.match(route, /analyzerItems\.find\(p => p\.item_id === completed\.item_id\)/);
   assert.match(route, /item\.current_status === "completed" && item\.type === "slot" && isAccumulatingSlot\(item\)/);

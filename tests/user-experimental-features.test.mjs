@@ -68,13 +68,10 @@ test("Phones Provisioning UI and admin APIs require experimental access", async 
   }
 });
 
-test("WebRTC headset UI and command handling require experimental access", async () => {
-  const [mini, softphone] = await Promise.all([
-    read("components/softphone-mini.jsx"),
-    read("components/softphone.jsx"),
-  ]);
+test("WebRTC headset state, UI, and command handling require experimental access", async () => {
+  const mini = await read("components/softphone-mini.jsx");
 
   assert.match(mini, /experimentalFeaturesEnabled \? <HeadsetStatusBadge \/> : null/);
+  assert.match(mini, /if \(!experimentalFeaturesEnabled\) return;[\s\S]*initHeadsetControlService/);
   assert.match(mini, /if \(!experimentalFeaturesEnabled\) return;[\s\S]*onCommand/);
-  assert.match(softphone, /if \(!experimentalFeaturesEnabled\) return;[\s\S]*initHeadsetControlService/);
 });

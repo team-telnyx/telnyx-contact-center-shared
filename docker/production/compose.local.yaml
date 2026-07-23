@@ -1,0 +1,7 @@
+# Local-development override. The base production compose file intentionally
+# does not publish PostgreSQL at all; the deploy wizard adds this file only for
+# Local installs so host-side database tools can still connect when needed.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"

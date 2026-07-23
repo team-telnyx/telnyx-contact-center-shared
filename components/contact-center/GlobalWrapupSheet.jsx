@@ -222,41 +222,26 @@ export function GlobalWrapupSheet() {
   // Listen for explicit server-side wrapup requests from the authoritative
   // webhook lifecycle. This path does not depend on WebRTC local call state,
   // so it still opens wrapup when the browser store missed the hangup event.
+  //
+  // Consumes the single shared connection ContactCenterStreamProvider already
+  // owns (forwarded via window CustomEvents) instead of opening a second,
+  // independent EventSource to the same /agent/stream endpoint — two live
+  // connections under the same per-agent SSE key caused every broadcast to be
+  // delivered twice, which showed up as duplicated live-transcription bubbles.
   useEffect(() => {
-    let eventSource = null;
-    const handleAgentMessage = (event) => {
-      try {
-        const data = JSON.parse(event.data || "{}");
-        if (data?.type === "wrapup_required" && data.interactionId) {
-          if (lastWrapupInteractionRef.current === data.interactionId) return;
-          lastWrapupInteractionRef.current = data.interactionId;
-          useWrapupSheetStore
-            .getState()
-            .openWrapup(data.interactionId, latestTranscriptionsRef.current || []);
-          return;
-        }
-        if (
-          data?.type === "interaction_updated" ||
-          data?.type === "interaction_ended"
-        ) {
-          window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions"),
-          );
-        }
-      } catch (err) {
-        console.error("[GlobalWrapupSheet] Failed to parse agent SSE event:", err);
-      }
+    const handleWrapupRequired = (event) => {
+      const data = event.detail;
+      if (!data?.interactionId) return;
+      if (lastWrapupInteractionRef.current === data.interactionId) return;
+      lastWrapupInteractionRef.current = data.interactionId;
+      useWrapupSheetStore
+        .getState()
+        .openWrapup(data.interactionId, latestTranscriptionsRef.current || []);
     };
 
-    try {
-      eventSource = new EventSource("/api/contact-center/agent/stream");
-      eventSource.onmessage = handleAgentMessage;
-    } catch (err) {
-      console.error("[GlobalWrapupSheet] Failed to connect agent SSE:", err);
-    }
-
+    window.addEventListener("contact-center:wrapup-required", handleWrapupRequired);
     return () => {
-      if (eventSource) eventSource.close();
+      window.removeEventListener("contact-center:wrapup-required", handleWrapupRequired);
     };
   }, []);
 

@@ -9,7 +9,7 @@ The Docker setup runs two containers:
 - **PostgreSQL 17** — database with a persistent volume
 - **Next.js application** — production build of the Contact Center
 
-Both containers are defined in `docker/production/compose.yaml` and managed by the `deploy.sh` script.
+Both containers are defined in `docker/production/compose.yaml` and managed by the `deploy.sh` script. Local installs also apply `compose.local.yaml`, which publishes PostgreSQL only on loopback.
 
 ## Quick Start
 
@@ -61,7 +61,7 @@ The script will:
 curl http://localhost:3000/api/health
 
 # Container status
-docker compose -f docker/production/compose.yaml ps
+docker compose -f docker/production/compose.yaml -f docker/production/compose.local.yaml ps
 ```
 
 ## Deployment Modes
@@ -82,6 +82,45 @@ Stops and rebuilds only the app container. Database data is preserved.
 
 Removes all containers and volumes, recreating the database from scratch. **This deletes all data.**
 
+### Audit and repair a legacy Telnyx Credential Connection
+
+Credential Connections created before the deploy wizard may have a null
+`sip_uri_calling_preference`, which can cause SIP transfers to fail with a 403
+reported as `user_busy`. Audit the connection configured in
+`docker/production/.env` without changing it:
+
+```bash
+./docker/deploy.sh production --audit-telnyx-credentials
+```
+
+The command uses `TELNYX_API_KEY` and `TELNYX_SIP_CONNECTION_ID` from `.env`.
+Exit status `0` means the connection already uses `unrestricted`; status `2`
+means a repair is required. To inspect a different, explicitly scoped
+connection:
+
+```bash
+./docker/deploy.sh production --audit-telnyx-credentials --connection-id <connection-id>
+```
+
+FDE-managed installations can read their existing environment file directly;
+secrets do not need to be copied into the repository:
+
+```bash
+./docker/deploy.sh production --audit-telnyx-credentials \
+  --env-file /opt/cc-prod/app.env
+```
+
+Repair first displays the current value, asks for confirmation, PATCHes only
+`sip_uri_calling_preference`, and verifies the value with a fresh GET:
+
+```bash
+./docker/deploy.sh production --repair-telnyx-credentials
+```
+
+For an explicitly approved non-interactive maintenance job, add `--yes`. The
+command never scans or changes every Credential Connection in the Telnyx
+account; it operates only on the configured or explicitly supplied ID.
+
 ## Manual Deployment
 
 If you prefer to run Docker Compose directly:
@@ -90,13 +129,13 @@ If you prefer to run Docker Compose directly:
 cd docker/production
 
 # Build and start
-docker compose up --build -d
+docker compose -f compose.yaml -f compose.local.yaml up --build -d
 
 # Check logs
-docker compose logs -f
+docker compose -f compose.yaml -f compose.local.yaml logs -f
 
 # Stop
-docker compose down
+docker compose -f compose.yaml -f compose.local.yaml down
 ```
 
 ## Database Schema & Seeding
@@ -116,7 +155,7 @@ Both containers have Docker health checks configured:
 
 | Service | Check | Interval |
 |---|---|---|
-| PostgreSQL | `pg_isready` | 10s |
+| PostgreSQL | Authenticated `SELECT 1` over TCP/SCRAM | 10s |
 | Application | `GET /api/health` | 30s |
 
 ## Logs
@@ -168,14 +207,14 @@ sudo usermod -aG docker $USER
 ### PostgreSQL is not responding
 
 ```bash
-docker compose -f docker/production/compose.yaml logs postgres
-docker compose -f docker/production/compose.yaml restart postgres
+docker compose -f docker/production/compose.yaml -f docker/production/compose.local.yaml logs postgres
+docker compose -f docker/production/compose.yaml -f docker/production/compose.local.yaml restart postgres
 ```
 
 ### App container fails to start
 
 ```bash
-docker compose -f docker/production/compose.yaml logs app
+docker compose -f docker/production/compose.yaml -f docker/production/compose.local.yaml logs app
 ```
 
 Common issues:
