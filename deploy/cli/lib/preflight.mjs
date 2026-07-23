@@ -98,7 +98,7 @@ async function isPortFree(port, host = '0.0.0.0') {
   });
 }
 
-function hintForBusyPort(port) {
+export function hintForBusyPort(port) {
   // 5432 has its own hint because the most common cause is "I already have a local Postgres
   // for development" — the wizard's port-conflict step offers to point at it instead of
   // telling the user to stop it. Other ports are usually app port collisions.

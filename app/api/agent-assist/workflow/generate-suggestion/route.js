@@ -9,6 +9,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, suggestionsLogger } from "@/lib/agent-assist/logging.mjs";
 import { isReadBackItem, buildReadBackSuggestion, orderedSlotsFromMap, formatSlotValue, earliestReadBackItemId } from "@/lib/agent-assist/readback.mjs";
+import { resolveFastSuggestionTemplate } from "@/lib/agent-assist/suggestion-templates.mjs";
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
@@ -51,7 +52,9 @@ export async function POST(request) {
       itemPromptHint,
       itemHints,
       itemType,
+      slotName,
       slotOptions,
+      suggestionTemplate,
       workflowId,
       agentName,
       brandName,
@@ -149,6 +152,30 @@ export async function POST(request) {
       return NextResponse.json({
         ok: true,
         suggestion: deterministicSuggestion,
+        model: "template",
+      });
+    }
+
+    // Fast templates for standard collect questions (GMR slot map, SAY: hints,
+    // or generic phrasing). Prefer this over an LLM round-trip so the right
+    // panel can appear in milliseconds after the target item is selected.
+    const fastTemplate = resolveFastSuggestionTemplate({
+      itemType,
+      itemLabel,
+      slotName: slotName || conversationContext?.targetSlotName || null,
+      suggestionTemplate,
+      itemPromptHint,
+      itemHints,
+      targetMode,
+      agentName,
+      brandName: effectiveBrandName,
+      prefilledSlots,
+      allowGenericSlot: true,
+    });
+    if (fastTemplate) {
+      return NextResponse.json({
+        ok: true,
+        suggestion: fastTemplate,
         model: "template",
       });
     }
@@ -475,6 +502,21 @@ function hasMeaningfulValue(value) {
 }
 
 function capturedSlotValue({ itemStatus, prefilledSlots, conversationContext }) {
+  // A correction candidate's newly-suggested value must win over the OLD
+  // confirmed value still sitting in slots_filled — a "suggested" item is
+  // deliberately NOT written to slots_filled until confirmed (so read-back
+  // stays on the old value until then), so the general fallback below would
+  // otherwise surface the stale value being corrected, not the new one
+  // pending confirmation. Gated on is_correction (set only on the correction
+  // path in analyze/route.js) so this does not affect the general case below,
+  // where slots_filled can hold a MORE RECENT agent-corrected value than a
+  // stale itemStatus.extracted_value — see "confirm slot suggestions prefer
+  // corrected filled slot values over stale suggested captures".
+  if (itemStatus?.is_correction) {
+    const correctionValue = itemStatus?.extracted_value ?? itemStatus?.value;
+    if (hasMeaningfulValue(correctionValue)) return correctionValue;
+  }
+
   const slotName = conversationContext?.targetSlotName;
   const prefilledValue = slotName ? prefilledSlots?.[slotName] : null;
   if (hasMeaningfulValue(prefilledValue)) return prefilledValue;
@@ -542,6 +584,18 @@ function buildDeterministicSuggestion({
 
   if (targetMode === "collect_prerequisite" && blockedItem?.label) {
     return `Before I ${blockedItem.label.toLowerCase()}, could you provide ${slotNounPhrase(label) || `the ${labelLower}`}?`;
+  }
+
+  // Caller flagged that an already-completed slot needs correcting (see
+  // findCorrectionTargetSlot in suggestion-target-resolver.mjs) — ask what the
+  // corrected value should be, rather than re-asking the original collection
+  // question or falling through to a generic read-back line.
+  if (targetMode === "collect_correction") {
+    const value = capturedSlotValue({ itemStatus, prefilledSlots, conversationContext });
+    const noun = slotNounPhrase(label) || `the ${labelLower}`;
+    return hasMeaningfulValue(value)
+      ? `Sorry about that — I have ${noun} as ${value}. What should it be instead?`
+      : `Sorry about that — what should ${noun} be corrected to?`;
   }
 
   if (conversationContext?.reason === "conversation_stage_match" && itemType === "slot") {

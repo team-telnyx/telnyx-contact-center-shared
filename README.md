@@ -165,6 +165,8 @@ APP_BASE_URL=https://<your-server-url>
 NEXT_PUBLIC_BASE_URL=https://<your-server-url>
 ALLOWED_ORIGINS=https://<your-server-url>
 NEXTAUTH_SECRET=<long-random-secret>
+ACCESS_JWT_SECRET=<different-long-random-secret>
+REFRESH_JWT_SECRET=<different-long-random-secret>
 
 # Telnyx credentials
 TELNYX_API_KEY=<your-telnyx-api-key>

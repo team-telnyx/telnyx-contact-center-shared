@@ -13,6 +13,7 @@ import {
   findFreePortInRange,
   defaultPortsFor,
   LOCAL_PORTS,
+  hintForBusyPort,
 } from '../lib/preflight.mjs';
 import net from 'node:net';
 
@@ -173,17 +174,10 @@ describe('preflight.mjs', () => {
     assert.deepStrictEqual(defaultPortsFor('aws'), []);
   });
 
-  it('checkPorts: hint for 5432 specifically suggests the wizard can point at an existing Postgres', async () => {
-    const server = net.createServer();
-    await new Promise((resolve) => server.listen(5432, resolve));
-    try {
-      const result = await checkPorts([5432]);
-      assert.strictEqual(result.status, 'fail');
-      assert.match(result.hint, /use existing Postgres/i);
-      assert.match(result.hint, /different host port/i);
-    } finally {
-      await new Promise((resolve) => server.close(resolve));
-    }
+  it('hint for 5432 specifically explains existing Postgres and a different Local port', () => {
+    const hint = hintForBusyPort(5432);
+    assert.match(hint, /use existing Postgres/i);
+    assert.match(hint, /different host port/i);
   });
 
   it('checkPorts: hint for non-5432 ports does NOT mention Postgres', async () => {

@@ -270,6 +270,7 @@ export async function upsertWebrtcCredentialConnection({
       headers: authHeaders(apiKey),
       body: JSON.stringify({
         active: true,
+        sip_uri_calling_preference: 'unrestricted',
         outbound: { outbound_voice_profile_id: outboundVoiceProfileId },
         ...(webhookUrl ? { webhook_event_url: webhookUrl, webhook_api_version: '2' } : {}),
         tags: existing.tags?.includes('webrtc') ? existing.tags : [...(existing.tags || []), 'webrtc'],

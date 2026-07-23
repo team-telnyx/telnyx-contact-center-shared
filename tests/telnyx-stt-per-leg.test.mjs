@@ -81,3 +81,35 @@ test("Telnyx STT drops pre-answer media buffers by default", async () => {
   assert.match(source, /telnyxSession\.clearBuffer\(mapping\.mediaTrack\)/);
   assert.doesNotMatch(source, /Flushing buffers/);
 });
+
+test("provider STT socket reconnects automatically after a dead-socket close (zero messages, not intentional)", async () => {
+  // Observed twice in live testing: two near-simultaneous session starts (e.g.
+  // inbound + outbound legs answering within milliseconds of each other), one
+  // side's provider socket accepts audio but never delivers a single message,
+  // then the provider force-closes it cleanly (~6s later) with no reason. Left
+  // unhandled, that track stays silent for the rest of the call.
+  const source = await readFile(
+    new URL("../lib/telnyx-stt-handler.mjs", import.meta.url),
+    "utf8",
+  );
+
+  // Told apart from an intentional close (our own close() sets this.closed
+  // synchronously before the socket actually closes) from a surprise provider
+  // close, and only reconnects when the socket never delivered anything.
+  assert.match(source, /const wasIntentional = this\.closed;/);
+  assert.match(source, /const deadSocket = !wasIntentional && this\.providerMessages === 0;/);
+  assert.match(source, /const willReconnect = deadSocket && this\.reconnectAttempts < STT_DEAD_SOCKET_MAX_RECONNECTS;/);
+  // Bounded retries — a persistent problem surfaces as an error, not an
+  // infinite silent retry loop.
+  assert.match(source, /const STT_DEAD_SOCKET_MAX_RECONNECTS = \d+;/);
+  assert.match(source, /provider_socket_dead_reconnect_exhausted/);
+  // Reconnect path: undo the intentional-close bookkeeping and call connect()
+  // again for a fresh socket.
+  assert.match(source, /provider_socket_dead_reconnecting/);
+  assert.match(source, /this\.reconnectAttempts\+\+;/);
+  assert.match(source, /this\.closed = false;\s*\n\s*this\.ws = null;/);
+  // this.connect() (as opposed to the external session.connect()) only
+  // appears in the reconnect branch — confirms it calls back into itself to
+  // open a fresh socket rather than just resetting state and stopping.
+  assert.match(source, /\n\s*this\.connect\(\);\s*\n/);
+});

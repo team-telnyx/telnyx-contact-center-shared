@@ -9,7 +9,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
-import { isReadBackItem } from "@/lib/agent-assist/readback.mjs";
+import { isReadBackItem, mentionsCorrectionTrigger, matchesReadBackAffirmativeHints } from "@/lib/agent-assist/readback.mjs";
 import { isAccumulatingSlot, accumulateSlotValue } from "@/lib/agent-assist/slot-accumulate.mjs";
 
 // How many pending items to send the analyzer per utterance. The old cap of 12
@@ -165,6 +165,58 @@ export async function POST(request) {
       })
       .slice(0, MAX_ANALYZER_PENDING_ITEMS);
 
+    // Needed by isReadBackStage below (moved up from its previous spot further
+    // down this function — see the comment there for why).
+    const slotsFilled = workflowSession.slots_filled || {};
+
+    // Are we at the final read-back/confirmation step? A read-back-matching
+    // item (e.g. "Confirm all information is correct") stays pending for the
+    // ENTIRE call until the very end, so checking pendingItems alone (as an
+    // earlier version of this code did) makes isReadBackStage true from the
+    // FIRST utterance onward — re-including every already-completed slot as a
+    // "correction candidate" (see below) and adding the correction prompt
+    // section for the whole call, not just read-back. That widened window is
+    // exactly what let a pickup-stage address utterance get misattributed to
+    // destination_facility: destination_facility was ALSO sitting in view as
+    // a correction candidate, adding noise right when the model should be
+    // tightly focused on pickup vs. destination. Require BOTH: a read-back
+    // item is pending, AND every slot-type item is already collected — read-
+    // back is only reached once there is nothing left to collect.
+    //
+    // A slot-type item with status "pending"/"suggested" does NOT count as
+    // "still needs collecting" when slots_filled already has a value for
+    // it — that's a correction candidate whose confirmation is still pending
+    // (see the always-suggested correction branch below), not a genuine gap.
+    // Without this exception, confirming ONE correction (e.g. date of birth)
+    // would make that slot itself "pending" again, which would flip
+    // isReadBackStage back to false and hide every OTHER slot from being
+    // corrected until that one confirmation was resolved — i.e. only one
+    // correction could ever be in flight at a time.
+    const isReadBackStage =
+      !pendingItems.some(
+        (item) => item.type === "slot" && !hasMeaningfulExtractedValue(slotsFilled[item.slot_name])
+      ) &&
+      pendingItems.some((item) =>
+        isReadBackItem({
+          itemType: item.type,
+          itemLabel: item.label,
+          itemPromptHint: item.prompt_hint,
+          itemHints: item.hints,
+        })
+      );
+
+    // Was a correction just flagged, in this utterance or a recent one? STT
+    // often mangles a corrected value differently on each retry (e.g. "Twin
+    // Hill" / "Stonemere" / "John Miller" for "John Muir Hospital"), and the
+    // caller then just repeats a plain name instead of re-explaining "that's
+    // still wrong" every single time. When true, the correction prompt (below)
+    // is told it can accept a bare restated value as continuing that same
+    // correction instead of requiring the explicit trigger phrase again.
+    const correctionInProgress =
+      isReadBackStage &&
+      (mentionsCorrectionTrigger(transcript) ||
+        (Array.isArray(recentContext) ? recentContext.some((c) => mentionsCorrectionTrigger(c?.text)) : false));
+
     // Free-text notes slots keep accumulating AFTER they complete: a completed
     // item drops out of the pending set, so later STT fragments of a multi-
     // sentence note would be lost. Re-include completed accumulating (notes)
@@ -190,7 +242,19 @@ export async function POST(request) {
       const trigger = it.completion_trigger || "agent";
       return Boolean(speakerType) && (trigger === "either" || trigger === speakerType);
     });
-    const analyzerItems = [...relevantPendingItems, ...completedNotesItems];
+
+    // At the read-back step only, re-include every OTHER already-completed slot
+    // too — as correction candidates, not for re-collection. Outside this
+    // stage, a completed slot stays fully out of the analyzer's view (see
+    // "pending items" query above), so an offhand later mention of a value
+    // can't accidentally overwrite it. Scoped to read-back because that's the
+    // one moment a caller is expected to review and correct prior answers;
+    // the prompt (buildWorkflowAnalysisSystemPrompt) is the actual gate that
+    // requires an EXPLICIT correction statement before returning one of these.
+    const correctionCandidateItems = isReadBackStage
+      ? completedSlotRows.filter((it) => !isAccumulatingSlot(it))
+      : [];
+    const analyzerItems = [...relevantPendingItems, ...completedNotesItems, ...correctionCandidateItems];
 
     if (analyzerItems.length === 0) {
       workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
@@ -217,14 +281,14 @@ export async function POST(request) {
     // slots ("Can I get Mercy for the pickup facility?"), so any text heuristic
     // to guess "asking vs stating" would drop real captures.
 
-    // Get current slots filled. `slotsFilled` is the snapshot read at request
-    // start; `slotsDelta` accumulates ONLY the slots this request changes, so the
-    // persist can jsonb-merge the delta instead of overwriting the whole object.
-    // Overwriting is a lost-update race: when analyze is slow, two requests
-    // overlap, each reads this snapshot, and the later write wipes the earlier
-    // one's slots (e.g. a freshly captured `other_aircraft_responding: false`
-    // vanishes, so the suggested response re-targets an already-filled slot).
-    const slotsFilled = workflowSession.slots_filled || {};
+    // slotsFilled (the snapshot read at request start) was moved up above,
+    // next to isReadBackStage which needs it. `slotsDelta` accumulates ONLY
+    // the slots this request changes, so the persist can jsonb-merge the
+    // delta instead of overwriting the whole object. Overwriting is a
+    // lost-update race: when analyze is slow, two requests overlap, each
+    // reads this snapshot, and the later write wipes the earlier one's slots
+    // (e.g. a freshly captured `other_aircraft_responding: false` vanishes, so
+    // the suggested response re-targets an already-filled slot).
     const slotsDelta = {};
 
     // Get workflow's LLM model and confidence threshold
@@ -256,41 +320,178 @@ export async function POST(request) {
       ? { slotName: recentlyCompletedSlot.slot_name, slotType: recentlyCompletedSlot.slot_type, value: recentlyCompletedSlot.completed_value }
       : null;
 
-    // The slot the agent is currently collecting = the earliest still-open slot
-    // (pendingItems are ordered by stage, then item). Passed to the analyzer so
-    // an ambiguous answer is assigned to the slot actually being asked, instead
-    // of a same-looking slot elsewhere (e.g. a mis-heard destination facility
-    // going into a patient-name slot).
+    // The slot the agent is currently collecting = the earliest still-open OR
+    // still-unconfirmed slot (pendingItems are ordered by stage, then item).
+    // Passed to the analyzer so an ambiguous answer is assigned to the slot
+    // actually being asked, instead of a same-looking slot elsewhere (e.g. a
+    // mis-heard destination facility going into a patient-name slot).
+    //
+    // Includes "suggested" (not just "pending"): a low-confidence capture
+    // isn't confirmed yet, and the caller often repeats/clarifies it on the
+    // very next turn. If that turn were treated as "moved on", current focus
+    // would already be pointing at whatever's next (e.g. sending_physician
+    // suggested at low confidence -> focus jumps to receiving_physician), so
+    // an unrelated bare repeat of the SAME name gets misattributed to the
+    // NEXT slot instead of confirming/refining the one actually still in
+    // question. Reported live: "I was talking only sending physician name but
+    // it fills up to both sending physician and receiving physician."
     const currentTargetItem = pendingItems.find(
-      (i) => i.type === "slot" && i.current_status === "pending"
+      (i) => i.type === "slot" && (i.current_status === "pending" || i.current_status === "suggested")
     );
     const currentTarget = currentTargetItem
       ? { label: currentTargetItem.label, slotName: currentTargetItem.slot_name }
       : null;
+    // Stage name of the currently active stage, used by the LLM stage-boundary
+    // rule to prevent cross-stage slot bleed (e.g. pickup dept bleeding into
+    // destination dept).
+    const currentStageName = currentTargetItem?.stage_name
+      ?? pendingItems.find(i => i.current_status === "pending")?.stage_name
+      ?? null;
+
+    // Narrow the analyzer's input to the current stage (+ a small look-ahead
+    // buffer) instead of every open item across the whole remaining workflow.
+    // Smaller prompt -> faster inference, and fewer structurally-similar
+    // future-stage slots in view to accidentally bleed into (the hard
+    // backstop below still applies as defense-in-depth regardless). Still-open
+    // items from EARLIER stages stay visible — the agent may circle back to a
+    // skipped question — only far-future stages are trimmed.
+    //
+    // completedNotesItems are deliberately EXEMPT from narrowing: they're
+    // already-completed, still-accumulating notes slots (see comment above
+    // completedSlotRows) that must stay analyzable regardless of which stage
+    // they belong to, or a later fragment of that note would stop accumulating.
+    //
+    // "suggested" items (a slot already captured at low confidence, awaiting
+    // an explicit confirmation utterance) are ALSO exempt, for the same
+    // reason: currentTargetItem anchors on the EARLIEST still-open slot, which
+    // can regress back to an early stage once every later-stage slot is
+    // either completed or merely "suggested" (e.g. one slot in "Intent
+    // Identification" never got filled, so once every later stage's slots
+    // are captured, that one early slot becomes the only remaining
+    // type=slot/status=pending row and currentStageOrder snaps back to it).
+    // Without this exemption, that regression narrows the analyzer's view
+    // down to the early stage and permanently hides a later "suggested" slot
+    // from ever being re-analyzed — so its confirmation utterance ("two IV
+    // drips is correct") is never seen, the slot never flips to "completed",
+    // and the low-confidence-confirmation fallback keeps re-prompting for it
+    // near the end of the call even though the agent already confirmed it.
+    // The read-back/"confirm all information" item is ALSO exempt, for the
+    // same regression: it's a non-slot PENDING item (not "suggested"), so the
+    // exemption above doesn't cover it. It sits in the final stage, so any
+    // regression at all pushes it out of the narrowed window — permanently
+    // hiding it from the analyzer even while the customer is actively giving
+    // the read-back affirmative ("yes, all information is correct"), leaving
+    // the read-back stuck open with no way to ever complete it.
+    const NARROW_STAGE_LOOKAHEAD = 1;
+    const currentStageOrder = currentTargetItem?.stage_order
+      ?? pendingItems.find(i => i.current_status === "pending")?.stage_order
+      ?? null;
+    const narrowedRelevantPendingItems = currentStageOrder == null
+      ? relevantPendingItems
+      : relevantPendingItems.filter((item) =>
+          item.current_status === "suggested" ||
+          (item.stage_order ?? 0) <= currentStageOrder + NARROW_STAGE_LOOKAHEAD ||
+          isReadBackItem({
+            itemType: item.type,
+            itemLabel: item.label,
+            itemPromptHint: item.prompt_hint,
+            itemHints: item.hints,
+          })
+        );
+    // correctionCandidateItems are exempt from narrowing for the same reason as
+    // completedNotesItems: they're already-completed slots from potentially
+    // any earlier stage, re-included ONLY so an explicit correction at the
+    // read-back step can be captured — narrowing by stage distance would
+    // defeat that (a correction to an early-stage slot must stay visible even
+    // though currentStageOrder now sits at the final Confirmation stage).
+    const narrowedAnalyzerItems = [...narrowedRelevantPendingItems, ...completedNotesItems, ...correctionCandidateItems];
+    workflowLogger.debug("workflow_analyzer_items_narrowed", agentAssistRuntimePayload({
+      sessionId: workflowSession.id,
+      interactionId: workflowSession.interaction_id,
+      currentStageName,
+      currentStageOrder,
+      isReadBackStage,
+      correctionInProgress,
+      correctionCandidates: correctionCandidateItems.length,
+      beforeCount: analyzerItems.length,
+      afterCount: narrowedAnalyzerItems.length,
+    }));
 
     // Call LLM analyzer (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
       transcript,
       speaker: speaker || "unknown",
-      pendingItems: analyzerItems,
+      pendingItems: narrowedAnalyzerItems,
       slotsFilled,
       model: llmModel,
       includeIntent: assistConfig.enable_intent_recognition === true,
       includeSentiment: assistConfig.enable_sentiment_analysis === true,
       confidenceThreshold,
       currentTarget,
+      currentStageName,
+      isReadBackStage,
+      correctionInProgress,
       recentContext: Array.isArray(recentContext) ? recentContext.slice(-6) : [],
       bleedGuardSlot,
     });
 
+    // Hard backstop for cross-stage slot bleed (e.g. pickup_department also
+    // filling destination_department) that slips past the LLM's stage-boundary
+    // prompt instruction. Prompt-only guidance is a strong nudge, not an
+    // enforced rule — the model can still copy a value to a structurally
+    // identical slot in a later stage within the SAME response. Detect that
+    // exact pattern here: two items in this response share a base slot concept
+    // (stripping a pickup_/destination_/sending_/receiving_ prefix) and an
+    // identical extracted value — keep only the earlier-stage one.
+    const baseSlotKey = (slotName) =>
+      String(slotName || "").replace(/^(pickup|destination|sending|receiving)_/, "");
+    const normalizeForBleedCheck = (value) => String(value ?? "").trim().toLowerCase();
+    const bleedRejectedItemIds = new Set();
+    {
+      const itemById = new Map(analyzerItems.map((i) => [i.item_id, i]));
+      const candidates = (analysisResult.completed_items || [])
+        .map((completed) => {
+          const item = itemById.get(completed.item_id);
+          if (!item?.slot_name) return null;
+          const base = baseSlotKey(item.slot_name);
+          if (base === item.slot_name) return null; // no pickup_/destination_/etc. prefix — not a paired slot
+          return {
+            itemId: completed.item_id,
+            base,
+            stageOrder: item.stage_order,
+            value: normalizeForBleedCheck(completed.extracted_value),
+          };
+        })
+        .filter(Boolean);
+
+      for (let a = 0; a < candidates.length; a++) {
+        for (let b = a + 1; b < candidates.length; b++) {
+          const x = candidates[a];
+          const y = candidates[b];
+          if (x.base !== y.base || !x.value || x.value !== y.value) continue;
+          if (x.stageOrder === y.stageOrder) continue;
+          const later = x.stageOrder > y.stageOrder ? x : y;
+          bleedRejectedItemIds.add(later.itemId);
+          workflowLogger.warn("workflow_stage_bleed_rejected", agentAssistRuntimePayload({
+            sessionId: workflowSession.id,
+            interactionId: workflowSession.interaction_id,
+            rejectedItemId: later.itemId,
+            baseSlotKey: x.base,
+            value: x.value,
+          }));
+        }
+      }
+    }
+
     // Process completed items
     const updates = [];
     const client = await pool.connect();
-    
+
     try {
       await client.query("BEGIN");
 
       for (const completed of analysisResult.completed_items || []) {
+        if (bleedRejectedItemIds.has(completed.item_id)) continue;
         // Get item details including completion_trigger (search the analyzer input,
         // which also carries completed notes slots still accumulating).
         const item = analyzerItems.find(p => p.item_id === completed.item_id);
@@ -353,6 +554,62 @@ export async function POST(request) {
               alternatives: [],
             });
           }
+          continue;
+        }
+
+        // A correction candidate (already-completed slot, re-included ONLY at
+        // the read-back stage — see correctionCandidateItems) is ALWAYS
+        // surfaced as "suggested" — pending agent confirmation — never
+        // silently auto-completed and never silently dropped, regardless of
+        // confidence. Confidence alone isn't a reliable signal for a
+        // correction: STT can garble the corrected value into something that
+        // still scores high confidence (e.g. "Stonemere" for "John Muir
+        // Hospital" scored 0.92 and was auto-applied before this change,
+        // landing on the wrong value with no visible flag that anything had
+        // changed). Routing every correction through "suggested" reuses the
+        // EXISTING low-confidence confirmation UI (chips / "please confirm")
+        // instead of a silent overwrite, and — because a "suggested" slot is
+        // NOT written to slots_filled until confirmed — the OLD value stays
+        // authoritative for read-back until the agent explicitly confirms the
+        // new one, so a bad guess can't silently become the record of truth.
+        if (item.current_status === "completed") {
+          if (!hasMeaningfulExtractedValue(completed.extracted_value)) continue;
+          const correctionAlternatives =
+            Array.isArray(completed.alternatives) && completed.alternatives.length > 0
+              ? JSON.stringify(completed.alternatives)
+              : null;
+          await client.query(
+            `UPDATE aa_workflow_item_status
+               SET status = 'suggested',
+                   completed_at = NULL,
+                   completed_by = 'ai',
+                   extracted_value = $1,
+                   confidence_score = $2,
+                   source_transcript = $3,
+                   alternatives = $6::jsonb,
+                   updated_at = NOW()
+             WHERE session_id = $4 AND item_id = $5`,
+            [
+              completed.extracted_value,
+              completed.confidence,
+              transcript,
+              workflowSession.id,
+              completed.item_id,
+              correctionAlternatives,
+            ]
+          );
+          updates.push({
+            item_id: completed.item_id,
+            status: "suggested",
+            confidence: completed.confidence,
+            extracted_value: completed.extracted_value,
+            source_text: completed.source_text,
+            alternatives: Array.isArray(completed.alternatives) ? completed.alternatives : [],
+            completed_by: "ai",
+            low_confidence: true,
+            confidence_threshold: confidenceThreshold,
+            is_correction: true,
+          });
           continue;
         }
 
@@ -441,6 +698,115 @@ export async function POST(request) {
             low_confidence: completed.confidence < confidenceThreshold,
             confidence_threshold: confidenceThreshold,
             completion_trigger_pending: !shouldComplete,
+          });
+        }
+      }
+
+      // Deterministic backstop: the read-back "confirm all information is
+      // correct"-style item is a single, extremely high-value completion that
+      // the LLM has repeatedly missed in live testing despite an unambiguous
+      // customer affirmative. If the model didn't already flag it above, check
+      // the raw transcript directly against the item's own hints and complete
+      // it deterministically when customer-spoken at the read-back stage.
+      // pendingItems only lists items still pending/suggested, so this
+      // naturally no-ops once the item is already completed.
+      if (isReadBackStage && speakerType === "customer") {
+        const readBackConfirmItem = pendingItems.find(
+          (item) =>
+            item.completion_trigger === "customer" &&
+            isReadBackItem({
+              itemType: item.type,
+              itemLabel: item.label,
+              itemPromptHint: item.prompt_hint,
+              itemHints: item.hints,
+            })
+        );
+        const alreadyHandledThisTurn =
+          readBackConfirmItem && updates.some((u) => u.item_id === readBackConfirmItem.item_id);
+        if (
+          readBackConfirmItem &&
+          !alreadyHandledThisTurn &&
+          matchesReadBackAffirmativeHints(transcript, readBackConfirmItem)
+        ) {
+          await client.query(
+            `UPDATE aa_workflow_item_status
+               SET status = 'completed', completed_at = NOW(), completed_by = $1,
+                   extracted_value = $2, confidence_score = 1, source_transcript = $3,
+                   alternatives = NULL, updated_at = NOW()
+             WHERE session_id = $4 AND item_id = $5`,
+            [speakerType, true, transcript, workflowSession.id, readBackConfirmItem.item_id]
+          );
+          updates.push({
+            item_id: readBackConfirmItem.item_id,
+            status: "completed",
+            confidence: 1,
+            extracted_value: true,
+            source_text: transcript,
+            alternatives: [],
+          });
+        }
+      }
+
+      // The customer just gave the final read-back affirmative (e.g. "Confirm
+      // all information is correct" completing — its completion_trigger is
+      // 'customer'-only, so reaching here already means the customer said it,
+      // not the agent reciting the script). Auto-promote every OTHER still-
+      // pending correction candidate in the same breath: the caller already
+      // reviewed and accepted the WHOLE updated summary (which folds in every
+      // pending correction — see buildReadBackSuggestion's callers), not just
+      // the read-back item by itself. Without this, each correction would
+      // still need its own separate "please confirm" exchange even after the
+      // caller already said the whole thing looks right.
+      //
+      // A correction candidate is identified the same way isReadBackStage's
+      // slot check is: a "suggested" slot whose slot_name ALREADY has a value
+      // in slots_filled. A genuine first-time low-confidence suggestion has
+      // no slots_filled entry yet, so it is deliberately NOT swept up here —
+      // it still needs its own individual confirmation.
+      const readBackJustConfirmed = updates.some((u) => {
+        if (u.status !== "completed") return false;
+        const completedItem =
+          analyzerItems.find((p) => p.item_id === u.item_id) ||
+          pendingItems.find((p) => p.item_id === u.item_id);
+        return (
+          completedItem &&
+          isReadBackItem({
+            itemType: completedItem.type,
+            itemLabel: completedItem.label,
+            itemPromptHint: completedItem.prompt_hint,
+            itemHints: completedItem.hints,
+          })
+        );
+      });
+
+      if (readBackJustConfirmed) {
+        const { rows: pendingCorrectionRows } = await client.query(
+          `SELECT i.id as item_id, i.slot_name, ist.extracted_value, ist.confidence_score
+             FROM aa_workflow_item_status ist
+             JOIN aa_workflow_items i ON i.id = ist.item_id
+            WHERE ist.session_id = $1 AND ist.status = 'suggested' AND i.type = 'slot'`,
+          [workflowSession.id]
+        );
+        for (const row of pendingCorrectionRows) {
+          if (!row.slot_name) continue;
+          if (!hasMeaningfulExtractedValue(slotsFilled[row.slot_name])) continue; // not a correction candidate
+          if (!hasMeaningfulExtractedValue(row.extracted_value)) continue;
+          await client.query(
+            `UPDATE aa_workflow_item_status
+               SET status = 'completed', completed_at = NOW(), completed_by = $1,
+                   alternatives = NULL, updated_at = NOW()
+             WHERE session_id = $2 AND item_id = $3`,
+            [speakerType || "customer", workflowSession.id, row.item_id]
+          );
+          slotsFilled[row.slot_name] = row.extracted_value;
+          slotsDelta[row.slot_name] = row.extracted_value;
+          updates.push({
+            item_id: row.item_id,
+            status: "completed",
+            confidence: row.confidence_score,
+            extracted_value: row.extracted_value,
+            source_text: transcript,
+            alternatives: [],
           });
         }
       }

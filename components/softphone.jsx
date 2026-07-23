@@ -27,8 +27,6 @@ import {
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { notify } from "@/components/ToastNotify";
-import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
-import { useExperimentalFeatures } from "@/lib/experimental-features-client";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -86,7 +84,6 @@ function isValidDialTo(value) {
 
 export function Softphone() {
   const { client, region, regions, setRegion } = useTelnyx();
-  const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
 
   // Zustand stores - call state (shared with mini phone)
   const activeCall = useActiveCall();
@@ -174,45 +171,6 @@ export function Softphone() {
   const displayedFromNumber = isIncomingCall
     ? incomingCallerDisplay || fromNumber
     : fromNumber;
-
-  useEffect(() => {
-    if (!experimentalFeaturesEnabled) return;
-    const service = getHeadsetControlService();
-    if (!service) return;
-
-    const callId =
-      activeCall?.callControlId ||
-      activeCall?.call_control_id ||
-      activeCall?.id ||
-      null;
-
-    initHeadsetControlService()
-      .then((initializedService) => initializedService?.setSoftphoneState({
-        callId,
-        direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
-        ringing: Boolean(isRinging),
-        active: Boolean(isCallConnected),
-        muted: Boolean(callUI.isMuted),
-        held: Boolean(callUI.isHeld),
-        remoteDisplayName: incomingCallerName || outboundCallerName || null,
-        remoteNumber: incomingCallerNumber || toNumber || null,
-      }))
-      .catch(() => {});
-  }, [
-    activeCall,
-    callUI.isHeld,
-    callUI.isMuted,
-    incomingCallerName,
-    incomingCallerNumber,
-    isCallConnected,
-    isIncomingCall,
-    isOutboundCall,
-    isRinging,
-    outboundCallerName,
-    toNumber,
-    experimentalFeaturesEnabled,
-  ]);
-
 
   const remoteAudioRef = useRef(null);
   const lastFetchedInteractionIdRef = useRef(null);
@@ -849,10 +807,12 @@ export function Softphone() {
       const isMuted = callUI.isMuted;
 
       if (!isMuted) {
-        activeCall.muteAudio?.() || activeCall.mute?.();
+        const mute = activeCall.muteAudio || activeCall.mute;
+        await mute?.call(activeCall);
         storeSetMuted(true);
       } else {
-        activeCall.unmuteAudio?.() || activeCall.unmute?.();
+        const unmute = activeCall.unmuteAudio || activeCall.unmute;
+        await unmute?.call(activeCall);
         storeSetMuted(false);
       }
     } catch (err) {
@@ -867,12 +827,14 @@ export function Softphone() {
       const isHeld = callUI.isHeld;
 
       if (isHeld) {
-        activeCall.unhold?.() || activeCall.resume?.();
+        const resume = activeCall.unhold || activeCall.resume;
+        await resume?.call(activeCall);
         // Update status before clearing held state so resume metrics close the hold interval
         updateStatus("active");
         storeSetHeld(false);
       } else {
-        activeCall.hold?.() || activeCall.pause?.();
+        const hold = activeCall.hold || activeCall.pause;
+        await hold?.call(activeCall);
         storeSetHeld(true);
         // Update status to 'held' to track hold start
         updateStatus("held");

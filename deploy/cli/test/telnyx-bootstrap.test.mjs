@@ -234,6 +234,13 @@ describe('telnyx-bootstrap.mjs', () => {
       assert.strictEqual(a.outcome, 'created');
       assert.strictEqual(b.outcome, 'updated');
       assert.strictEqual(mock.state.credentialConnections.length, 1);
+      const patchCall = mock.state.callLog.find((c) => c.method === 'PATCH' && c.url.includes('/v2/credential_connections/'));
+      assert.ok(patchCall, 'expected PATCH for the existing credential connection');
+      assert.strictEqual(
+        JSON.parse(patchCall.body).sip_uri_calling_preference,
+        'unrestricted',
+        're-running the wizard must repair legacy connections whose API default blocks SIP URI transfers',
+      );
     });
 
     it('throws when outboundVoiceProfileId is missing (cannot create a WebRTC leg without it)', async () => {
@@ -262,6 +269,7 @@ describe('telnyx-bootstrap.mjs', () => {
       // user_name is deterministic from `name` so resume can find the same connection
       // and the owner can derive it without an extra lookup.
       assert.strictEqual(body.user_name, 'ccmainwebrtc');
+      assert.strictEqual(body.sip_uri_calling_preference, 'unrestricted');
     });
 
     it('user_name derived deterministically from `name` (resume must hit the same value)', async () => {

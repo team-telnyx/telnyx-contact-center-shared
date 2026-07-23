@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import useCallsStore from "@/lib/stores/calls-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import useWorkflowStore from "@/lib/stores/workflow-store";
 
 export function ContactCenterStreamProvider({ children }) {
   useEffect(() => {
@@ -150,6 +151,14 @@ export function ContactCenterStreamProvider({ children }) {
               window.dispatchEvent(
                 new CustomEvent("contact-center:refresh-interactions"),
               );
+            } else if (data.type === "ai_handoff_data") {
+              window.dispatchEvent(
+                new CustomEvent("contact-center:ai-handoff-data", { detail: data }),
+              );
+            } else if (data.type === "wrapup_required") {
+              window.dispatchEvent(
+                new CustomEvent("contact-center:wrapup-required", { detail: data }),
+              );
             } else if (data.type === "interaction_ended") {
               if (data.callControlId) {
                 useCallsStore
@@ -158,6 +167,13 @@ export function ContactCenterStreamProvider({ children }) {
               }
               if (data.interactionId) {
                 useCallsStore.getState().removeCall(data.interactionId);
+                // Clear active call + workflow state only if this is the currently active interaction.
+                // Guard prevents clearing a NEW call's state when an old call's ended event arrives late.
+                const activeInteractionId = useActiveCallStore.getState().contactCenter?.interactionId;
+                if (activeInteractionId && String(activeInteractionId) === String(data.interactionId)) {
+                  useActiveCallStore.getState().clearActiveCall();
+                  useWorkflowStore.getState().clearSession();
+                }
               }
               // Dispatch event to trigger interaction list refresh
               window.dispatchEvent(

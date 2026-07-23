@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
-import { addSseClient, removeSseClient } from "@/lib/sse";
+import { replaceSseClient, removeSseClient } from "@/lib/sse";
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
@@ -65,7 +65,13 @@ export async function GET(request) {
         };
 
         const proxyWriter = { write };
-        addSseClient(sseKey, proxyWriter);
+        // One live connection per agent expected here — evict any stale writer
+        // under the same key instead of leaving both registered. Through a
+        // tunnel (cloudflared/ngrok), a silent client reconnect can otherwise
+        // leave an old, undetected-dead writer receiving broadcasts for up to
+        // 15s (until the ping-failure cleanup), causing the same event to be
+        // delivered twice and rendered as a duplicate transcription bubble.
+        replaceSseClient(sseKey, proxyWriter);
 
         // Send initial connection event
         write(

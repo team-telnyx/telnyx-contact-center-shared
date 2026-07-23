@@ -21,6 +21,7 @@ const authSources = [
   "app/api/auth/reset-password/route.js",
   "app/api/auth/activate/route.js",
   "app/api/auth/invite/[token]/route.js",
+  "lib/password-reset.js",
 ];
 
 test("auth flows emit structured pino auth events instead of direct console output", async () => {
@@ -45,7 +46,11 @@ test("auth flows emit structured pino auth events instead of direct console outp
   for (const file of authSources) {
     const src = await source(file);
     combined.push(src);
-    assert.match(src, /@\/lib\/auth-logging\.mjs/, `${file} should use the shared auth logger`);
+    assert.match(
+      src,
+      /(?:@\/lib\/|\.\/)auth-logging\.mjs/,
+      `${file} should use the shared auth logger`,
+    );
     assert.doesNotMatch(src, /console\.(log|warn|error)\(/, `${file} should not log auth through console`);
   }
 

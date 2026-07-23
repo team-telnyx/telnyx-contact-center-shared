@@ -27,18 +27,20 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST_AUTH_METHOD: trust
-    # Host port mapping is parameterized: default 5432, but the wizard can rewrite
-    # POSTGRES_HOST_PORT in .env when the user's host already has something on 5432
-    # (e.g. they have a local Postgres for development). The container still listens
-    # on 5432 internally so the app container's POSTGRES_PORT=5432 is unchanged.
-    ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      # These settings only initialize a new/empty data directory. Existing
+      # volumes retain their pg_hba.conf and require a separate migration.
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    # Deliberately no host port here. The app reaches Postgres as
+    # postgres:5432 on telnyx-network. Local development adds an explicit,
+    # loopback-only mapping through compose.local.yaml.
     volumes:
       - postgres:/var/lib/postgresql/data
       - ./init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # Use TCP plus the configured password so the check exercises the host
+      # SCRAM rule. pg_isready alone only checks server availability.
+      test: ["CMD-SHELL", "PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc 'SELECT 1' >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
