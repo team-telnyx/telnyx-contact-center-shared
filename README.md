@@ -371,4 +371,5 @@ For detailed architecture documentation, see the `docs/` directory.
 
 ## License
 
-Private project
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for
+details.
