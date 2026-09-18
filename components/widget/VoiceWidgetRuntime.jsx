@@ -16,7 +16,7 @@ import { TtsExpressionMarkdown } from "@/components/tts-expression-text";
 import AudioWaveform from "./AudioWaveform";
 import HandoffTimeline from "./HandoffTimeline";
 import WidgetIcon from "./WidgetIcon";
-import { safeImageUrl } from "@/lib/widgets/safe-image-url.mjs";
+import { safeImageUrl } from "@/lib/security/display-url.mjs";
 
 function Avatar({ spec, color, textColor, size = 36 }) {
   const safeSrc = spec?.type === "image" ? safeImageUrl(spec.value) : null;

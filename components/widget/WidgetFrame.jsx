@@ -16,7 +16,7 @@ import WidgetIcon from "./WidgetIcon";
 import DocumentPreview from "@/components/documents/DocumentPreview";
 import { documentPreviewKind } from "@/lib/documents/preview-types.mjs";
 import { attachmentAccept, isAttachmentTypeAllowed } from "@/lib/widgets/attachment-types.mjs";
-import { safeImageUrl } from "@/lib/widgets/safe-image-url.mjs";
+import { safeImageUrl } from "@/lib/security/display-url.mjs";
 
 const QUICK_EMOJI = ["😀", "😊", "👍", "❤️", "🎉", "🙏", "👋", "🤔"];
 
