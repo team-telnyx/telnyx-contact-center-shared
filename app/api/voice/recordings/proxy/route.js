@@ -3,6 +3,7 @@ import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, plat
 import { withPermission } from "@/lib/authz/guard";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { recordingInScope, selfOnlyScope } from "@/lib/authz/scope.mjs";
+import { assertPublicHostname } from "@/lib/security/outbound-url.mjs";
 
 /**
  * Proxy endpoint for recording URLs to avoid CORS issues
@@ -22,28 +23,47 @@ async function GET_handler(request, _context, authz) {
       );
     }
 
-    // Validate that the URL is from a trusted source (S3 or Telnyx)
+    // Validate that the URL is from a trusted source.
+    //
+    // The host is matched exactly or as a subdomain, never as a substring: a
+    // `hostname.includes("s3.amazonaws.com")` test accepts
+    // `s3.amazonaws.com.attacker.example`, which an attacker can register and
+    // point at anything — including the instance metadata service. The scheme
+    // is pinned to https, and the resolved address is checked against the same
+    // outbound guard the call-flow HTTP tester uses, so a hostname that passes
+    // the allowlist but resolves to a private or link-local address is refused
+    // before any request is made.
+    let parsedUrl;
     try {
-      const url = new URL(audioUrl);
-      const hostname = url.hostname.toLowerCase();
-      
-      // Only allow S3 URLs (telephony-recorder-prod) or Telnyx domains
-      const allowedHosts = [
-        "s3.amazonaws.com",
-        "telephony-recorder-prod.s3.amazonaws.com",
-        "telephony-recorder-prod.s3.us-east-1.amazonaws.com",
-      ];
-      
-      if (!allowedHosts.some(host => hostname.includes(host))) {
-        return NextResponse.json(
-          { ok: false, error: "URL is not from an allowed source" },
-          { status: 403 }
-        );
-      }
-    } catch (urlError) {
+      parsedUrl = new URL(audioUrl);
+    } catch {
       return NextResponse.json(
         { ok: false, error: "Invalid URL format" },
         { status: 400 }
+      );
+    }
+
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const allowedHosts = [
+      "s3.amazonaws.com",
+      "telephony-recorder-prod.s3.amazonaws.com",
+      "telephony-recorder-prod.s3.us-east-1.amazonaws.com",
+    ];
+    const hostAllowed = allowedHosts.some(
+      (host) => hostname === host || hostname.endsWith(`.${host}`)
+    );
+    if (parsedUrl.protocol !== "https:" || !hostAllowed) {
+      return NextResponse.json(
+        { ok: false, error: "URL is not from an allowed source" },
+        { status: 403 }
+      );
+    }
+    try {
+      await assertPublicHostname(hostname);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "URL is not from an allowed source" },
+        { status: 403 }
       );
     }
 

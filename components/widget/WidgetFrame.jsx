@@ -16,6 +16,7 @@ import WidgetIcon from "./WidgetIcon";
 import DocumentPreview from "@/components/documents/DocumentPreview";
 import { documentPreviewKind } from "@/lib/documents/preview-types.mjs";
 import { attachmentAccept, isAttachmentTypeAllowed } from "@/lib/widgets/attachment-types.mjs";
+import { safeImageUrl } from "@/lib/widgets/safe-image-url.mjs";
 
 const QUICK_EMOJI = ["😀", "😊", "👍", "❤️", "🎉", "🙏", "👋", "🤔"];
 
@@ -38,9 +39,10 @@ function Avatar({ spec, fallbackSpec = null, color, textColor, size = 36 }) {
   const [failedImageUrl, setFailedImageUrl] = useState(null);
   const imageFailed = spec?.type === "image" && failedImageUrl === spec.value;
   const style = { backgroundColor: color, color: textColor, width: size, height: size };
-  if (spec?.type === "image" && !imageFailed) {
+  const safeSrc = spec?.type === "image" ? safeImageUrl(spec.value) : null;
+  if (safeSrc && !imageFailed) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} src={spec.value} alt="" onError={() => setFailedImageUrl(spec.value)} />;
+    return <img className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} src={safeSrc} alt="" onError={() => setFailedImageUrl(spec.value)} />;
   }
   const visibleSpec = imageFailed && fallbackSpec ? fallbackSpec : spec;
   return (

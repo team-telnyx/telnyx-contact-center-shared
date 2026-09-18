@@ -111,11 +111,11 @@ export const authOptions = {
       try {
         // If url is provided and it's a relative path, use the current origin
         if (url && url.startsWith("/")) {
-          // Check if we're in a tunnel environment by looking at the baseUrl
-          if (baseUrl.includes("tunnel.example.com")) {
-            return `https://tunnel.example.com${url}`;
-          }
-          // Use the NEXTAUTH_URL if set, otherwise use baseUrl
+          // NEXTAUTH_URL is the deployment's own public URL and must match it,
+          // so it is the right base behind a tunnel or proxy too. The previous
+          // version special-cased one demo hostname with a substring test,
+          // which both hard-coded an environment into product code and
+          // accepted any host merely containing that name.
           const redirectBase = process.env.NEXTAUTH_URL || baseUrl;
           return `${redirectBase}${url}`;
         }
@@ -133,9 +133,6 @@ export const authOptions = {
         }
 
         // Default to home page
-        if (baseUrl.includes("tunnel.example.com")) {
-          return `https://tunnel.example.com/`;
-        }
         const defaultUrl = process.env.NEXTAUTH_URL || baseUrl;
         return `${defaultUrl}/`;
       } catch (_) {}

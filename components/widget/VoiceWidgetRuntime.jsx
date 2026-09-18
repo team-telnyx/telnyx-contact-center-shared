@@ -16,11 +16,13 @@ import { TtsExpressionMarkdown } from "@/components/tts-expression-text";
 import AudioWaveform from "./AudioWaveform";
 import HandoffTimeline from "./HandoffTimeline";
 import WidgetIcon from "./WidgetIcon";
+import { safeImageUrl } from "@/lib/widgets/safe-image-url.mjs";
 
 function Avatar({ spec, color, textColor, size = 36 }) {
-  if (spec?.type === "image") {
+  const safeSrc = spec?.type === "image" ? safeImageUrl(spec.value) : null;
+  if (safeSrc) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} src={spec.value} alt="" />;
+    return <img className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} src={safeSrc} alt="" />;
   }
   return (
     <span

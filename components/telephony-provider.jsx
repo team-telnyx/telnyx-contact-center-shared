@@ -149,17 +149,15 @@ export function TelephonyProvider({ children }) {
   }
 
   function getCurrentEnvironment() {
-    // Detect current environment based on URL
+    // The value only keys the cached WebRTC token, so that a token minted
+    // against one deployment is never reused against another. The origin is
+    // both the most precise discriminator and the only one that works for
+    // every installation: the previous version matched a fixed set of demo
+    // hostnames by substring, so any other deployment reported "unknown" for
+    // dev, staging and production alike and the cache could not tell them
+    // apart.
     if (typeof window === "undefined") return "unknown";
-    const hostname = window.location.hostname;
-    if (hostname.includes("tunnel.example.com")) return "dev";
-    if (hostname.includes("dev.example.com")) return "staging";
-    if (
-      hostname.includes("www.example.com") ||
-      hostname.includes("example.com")
-    )
-      return "production";
-    return "unknown";
+    return window.location.origin;
   }
 
   function shouldForceTokenRefresh() {
