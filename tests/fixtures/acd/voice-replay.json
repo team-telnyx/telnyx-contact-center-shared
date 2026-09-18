@@ -1,0 +1,10 @@
+{
+  "provenance": "Synthetic contract fixture; not a recording of a production call.",
+  "events": [
+    { "eventType": "call.answered", "leg": "device" },
+    { "eventType": "call.bridged", "leg": "customer" },
+    { "eventType": "call.hangup", "leg": "customer" },
+    { "eventType": "call.hangup", "leg": "device" },
+    { "eventType": "call.answered", "leg": "customer", "late": true }
+  ]
+}

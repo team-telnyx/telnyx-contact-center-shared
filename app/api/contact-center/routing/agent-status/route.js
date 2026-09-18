@@ -1,154 +1,73 @@
-/**
- * API endpoint for updating agent status
- * POST /api/contact-center/routing/agent-status
- */
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { updateAgentQueues } from "@/lib/contact-center/state-manager";
-import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
-import { ensureAgentStatusState, setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { agentPayload, contactCenterErrorPayload, statusLogger } from "@/lib/contact-center/logging.mjs";
+import {
+  ensureAgentState,
+  readEffectiveAgentStatus,
+  setManualAgentStatus,
+} from "@/lib/acd/agent-state.mjs";
+import { setAgentQueueActivation } from "@/lib/acd/queue-membership.mjs";
+import { contactCenterErrorPayload, statusLogger } from "@/lib/contact-center/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const userId = session.user.id;
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const userId = String(session.user.id);
     const body = await request.json();
-    const { status, queueIds, isActive, system } = body;
-
+    statusLogger.debug("routing_status_update_requested", {
+      agentUserId: userId,
+      requestedStatus: body.status || null,
+      queueCount: Array.isArray(body.queueIds) ? body.queueIds.length : null,
+    });
     const pool = getPostgresPool();
-    if (!pool) {
-      return NextResponse.json(
-        { error: "Database not available" },
-        { status: 500 },
+    if (!pool) return NextResponse.json({ error: "Database not available" }, { status: 503 });
+    await ensureAgentState(pool, userId);
+
+    let effectiveStatus = await readEffectiveAgentStatus(pool, userId, "Offline");
+    if (body.status) {
+      const valid = await pool.query(
+        `SELECT 1 FROM cc_user_statuses
+          WHERE name = $1 AND is_active = true AND user_selectable = true`,
+        [body.status],
       );
-    }
-
-    // Get user identity and Contact Center authoritative status
-    const userResult = await pool.query(
-      `SELECT
-          u.username,
-          s.agent_status AS current_agent_status,
-          s.active_queue_ids
-         FROM users u
-         LEFT JOIN cc_agent_state s ON s.user_id = u.id
-        WHERE u.id = $1`,
-      [userId],
-    );
-
-    if (!userResult.rows || userResult.rows.length === 0) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const user = userResult.rows[0];
-    const username = user.username;
-
-    // Update agent status if provided. If no cc_agent_state row exists yet,
-    // mirror the users table default so queue-only activation can route calls.
-    const effectiveStatus = status || user.current_agent_status || "Available";
-    if (status) {
-      // Validate status
-      // Get valid statuses from database
-      // Offline is system-only and not user-selectable
-      let validStatuses = system
-        ? ["Available", "Busy", "Away", "Offline"] // System can set any status including Offline
-        : ["Available", "Busy", "Away"]; // Users can only select user-selectable statuses (Offline excluded)
-      if (pool) {
-        try {
-          const statusResult = await pool.query(
-            system
-              ? `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`
-              : `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`,
-          );
-          if (statusResult.rows.length > 0) {
-            validStatuses = statusResult.rows.map((row) => row.name);
-          }
-        } catch (error) {
-          statusLogger.error("status_catalog_fetch_failed", contactCenterErrorPayload(error));
-          // Use fallback statuses
-        }
+      if (!valid.rowCount) {
+        return NextResponse.json({ error: "Invalid user-selectable status" }, { status: 400 });
       }
-      if (!validStatuses.includes(status)) {
-        return NextResponse.json(
-          {
-            error: `Invalid status. Must be one of: ${validStatuses.join(
-              ", ",
-            )}`,
-          },
-          { status: 400 },
-        );
-      }
-
-      await setUserStatus({
-        userId,
-        username,
-        status,
-        previousStatus: user.current_agent_status || null,
+      effectiveStatus = await setManualAgentStatus(pool, {
+        agentId: userId,
+        status: body.status,
+        actor: `agent:${userId}`,
+        expectedVersion: body.expectedVersion ?? null,
       });
     }
 
-    // Update queue assignments if provided
-    if (queueIds !== undefined && Array.isArray(queueIds)) {
-      updateAgentQueues(userId, queueIds, isActive !== false);
-
-      const currentActiveQueueIds = Array.isArray(user.active_queue_ids)
-        ? user.active_queue_ids
-        : [];
-      const updatedActiveQueueIds =
-        isActive === false
-          ? currentActiveQueueIds.filter((id) => !queueIds.includes(id))
-          : [...new Set([...currentActiveQueueIds, ...queueIds])];
-
-      // Ensure agent state exists and update active queues without changing an
-      // existing Contact Center status.
-      await ensureAgentStatusState({
-        userId,
-        username,
-        status: effectiveStatus,
-        activeQueueIds: updatedActiveQueueIds,
+    let changedQueues = [];
+    if (Array.isArray(body.queueIds)) {
+      changedQueues = await setAgentQueueActivation(pool, {
+        agentId: userId,
+        queueIds: body.queueIds,
+        enabled: body.isActive !== false,
+        actor: `agent:${userId}`,
       });
     }
-
-    const shouldOfferQueuedCalls =
-      effectiveStatus === "Available" &&
-      (Boolean(status) || (Array.isArray(queueIds) && isActive !== false));
-
-    if (shouldOfferQueuedCalls) {
-      try {
-        await offerQueuedCallForAgent({
-          userId,
-          queueIds: status ? null : queueIds,
-        });
-      } catch (error) {
-        statusLogger.error("queued_call_offer_after_status_change_failed", {
-          ...agentPayload({ agentUserId: userId, agentUsername: username }),
-          queueCount: Array.isArray(queueIds) ? queueIds.length : undefined,
-          ...contactCenterErrorPayload(error),
-        });
-      }
-    }
-
+    statusLogger.info("routing_status_update_completed", {
+      agentUserId: userId,
+      effectiveStatus,
+      queueCount: changedQueues.length,
+    });
     return NextResponse.json({
       success: true,
-      userId,
       status: effectiveStatus,
-      queueIds: queueIds || [],
+      queues: changedQueues.map((queue) => String(queue.id)),
     });
   } catch (error) {
-    statusLogger.error("agent_status_route_update_failed", contactCenterErrorPayload(error));
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        message: error.message,
-      },
-      { status: 500 },
-    );
+    statusLogger.error("routing_status_update_failed", contactCenterErrorPayload(error));
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: error.status || 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/contact-center/routing/agent-status" });

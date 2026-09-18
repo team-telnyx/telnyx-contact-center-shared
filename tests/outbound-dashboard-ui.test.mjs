@@ -22,7 +22,7 @@ test("expanded dashboard campaign card renders contact statistics and calls proc
   assert.ok(cardEnd > cardStart, "DashboardCampaignCard should end before CampaignsView");
 
   const cardSource = source.slice(cardStart, cardEnd);
-  assert.match(cardSource, /buildDashboardCampaignExpandedStats\(\{ progress, live, summary, maxLines \}\)/, "card should use the expanded stats view model");
+  assert.match(cardSource, /buildDashboardCampaignExpandedStats\(\{ progress, live, summary, maxLines, channel: campaign\.channel \}\)/, "card should use the expanded stats view model");
   assert.match(cardSource, /CONTACTS STATISTICS/, "expanded card should label contact statistics group");
   assert.match(cardSource, /CALLS PROCESSING/, "expanded card should label calls processing group");
   assert.match(cardSource, /contactStats\.map/, "contact statistics should render from contactStats");
@@ -83,41 +83,17 @@ test("outbound dialer restores and persists the supervisor's last selected secti
   assert.match(source, /id: "time-sets"/, "Time Sets should remain a valid persisted section");
 });
 
-test("campaign command center has a right-aligned default-off active campaign toggle that hides exhausted cards", async () => {
+test("campaign command center applies the same persisted status selection to cards and details", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
-  const pageStart = source.indexOf("export default function OutboundDialerPage");
-  const pageEnd = source.indexOf("function LiveCallsView", pageStart);
-  const dashboardStart = source.indexOf("function DashboardView");
-  const dashboardEnd = source.indexOf("function DashboardCampaignCard", dashboardStart);
-  assert.ok(pageStart > -1 && pageEnd > pageStart, "OutboundDialerPage should exist before LiveCallsView");
-  assert.ok(dashboardStart > -1 && dashboardEnd > dashboardStart, "DashboardView should exist before DashboardCampaignCard");
+  const dashboardSource = source.slice(source.indexOf("function DashboardView"), source.indexOf("function DashboardCampaignCard"));
 
-  const pageSource = source.slice(pageStart, pageEnd);
-  const dashboardSource = source.slice(dashboardStart, dashboardEnd);
-  const sectionHeaderSource = pageSource.slice(pageSource.indexOf("<section"), pageSource.indexOf("<DashboardView", pageSource.indexOf("<section")));
-
-  assert.match(source, /ACTIVE_DASHBOARD_CAMPAIGN_STATES = new Set\(\["running", "stopped", "paused", "recycled"\]\)/, "Active campaign filter should allow running, stopped, paused, and recycled states");
-  assert.match(source, /const executionStateWithRuntimeFor = \(campaign, contactLists = \[\], executionDebug = null\) => executionStateFor\(campaign, campaignRuntimeContext\(campaign, contactLists, executionDebug\)\)/, "Active campaign filter should derive from normalized execution state with runtime context");
-  assert.match(source, /const isActiveDashboardCampaign = \(campaign, contactLists = \[\], executionDebug = null\) => ACTIVE_DASHBOARD_CAMPAIGN_STATES\.has\(executionStateWithRuntimeFor\(campaign, contactLists, executionDebug\)\)/, "Active campaign filter should exclude runtime-exhausted campaigns");
-  assert.match(pageSource, /const \[showOnlyActiveDashboardCampaigns, setShowOnlyActiveDashboardCampaigns\] = useState\(false\)/, "Show only active campaign should default off");
-  assert.match(source, /supervisor\.outbound-dialer\.showOnlyActiveDashboardCampaigns/, "Show only active campaign should be persisted for supervisor return visits");
-  assert.match(pageSource, /localStorage\.getItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyActiveDashboardCampaigns\)/, "Show only active campaign should restore from localStorage after hydration");
-  assert.match(pageSource, /localStorage\.setItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyActiveDashboardCampaigns, String\(showOnlyActiveDashboardCampaigns\)\)/, "Show only active campaign changes should be saved to localStorage");
-  assert.doesNotMatch(sectionHeaderSource, /Show only active campaign/, "Top section header should not render the active-campaign toggle");
-  assert.match(pageSource, /<DashboardView[\s\S]*showOnlyActiveCampaigns=\{showOnlyActiveDashboardCampaigns\}[\s\S]*setShowOnlyActiveCampaigns=\{setShowOnlyActiveDashboardCampaigns\}/, "DashboardView should receive the active-only filter flag and setter");
-  assert.match(pageSource, /const selectableDashboardCampaigns = useMemo\(\(\) => showOnlyActiveDashboardCampaigns \? dashboardCampaigns\.filter\(\(campaign\) => isActiveDashboardCampaign\(campaign, contactLists, executionDebugByCampaign\?\.\[campaign\.id\]\)\) : dashboardCampaigns/, "Dashboard selected campaign should be constrained to the same active-only runtime filter");
-  assert.match(pageSource, /const selectedDashboardCampaign = useMemo\(\(\) => selectableDashboardCampaigns\.find\(\(c\) => c\.id === selectedCampaignId\) \|\| selectableDashboardCampaigns\[0\] \|\| null/, "Dashboard detail panel should fall back within the filtered card list");
-  assert.match(pageSource, /const selectedCampaignIsDashboard = dashboardCampaigns\.some\(\(campaign\) => campaign\.id === selectedCampaignId\)/, "Dashboard reconciliation should only consider existing dashboard campaign selections");
-  assert.match(pageSource, /const selectedCampaignIsSelectable = selectableDashboardCampaigns\.some\(\(campaign\) => campaign\.id === selectedCampaignId\)/, "Dashboard reconciliation should detect whether the dashboard selection is still visible under the filter");
-  assert.match(pageSource, /if \(!selectedCampaignIsDashboard \|\| selectedCampaignIsSelectable\) return;[\s\S]*setSelectedCampaignId\(selectedDashboardCampaign\.id\);/, "Dashboard selection should only be reconciled when the current dashboard campaign is hidden by the filter");
-  assert.match(dashboardSource, /function DashboardView\(\{[\s\S]*showOnlyActiveCampaigns[\s\S]*setShowOnlyActiveCampaigns[\s\S]*\}\)/, "DashboardView should accept the active-only filter flag and setter");
-  assert.match(dashboardSource, /Campaign command center[\s\S]*Show only active campaign/, "Campaign command center should render the requested toggle label");
-  assert.match(dashboardSource, /className="ml-auto flex items-center gap-3/, "Campaign command center toggle should be aligned to the right side of the card header");
-  assert.match(dashboardSource, /<Switch[\s\S]*id="show-only-active-dashboard-campaigns"[\s\S]*checked=\{showOnlyActiveCampaigns\}[\s\S]*onCheckedChange=\{setShowOnlyActiveCampaigns\}/, "Campaign command center toggle should be wired to page state");
-  assert.match(dashboardSource, /const activeCampaigns = visibleCampaigns\.filter\(\(campaign\) => isActiveDashboardCampaign\(campaign, contactLists, executionDebugByCampaign\?\.\[campaign\.id\]\)\);/, "Dashboard should compute active campaigns from normalized runtime states");
-  assert.match(dashboardSource, /const runningCampaigns = visibleCampaigns\.filter\(\(campaign\) => executionStateWithRuntimeFor\(campaign, contactLists, executionDebugByCampaign\?\.\[campaign\.id\]\) === "running"\);/, "Dashboard running counts should exclude runtime-exhausted campaigns");
-  assert.match(dashboardSource, /const dashboardCampaignCards = showOnlyActiveCampaigns \? activeCampaigns : visibleCampaigns;/, "Dashboard cards should hide exhausted campaigns when the toggle is on");
-  assert.match(dashboardSource, /dashboardCampaignCards\.map/, "Dashboard should render campaign cards from the filtered list");
+  assert.doesNotMatch(source, /showOnlyActiveDashboardCampaigns|Show only active campaign/);
+  assert.match(source, /dashboardCampaignStatuses.includes\(executionStateWithRuntimeFor\(campaign, contactLists, executionDebugByCampaign\?\.\[campaign.id\]\)\)/, "filter must use the same runtime state as campaign badges");
+  assert.match(source, /dashboardCampaignCards=\{selectableDashboardCampaigns\}/, "cards must use the same filtered list as the selected detail panel");
+  assert.match(source, /selectableDashboardCampaigns.find/, "detail selection must stay within the filtered list");
+  assert.match(source, /localStorage.setItem\(OUTBOUND_UI_STATE_STORAGE_KEYS.dashboardCampaignStatuses, JSON.stringify\(dashboardCampaignStatuses\)\)/);
+  assert.match(dashboardSource, /<ToggleGroup type="multiple" value=\{campaignStatuses\} onValueChange=\{setCampaignStatuses\}/);
+  assert.match(dashboardSource, /Select at least one campaign status/, "an empty selection should explain how to show cards again");
 });
 
 test("time sets editor defaults to calendar view and persists the selected tab in localStorage", async () => {
@@ -200,7 +176,7 @@ test("campaign save action is disabled until audience, Target, and FROM slots ar
   const formSource = source.slice(formStart, formEnd);
   assert.match(source, /campaignSaveRequirements/, "page should import campaign save requirement validation");
   assert.match(formSource, /campaignReferenceKindForMode\(mode\)/, "Campaign form should derive Target kind directly from selected Mode");
-  assert.match(formSource, /campaignSaveRequirements\(normalizedDraft, \{ maxAttempts: campaignMaxAttempts \}\)/, "form should evaluate campaign save requirements with effective max attempts");
+  assert.match(formSource, /campaignSaveRequirements\(normalizedDraft, \{ maxAttempts: campaignMaxAttempts, settings: outboundSettings, templateVariables: messagingTemplateVariables \}\)/, "form should evaluate campaign save requirements with effective max attempts");
   assert.match(formSource, /disabled: saving \|\| !saveRequirements\.canSave/, "Save campaign header action should be disabled until requirements pass");
   assert.doesNotMatch(formSource, /label="Handler"/, "Dialing Strategy should not render a Handler dropdown");
   assert.doesNotMatch(formSource, /label="Reference"/, "Campaign configuration should rename Reference to Target");

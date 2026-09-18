@@ -1,12 +1,11 @@
 // GET (list) and POST (create)
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
+import { withPermission } from "@/lib/authz/guard";
 
 const TELNYX_BASE = "https://api.telnyx.com/v2";
 
-export async function GET(request) {
-  const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+async function GET_handler(request, _context, authz) {
+  const user = authz.user;
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Missing TELNYX_API_KEY" }, { status: 500 });
   const { searchParams } = new URL(request.url);
@@ -22,9 +21,8 @@ export async function GET(request) {
   return NextResponse.json(data, { status: res.status });
 }
 
-export async function POST(request) {
-  const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Missing TELNYX_API_KEY" }, { status: 500 });
   const body = await request.json();
@@ -39,3 +37,7 @@ export async function POST(request) {
   const data = await res.json();
   return NextResponse.json(data, { status: res.status });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("pronunciation_dicts:read", GET_handler, { route: "/api/ai/pronunciation-dictionaries" });
+export const POST = withPermission("pronunciation_dicts:create", POST_handler, { route: "/api/ai/pronunciation-dictionaries" });

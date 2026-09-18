@@ -1,33 +1,22 @@
+import { saveAdminSettings } from "@/lib/acd/utilization.mjs";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
+import { updateAssignmentPriorities } from '@/lib/contact-center/queue-assignment-priorities.mjs';
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { queueInScope, resolveScope } from "@/lib/authz/scope.mjs";
+import { removeScopeIds } from "@/lib/authz/roles-store.mjs";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
 
-export async function GET(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, { params }, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool)
     return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   const resolvedParams = await params;
   const id = resolvedParams?.id;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (!queueInScope(authz.scope, id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Get queue with user assignments
   const queueRes = await pool.query(`SELECT * FROM cc_queues WHERE id=$1`, [
@@ -64,13 +53,24 @@ export async function GET(request, { params }) {
   });
 }
 
-export async function PUT(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, { params }, authz) {
+  const user = authz.user;
   const resolvedParams = await params;
   const id = resolvedParams?.id;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (!queueInScope(authz.scope, id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await request.json();
+  if (body.assignmentPriorities !== undefined && body.userAssignments !== undefined) {
+    return NextResponse.json({ error: 'Use assignmentPriorities or userAssignments, not both' }, { status: 400 });
+  }
+  // Routing assignments are their own grant (queues:agents.assign); the queue's settings need queues:update.
+  const wantsAssignments = body.userAssignments !== undefined || body.assignmentPriorities !== undefined;
+  if (wantsAssignments && (!authz.can("queues:agents.assign") || !queueInScope(await resolveScope(getPostgresPool(), authz.user, authz.access, "queues:agents.assign"), id))) {
+    return NextResponse.json({ error: "Forbidden", permission: "queues:agents.assign" }, { status: 403 });
+  }
+  if (Object.keys(body).some((key) => key !== "userAssignments" && key !== "assignmentPriorities") && (!authz.can("queues:update") || !queueInScope(await resolveScope(getPostgresPool(), authz.user, authz.access, "queues:update"), id))) {
+    return NextResponse.json({ error: "Forbidden", permission: "queues:update" }, { status: 403 });
+  }
 
   const pool = getPostgresPool();
   if (!pool)
@@ -103,12 +103,12 @@ export async function PUT(request, { params }) {
     "timeout_secs",
     body.timeoutSecs != null ? Number(body.timeoutSecs) : undefined,
   );
-  maybeSet(
-    "agent_answer_timeout_secs",
-    body.agentAnswerTimeoutSecs != null
-      ? Number(body.agentAnswerTimeoutSecs)
-      : undefined,
-  );
+  if (Object.prototype.hasOwnProperty.call(body, "agentAnswerTimeoutSecs")) {
+    set.agent_answer_timeout_secs =
+      body.agentAnswerTimeoutSecs == null || body.agentAnswerTimeoutSecs === ""
+        ? null
+        : Number(body.agentAnswerTimeoutSecs);
+  }
   maybeSet(
     "overflow_queue_id",
     body.overflowQueueId != null ? String(body.overflowQueueId) : undefined,
@@ -205,6 +205,10 @@ export async function PUT(request, { params }) {
   );
 
   try {
+    await saveAdminSettings(pool, { scope: "queue", id, utilization: body.utilization, actor: String(user.id) }, async (pool, afterCommit) => {
+    if (body.assignmentPriorities !== undefined) {
+      await updateAssignmentPriorities(pool, id, body.assignmentPriorities, { inTransaction: true });
+    }
     if (Object.keys(set).length > 0) {
       const fields = [];
       const values = [];
@@ -268,7 +272,7 @@ export async function PUT(request, { params }) {
           );
           const queue = queueRes.rows?.[0];
           if (queue) {
-            await broadcastToAllAgents(
+            afterCommit.push(() => broadcastToAllAgents(
               {
                 type: "queue_updated",
                 queue: {
@@ -281,7 +285,7 @@ export async function PUT(request, { params }) {
                 timestamp: new Date().toISOString(),
               },
               "queue_changed",
-            );
+            ));
           }
         } catch (sseError) {
           adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
@@ -309,22 +313,24 @@ export async function PUT(request, { params }) {
       }
     }
 
+    return { id };
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     const msg = err?.message || String(err);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: msg }, { status: err.status || 400 });
   }
 }
 
-export async function DELETE(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, { params }, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool)
     return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   const resolvedParams = await params;
   const id = resolvedParams?.id;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (!queueInScope(authz.scope, id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Check if queue is used as overflow queue
   const overflowCheck = await pool.query(
@@ -339,9 +345,16 @@ export async function DELETE(request, { params }) {
   }
 
   await pool.query(`DELETE FROM cc_queues WHERE id=$1`, [id]);
+  // A deleted queue leaves every role scope that named it (Phase 3a).
+  await removeScopeIds(pool, "queues", [id], { actor: user, reason: "queue deleted" });
   return NextResponse.json({ ok: true });
 }
 
 function nowIso() {
   return new Date().toISOString();
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("queues:read", GET_handler, { route: "/api/admin/queues/[id]" });
+export const PUT = withPermission(["queues:update", "queues:agents.assign"], PUT_handler, { route: "/api/admin/queues/[id]" });
+export const DELETE = withPermission("queues:delete", DELETE_handler, { route: "/api/admin/queues/[id]" });

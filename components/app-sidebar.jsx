@@ -33,8 +33,6 @@ const data = {
 
 export function AppSidebar({ hideNav, className, ...props }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState("agent");
-  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchUserData = React.useCallback(async () => {
@@ -43,14 +41,6 @@ export function AppSidebar({ hideNav, className, ...props }) {
       const data = await res.json();
       if (data?.isAuth && data?.user) {
         setUser(data.user);
-        // Support both roles array and legacy role field
-        const userRoles =
-          data.user.roles &&
-          Array.isArray(data.user.roles) &&
-          data.user.roles.length > 0
-            ? data.user.roles
-            : ["agent"];
-        setRoles(userRoles);
       }
     } catch (_) {
     } finally {
@@ -106,11 +96,7 @@ export function AppSidebar({ hideNav, className, ...props }) {
                   ))}
                 </div>
               ) : (
-                <NavMain
-                  groups={data.navGroups}
-                  userRole={role}
-                  userRoles={roles}
-                />
+                <NavMain groups={data.navGroups} />
               ))}
           </SidebarContent>
 

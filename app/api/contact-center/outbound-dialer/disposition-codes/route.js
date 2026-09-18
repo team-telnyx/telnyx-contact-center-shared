@@ -4,12 +4,10 @@ import {
   getOutboundPool,
   jsonError,
   mapOutboundDispositionCode,
-  optionalString,
-  requireOutboundSupervisor,
-  safeJson,
-  usernameFor,
-} from "@/lib/outbound-dialer/api";
+  optionalString, safeJson,
+  usernameFor } from "@/lib/outbound-dialer/api";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const CLASSIFICATIONS = ["none", "right_party_contact", "number_uncallable", "contact_uncallable", "retry"];
 const BUSINESS_CATEGORIES = ["none", "success", "neutral", "failure"];
@@ -37,8 +35,8 @@ const SELECT_SQL = `
   LEFT JOIN outbound_campaigns c ON c.id = m.campaign_id
 `;
 
-export async function GET() {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const [mappingsResult, wrapupsResult] = await Promise.all([
     pool.query(`${SELECT_SQL} WHERE m.status <> 'archived' ORDER BY COALESCE(c.name, 'Global'), w.display_order, w.name LIMIT 300`),
@@ -51,8 +49,8 @@ export async function GET() {
   });
 }
 
-export async function POST(request) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
     const body = await request.json();
@@ -81,3 +79,7 @@ export async function POST(request) {
     return jsonError(err.message || "Failed to create disposition code", 400);
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("disposition_codes:read", GET_handler, { route: "/api/contact-center/outbound-dialer/disposition-codes" });
+export const POST = withPermission("disposition_codes:create", POST_handler, { route: "/api/contact-center/outbound-dialer/disposition-codes" });

@@ -8,13 +8,13 @@ const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
 
 // Reproduces: at the final read-back ("We're transferring Mike Anderson...
 // from Saint Mary's Hospital ... to Johnny Hospital ...") the caller says
-// "destination facility name is incorrect, change it to John Muir Hospital."
+// "destination facility name is incorrect, change it to John Mabry Hospital."
 // Before this feature, an already-completed slot was excluded from the
 // analyzer entirely (see the pending-items query: only status IN ('pending',
 // 'suggested')), so the LLM never even saw destination_facility_name as a
 // candidate and the correction was silently dropped.
 
-test("buildWorkflowAnalysisSystemPrompt adds the correction section ONLY at the read-back stage", () => {
+test("buildWorkflowAnalysisSystemPrompt adds the correction section at read-back OR when corrections are allowed mid-call", () => {
   const completedItem = {
     item_id: "dest-facility",
     type: "slot",
@@ -31,22 +31,36 @@ test("buildWorkflowAnalysisSystemPrompt adds the correction section ONLY at the 
     slotsFilled: { destination_facility: "Johnny Hospital" },
     isReadBackStage: true,
   });
-  assert.match(readBackPrompt, /Correction Handling \(Read-Back Stage\)/);
+  assert.match(readBackPrompt, /Correction Handling/);
   assert.match(readBackPrompt, /ALREADY CONFIRMED/);
   assert.match(readBackPrompt, /"Johnny Hospital"/);
   assert.match(readBackPrompt, /EXPLICITLY states the existing value is wrong/);
 
-  // Same already-completed item, but NOT flagged as the read-back stage (the
-  // default/every-other-stage case) — the correction section must not appear,
-  // even though the item itself is still annotated as already confirmed.
-  const midCallPrompt = buildWorkflowAnalysisSystemPrompt({
+  // Same already-completed item mid-call with no correction in play: the
+  // section must stay absent so nothing invites the model to overwrite a
+  // confirmed value on an offhand mention.
+  const quietMidCallPrompt = buildWorkflowAnalysisSystemPrompt({
     pendingItems: [completedItem],
     slotsFilled: { destination_facility: "Johnny Hospital" },
   });
-  assert.doesNotMatch(midCallPrompt, /Correction Handling/);
+  assert.doesNotMatch(quietMidCallPrompt, /Correction Handling/);
   // The "already confirmed" item annotation is independent of stage — it only
   // depends on the item being marked completed with a value, so it still shows.
-  assert.match(midCallPrompt, /ALREADY CONFIRMED/);
+  assert.match(quietMidCallPrompt, /ALREADY CONFIRMED/);
+
+  // an earlier fix: mid-call, once someone explicitly says a value is wrong, the
+  // route puts correction candidates in the analyzer input and sets
+  // allowCorrections — the same instructions apply away from read-back.
+  const midCallCorrectionPrompt = buildWorkflowAnalysisSystemPrompt({
+    pendingItems: [completedItem],
+    slotsFilled: { destination_facility: "Johnny Hospital" },
+    allowCorrections: true,
+  });
+  assert.match(midCallCorrectionPrompt, /Correction Handling/);
+  assert.match(midCallCorrectionPrompt, /EXPLICITLY states the existing value is wrong/);
+  // The read-back-only final-confirmation rule must NOT leak into a mid-call
+  // correction — there is no read-back recitation to confirm yet.
+  assert.doesNotMatch(midCallCorrectionPrompt, /Final Confirmation Requires a Customer Affirmative/);
 });
 
 test("correction section always includes phonetic-mishearing tolerance", () => {
@@ -68,7 +82,7 @@ test("correction section always includes phonetic-mishearing tolerance", () => {
   assert.doesNotMatch(prompt, /A correction is already in progress/);
 });
 
-// Reproduces the live regression: STT mangled "John Muir Hospital" into a
+// Reproduces the live regression: STT mangled "John Mabry Hospital" into a
 // different name on each retry ("Twin Hill", "Stonemere", "John Miller",
 // "Tornio"). Only the utterance that repeated an explicit correction trigger
 // ("First mission facility is Stonemere Hospital" — following "that's not
@@ -95,8 +109,8 @@ test("correctionInProgress adds continuation leniency for a bare restated value"
 
 test("mentionsCorrectionTrigger matches explicit correction language, not plain restatements", () => {
   assert.equal(mentionsCorrectionTrigger("No. That's not correct. Uh, decision facility is incorrect."), true);
-  assert.equal(mentionsCorrectionTrigger("Please change it to John Muir Hospital."), true);
-  assert.equal(mentionsCorrectionTrigger("Actually, it's John Muir Hospital."), true);
+  assert.equal(mentionsCorrectionTrigger("Please change it to John Mabry Hospital."), true);
+  assert.equal(mentionsCorrectionTrigger("Actually, it's John Mabry Hospital."), true);
   // A bare restated value (the continuation case) does NOT itself count as a
   // new trigger — continuation leniency comes from a trigger EARLIER in
   // recentContext, not from re-matching on every subsequent utterance.
@@ -104,7 +118,7 @@ test("mentionsCorrectionTrigger matches explicit correction language, not plain 
   assert.equal(mentionsCorrectionTrigger("The technician facility name is John Miller."), false);
 });
 
-test("live analyze route only re-includes completed slots as correction candidates at the read-back stage", async () => {
+test("live analyze route re-includes completed slots as correction candidates at read-back, or mid-call behind an explicit trigger", async () => {
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
 
   // Detection reuses the same isReadBackItem helper already used to keep the
@@ -123,16 +137,28 @@ test("live analyze route only re-includes completed slots as correction candidat
   // isReadBackStage back to false and hide every OTHER slot from being
   // corrected until that one confirmation resolved — only one correction could
   // ever be in flight at a time.
+  // Checked against allPendingItems (whole workflow), not the possibly
+  // concept-group-scoped pendingItems — read-back readiness is a
+  // whole-workflow concept, see the concurrent-group-batching comments.
   assert.match(
     route,
-    /const isReadBackStage =\s*\n\s*!pendingItems\.some\(\s*\n\s*\(item\) => item\.type === "slot" && !hasMeaningfulExtractedValue\(slotsFilled\[item\.slot_name\]\)\s*\n\s*\) &&\s*\n\s*pendingItems\.some\(\(item\) =>/
+    /const isReadBackStage =\s*\n\s*!allPendingItems\.some\(\s*\n\s*\(item\) => item\.type === "slot" && !hasMeaningfulExtractedValue\(slotsFilled\[item\.slot_name\]\)\s*\n\s*\) &&\s*\n\s*allPendingItems\.some\(\(item\) =>/
   );
 
-  // Gated on isReadBackStage; excludes accumulating notes slots (those already
-  // have their own always-on re-inclusion via completedNotesItems).
+  // an earlier fix: read-back OR an explicit correction trigger at any other stage.
+  // The trigger requirement preserves the original guarantee — with no
+  // correction in play a completed slot is still entirely out of view, so an
+  // offhand later mention cannot overwrite it. Excludes accumulating notes
+  // slots (those have their own always-on re-inclusion via completedNotesItems).
+  assert.match(route, /const correctionsAllowed = isReadBackStage \|\| correctionRequested;/);
+  // an earlier fix follow-up: MANUALLY-edited slots are additionally excluded — the
+  // agent's typed value is not in the transcript, so exposing the slot only
+  // invites the LLM to "correct" it back to the stale spoken value. Agent-
+  // SPOKEN captures (completed_by='agent' with a real LLM confidence) stay
+  // correctable; see isManualAgentRow in the route.
   assert.match(
     route,
-    /const correctionCandidateItems = isReadBackStage\s*\n\s*\? completedSlotRows\.filter\(\(it\) => !isAccumulatingSlot\(it\)\)\s*\n\s*: \[\];/
+    /const correctionCandidateItems = correctionsAllowed\s*\n\s*\? completedSlotRows\.filter\(\(it\) => !isAccumulatingSlot\(it\) && !isManualAgentRow\(it\)\)\s*\n\s*: \[\];/
   );
 
   // Included in both the lookup list (analyzerItems) and the LLM-facing list
@@ -142,22 +168,38 @@ test("live analyze route only re-includes completed slots as correction candidat
   assert.match(route, /const analyzerItems = \[\.\.\.relevantPendingItems, \.\.\.completedNotesItems, \.\.\.correctionCandidateItems\]/);
   assert.match(route, /const narrowedAnalyzerItems = \[\.\.\.narrowedRelevantPendingItems, \.\.\.completedNotesItems, \.\.\.correctionCandidateItems\]/);
 
-  // Passed through to the analyzer so the prompt can gate the correction
-  // instructions on it.
-  assert.match(route, /isReadBackStage,\s*\n\s*correctionInProgress,\s*\n\s*recentContext:/);
+  // The prompt's correction section is gated on candidates actually being in
+  // the analyzer input, not on the stage — mid-call an explicit trigger is
+  // what put them there.
+  assert.match(route, /allowCorrections: correctionCandidateItems\.length > 0,/);
 
-  // correctionInProgress: a correction trigger phrase ("incorrect", "change
-  // it", ...) in this utterance OR a recent one, only while at read-back.
-  assert.match(route, /const correctionInProgress =\s*\n\s*isReadBackStage &&/);
-  assert.match(route, /mentionsCorrectionTrigger\(transcript\)/);
-  assert.match(route, /recentContext\.some\(\(c\) => mentionsCorrectionTrigger\(c\?\.text\)\)/);
+  // correctionRequested: a correction trigger phrase ("incorrect", "change
+  // it", ...) in this utterance OR a recent one, at ANY stage.
+  assert.match(route, /const correctionRequested =\s*\n\s*mentionsCorrectionTrigger\(transcript\)/);
+  assert.doesNotMatch(
+    route,
+    /const correctionRequested =\s*\n\s*isReadBackStage/,
+    "an explicit correction must be recognized away from the read-back stage (an earlier fix)",
+  );
+  assert.match(route, /correctionWindow\.some\(\(c\) => mentionsCorrectionTrigger\(c\?\.text\)\)/);
+
+  // How far back the trigger may sit is stage-dependent: the whole recent
+  // window at read-back (nothing left to collect), but only the previous
+  // utterance mid-call, so a stale trigger cannot keep every completed slot
+  // exposed while collection continues.
+  assert.match(route, /const midCallCorrectionWindow = recentContextEntries\.slice\(-1\);/);
+  assert.match(
+    route,
+    /const correctionWindow = isReadBackStage \? recentContextEntries : midCallCorrectionWindow;/,
+  );
 });
 
-test("workflow-analyzer threads isReadBackStage and correctionInProgress through to the prompt builder", async () => {
+test("workflow-analyzer threads isReadBackStage, allowCorrections and correctionInProgress through to the prompt builder", async () => {
   const source = await read("../lib/agent-assist/workflow-analyzer.js");
   assert.match(source, /isReadBackStage = false,/);
+  assert.match(source, /allowCorrections = false,/);
   assert.match(source, /correctionInProgress = false,/);
-  assert.match(source, /isReadBackStage,\s*\n\s*correctionInProgress,\s*\n\s*bleedGuardSlot,/);
+  assert.match(source, /isReadBackStage,\s*\n\s*allowCorrections,\s*\n\s*correctionInProgress,\s*\n\s*bleedGuardSlot,/);
 });
 
 test("a correction is ALWAYS surfaced as suggested (highlighted, pending confirmation), never silently auto-completed or silently dropped", async () => {
@@ -338,6 +380,22 @@ test("all pending corrections auto-promote to completed when the customer gives 
   assert.match(route, /if \(!hasMeaningfulExtractedValue\(slotsFilled\[row\.slot_name\]\)\) continue; \/\/ not a correction candidate/);
 });
 
+test("auto-promotion requires the CUSTOMER's own confirm-all completing, not the agent's read-back recitation", async () => {
+  // isReadBackItem alone matches BOTH "Read back transport details" (the
+  // agent's own recitation action) and "Confirm all information is correct"
+  // (the customer's actual sign-off) — both share "read back"/"confirm all"
+  // phrasing. Without requiring completion_trigger === "customer", the
+  // agent completing their OWN recitation (manually, or auto-detected from
+  // the agent's own utterance) would satisfy this check and promote every
+  // pending correction into slots_filled as authoritative before the
+  // customer has reviewed or approved anything.
+  const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
+  assert.match(
+    route,
+    /completedItem &&\s*\n\s*completedItem\.completion_trigger === "customer" &&\s*\n\s*isReadBackItem\(\{/
+  );
+});
+
 test("a stale in-flight read-back suggestion request is discarded if the merged slots moved on before it resolves", async () => {
   // Reported live: a confirmed DOB correction, and separately a confirmed IV
   // drips correction, both reverted to their OLD value in the read-back text
@@ -376,6 +434,52 @@ test("the read-back target always regenerates (bypasses the 'already generated' 
   assert.match(source, /if \(!isReadBackTarget\) generatedTargetKeysRef\.current\.add\(targetKey\);/);
 });
 
+test("an already-displayed read-back suggestion refreshes on its own when a correction confirms, even while the current target has moved elsewhere", async () => {
+  // Reported live: a correction is confirmed (slotsFilled/itemStatuses
+  // update), but the read-back text keeps showing the pre-correction value
+  // until the caller updates ANOTHER, unrelated slot. Root cause: the main
+  // "regenerate on currentSlot change" effect only refreshes the read-back
+  // text when currentSlot IS RESOLVED to the read-back item — but
+  // findCorrectionTargetSlot keeps the resolved target locked onto that
+  // specific slot's OWN collect_correction prompt for as long as the
+  // correction-trigger phrase is still inside the rolling conversation
+  // window (often several turns), so the read-back card's own list entry
+  // just sits frozen the whole time. This effect refreshes an EXISTING
+  // read-back entry directly off of itemStatuses/slotsFilled changes,
+  // independent of what the current resolved target is.
+  const source = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+  assert.match(source, /function findStageAndItemById\(stages, itemId\)/);
+  assert.match(
+    source,
+    /generateSuggestion\(found\.stage, found\.item, session, transcriptions, \{[\s\S]*?slotsFilled: merged,/
+  );
+  // Same staleness discard as Fix 6: drop the response if the merged slots
+  // moved on again before it resolved (another correction landed meanwhile).
+  assert.match(
+    source,
+    /const latestMerged = mergeReadBackSlots\(latestState\.stages, latestState\.itemStatuses, latestState\.slotsFilled\);\s*\n\s*if \(JSON\.stringify\(latestMerged\) !== mergedKey\) return;/
+  );
+});
+
+test("the read-back refresh lookup resolves against the authoritative item definition (stages), not the flattened suggestion object", async () => {
+  // A suggestion only stores itemType/itemLabel (see generateSuggestion's
+  // return shape) — no prompt_hint/hints. isReadBackItem also matches a read-
+  // back item identified SOLELY by its prompt_hint/hints (e.g. label "Verify
+  // order" with a read-back-phrased hint) — checking only the suggestion's
+  // own stored fields would never find that entry, leaving it stuck showing
+  // the pre-correction value forever. Must look up the full item (type,
+  // label, prompt_hint, hints) via findStageAndItemById before testing it.
+  const source = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+  assert.doesNotMatch(
+    source,
+    /suggestionsRef\.current\.find\(\(s\) =>\s*\n\s*isReadBackItem\(\{ itemType: s\.itemType, itemLabel: s\.itemLabel \}\)/
+  );
+  assert.match(
+    source,
+    /const candidate = findStageAndItemById\(stages, s\.itemId\);\s*\n\s*if \(!candidate\) continue;\s*\n\s*if \(isReadBackItem\(\{\s*\n\s*itemType: candidate\.item\.type,\s*\n\s*itemLabel: candidate\.item\.label,\s*\n\s*itemPromptHint: candidate\.item\.prompt_hint,\s*\n\s*itemHints: candidate\.item\.hints,\s*\n\s*\}\)\) \{/
+  );
+});
+
 test("the read-back item is exempt from stage-distance narrowing, so it stays visible even when currentStageOrder regresses", async () => {
   // Reported live: the customer clearly said "yes, all information is
   // correct" but the read-back item never completed — stuck forever. Root
@@ -393,7 +497,70 @@ test("the read-back item is exempt from stage-distance narrowing, so it stays vi
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
   assert.match(
     route,
-    /item\.current_status === "suggested" \|\|\s*\n\s*\(item\.stage_order \?\? 0\) <= currentStageOrder \+ NARROW_STAGE_LOOKAHEAD \|\|\s*\n\s*isReadBackItem\(\{/
+    /item\.current_status === "suggested" \|\|\s*\n\s*ALWAYS_VISIBLE_SLOT_NAMES\.has\(item\.slot_name\) \|\|\s*\n\s*\(item\.stage_order \?\? 0\) <= currentStageOrder \+ NARROW_STAGE_LOOKAHEAD \|\|\s*\n\s*isReadBackItem\(\{/
+  );
+});
+
+test("a multi-utterance debounce batch is sent as ONE analyzeTranscriptBatch request, not one fetch per utterance", async () => {
+  // The analyze route computes currentTargetItem from a fresh DB snapshot
+  // read at the START of each utterance within a batch request. Firing
+  // every utterance in a debounce batch as SEPARATE concurrent requests
+  // (Promise.all) meant sibling requests could all read the SAME stale
+  // snapshot before any of them persisted a slot — a caller answering two
+  // different questions in one breath ("ICU" ... "3") could have the
+  // second bare answer misattributed to whatever slot was still open
+  // before the batch started, since currentTarget is used as a
+  // tie-breaker for exactly that kind of ambiguous short answer. Bundling
+  // the whole batch into one request lets the server process each
+  // utterance in order within a single DB transaction (see
+  // analyzeOneUtterance in analyze/route.js) — same ordering guarantee,
+  // without N separate HTTP round trips.
+  const source = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+  assert.match(source, /await analyzeTranscriptBatch\(currentBatch\.map/);
+  assert.match(source, /analysisQueueRef\.current\.set\(utterance\.transcriptionId, utterance\)/);
+  assert.doesNotMatch(source, /await Promise\.all\(\s*\n\s*batch\.map/);
+});
+
+test("analyze ordering is serialized with a bounded latest-value queue", async () => {
+  // Gap in the previous fix: sequencing inside one batch's own for-loop
+  // isn't enough. If the first /analyze call in a batch is slow, a later
+  // final transcript can schedule its OWN timer and fire its OWN batch
+  // before the first one's loop finishes — since ordering was only local to
+  // each batch's loop, the two batches' calls could still run concurrently
+  // with each other, reproducing the exact race the earlier fix was meant
+  // to close. A single shared promise chain for the whole session (not
+  // reset per batch) guarantees every analyze call queues up strictly after
+  // every call already enqueued, regardless of which timer scheduled it.
+  const source = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+  assert.match(source, /const analysisQueueRef = useRef\(new Map\(\)\);/);
+  assert.match(source, /if \(analysisDrainRunningRef\.current\) return;/);
+  assert.match(source, /await analyzeTranscriptBatch\(currentBatch\.map/);
+  assert.doesNotMatch(source, /analyzeChainRef/);
+});
+
+test("a queued analyze batch request is dropped if the call ends and a NEW one starts before its turn in the chain", async () => {
+  // Gap in the chaining fix: analyzeTranscriptBatch (workflow-store.js)
+  // reads the store's CURRENT session fresh when it actually executes, not
+  // a closure from when it was queued. If call A ends and call B starts
+  // while an earlier batch from call A is still queued behind a slow
+  // request, that queued batch would otherwise be sent into call B's
+  // workflow session under call B's sessionId — a cross-call data leak. The
+  // chain must capture the interaction identity at ENQUEUE time and
+  // re-check it against the store's activeInteractionId right before
+  // calling analyzeTranscriptBatch, bailing out if the call has moved on.
+  // This is a DIFFERENT guard than analyzeTranscriptBatch's own staleness
+  // check, which only catches a switch happening WHILE that specific
+  // request is already in flight — not one that happened before it was
+  // even dispatched.
+  const source = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+  assert.match(source, /const activeInteractionId = useWorkflowStore\.getState\(\)\.activeInteractionId;/);
+  assert.match(source, /queued\.filter\(\(item\) => item\.interactionId === activeInteractionId\)/);
+  // interactionId must be in the effect's own dependency array, or a batch
+  // built after a call switch (without session/transcriptions ALSO
+  // changing) could still capture a stale enqueuedInteractionId.
+  assert.match(
+    source,
+    /\}, \[session, transcriptions, assistConfig\.auto_detect_completion, interactionId, enqueueAnalysis\]\);/
   );
 });
 
@@ -405,11 +572,108 @@ test("matchesReadBackAffirmativeHints matches the item's own configured hints as
   assert.equal(matchesReadBackAffirmativeHints("Yes, that's correct.", confirmAllItem), true);
   assert.equal(matchesReadBackAffirmativeHints("K. All information is correct.", confirmAllItem), true);
   assert.equal(matchesReadBackAffirmativeHints("", confirmAllItem), false);
-  assert.equal(matchesReadBackAffirmativeHints("No, something is not correct.", confirmAllItem), true); // contains "correct" — the caller of this function is responsible for the surrounding context, not this substring check
+  // A rejection/correction must never count as an affirmative, even though
+  // "correct" is technically a substring of "not correct" and one of this
+  // item's own configured hints.
+  assert.equal(matchesReadBackAffirmativeHints("No, something is not correct.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("No, that's wrong.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("Actually, the DOB is wrong.", confirmAllItem), false);
   assert.equal(matchesReadBackAffirmativeHints("The pickup facility is Saint Mary's.", confirmAllItem), false);
-  // No hints configured on the item -> never matches.
-  assert.equal(matchesReadBackAffirmativeHints("All information is correct.", { hints: [] }), false);
-  assert.equal(matchesReadBackAffirmativeHints("All information is correct.", {}), false);
+  // A leading "no" alone must NOT be treated as a rejection: the read-back
+  // prompt itself asks "...or is there anything you'd like to change?", so a
+  // "No, ___ is correct" reply is a valid, common affirmative, not a
+  // rejection just because it starts with "no".
+  assert.equal(matchesReadBackAffirmativeHints("No, everything is correct.", confirmAllItem), true);
+  assert.equal(matchesReadBackAffirmativeHints("No changes, everything is correct.", confirmAllItem), true);
+  // "Actually, it's ___" alone is ambiguous (could precede a correction or an
+  // affirmative) — must not be rejected outright when what follows is
+  // actually affirmative. Only the unambiguous rejection words (wrong,
+  // incorrect, not correct, mistake, etc.) should short-circuit here.
+  assert.equal(matchesReadBackAffirmativeHints("Actually, it's correct.", confirmAllItem), true);
+  assert.equal(matchesReadBackAffirmativeHints("Actually, it's all correct.", confirmAllItem), true);
+  // "change it/that/this" is a plain substring match with no negation
+  // handling — must not reject a negated "no need to change" affirmative.
+  assert.equal(matchesReadBackAffirmativeHints("No need to change it, everything is correct.", confirmAllItem), true);
+  assert.equal(matchesReadBackAffirmativeHints("I wouldn't change that, everything is correct.", confirmAllItem), true);
+  // "wrong"/"error" alone were previously unconditional rejection triggers,
+  // so a NEGATED rejection word ("nothing is WRONG", "no ERROR") was
+  // incorrectly rejected even though it's a valid affirmative.
+  assert.equal(matchesReadBackAffirmativeHints("Nothing is wrong, everything is correct.", confirmAllItem), true);
+  assert.equal(matchesReadBackAffirmativeHints("No error, everything is correct.", confirmAllItem), true);
+  // Conversely, "all"/"everything" near "correct" were previously an
+  // unconditional affirmative match with no negation awareness, so a genuine
+  // rejection using "not" ("not ALL ... is CORRECT") was incorrectly
+  // accepted as an affirmative.
+  assert.equal(matchesReadBackAffirmativeHints("No, not all the information is correct.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("It is not all correct.", confirmAllItem), false);
+  // The negation guard must cover every affirmative anchor word the generic
+  // patterns accept (correct/right/good/fine), not just "correct" — a
+  // negated "right"/"good"/"fine" is just as much a rejection.
+  assert.equal(matchesReadBackAffirmativeHints("No, not everything is right.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("It's not all good.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("That's not fine.", confirmAllItem), false);
+  // A partial exception ("yes, EXCEPT X" / "correct, but X needs fixing" /
+  // "ALMOST everything is correct") is not a full sign-off — the caller is
+  // explicitly flagging something still needs review, even though the
+  // sentence also contains an affirmative-looking word/phrase.
+  assert.equal(matchesReadBackAffirmativeHints("Yes, except the DOB.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("Everything is correct except the destination.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("Everything is correct, but the DOB needs updating.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("Almost everything is correct.", confirmAllItem), false);
+  // "but" alone must NOT be an unconditional rejection trigger — a caller
+  // who confirms and then asks an unrelated follow-up question is still a
+  // full sign-off. Only a "but" clause that actually states something needs
+  // changing (caught by NEEDS_UPDATE_WORDS) is a rejection.
+  assert.equal(matchesReadBackAffirmativeHints("Everything is correct, but can I get the confirmation number?", confirmAllItem), true);
+  // An explicit "change/update X TO value" is an actionable correction even
+  // with a leading affirmative "Yes," — the caller is not confirming, they
+  // are dictating a new value.
+  assert.equal(matchesReadBackAffirmativeHints("Yes, please change the DOB to 1970.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("Update the room to 402.", confirmAllItem), false);
+  // The generic affirmative fallback matches independent of configured
+  // hints — unrelated text with no hints configured still correctly falls
+  // through to false.
+  assert.equal(matchesReadBackAffirmativeHints("The pickup facility is Saint Mary's.", { hints: [] }), false);
+  assert.equal(matchesReadBackAffirmativeHints("The pickup facility is Saint Mary's.", {}), false);
+
+  // Reported live: "Yeah. I want to change the date of birth." — the leading
+  // "Yeah" alone matched the generic affirmative pattern, and "I want to
+  // change the date of birth" matched NONE of the existing rejection
+  // patterns (no explicit "to <value>", no "need", no negation, no "wrong"/
+  // "incorrect") — so a customer mid-correction got wrongly recorded as
+  // confirming the whole read-back, skipping straight to the next step.
+  // "want"/"wish"/"'d like" to change/update/fix/correct must reject the
+  // same way "needs to be changed" already does, regardless of a leading
+  // affirmative filler word.
+  assert.equal(matchesReadBackAffirmativeHints("Yeah. I want to change the date of birth.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("Yes, I'd like to update the room.", confirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("I wish to correct the patient's weight.", confirmAllItem), false);
+  // Negated desire is the opposite of a correction — must still pass through
+  // as a valid affirmative.
+  assert.equal(matchesReadBackAffirmativeHints("No, I don't want to change anything, everything is correct.", confirmAllItem), true);
+});
+
+test("mentionsCorrectionTrigger also recognizes a named-field 'want to change' correction, not just the pronoun form", () => {
+  assert.equal(mentionsCorrectionTrigger("I want to change the date of birth."), true);
+  assert.equal(mentionsCorrectionTrigger("I'd like to update the pickup room."), true);
+  assert.equal(mentionsCorrectionTrigger("Everything is fine."), false);
+});
+
+test("matchesReadBackAffirmativeHints falls back to a generic affirmative check when the item's own hints don't overlap with customer speech", () => {
+  // Reproduces a live-reported stuck read-back: item.hints is commonly
+  // auto-derived by comma-splitting prompt_hint (see
+  // scripts/upsert-medical-transport-intake-workflow.mjs), which produces
+  // AGENT-question-framed phrases like "is that correct, anything to
+  // change, does everything look right, accurate" — none of which are
+  // substrings of a customer's own affirmative reply. The generic fallback
+  // must still catch these regardless of the item's configured hints.
+  const realisticConfirmAllItem = {
+    hints: ["is that correct", "anything to change", "does everything look right", "accurate"],
+  };
+  assert.equal(matchesReadBackAffirmativeHints("Yes.", realisticConfirmAllItem), true);
+  assert.equal(matchesReadBackAffirmativeHints("I can confirm all information is correct.", realisticConfirmAllItem), true);
+  assert.equal(matchesReadBackAffirmativeHints("give me the reference number", realisticConfirmAllItem), false);
+  assert.equal(matchesReadBackAffirmativeHints("No, that's not correct, the DOB is wrong.", realisticConfirmAllItem), false);
 });
 
 test("analyze route applies a deterministic read-back-affirmative backstop when the LLM misses the completion", async () => {
@@ -424,9 +688,13 @@ test("analyze route applies a deterministic read-back-affirmative backstop when 
   // and the LLM didn't already flag it this turn.
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
   assert.match(route, /if \(isReadBackStage && speakerType === "customer"\) \{/);
+  // allPendingItems, not the concept-group-scoped pendingItems — in a
+  // multi-group batch the affirmative is classified by content while the
+  // Confirmation items live in their own group, so a scoped lookup would
+  // find nothing and the backstop would silently never fire.
   assert.match(
     route,
-    /const readBackConfirmItem = pendingItems\.find\(\s*\n\s*\(item\) =>\s*\n\s*item\.completion_trigger === "customer" &&/
+    /const readBackConfirmItem = allPendingItems\.find\(\s*\n\s*\(item\) =>\s*\n\s*item\.completion_trigger === "customer" &&/
   );
   assert.match(route, /matchesReadBackAffirmativeHints\(transcript, readBackConfirmItem\)/);
   // Must not double-apply if the LLM ALREADY completed it this same turn.

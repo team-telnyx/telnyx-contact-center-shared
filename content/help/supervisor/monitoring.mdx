@@ -30,6 +30,14 @@ Queue metrics include monitored queues, waiting callers, longest wait, active ca
 
 Use filters to isolate pressure before intervening. A high waiting count with available agents can indicate skill mismatch, inactive agent queue assignments, status/endpoint issues, or routing constraints rather than insufficient headcount.
 
+## Previewing live email
+
+Choose **Preview conversation** on an email interaction. Email cards fill the conversation column with compact internal spacing, while the modal retains its standard size. Its format and image settings follow **Admin → Email → Preview**.
+
+During an active interaction, the current agent's saved reply appears with a **Draft** badge, the agent's name and the last saved time. Typing and replies inserted from AI Copilot appear after the agent's automatic save (normally after a brief typing pause), followed by the live stream update. This is a read-only view; an unsaved local edit is not yet visible.
+
+Once the agent sends, the draft is replaced by the outbound message. **Sent** means Telnyx accepted the send; recipient delivery evidence is displayed separately. Scheduled, pending and failed sends retain their respective statuses. Empty drafts disappear, and drafts from previous assignees or closed interactions are not shown. Draft attachments are listed by name, without exposing their unsent contents or BCC recipients.
+
 ## Supervising a live call
 
 Open the supervisory console from an active call and choose the supported supervision role, such as monitor, whisper, or barge. The target call must still be active. Announce or record supervisory participation where law and organizational policy require it.

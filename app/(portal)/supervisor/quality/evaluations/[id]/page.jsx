@@ -1,5 +1,7 @@
 "use client";
 
+import { ConversationReader } from "@/components/contact-center/ConversationPreview";
+import { channelDefinition } from "@/lib/acd/channel-registry.mjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -284,7 +286,7 @@ export default function QualityEvaluationDetailPage() {
   }, [evaluationId, load]);
 
   const statusConfig = STATUS_BADGES[evaluation?.status] || STATUS_BADGES.draft;
-  const canRunAi = !isFinal && !aiRunning && Boolean(recordingId || recordingUrl || transcriptionText);
+  const canRunAi = !isFinal && !aiRunning && Boolean(recordingId || recordingUrl || transcriptionText || channelDefinition(interaction?.interaction_type).capabilities.conversation);
 
   return (
     <SupervisorPageShell>
@@ -366,13 +368,14 @@ export default function QualityEvaluationDetailPage() {
                       <div className="mt-1 font-medium">
                         {formatDateTime(interaction?.completed_at || interaction?.abandoned_at)}
                         <span className="ml-2 text-muted-foreground">
-                          · {formatDuration(interaction?.talk_time_seconds)} talk
+                          · {formatDuration(interaction?.handle_time_seconds)} handling elapsed
                         </span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
+                {channelDefinition(interaction?.interaction_type).capabilities.conversation ? <div className="h-[650px] overflow-hidden rounded-xl border"><ConversationReader workItemId={interaction.work_item_id||interaction.id}/></div> : <>
                 <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardContent className="pt-6">
                     {recordingId || recordingUrl ? (
@@ -422,6 +425,7 @@ export default function QualityEvaluationDetailPage() {
                     )}
                   </CardContent>
                 </Card>
+                </>}
               </div>
 
               {/* Right column: scoring panel — scrolls independently of the recording */}

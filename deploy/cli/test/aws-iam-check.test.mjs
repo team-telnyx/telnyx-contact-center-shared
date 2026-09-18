@@ -149,7 +149,7 @@ describe('aws-iam-check.mjs', () => {
   // Regression coverage for the 2026-07-06 E2E false-negative: a
   // deployment-name-scoped operator policy (the exact shape
   // generateRequiredPolicyJson produces, and the shape our own internal
-  // fde-app-bot-* policies use) was reported as "28 actions denied" because
+  // cc-deploy-bot-* policies use) was reported as "28 actions denied" because
   // simulate-principal-policy defaults to evaluating against Resource: "*"
   // when no --resource-arns is passed — see aws-iam-check.mjs's module
   // header comment for the full story.
@@ -162,7 +162,7 @@ describe('aws-iam-check.mjs', () => {
     function scopedPolicySimulate({ allowedDeploymentPrefix = 'cc-main' } = {}) {
       return async (cmd, args) => {
         if (args[0] === 'sts') {
-          return { stdout: JSON.stringify({ Arn: 'arn:aws:iam::123456789012:user/fde-app-bot', Account: '123456789012' }) };
+          return { stdout: JSON.stringify({ Arn: 'arn:aws:iam::123456789012:user/cc-deploy-bot', Account: '123456789012' }) };
         }
         if (args[0] === 'iam' && args[1] === 'simulate-principal-policy') {
           const actionsIdx = args.indexOf('--action-names');

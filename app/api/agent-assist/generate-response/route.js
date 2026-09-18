@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
+import { withPermission } from "@/lib/authz/guard";
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
@@ -8,16 +8,10 @@ const TELNYX_API_BASE = "https://api.telnyx.com/v2";
  * POST /api/agent-assist/generate-response
  * Generates a suggested response for a transcription using Telnyx AI chat completion with streaming
  */
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
     // Authenticate the user
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const body = await request.json();
     const { transcript, articleContent } = body;
@@ -78,6 +72,7 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
         ],
         model: "openai/gpt-4o",
         temperature: 0.7,
+        enable_thinking: false,
         stream: true,
       }),
     });
@@ -158,3 +153,5 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/agent-assist/generate-response" });

@@ -44,7 +44,7 @@ test("admin Settings page has a Brand/Company Name field wired to the API", asyn
   assert.match(page, /\.\.\.\(brandName !== lastSavedBrandNameRef\.current \? \{ brandName \} : \{\}\)/);
   assert.match(page, /Brand \/ Company Name/);
   assert.match(page, /id="brand-name"/);
-  assert.match(page, /placeholder="e\.g\. Global Medical Response"/);
+  assert.match(page, /placeholder="e\.g\. Acme Air Medical"/);
 });
 
 test("Reset to Defaults PRESERVES the brand and restores the field (Codex #1187: no wipe, no stale)", async () => {

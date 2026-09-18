@@ -4,16 +4,16 @@ description: Detailed map of campaigns, lists, compliance controls, live calls, 
 audiences: [owner]
 keywords: [outbound dialer, campaigns, DNC, attempt controls, time sets]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-09-15
 ---
 
 Outbound Dialer is currently shown to the Owner role. Its rail contains:
 
 | Section | Function |
 | --- | --- |
-| Dashboard | Running campaigns, contact inventory, active/ringing calls, realtime answered/failed signals, and start/pause/resume/stop/recycle controls. |
+| Dashboard | Campaign cards with status filters, contact inventory, active/ringing calls, realtime answered/failed signals, and start/pause/resume/stop/recycle controls. |
 | Live Calls | Filter active campaign calls by campaign/status; optionally keep disconnected calls visible for 60 seconds; open details or supervise/disconnect where available. |
-| Campaigns | Define channel (voice), mode, handler target, contact list, From-number rotation, DNC/filter/time set, attempt control, pacing, concurrency, retry, AMD, and attached form/workflow mappings. |
+| Campaigns | Define channel (voice or SMS), mode, handler target, contact list, From-number rotation, DNC/filter/time set, attempt control, pacing, concurrency, retry, AMD, and attached form/workflow mappings. SMS campaigns run in Broadcast mode and configure sender numbers, destination fields, a consent check, a template with variable mapping, a live preview, audience validation, test sends and per-campaign pacing instead of the voice fields. |
 | Contact Lists | Create a list, upload CSV, preview rows, map phone/email/WhatsApp fields, validate, and inspect import counts. |
 | DNC | Import suppression records, choose match strategy/columns, and activate or pause governance. |
 | Filters | Build contact-list eligibility conditions and test the result before campaign use. |
@@ -22,8 +22,22 @@ Outbound Dialer is currently shown to the Owner role. Its rail contains:
 | Attempt Controls | Configure reset period/timezone, contact and number caps, outcome-specific recall delays, and phone-type rules. |
 | History | Inspect attempts and outcomes for a selected campaign. |
 | Event Viewer | Filter the campaign event timeline by event type. |
-| Settings | Configure global agent/line limits, utilization, CPS, abandon threshold, maximum attempts, dial timeout, callable defaults, and allowed From numbers. |
+| Settings | Full-width selectable section cards: Outbound settings, Inbound priority, Allowed Numbers, Answered without agent, Time Zone Settings, and the Messaging campaigns sections Shared, SMS, WhatsApp and Email. Each card previews its current values; clicking a card opens only that section in Context settings, and Save settings persists every section at once. Field labels are short, with the full explanation behind the info icon; Allowed Numbers is a searchable scrolling list. |
+
+In the Dashboard command center, toggle any combination of Running, Paused, Stopped, Ready, Recycled, Completed, and Exhausted. Running and Paused are selected by default. The browser remembers your selection when you leave or reload the screen. Turning every status off hides all campaign cards. The filter uses the displayed execution status, including campaigns whose callable records are exhausted.
 
 Save prerequisites are marked in the campaign editor. Do not run a campaign until its list is validated, destination field is mapped, From-number slots cover retries, DNC/filter/time controls are attached, handler exists, and test calls confirm disposition and retry behavior.
+
+## Messaging broadcast campaigns
+
+An SMS campaign sends one template message to every callable contact without involving agents. Enable **SMS** under **Settings → Messaging campaigns** first; a disabled channel blocks Start and pauses running campaigns. In the campaign editor choose the **SMS** channel, the sending numbers (mapped under **Admin → SMS → Numbers**; replies reach the queue mapped to the number), the destination fields in priority order, an optional consent field, and a template from **Admin → SMS → Templates**. Map every template variable to a contact-list column, a contact-method slot, static text or a system value, or choose what happens when a value is missing. The preview renders the message for a real contact, **Validate audience** counts sendable, suppressed and skipped contacts before you start, and **Send** delivers a test message to one address.
+
+While the campaign runs the worker sends batches within the workspace limits, honours DNC lists, STOP opt-outs, the consent field and the callable window, and records every message on the attempt ledger. Throttling backs the campaign off, transient carrier failures retry later, sender-level problems (for example an unregistered 10DLC number) and failure-rate spikes pause the campaign automatically with the reason shown in the Event Viewer. The Dashboard shows Sent, Delivered, Replied, Queued, Failed, Unconfirmed and Suppressed counts, and the campaign monitor lists each message with its delivery state and rendered text.
+
+WhatsApp and email campaigns use the same editor with their own sender and template.
+
+A **WhatsApp** campaign sends one approved Meta template from a single mapped number. Only templates Meta has approved appear in the list, because a campaign message is business-initiated and cannot use free-form text. Their variables are positional (`{{1}}`, `{{2}}`), shown as `body:1` or `header:1` in the mapping table; map each one to a contact field, static text or a system value. Templates whose header is an image, video or document need a public HTTPS media link. Settings → Messaging campaigns → WhatsApp decides which template categories a campaign may send. The 24-hour customer service window does not apply to a template, and a customer reply opens a conversation in the queue mapped to the sending number.
+
+An **email** campaign sends one Telnyx email template from a mailbox that allows sending. Variables use `{{variable}}` in the subject and the body. You can override the subject for the campaign, set a From name and a Reply-to address. Only simple variable substitution is supported; a template using Liquid conditions or loops is refused rather than sent with unprocessed markup, because the per-contact preview and the audience check cannot run Liquid. When **Require unsubscribe** is on, the campaign sends only if the workspace has an unsubscribe group, the template maps `{{unsubscribe_url}}`, or the body contains an unsubscribe link; the List-Unsubscribe header follows the same setting. Bounces and delivery failures land on the attempt ledger like any other channel.
 
 Archive removes an item from active lists without erasing historical references. Campaign start/stop and live disconnect actions affect external calls and should follow change-control procedures.

@@ -21,6 +21,7 @@ Each server card shows its configuration and allowed tools. Expand the card to i
 | **Authentication Type** | No | None, Bearer token, OAuth Authorization Code with PKCE, OAuth Client Credentials, API-key header, or Custom header. |
 | **Secret** | Depends on auth | Selects a local encrypted secret; raw credentials are not entered into the server record. |
 | **Header Name / Scheme / Resource URL** | Depends on auth | Header or OAuth metadata required by the selected method. |
+| **Custom Headers** | No | Static header name/value pairs sent on every request, in addition to the selected authentication. Credentials must use the local-secret option. |
 | **Allowed Tools** | No | Explicit allowlist of discovered tools available to consumers. |
 
 ## Connect and authenticate
@@ -28,6 +29,31 @@ Each server card shows its configuration and allowed tools. Expand the card to i
 Select **Connect** after entering name, type, and URL. This detects authentication requirements and attempts tool discovery. For Authorization Code OAuth, connect first, review the detected resource, then select **Authenticate**. After the callback, review tools and save the final configuration.
 
 OAuth client credentials may be stored as JSON containing `client_id` and `client_secret`, or in the supported `client_id:client_secret` format. For non-Telnyx OAuth resources, provide the resource URL when required.
+
+### External OAuth providers
+
+By default, OAuth Client Credentials requests a token from the Telnyx token endpoint. To use a different provider, add its details to the same secret:
+
+```json
+{
+  "client_id": "...",
+  "client_secret": "...",
+  "token_url": "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token",
+  "scope": "<application-id>/.default"
+}
+```
+
+Optional keys: `audience`, `resource`, and `auth_style`. Client authentication defaults to `client_secret_post` for external providers and HTTP Basic for the Telnyx token endpoint; set `auth_style` to `basic` or `post` to override. The `resource` parameter is only sent when set explicitly, because Microsoft Entra ID v2 rejects it.
+
+Tokens are cached per endpoint, scope, and resource, and refreshed automatically before expiry.
+
+### Gateways that require a second credential
+
+Some vendors put their MCP server behind an API gateway that requires a static key alongside the OAuth bearer token. Configure the OAuth grant as the authentication type and add the gateway key under **Custom Headers**, for example `Ocp-Apim-Subscription-Key`. Custom headers are merged with the generated `Authorization` header on every request, including tool discovery.
+
+Tick **Value is a local secret** on any header that carries a credential and select the local secret holding it. The server record then stores only a reference (`{{secret:<name>}}`); the credential itself stays in the encrypted secret store and is resolved server-side at request time, so it is never written to the server record or returned to the browser. Leave the box unticked only for non-sensitive values such as a tenant identifier.
+
+Header names are case-insensitive, and the authentication setting above generates its own `Authorization` header. A custom row named `Authorization` (in any casing) is replaced by the generated one, and the editor warns when you add it.
 
 ## Tool discovery and allowlisting
 

@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request, context) {
+async function GET_handler(request, context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401, headers: { "Cache-Control": "no-store" } }
-      );
-    }
+    const user = authz.user;
 
     const { searchParams } = new URL(request.url);
     const useDemoApiKey = searchParams.get("useDemoApiKey") === "true";
@@ -81,3 +75,5 @@ export async function GET(request, context) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["ai_insights:read", "agent:self"], GET_handler, { route: "/api/ai/conversations/[id]/conversations-insights" });

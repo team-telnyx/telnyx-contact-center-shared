@@ -8,9 +8,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 // GET /api/agent-assist/workflow/session?interactionId=xxx - Get session state
-export async function GET(request) {
+async function GET_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -46,7 +47,7 @@ export async function GET(request) {
       workflowSession = s;
     } else {
       const { rows: [s] } = await pool.query(
-        `SELECT * FROM aa_workflow_sessions WHERE interaction_id = $1`,
+        `SELECT * FROM aa_workflow_sessions WHERE work_item_id::text = $1`,
         [interactionId]
       );
       workflowSession = s;
@@ -86,13 +87,19 @@ async function getWorkflowSessionState(pool, sessionId) {
             w.name as workflow_name, 
             w.category as workflow_category,
             w.llm_confidence_threshold as workflow_confidence_threshold,
-            w.data_action_buttons,
-            i.agent_username,
+	            w.data_action_buttons,
+	            i.agent_username,
+	            jsonb_build_object(
+	              'transcriptions', COALESCE(s.transcriptions, '[]'::jsonb),
+	              'suggestions', COALESCE(s.suggestions, '[]'::jsonb),
+	              'workflow_session_id', s.id,
+	              'updated_at', s.updated_at
+	            ) AS agent_assist_history,
             u.first_name as agent_first_name,
             u.last_name as agent_last_name
      FROM aa_workflow_sessions s
      JOIN aa_workflows w ON s.workflow_id = w.id
-     LEFT JOIN cc_interactions i ON s.interaction_id = i.id
+	     LEFT JOIN acd_history_interactions i ON s.work_item_id = i.id
      LEFT JOIN users u ON i.agent_username = u.username
      WHERE s.id = $1`,
     [sessionId]
@@ -179,3 +186,6 @@ async function getWorkflowSessionState(pool, sessionId) {
     completedItems,
   };
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agent:self", GET_handler, { route: "/api/agent-assist/workflow/session" });

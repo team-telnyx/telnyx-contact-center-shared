@@ -56,6 +56,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Can } from "@/components/auth-provider";
 
 export default function CallFlowsPage() {
   const router = useRouter();
@@ -82,28 +83,7 @@ export default function CallFlowsPage() {
           return;
         }
 
-        // Check if user has admin or owner role
-        const userRoles =
-          data.user.roles &&
-          Array.isArray(data.user.roles) &&
-          data.user.roles.length > 0
-            ? data.user.roles.map((r) => String(r).toLowerCase())
-            : ["agent"];
-
-        const hasAdminAccess = userRoles.some(
-          (role) => role === "admin" || role === "owner"
-        );
-
-        if (!hasAdminAccess) {
-          notify({
-            title: "Access Denied",
-            description: "You do not have permission to access this page.",
-            variant: "error",
-          });
-          router.push("/");
-          return;
-        }
-
+        // Screen access (admin.automations.call-app-flows) is enforced by the proxy and <ScreenGuard> (RBAC Phase 3).
         setIsAuthorized(true);
       } catch (error) {
         console.error("Error checking authorization:", error);
@@ -370,14 +350,14 @@ export default function CallFlowsPage() {
   }
 
   const headerActions = <>
-    <Button variant="outline" size="sm" onClick={handleImport}>
+    <Can permission="call_flows:import"><Button variant="outline" size="sm" onClick={handleImport}>
       <IconUpload className="h-4 w-4 mr-2" />
       Import
-    </Button>
-    <Button size="sm" onClick={handleCreate}>
+    </Button></Can>
+    <Can permission="call_flows:create"><Button size="sm" onClick={handleCreate}>
       <IconPlus className="h-4 w-4 mr-2" />
       Create Flow
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -596,7 +576,7 @@ export default function CallFlowsPage() {
                           >
                             <IconDownload className="size-4" />
                           </button>
-                          <button
+                          <Can permission="call_flows:delete"><button
                             type="button"
                             onClick={() =>
                               handleDeleteClick(flow.id, flow.name)
@@ -605,7 +585,7 @@ export default function CallFlowsPage() {
                             title="Delete flow"
                           >
                             <IconTrash className="size-4" />
-                          </button>
+                          </button></Can>
                         </div>
                       </TableCell>
                     </TableRow>

@@ -7,7 +7,6 @@ const files = {
   incomingWebhook: "app/api/voice/webhook/incoming/[flowId]/route.js",
   flowEngine: "lib/voice-flow-engine.js",
   streamingHandler: "app/api/voice/streaming/ws-handler.js",
-  callAction: "app/api/voice/call-action/route.js",
   callState: "app/api/voice/calls/[callControlId]/state/route.js",
   recordingTranscribe: "app/api/voice/recordings/[id]/transcribe/route.js",
   telnyxProvider: "lib/telnyx.js",
@@ -42,13 +41,12 @@ test("Voice/Telnyx logging helper exposes canonical topic loggers", async () => 
 
 test("Voice Flow and Telnyx core runtime files use structured topic loggers", async () => {
   const expectations = [
-    [files.incomingWebhook, /voiceWebhookLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
-    [files.flowEngine, /voiceFlowLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
-    [files.streamingHandler, /(streamingLogger|mediaLogger)\.(debug|info|warn|error)\("[a-z0-9_]+"/],
-    [files.callAction, /callControlLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
-    [files.callState, /callControlLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
-    [files.recordingTranscribe, /recordingsLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
-    [files.telnyxProvider, /providerApiLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
+    [files.incomingWebhook, /voiceWebhookLogger\.(debug|info|warn|error)\(\s*"[a-z0-9_]+"/],
+    [files.flowEngine, /voiceFlowLogger\.(debug|info|warn|error)\(\s*"[a-z0-9_]+"/],
+    [files.streamingHandler, /(streamingLogger|mediaLogger)\.(debug|info|warn|error)\(\s*"[a-z0-9_]+"/],
+    [files.callState, /callControlLogger\.(debug|info|warn|error)\(\s*"[a-z0-9_]+"/],
+    [files.recordingTranscribe, /recordingsLogger\.(debug|info|warn|error)\(\s*"[a-z0-9_]+"/],
+    [files.telnyxProvider, /providerApiLogger\.(debug|info|warn|error)\(\s*"[a-z0-9_]+"/],
   ];
 
   for (const [path, loggerPattern] of expectations) {

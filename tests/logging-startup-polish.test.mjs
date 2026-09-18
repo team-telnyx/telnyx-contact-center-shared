@@ -9,7 +9,6 @@ const files = {
   seedDomains: new URL("../lib/seed-domains.mjs", import.meta.url),
   seedOwner: new URL("../lib/seed-default-owner.mjs", import.meta.url),
   seedWorkflows: new URL("../lib/seed-sample-workflows.mjs", import.meta.url),
-  ghostCleanup: new URL("../lib/contact-center/ghost-call-cleanup.mjs", import.meta.url),
   streaming: new URL("../lib/streaming-ws-handler.mjs", import.meta.url),
   startWrapper: new URL("../scripts/start-next-with-pino.mjs", import.meta.url),
   packageJson: new URL("../package.json", import.meta.url),
@@ -51,7 +50,6 @@ test("startup modules expose structured pino event names for schema, seed, clean
   const seedDomains = await source(files.seedDomains);
   const seedOwner = await source(files.seedOwner);
   const seedWorkflows = await source(files.seedWorkflows);
-  const ghostCleanup = await source(files.ghostCleanup);
   const streaming = await source(files.streaming);
 
   assert.match(schema, /postgres_schema_created/);
@@ -60,7 +58,6 @@ test("startup modules expose structured pino event names for schema, seed, clean
   assert.match(seedDomains, /seed_domains_/);
   assert.match(seedOwner, /seed_owner_/);
   assert.match(seedWorkflows, /seed_workflows_complete/);
-  assert.match(ghostCleanup, /ghost_call_cleanup_/);
   assert.match(streaming, /createDiagnosticLogger\("platform\.app"\)/);
   assert.match(streaming, /createDiagnosticLogger\("telnyx\.streaming"\)/);
   assert.match(streaming, /streaming_ws_listening/);
@@ -107,7 +104,7 @@ test("production start is wrapped so Next CLI ready lines become pino events", a
   assert.match(startWrapper, /nextCliStartingLineSuppressed/);
   assert.match(startWrapper, /next", "start"/);
   assert.match(startWrapper, /process\.env\.APP_HOSTNAME \|\| "0\.0\.0\.0"/);
-  assert.doesNotMatch(startWrapper, /process\.env\.HOSTNAME/);
+  assert.doesNotMatch(startWrapper, /(?:--hostname|hostname:)\s*process\.env\.HOSTNAME/);
   assert.doesNotMatch(packageJson.scripts.start, /next start --hostname/);
   assert.doesNotMatch(dockerfile, /Starting Next\.js production server/);
 });

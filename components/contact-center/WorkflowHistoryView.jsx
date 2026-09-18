@@ -31,6 +31,11 @@ import {
   CheckCheck,
   Pencil,
 } from "lucide-react";
+import { formatSlotDisplay } from "@/lib/agent-assist/slot-display.mjs";
+import {
+  resolveWorkflowHistorySuggestions,
+  resolveWorkflowHistoryTranscriptions,
+} from "@/lib/agent-assist/history-transcriptions.mjs";
 
 /**
  * WorkflowHistoryView Component
@@ -72,38 +77,24 @@ export default function WorkflowHistoryView({ interactionId }) {
         // Extract agent_assist data from interaction metadata
         const agentAssist = interactionData?.interaction?.metadata?.agent_assist || {};
         
-        // Merge session with transcriptions and suggestions from metadata
+        // Merge the session with compatibility history. The workflow session
+        // itself is authoritative; Core transcript artifacts are the durable
+        // fallback for older sessions.
         if (sessionData.session) {
-          // Get transcriptions from metadata or from item statuses as fallback
-          let transcriptions = agentAssist.transcriptions || [];
-          
-          // If no transcriptions in metadata, try to reconstruct from item statuses
-          if (transcriptions.length === 0 && sessionData.session.stages) {
-            const reconstructed = [];
-            let seenTranscripts = new Set();
-            
-            sessionData.session.stages.forEach(stage => {
-              stage.items?.forEach(item => {
-                const status = item.status;
-                if (status?.source_transcript && !seenTranscripts.has(status.source_transcript)) {
-                  seenTranscripts.add(status.source_transcript);
-                  reconstructed.push({
-                    id: `reconstructed-${reconstructed.length}`,
-                    transcript: status.source_transcript,
-                    track: status.completed_by === 'customer' ? 'inbound' : 'outbound',
-                    isFinal: true,
-                  });
-                }
-              });
-            });
-            
-            if (reconstructed.length > 0) {
-              transcriptions = reconstructed;
-            }
-          }
-          
-          sessionData.session.transcriptions = transcriptions;
-          sessionData.session.suggestions = agentAssist.suggestions || [];
+          sessionData.session.transcriptions = resolveWorkflowHistoryTranscriptions({
+            sessionTranscriptions: sessionData.session.transcriptions,
+            metadataTranscriptions: agentAssist.transcriptions,
+            artifactSegments:
+              interactionData?.interaction?.metadata?.transcription_segments,
+            artifactSpeakerTurns:
+              interactionData?.interaction?.metadata?.transcription_speaker_turns,
+            artifactText:
+              interactionData?.interaction?.metadata?.transcription_text,
+          });
+          sessionData.session.suggestions = resolveWorkflowHistorySuggestions({
+            sessionSuggestions: sessionData.session.suggestions,
+            metadataSuggestions: agentAssist.suggestions,
+          });
         }
 
         setSession(sessionData.session || null);
@@ -119,7 +110,7 @@ export default function WorkflowHistoryView({ interactionId }) {
   }, [interactionId]);
 
   // Extract data from session
-  const stages = session?.stages || [];
+  const stages = useMemo(() => session?.stages || [], [session?.stages]);
   const itemStatuses = useMemo(() => {
     const statuses = {};
     stages.forEach((stage) => {
@@ -285,6 +276,9 @@ function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
                           const confidenceScore = status.confidence_score;
                           const isAiFilled = completedBy === "ai" || (status.auto_filled && !completedBy) || (confidenceScore != null && !completedBy);
                           const isAgentFilled = completedBy === "agent";
+                          // an earlier fix: resolved by rule (e.g. bed = N/A because the
+                          // room has no number), not by a model or a click.
+                          const isInferred = completedBy === "inferred";
 
                           return (
                             <div
@@ -325,9 +319,14 @@ function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
                                     {slotValue ? (
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <span className="text-sm font-medium text-foreground">
-                                          {slotValue}
+                                          {formatSlotDisplay(slotValue, item.slot_type)}
                                         </span>
-                                        {isAiFilled ? (
+                                        {isInferred ? (
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-600 dark:text-slate-300 border-slate-500/40 bg-slate-500/10" title="Inferred from an earlier answer">
+                                            <Sparkles className="h-3 w-3 mr-0.5" />
+                                            Inferred
+                                          </Badge>
+                                        ) : isAiFilled ? (
                                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Filled by AI Assistant">
                                             <Bot className="h-3 w-3 mr-0.5" />
                                             AI
@@ -635,7 +634,7 @@ function SuggestionsHistoryCard({ suggestions }) {
                         <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
                           isLatest ? "font-medium" : "text-muted-foreground"
                         }`}>
-                          "{suggestion.text}"
+                          &ldquo;{suggestion.text}&rdquo;
                         </p>
 
                         {/* Slot options badges */}

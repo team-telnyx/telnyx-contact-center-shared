@@ -18,6 +18,10 @@ async function loadMcpAuthDiscoveryForUnitTests() {
   return import(new URL("lib/mcp/mcp-auth-discovery.js", root));
 }
 
+async function loadMcpClientCredentialsForUnitTests() {
+  return import(new URL("lib/mcp/mcp-oauth-client-credentials.js", root));
+}
+
 test("AI Assistants navigation exclusively exposes MCP Servers for admin users", async () => {
   const menu = await read("config/menu.jsx");
   const aiRail = await read("components/assistants/AiAssistantsSectionNav.jsx");
@@ -26,7 +30,7 @@ test("AI Assistants navigation exclusively exposes MCP Servers for admin users",
   assert.match(aiRail, /label:\s*"MCP Servers"/, "AI Assistants rail should include MCP Servers");
   assert.match(aiRail, /href:\s*"\/admin\/mcp-servers"/, "MCP Servers should link to the admin page");
   assert.doesNotMatch(configurationRail, /label:\s*"MCP Servers"/, "Configuration rail should not duplicate MCP Servers");
-  assert.match(menu, /title:\s*"AI Assistants"[\s\S]*role_access:\s*\["admin",\s*"owner"\]/, "MCP Servers should inherit the admin/owner-scoped AI section");
+  assert.match(menu, /title:\s*"AI Assistants"[\s\S]*screens:\s*\["admin\.ai"/, "MCP Servers should inherit the AI section's screen grants");
 });
 
 test("Admin MCP Server routes use local Postgres registry and never proxy Telnyx MCP registry", async () => {
@@ -37,7 +41,7 @@ test("Admin MCP Server routes use local Postgres registry and never proxy Telnyx
   const schema = await read("lib/postgres-schema.mjs");
 
   for (const source of [listRoute, detailRoute, toolsRoute]) {
-    assert.match(source, /requireAdmin/, "MCP admin API should enforce admin access");
+    assert.match(source, /withPermission\("mcp_servers:(read|create|update|delete)", [A-Z]+_handler, \{ route:/, "MCP admin API should enforce admin access");
     assert.doesNotMatch(source, /buildTelnyxV2Url|\/ai\/mcp_servers|TELNYX_API_KEY/, "MCP admin API must not use Telnyx MCP registry");
   }
 
@@ -109,6 +113,101 @@ test("MCP auth discovery detects OAuth protected remote servers generically", as
     },
   });
   assert.equal(clientCredentialsOnlySummary.authType, "bearer", "non-Telnyx client_credentials discovery should not auto-select an unsupported runtime flow");
+});
+
+test("MCP OAuth client credentials support external providers without breaking Telnyx defaults", async () => {
+  const {
+    TELNYX_OAUTH_TOKEN_URL,
+    buildClientCredentialsTokenRequest,
+    parseOAuthClientCredentials,
+    resolveClientCredentialsConfig,
+  } = await loadMcpClientCredentialsForUnitTests();
+
+  const telnyxCredentials = parseOAuthClientCredentials('{"client_id":"cid","client_secret":"csecret"}');
+  const telnyxConfig = resolveClientCredentialsConfig({
+    credentials: telnyxCredentials,
+    authScheme: "",
+    isTelnyxMcpResource: true,
+  });
+  assert.equal(telnyxConfig.tokenUrl, TELNYX_OAUTH_TOKEN_URL, "Telnyx remains the default token endpoint");
+  assert.equal(telnyxConfig.scope, "admin", "Telnyx keeps its admin scope default");
+  assert.equal(telnyxConfig.resource, "https://api.telnyx.com/v2/mcp");
+
+  const telnyxRequest = buildClientCredentialsTokenRequest({ ...telnyxCredentials, ...telnyxConfig });
+  assert.equal(telnyxRequest.endpoint, TELNYX_OAUTH_TOKEN_URL);
+  assert.equal(
+    telnyxRequest.headers.Authorization,
+    `Basic ${Buffer.from("cid:csecret").toString("base64")}`,
+    "Telnyx client authentication stays HTTP Basic",
+  );
+  assert.equal(telnyxRequest.body.get("resource"), "https://api.telnyx.com/v2/mcp");
+  assert.equal(telnyxRequest.body.get("client_secret"), null, "Basic client auth must not duplicate the secret in the body");
+
+  assert.throws(
+    () => resolveClientCredentialsConfig({ credentials: telnyxCredentials, authScheme: "", isTelnyxMcpResource: false }),
+    /requires auth_scheme to contain the OAuth resource URL/,
+    "the Telnyx token endpoint still requires a resource",
+  );
+
+  // Microsoft Entra ID shape used by external vendors such as the the reference workflow MCP server.
+  const entraCredentials = parseOAuthClientCredentials(JSON.stringify({
+    client_id: "the reference workflow-client",
+    client_secret: "the reference workflow-secret",
+    token_url: "https://login.microsoftonline.com/tenant-guid/oauth2/v2.0/token",
+    scope: "resource-guid/.default",
+  }));
+  const entraConfig = resolveClientCredentialsConfig({
+    credentials: entraCredentials,
+    authScheme: "https://dispatch-api.example.com/mcpserver/v1/mcp",
+    isTelnyxMcpResource: false,
+  });
+  assert.equal(entraConfig.tokenUrl, "https://login.microsoftonline.com/tenant-guid/oauth2/v2.0/token");
+  assert.equal(entraConfig.scope, "resource-guid/.default");
+  assert.equal(entraConfig.resource, "", "Entra ID v2 rejects the v1-only resource parameter, so it must not be inferred");
+
+  const entraRequest = buildClientCredentialsTokenRequest({ ...entraCredentials, ...entraConfig });
+  assert.equal(entraRequest.endpoint, "https://login.microsoftonline.com/tenant-guid/oauth2/v2.0/token");
+  assert.equal(entraRequest.headers.Authorization, undefined, "external providers default to client_secret_post");
+  assert.equal(entraRequest.body.get("client_id"), "the reference workflow-client");
+  assert.equal(entraRequest.body.get("client_secret"), "the reference workflow-secret");
+  assert.equal(entraRequest.body.get("scope"), "resource-guid/.default");
+  assert.equal(entraRequest.body.get("resource"), null);
+  assert.equal(entraRequest.body.get("grant_type"), "client_credentials");
+
+  const basicOverride = buildClientCredentialsTokenRequest({
+    clientId: "cid",
+    clientSecret: "csecret",
+    tokenUrl: "https://auth.example.com/token",
+    authStyle: "basic",
+  });
+  assert.equal(
+    basicOverride.headers.Authorization,
+    `Basic ${Buffer.from("cid:csecret").toString("base64")}`,
+    "auth_style should force HTTP Basic for providers that require it",
+  );
+
+  // RFC 6749 2.3.1: each component is form-urlencoded before being joined and
+  // Base64'd. A secret containing ":" would otherwise split into the wrong
+  // client id/secret pair at the provider.
+  const reservedChars = buildClientCredentialsTokenRequest({
+    clientId: "client:id",
+    clientSecret: "sec%ret word",
+    authStyle: "basic",
+  });
+  assert.equal(
+    reservedChars.headers.Authorization,
+    `Basic ${Buffer.from("client%3Aid:sec%25ret+word").toString("base64")}`,
+    "Basic client credentials must be form-urlencoded before Base64",
+  );
+  const decoded = Buffer.from(reservedChars.headers.Authorization.slice(6), "base64").toString();
+  assert.equal(decoded.split(":").length, 2, "encoding must leave exactly one delimiter");
+
+  assert.deepEqual(
+    parseOAuthClientCredentials("cid:csecret"),
+    { clientId: "cid", clientSecret: "csecret", tokenUrl: null, scope: null, audience: null, resource: null, authStyle: null },
+    "legacy client_id:client_secret secrets keep working",
+  );
+  assert.equal(parseOAuthClientCredentials(""), null);
 });
 
 test("MCP runtime resolves local Contact Center secrets and validates calls against persisted input schemas", async () => {
@@ -218,6 +317,10 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(sheet, /Authorization Code \+ PKCE/, "sheet should describe the interactive OAuth flow");
   assert.doesNotMatch(sheet, /OAuth via Telnyx Portal/, "OAuth auth label should not be hardcoded to Telnyx Portal");
   assert.match(sheet, /client_id.*client_secret/s, "sheet should explain OAuth credential secret format");
+  assert.match(sheet, /token_url/, "sheet should document the token endpoint override for non-Telnyx OAuth providers");
+  assert.match(sheet, /Custom Headers/, "sheet should let admins configure static headers such as gateway subscription keys");
+  assert.match(sheet, /Ocp-Apim-Subscription-Key/, "custom header help should name a real gateway key example");
+  assert.match(sheet, /headers: headerRowsToObject\(headerRows\)/, "sheet should persist custom headers on save and on tool discovery");
   assert.match(sheet, /\/api\/admin\/secrets/, "sheet should list local Contact Center secrets for runtime auth");
   assert.doesNotMatch(sheet, /\/api\/integration-secrets|Telnyx integration secrets|APIKeyRefCombobox/, "MCP auth picker must not use Telnyx integration secrets");
   assert.doesNotMatch(sheet, /secret\.value/, "sheet must not expose decrypted secret values client-side");
@@ -284,7 +387,7 @@ test("MCP Tool editor, test sheet, and monitor expose normalized response payloa
 
   assert.match(route, /callMcpTool/);
   assert.match(route, /getMcpResponseVariablePayload/);
-  assert.match(route, /body:\s*responsePayload/, "MCP test route should include a normalized response body in result.response for persistence");
+  assert.match(route, /body:\s*isError \? rawResponsePayload : responsePayload/, "MCP test route should include a normalized (MCP result envelope-unwrapped) response body in result.response for persistence");
   assert.match(route, /buildMcpErrorResponse/, "MCP test route should return an error response object instead of only a top-level error string so the sheet can render failed remote MCP calls");
   assert.match(route, /getMcpErrorStatus/, "MCP test route should preserve remote HTTP error codes such as 449 instead of collapsing every transport error to 500");
   assert.match(route, /response:\s*\{[\s\S]*isError:\s*true[\s\S]*body:/, "MCP test route should include failed transport calls in result.response.body for Response Payload rendering");
@@ -391,13 +494,13 @@ test("MCP argument builder only resolves explicit schema-shaped args and preserv
         dynamic_extra: "keep me",
       },
     }),
-    variables: { customer: { phone: "+48602410402", name: "Leszek" } },
+    variables: { customer: { phone: "+48600000001", name: "Demo" } },
   });
 
   assert.deepEqual(args, {
     request: {
-      to: "+48602410402",
-      text: "Hello Leszek",
+      to: "+48600000001",
+      text: "Hello Demo",
       dynamic_extra: "keep me",
     },
   });
@@ -425,7 +528,7 @@ test("MCP schema validator rejects missing required fields without stripping all
     required: ["request"],
   };
 
-  const validArgs = { request: { to: "+48602410402", extra: "preserved" } };
+  const validArgs = { request: { to: "+48600000001", extra: "preserved" } };
   assert.equal(validateMcpToolArguments(validArgs, schema).valid, true);
   assert.deepEqual(assertValidMcpToolArguments(validArgs, schema), validArgs);
 

@@ -3,11 +3,12 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 /**
  * GET /api/admin/web-pages/[id]
  * Get a specific web page
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }) {
   try {
     const user = await getAuthenticatedUser(request.url);
     if (!user) {
@@ -59,7 +60,7 @@ export async function GET(request, { params }) {
  * PATCH /api/admin/web-pages/[id]
  * Update a web page
  */
-export async function PATCH(request, { params }) {
+async function PATCH_handler(request, { params }) {
   try {
     const user = await getAuthenticatedUser(request.url);
     if (!user) {
@@ -169,7 +170,7 @@ export async function PATCH(request, { params }) {
  * DELETE /api/admin/web-pages/[id]
  * Delete a web page
  */
-export async function DELETE(request, { params }) {
+async function DELETE_handler(request, { params }) {
   try {
     const user = await getAuthenticatedUser(request.url);
     if (!user) {
@@ -216,3 +217,8 @@ export async function DELETE(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("web_pages:read", GET_handler, { route: "/api/admin/web-pages/[id]" });
+export const PATCH = withPermission("web_pages:update", PATCH_handler, { route: "/api/admin/web-pages/[id]" });
+export const DELETE = withPermission("web_pages:delete", DELETE_handler, { route: "/api/admin/web-pages/[id]" });

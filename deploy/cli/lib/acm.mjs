@@ -218,7 +218,7 @@ export async function listCertificatesForDomain({ domain, region, execImpl = exe
  * the operator *why* it's requesting a new certificate instead of silently
  * doing so when there's a perfectly good wildcard cert one region over.
  *
- * Added after a real 2026-07-06 case: the account had `*.demotelnyx.com`
+ * Added after a real 2026-07-06 case: the account had `*.example.com`
  * issued in us-east-2, but the deployment's region was us-west-2 —
  * listCertificatesForDomain (region-scoped) correctly found nothing, and
  * the wizard silently requested + issued a brand new per-host certificate

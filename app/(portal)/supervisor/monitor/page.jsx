@@ -1,4 +1,11 @@
 "use client";
+import MultichannelDashboard from "@/components/contact-center/MultichannelDashboard";
+import MonitoringFilters from "@/components/contact-center/MonitoringFilters";
+import LiveInteractionsView from "@/components/contact-center/LiveInteractionsView";
+import { realtimeDurations } from "@/lib/acd/realtime-display.mjs";
+import { formatCapacityUtilization } from "@/lib/contact-center/capacity-display.mjs";
+
+import { AcdOperationsPanel } from "@/components/contact-center/AcdOperationsPanel";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,16 +29,13 @@ import {
   IconInfoCircle,
   IconCheck,
   IconX,
-  IconRefresh,
   IconFilter,
   IconEye,
   IconStar,
   IconStarFilled,
   IconArrowDown,
   IconChartBar,
-  IconSparkles,
   IconPhoneIncoming,
-  IconGauge,
   IconPlayerPause,
   IconPlayerPlay,
   IconPlayerStop,
@@ -58,7 +62,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import {
-  SupervisorPageHeader,
   SupervisorPageShell,
 } from "@/components/contact-center/SupervisorPageLayout";
 import { Input } from "@/components/ui/input";
@@ -76,7 +79,9 @@ import {
   STATUS_NAME_ICON_FALLBACK,
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
-import { SupervisionModal } from "@/components/contact-center/SupervisionModal";
+import InteractionPreviewAction from "@/components/contact-center/InteractionPreviewAction";
+import InteractionSla from "@/components/contact-center/InteractionSla";
+import { InteractionChannel } from "@/components/contact-center/InteractionChannel";
 import {
   HoverCard,
   HoverCardContent,
@@ -88,6 +93,7 @@ import {
   MONITOR_RAIL_ITEMS,
 } from "@/components/contact-center/MonitorSectionNav";
 import { OverviewDashboardView } from "@/components/contact-center/OverviewDashboardView";
+import { Can } from "@/components/auth-provider";
 
 const MONITOR_UI_STATE_STORAGE_KEYS = {
   activeSection: MONITOR_ACTIVE_SECTION_STORAGE_KEY,
@@ -120,8 +126,34 @@ function CampaignPriorityBadge({ priority }) {
   );
 }
 
+function CallPriorityIndicator({ priority }) {
+  const normalizedPriority = Number(priority);
+  if (
+    !Number.isInteger(normalizedPriority) ||
+    normalizedPriority < 1 ||
+    normalizedPriority > 5
+  ) {
+    return "—";
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }, (_, index) =>
+        index + 1 <= normalizedPriority ? (
+          <IconStarFilled key={index} className="h-4 w-4 text-yellow-400" />
+        ) : (
+          <IconStar key={index} className="h-4 w-4 text-gray-300" />
+        ),
+      )}
+      <span className="ml-1 text-xs text-muted-foreground">
+        ({normalizedPriority})
+      </span>
+    </div>
+  );
+}
+
 // Component to display skills with relaxation indicator
-function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
+function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed, skillNames = {} }) {
   // Use relaxed skills if available, otherwise use original required skills
   const skillsToDisplay = relaxedSkills || requiredSkills;
 
@@ -154,8 +186,8 @@ function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
                 key={skillName}
                 className="flex items-center justify-between py-1"
               >
-                <span className="text-sm font-medium">{skillName}</span>
-                <div className="flex items-center gap-1">
+                <span className="text-sm font-medium min-w-0 break-words pr-2">{skillNames[skillName] || skillName}</span>
+                <div className="flex items-center gap-1 shrink-0">
                   {Array.from({ length: 5 }, (_, i) => {
                     const starValue = i + 1;
                     const filled = starValue <= proficiency;
@@ -294,7 +326,7 @@ function OverviewMetricCard({ icon: Icon, label, value, detail, progress = 0, ch
   };
 
   return (
-    <Card className="overflow-hidden border bg-background/85 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+    <Card className="overflow-hidden border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <span className={`rounded-2xl bg-gradient-to-br p-3 ${tones[tone] || tones.slate}`}>
@@ -335,275 +367,6 @@ function MiniSignalTile({ label, value, detail }) {
   );
 }
 
-function MonitorDashboardView({ overall, agents, queues, timestamp }) {
-  const [today, setToday] = useState(null);
-  const [todayLoading, setTodayLoading] = useState(true);
-
-  // Today aggregates come from the analytics dashboard-today report so the
-  // dashboard consolidates the former Statistics tiles into a single view.
-  useEffect(() => {
-    let cancelled = false;
-    async function loadToday() {
-      try {
-        const from = new Date();
-        from.setHours(0, 0, 0, 0);
-        const sp = new URLSearchParams();
-        sp.set("report", "dashboard-today");
-        sp.set("from", from.toISOString());
-        sp.set("to", new Date().toISOString());
-        const res = await fetch(`/api/contact-center/analytics?${sp.toString()}`, { cache: "no-store" });
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload?.error || "Failed to load today statistics");
-        if (!cancelled) setToday(payload.data || null);
-      } catch (error) {
-        if (!cancelled) {
-          setToday(null);
-          notify({ title: "Dashboard load failed", description: String(error.message || error), variant: "error" });
-        }
-      } finally {
-        if (!cancelled) setTodayLoading(false);
-      }
-    }
-    loadToday();
-    const interval = setInterval(loadToday, 60000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const todayTotals = today?.totals || {};
-  const totalCalls = Number(todayTotals.total ?? overall.calls?.total ?? 0);
-  const answered = Number(todayTotals.answered ?? overall.calls?.answered ?? 0);
-  const abandoned = Number(todayTotals.abandoned ?? overall.calls?.abandoned ?? 0);
-  const outbound = Number(todayTotals.outbound ?? overall.calls?.outbound ?? 0);
-  const avgWait = Math.round(Number(todayTotals.avgWaitSeconds ?? overall.calls?.avgWaitTimeSeconds ?? 0));
-  const avgHandle = Math.round(Number(todayTotals.avgHandleSeconds ?? overall.calls?.avgHandleTimeSeconds ?? 0));
-
-  const active = overall.calls?.active || 0;
-  const totalAgents = agents.length || overall.agents?.totalActive || 0;
-  const available = overall.agents?.available || agents.filter((a) => a.status === "Available").length;
-  const busy = overall.agents?.busy || agents.filter((a) => Number(a.currentCalls || 0) > 0).length;
-  const waiting = overall.queues?.totalWaitingCalls || queues.reduce((sum, q) => sum + Number(q.realtime?.waitingCalls || 0), 0);
-  const activeQueues = queues.filter((q) => Number(q.realtime?.activeCalls || 0) > 0 || Number(q.realtime?.waitingCalls || 0) > 0).length;
-  const answerRate = pct(answered, Math.max(totalCalls, answered + abandoned));
-  const occupancy = pct(busy, Math.max(totalAgents, available + busy));
-  const queuePressure = pct(waiting, Math.max(waiting + active, 1));
-
-  const hourly = today?.hourly || [];
-  const topAgents = today?.topAgents || [];
-  const topWrapupCodes = today?.topWrapupCodes || [];
-  const todayQueues = today?.queues || [];
-  const maxAgentHandled = Math.max(...topAgents.map((a) => a.handled), 1);
-  const maxCodeTotal = Math.max(...topWrapupCodes.map((c) => c.total), 1);
-
-  const healthRows = [
-    { label: "Today answer rate", value: answered, total: Math.max(totalCalls, answered + abandoned), hint: `${answered} answered · ${abandoned} abandoned` },
-    { label: "Realtime agent occupancy", value: busy, total: Math.max(totalAgents, available + busy), hint: `${available} available · ${busy} busy` },
-    { label: "Live queue pressure", value: waiting, total: Math.max(waiting + active, 1), hint: `${waiting} waiting · ${active} active calls` },
-  ];
-
-  return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Today realtime command center</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight">Contact center today at a glance</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Current-day call statistics, top performers, and contact reasons — live tiles stay fed by the monitor stream for active calls, queue pressure, and agent availability.
-            </p>
-          </div>
-          <Badge variant="outline" className="bg-background/70 px-3 py-1 text-xs">
-            {timestamp ? `Updated ${new Date(timestamp).toLocaleTimeString()}` : "Waiting for live data"}
-          </Badge>
-        </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <OverviewMetricCard icon={IconPhoneIncoming} label="Total calls" value={formatShortNumber(totalCalls)} detail={`${answered} answered · ${abandoned} abandoned`} progress={pct(totalCalls, Math.max(totalCalls, 1))} chip="Today" tone="sky" />
-          <OverviewMetricCard icon={IconCheck} label="Answered" value={formatShortNumber(answered)} detail={`${answerRate}% answer rate`} progress={answerRate} chip="Today" tone="emerald" />
-          <OverviewMetricCard icon={IconAlertCircle} label="Abandoned" value={formatShortNumber(abandoned)} detail={`${pct(abandoned, Math.max(totalCalls, 1))}% of today volume`} progress={pct(abandoned, Math.max(totalCalls, 1))} chip="Today" tone="amber" />
-          <OverviewMetricCard icon={IconClock} label="Avg wait" value={formatDurationShort(avgWait)} detail={`Avg handle ${formatDurationShort(avgHandle)}`} progress={pct(avgWait, Math.max(avgWait, 1))} chip="Today" tone="violet" />
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <MiniSignalTile label="Active calls" value={formatShortNumber(active)} detail="Connected or ringing now" />
-          <MiniSignalTile label="Waiting" value={formatShortNumber(waiting)} detail={`${activeQueues} of ${queues.length} queues active`} />
-          <MiniSignalTile label="Agents" value={`${available}/${totalAgents}`} detail={`${busy} busy now`} />
-          <MiniSignalTile label="Occupancy" value={`${occupancy}%`} detail="Busy agents now" />
-          <MiniSignalTile label="Today SLA" value={`${answerRate}%`} detail="Answered vs abandoned" />
-          <MiniSignalTile label="Outbound" value={formatShortNumber(outbound)} detail="Today outbound calls" />
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <GraphCard title="Today call volume by hour" description="Answered and abandoned interactions per hour for the current day.">
-          {todayLoading ? (
-            <Skeleton className="h-[260px] w-full" />
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={hourly.length ? hourly : [{ label: "No calls yet", answered: 0, abandoned: 0 }]} margin={{ left: -20, right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
-                <Bar dataKey="answered" name="answered" stackId="calls" fill="#10b981" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="abandoned" name="abandoned" stackId="calls" fill="#f97316" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </GraphCard>
-
-        <Card className="border bg-background/85 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <IconGauge className="h-5 w-5 text-sky-600" />
-              Operations health
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {healthRows.map((row) => (
-              <div key={row.label} className="rounded-2xl border bg-card/70 p-4">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <div>
-                    <div className="font-semibold">{row.label}</div>
-                    <div className="text-xs text-muted-foreground">{row.hint}</div>
-                  </div>
-                  <div className="text-2xl font-semibold">{pct(row.value, row.total)}%</div>
-                </div>
-                <Progress value={pct(row.value, row.total)} className="mt-3 h-2" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="border bg-background/85 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <IconStar className="h-5 w-5 text-amber-500" />
-              Top performers today
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Agents ranked by handled interactions for the current day.</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {todayLoading ? (
-              <>
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </>
-            ) : topAgents.length ? (
-              topAgents.map((agent, index) => (
-                <div key={agent.username} className="rounded-2xl border bg-card/70 p-3" data-testid="top-performer-row">
-                  <div className="flex items-center gap-3">
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${index === 0 ? "bg-amber-500/15 text-amber-600" : index === 1 ? "bg-zinc-400/15 text-zinc-500" : index === 2 ? "bg-orange-700/15 text-orange-700" : "bg-muted text-muted-foreground"}`}>
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">{agent.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {agent.handled} handled · AHT {formatDurationShort(agent.avgHandleSeconds)} · talk {formatDurationShort(agent.talkSeconds)}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold">{formatShortNumber(agent.handled)}</div>
-                      <div className="text-xs text-muted-foreground">calls</div>
-                    </div>
-                  </div>
-                  <Progress value={pct(agent.handled, maxAgentHandled)} className="mt-2 h-1.5" />
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No handled interactions yet today.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border bg-background/85 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <IconChartBar className="h-5 w-5 text-violet-600" />
-              Top wrap-up codes today
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Why customers called today — the most used dispositions.</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {todayLoading ? (
-              <>
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </>
-            ) : topWrapupCodes.length ? (
-              topWrapupCodes.map((code) => (
-                <div key={code.codeId} className="rounded-2xl border bg-card/70 p-3" data-testid="top-wrapup-row">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="truncate font-medium">{code.codeName}</span>
-                    <span className="shrink-0 font-semibold">{formatShortNumber(code.total)}</span>
-                  </div>
-                  <Progress value={pct(code.total, maxCodeTotal)} className="mt-2 h-1.5" />
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No wrap-up codes recorded yet today.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border bg-background/85 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <IconTrendingUp className="h-5 w-5 text-emerald-600" />
-            Queues today
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">Per-queue volume and answer rate for the current day.</p>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Queue</TableHead>
-                <TableHead className="text-right">Calls</TableHead>
-                <TableHead className="text-right">Answered</TableHead>
-                <TableHead className="text-right">Abandoned</TableHead>
-                <TableHead className="text-right">Answer rate</TableHead>
-                <TableHead className="text-right">Avg wait</TableHead>
-                <TableHead className="text-right">Waiting now</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {todayQueues.length ? (
-                todayQueues.map((queue) => {
-                  const liveQueue = queues.find((q) => (q.queueName || q.name || q.displayName) === queue.queueName);
-                  const waitingNow = Number(liveQueue?.realtime?.waitingCalls ?? liveQueue?.currentQueueSize ?? 0);
-                  return (
-                    <TableRow key={queue.queueName}>
-                      <TableCell className="font-medium">{queue.queueName}</TableCell>
-                      <TableCell className="text-right">{formatShortNumber(queue.total)}</TableCell>
-                      <TableCell className="text-right">{formatShortNumber(queue.answered)}</TableCell>
-                      <TableCell className="text-right">{formatShortNumber(queue.abandoned)}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="outline" className={`bg-transparent ${queue.answerRatePct >= 80 ? "border-green-500 text-green-600" : queue.answerRatePct >= 50 ? "border-amber-500 text-amber-600" : "border-red-500 text-red-500"}`}>
-                          {queue.answerRatePct}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">{formatDurationShort(queue.avgWaitSeconds)}</TableCell>
-                      <TableCell className="text-right">{formatShortNumber(waitingNow)}</TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow><TableCell colSpan={7} className="text-center text-sm">No interactions yet today.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 function getQueueAvgWaitSeconds(queue) {
   return Number(
     queue.avgWaitTimeSeconds
@@ -633,7 +396,7 @@ function ChartTooltip({ active, payload, label }) {
 
 function GraphCard({ title, description, children }) {
   return (
-    <Card className="border bg-background/85 shadow-sm">
+    <Card className="border bg-card shadow-sm">
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <p className="text-sm text-muted-foreground">{description}</p>
@@ -644,6 +407,10 @@ function GraphCard({ title, description, children }) {
 }
 
 export default function MonitorPage() {
+  const [channel,setChannel]=useState("all");
+  return <MonitorPageContent key={channel} channel={channel} onChannelChange={setChannel}/>;
+}
+function MonitorPageContent({channel,onChannelChange}) {
   // Helper function to format idle time in seconds to human-readable format
   const formatIdleTime = (seconds) => {
     if (!seconds || seconds <= 0) return "—";
@@ -669,6 +436,7 @@ export default function MonitorPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
+  const [dashboardError, setDashboardError] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [agentQueues, setAgentQueues] = useState([]);
   const [agentCampaigns, setAgentCampaigns] = useState([]);
@@ -696,8 +464,6 @@ export default function MonitorPage() {
   const [agentNameFilter, setAgentNameFilter] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedQueues, setSelectedQueues] = useState([]);
-  const [supervisionModalOpen, setSupervisionModalOpen] = useState(false);
-  const [selectedCallForSupervision, setSelectedCallForSupervision] =
     useState(null);
   const expandedQueueIdRef = useRef(null);
   const expandedAgentIdRef = useRef(null);
@@ -785,7 +551,7 @@ export default function MonitorPage() {
         // This prevents rapid-fire requests when waking up
         setTimeout(() => {
           if (isPageVisibleRef.current && !isLoadingDashboardRef.current) {
-            loadDashboard();
+            loadDashboard({ silent: true });
           }
         }, 500);
       }
@@ -816,10 +582,14 @@ export default function MonitorPage() {
     loadStatuses();
 
     // Set up SSE stream for real-time updates
-    const eventSource = new EventSource("/api/contact-center/monitor/stream");
+    const eventSource = new EventSource(`/api/contact-center/monitor/stream?channel=${channel}&timezone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC")}`);
 
     eventSource.onopen = () => {
       setConnected(true);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
       console.log("[Monitor] SSE connection opened");
     };
 
@@ -831,6 +601,8 @@ export default function MonitorPage() {
 
       try {
         const update = JSON.parse(event.data);
+        setDashboardError(null);
+        setLoading(false);
 
         setData((currentData) => {
           if (!currentData) {
@@ -882,85 +654,9 @@ export default function MonitorPage() {
             }
           });
 
-          // Merge agents stats - update only changed agents
-          // Always use availableSince from server (database) as single source of truth
-          // Client-side calculation will use this timestamp for real-time updates
-          const currentAgents = currentData.agents?.stats || [];
-          const mergedAgents = currentAgents.map((currentAgent) => {
-            const updatedAgent = updateAgents.find(
-              (a) => String(a.userId) === String(currentAgent.userId),
-            );
-            if (updatedAgent) {
-              // Smart merge for availableSince:
-              // 1. If server provides availableSince, use it (it's the source of truth)
-              // 2. If server sends null but agent is still Available, preserve existing availableSince
-              //    (prevents flickering when server temporarily doesn't have the value due to race conditions)
-              // 3. If status changed or calls changed, always use server's value
-              const statusChanged = updatedAgent.status !== currentAgent.status;
-              const callsChanged =
-                updatedAgent.currentCalls !== currentAgent.currentCalls;
-              const isStillAvailable =
-                updatedAgent.status === "Available" &&
-                updatedAgent.currentCalls === 0 &&
-                currentAgent.status === "Available" &&
-                currentAgent.currentCalls === 0;
-
-              if (
-                !statusChanged &&
-                !callsChanged &&
-                isStillAvailable &&
-                !updatedAgent.availableSince &&
-                currentAgent.availableSince
-              ) {
-                // Agent is still Available with no changes, but server sent null availableSince
-                // Preserve existing to prevent flickering (server might have race condition)
-                return {
-                  ...updatedAgent,
-                  availableSince: currentAgent.availableSince,
-                };
-              }
-              // Use server's value in all other cases (status/calls changed, or server provided value)
-              return updatedAgent;
-            }
-            return currentAgent;
-          });
-
-          // Add any new agents that weren't in the current list
-          const currentAgentIds = new Set(
-            currentAgents.map((a) => String(a.userId)),
-          );
-          const newAgents = updateAgents.filter(
-            (a) => !currentAgentIds.has(String(a.userId)),
-          );
-
-          // Merge queues stats - update only changed queues
-          const currentQueues = currentData.queues?.stats || [];
-          const mergedQueues = currentQueues.map((currentQueue) => {
-            const updatedQueue = updateQueues.find(
-              (q) => String(q.queueId) === String(currentQueue.queueId),
-            );
-            return updatedQueue || currentQueue;
-          });
-
-          // Add any new queues that weren't in the current list
-          const currentQueueIds = new Set(
-            currentQueues.map((q) => String(q.queueId)),
-          );
-          const newQueues = updateQueues.filter(
-            (q) => !currentQueueIds.has(String(q.queueId)),
-          );
-
-          const mergedData = {
-            ...update,
-            agents: {
-              ...update.agents,
-              stats: [...mergedAgents, ...newAgents],
-            },
-            queues: {
-              ...update.queues,
-              stats: [...mergedQueues, ...newQueues],
-            },
-          };
+          // SSE carries a complete snapshot. Replacing it also removes deleted
+          // users and disabled queues instead of retaining stale rows forever.
+          const mergedData = update;
 
           // Check if expanded queue needs to be refreshed
           // Only refresh if page is visible to prevent queued requests
@@ -970,29 +666,13 @@ export default function MonitorPage() {
             loadQueueCallsRef.current &&
             isPageVisibleRef.current
           ) {
-            const prevQueue = prevQueues.find(
-              (queue) => String(queue.queueId) === String(expandedQueueId),
-            );
-            const nextQueue = updateQueues.find(
-              (queue) => String(queue.queueId) === String(expandedQueueId),
-            );
-            const queueChanged =
-              prevQueue &&
-              nextQueue &&
-              (prevQueue.realtime?.waitingCalls !==
-                nextQueue.realtime?.waitingCalls ||
-                prevQueue.realtime?.activeCalls !==
-                  nextQueue.realtime?.activeCalls ||
-                prevQueue.realtime?.longestWaitSeconds !==
-                  nextQueue.realtime?.longestWaitSeconds);
-            if (queueChanged) {
-              setTimeout(() => {
-                // Double-check visibility before executing
-                if (isPageVisibleRef.current && loadQueueCallsRef.current) {
-                  loadQueueCallsRef.current(expandedQueueId, { silent: true });
-                }
-              }, 0);
-            }
+            // Refresh even when counts stay equal: an interaction or its SLA
+            // can change without changing the queue's aggregate counters.
+            setTimeout(() => {
+              if (isPageVisibleRef.current && expandedQueueIdRef.current === expandedQueueId) {
+                loadQueueCallsRef.current?.(expandedQueueId, { silent: true });
+              }
+            }, 0);
           }
 
           return mergedData;
@@ -1008,7 +688,7 @@ export default function MonitorPage() {
         const update = JSON.parse(event.data);
         // Update only the specific agent's status
         if (update.userId && update.status) {
-          updateAgentStatus(update.userId, update.status);
+          updateAgentStatus(update.userId, update.status, update.pendingStatus);
           invalidateExpandedAgentCalls(update.userId);
         }
       } catch (error) {
@@ -1106,11 +786,11 @@ export default function MonitorPage() {
       console.error("[Monitor] SSE error:", error);
       setConnected(false);
       // Fallback to polling if SSE fails
-      if (!data && !pollIntervalRef.current) {
+      if (!pollIntervalRef.current) {
         pollIntervalRef.current = setInterval(() => {
           // Only poll when page is visible
           if (isPageVisibleRef.current && !isLoadingDashboardRef.current) {
-            loadDashboard();
+            loadDashboard({ silent: true });
           }
         }, 5000);
       }
@@ -1152,7 +832,7 @@ export default function MonitorPage() {
     }
   }
 
-  async function loadDashboard() {
+  async function loadDashboard({ silent = false } = {}) {
     // Prevent multiple simultaneous loads
     if (isLoadingDashboardRef.current) {
       return;
@@ -1165,11 +845,11 @@ export default function MonitorPage() {
 
     try {
       isLoadingDashboardRef.current = true;
-      setLoading(true);
+      if (!silent) setLoading(true);
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
       const res = await fetch(
-        `/api/contact-center/monitor/dashboard?t=${timestamp}`,
+        `/api/contact-center/monitor/dashboard?t=${timestamp}&channel=${channel}&timezone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC")}`,
         {
           cache: "no-store",
           headers: {
@@ -1184,11 +864,13 @@ export default function MonitorPage() {
       }
       const dashboardData = await res.json();
       setData(dashboardData);
+      setDashboardError(null);
       setLoading(false);
     } catch (error) {
       console.error("[Monitor] Error loading dashboard:", error);
+      setDashboardError(error.message);
       setLoading(false);
-      notify({
+      if (!silent) notify({
         title: "Load failed",
         description: error.message,
         variant: "error",
@@ -1210,8 +892,10 @@ export default function MonitorPage() {
     }, 1000);
   }
 
-  // Update specific agent's status without reloading entire dashboard
-  function updateAgentStatus(userId, newStatus) {
+  // Update specific agent's status without reloading entire dashboard.
+  // `pendingStatus` is the manual status waiting for the agent's current
+  // interactions to end; leave it untouched when the caller does not know it.
+  function updateAgentStatus(userId, newStatus, pendingStatus) {
     const userIdStr = String(userId);
     setData((prevData) => {
       if (!prevData || !prevData.agents?.stats) return prevData;
@@ -1219,7 +903,11 @@ export default function MonitorPage() {
       const updatedStats = prevData.agents.stats.map((agent) => {
         const agentUserIdStr = String(agent.userId);
         if (agentUserIdStr === userIdStr) {
-          return { ...agent, status: newStatus };
+          return {
+            ...agent,
+            status: newStatus,
+            ...(pendingStatus === undefined ? {} : { pendingStatus: pendingStatus || null }),
+          };
         }
         return agent;
       });
@@ -1366,6 +1054,8 @@ export default function MonitorPage() {
 
   function isQueueCallDifferent(prevCall, nextCall) {
     return (
+      JSON.stringify(prevCall?.sla) !== JSON.stringify(nextCall?.sla) ||
+      prevCall?.channel !== nextCall?.channel ||
       prevCall?.fromNumber !== nextCall?.fromNumber ||
       prevCall?.toNumber !== nextCall?.toNumber ||
       prevCall?.state !== nextCall?.state ||
@@ -1380,7 +1070,9 @@ export default function MonitorPage() {
       JSON.stringify(prevCall?.relaxedSkills) !==
         JSON.stringify(nextCall?.relaxedSkills) ||
       JSON.stringify(prevCall?.requiredSkills) !==
-        JSON.stringify(nextCall?.requiredSkills)
+        JSON.stringify(nextCall?.requiredSkills) ||
+      JSON.stringify(prevCall?.skillNames) !==
+        JSON.stringify(nextCall?.skillNames)
     );
   }
 
@@ -1478,7 +1170,7 @@ export default function MonitorPage() {
       if (!silent) {
         setLoadingAgentCalls((prev) => new Set(prev).add(userId));
       }
-      const res = await fetch(`/api/contact-center/agents/${userId}/calls`, {
+      const res = await fetch(`/api/contact-center/agents/${userId}/calls?timezone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}`, {
         cache: "no-store",
       });
       if (!res.ok) {
@@ -1593,17 +1285,20 @@ export default function MonitorPage() {
           userId: selectedAgent.userId, // Pass the target user's ID
         }),
       });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to update status");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || "Failed to update status");
       }
 
-      // Update the agent's status in the main list
-      updateAgentStatus(selectedAgent.userId, newStatus);
+      // Update the agent's status in the main list. While the agent is busy the
+      // chosen status stays pending and only blocks new offers.
+      updateAgentStatus(selectedAgent.userId, data.status || newStatus, data.pendingStatus ?? null);
 
       notify({
-        title: "Status updated",
-        description: `Agent status changed to ${newStatus}`,
+        title: data.pendingStatus ? "Status change pending" : "Status updated",
+        description: data.pendingStatus
+          ? `${newStatus} applies after the agent's current interactions end. No new interactions will be offered.`
+          : `Agent status changed to ${newStatus}`,
         variant: "success",
       });
 
@@ -1617,16 +1312,6 @@ export default function MonitorPage() {
         variant: "error",
       });
     }
-  }
-
-  if (loading && !data) {
-    return (
-      <div className="px-4 lg:px-6 space-y-4">
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
   }
 
   const overall = data?.overall || {};
@@ -1726,36 +1411,36 @@ export default function MonitorPage() {
 
   const filteredAgentMetrics = {
     total: agents.length,
-    available: agents.filter((agent) => agent.status === "Available").length,
+    available: agents.filter((agent) => agent.isAvailableForRouting).length,
     busy: agents.filter((agent) => agent.status === "Busy" || Number(agent.currentCalls || 0) > 0).length,
-    activeCalls: agents.reduce((sum, agent) => sum + Number(agent.currentCalls || 0), 0),
+    activeCalls: new Set(agents.flatMap(agent => agent.currentInteractionIds || [])).size,
     activeQueues: agents.reduce((sum, agent) => sum + Number(agent.activeQueues || 0), 0),
     completedToday: agents.reduce((sum, agent) => sum + Number(agent.today?.completedCalls || 0), 0),
   };
   filteredAgentMetrics.availability = pct(filteredAgentMetrics.available, Math.max(filteredAgentMetrics.total, 1));
-  filteredAgentMetrics.occupancy = pct(filteredAgentMetrics.busy, Math.max(filteredAgentMetrics.total, 1));
+  filteredAgentMetrics.occupancy = pct(agents.reduce((sum,a)=>sum+Number(a.usedCapacity||0),0), agents.reduce((sum,a)=>sum+Number(a.capacityBudget||1),0));
 
   const queueViewMetrics = queues.reduce(
     (acc, queue) => {
       const waiting = Number(queue.realtime?.waitingCalls || 0);
       const active = Number(queue.realtime?.activeCalls || 0);
-      const availableAgents = Number(queue.agents?.available || 0);
-      const busyAgents = Number(queue.agents?.busy || 0);
       const totalCalls = Number(queue.today?.totalCalls || 0);
       const answeredCalls = Number(queue.today?.answeredCalls || 0);
-      const serviceLevelDenominator = Number(queue.today?.completedCalls ?? answeredCalls ?? totalCalls ?? 0);
-      const serviceLevel = Number(queue.today?.serviceLevelPercentage || 0);
+      const serviceLevelDenominator = Number(queue.sla?.denominator || 0);
+      const met = Number(queue.sla?.met || 0);
+      acc.slaMet += met;
+      acc.slaBreached += Number(queue.sla?.breached || 0) + Number(queue.sla?.unserved || 0);
+      acc.slaPending += Number(queue.sla?.pending || 0);
+      acc.slaUnavailable += Number(queue.sla?.unavailable || 0);
 
       acc.total += 1;
       acc.waiting += waiting;
       acc.active += active;
-      acc.availableAgents += availableAgents;
-      acc.busyAgents += busyAgents;
       acc.longestWait = Math.max(acc.longestWait, Number(queue.realtime?.longestWaitSeconds || 0));
       acc.totalCalls += totalCalls;
       acc.answeredCalls += answeredCalls;
-      if (Number.isFinite(serviceLevel) && serviceLevelDenominator > 0) {
-        acc.serviceLevelWeightedSum += serviceLevel * serviceLevelDenominator;
+      if (serviceLevelDenominator > 0) {
+
         acc.serviceLevelDenominator += serviceLevelDenominator;
       }
       return acc;
@@ -1769,13 +1454,17 @@ export default function MonitorPage() {
       longestWait: 0,
       totalCalls: 0,
       answeredCalls: 0,
-      serviceLevelWeightedSum: 0,
+      slaMet: 0, slaBreached: 0, slaPending: 0, slaUnavailable: 0,
       serviceLevelDenominator: 0,
     },
   );
   queueViewMetrics.serviceLevel = queueViewMetrics.serviceLevelDenominator
-    ? Math.round(queueViewMetrics.serviceLevelWeightedSum / queueViewMetrics.serviceLevelDenominator)
-    : pct(queueViewMetrics.answeredCalls, Math.max(queueViewMetrics.totalCalls, 1));
+    ? Math.round(100 * queueViewMetrics.slaMet / queueViewMetrics.serviceLevelDenominator)
+    : null;
+  const visibleQueueIds = new Set(queues.map(queue => queue.queueId));
+  const queueMembers = allAgents.filter(agent => agent.activeQueueIds?.some(id => visibleQueueIds.has(id)));
+  queueViewMetrics.availableAgents = queueMembers.filter(agent => Object.entries(agent.capacityByQueue || {}).some(([id, available]) => available && visibleQueueIds.has(id))).length;
+  queueViewMetrics.busyAgents = queueMembers.filter(agent => Number(agent.usedCapacity) > 0).length;
   queueViewMetrics.pressure = pct(queueViewMetrics.waiting, Math.max(queueViewMetrics.waiting + queueViewMetrics.active, 1));
 
   const selectMonitorSection = (value) => {
@@ -1818,17 +1507,17 @@ export default function MonitorPage() {
 
   const renderQueueCallsPanel = (queue) => {
     const queueId = String(queue.queueId);
-    const calls = queueCallsMap[queueId] || [];
-    const visibleCalls = calls.slice(0, 10);
+    const calls = (queueCallsMap[queueId] || []).filter(item=>channel==="all"||item.channel===channel);
+    const visibleCalls = calls;
     const loadingCalls = loadingQueueCalls.has(queueId);
 
     return (
       <div className="rounded-2xl border border-border/70 bg-muted/30 p-4 dark:bg-zinc-900/70" data-testid="queue-calls-accordion-panel">
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h4 className="text-sm font-semibold">Recent calls in this queue</h4>
+            <h4 className="text-sm font-semibold">Live interactions in this queue</h4>
             <p className="text-xs text-muted-foreground">
-              Showing max 10 calls inside the expanded queue row. The list scrolls when more calls are present.
+              Current work in this queue. Open an interaction to inspect its channel-specific details.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1849,35 +1538,29 @@ export default function MonitorPage() {
           </div>
         ) : calls.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
-            No calls found for this queue
+            No interactions found for this queue
           </div>
         ) : (
           <div className="max-h-[360px] overflow-y-auto rounded-xl border border-border/60 bg-background/70 dark:bg-zinc-950/60">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur dark:bg-zinc-950/95">
                 <TableRow>
-                  <TableHead>From</TableHead>
+                  <TableHead className="w-12">Channel</TableHead><TableHead>From</TableHead>
                   <TableHead>To</TableHead>
                   <TableHead>State</TableHead>
                   <TableHead>Agent</TableHead>
                   <TableHead>Required Skills</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Wait Time</TableHead>
-                  <TableHead>Talk Time</TableHead>
+                  <TableHead>Handling elapsed</TableHead>
                   <TableHead>Waiting Reason</TableHead>
+                  <TableHead>SLA</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visibleCalls.map((call) => {
-                  const waitTimeSeconds = call.enqueuedAt
-                    ? call.answeredAt
-                      ? Math.max(0, Math.floor((new Date(call.answeredAt).getTime() - new Date(call.enqueuedAt).getTime()) / 1000))
-                      : Math.max(0, Math.floor((currentTime.getTime() - new Date(call.enqueuedAt).getTime()) / 1000))
-                    : call.waitSeconds || 0;
-                  const talkTimeSeconds = call.answeredAt
-                    ? Math.max(0, Math.floor((currentTime.getTime() - new Date(call.answeredAt).getTime()) / 1000))
-                    : call.talkSeconds || 0;
+                  const { wait: waitTimeSeconds, handling: talkTimeSeconds } = realtimeDurations(call, currentTime.getTime());
                   const displayState =
                     call.state && ["completed", "abandoned", "failed"].includes(call.state.toLowerCase())
                       ? call.state
@@ -1895,14 +1578,14 @@ export default function MonitorPage() {
                       ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
                       : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
                   const waitingReason = !call.answeredAt && !call.agentUsername
-                    ? call.routingMetadata?.skillMatch?.matchRatio < 1 && Object.keys(call.requiredSkills || {}).length > 0
+                    ? call.waitingReason || (call.routingMetadata?.skillMatch?.matchRatio < 1 && Object.keys(call.requiredSkills || {}).length > 0
                       ? "Skills not matched"
-                      : "No agents available"
+                      : "No agents available")
                     : null;
 
                   return (
                     <TableRow key={call.id || call.callControlId || call.callSessionId} className="hover:bg-muted/50">
-                      <TableCell>{call.fromNumber || "—"}</TableCell>
+                      <TableCell><InteractionChannel channel={call.channel} /></TableCell><TableCell>{call.customerName || call.fromNumber || "—"}</TableCell>
                       <TableCell>{call.toNumber || "—"}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center rounded-md border bg-transparent px-2.5 py-0.5 text-xs font-medium ${stateColor}`}>
@@ -1917,23 +1600,13 @@ export default function MonitorPage() {
                       </TableCell>
                       <TableCell>
                         {call.requiredSkills && Object.keys(call.requiredSkills).length > 0 ? (
-                          <RelaxationIndicator requiredSkills={call.requiredSkills} relaxedSkills={call.relaxedSkills} isRelaxed={call.isRelaxed} />
+                          <RelaxationIndicator requiredSkills={call.requiredSkills} relaxedSkills={call.relaxedSkills} isRelaxed={call.isRelaxed} skillNames={call.skillNames} />
                         ) : (
                           "—"
                         )}
                       </TableCell>
                       <TableCell>
-                        {call.priority && call.priority >= 1 && call.priority <= 5 ? (
-                          <div className="flex items-center gap-1">
-                            {Array.from({ length: 5 }, (_, i) => {
-                              const filled = i + 1 <= call.priority;
-                              return filled ? <IconStarFilled key={i} className="h-4 w-4 text-yellow-400" /> : <IconStar key={i} className="h-4 w-4 text-gray-300" />;
-                            })}
-                            <span className="ml-1 text-xs text-muted-foreground">({call.priority})</span>
-                          </div>
-                        ) : (
-                          "—"
-                        )}
+                        <CallPriorityIndicator priority={call.priority} />
                       </TableCell>
                       <TableCell>{waitTimeSeconds > 0 ? formatDurationShort(waitTimeSeconds) : "—"}</TableCell>
                       <TableCell>{talkTimeSeconds > 0 ? formatDurationShort(talkTimeSeconds) : "—"}</TableCell>
@@ -1956,20 +1629,10 @@ export default function MonitorPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {call.answeredAt || call.agentUsername || call.agentName ? (
-                          <button
-                            onClick={() => {
-                              setSelectedCallForSupervision(call);
-                              setSupervisionModalOpen(true);
-                            }}
-                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            title="Supervise this call"
-                          >
-                            <IconEye className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          "—"
-                        )}
+                        <InteractionSla sla={call.sla} />
+                      </TableCell>
+                      <TableCell>
+                        <InteractionPreviewAction interaction={call} />
                       </TableCell>
                     </TableRow>
                   );
@@ -1980,7 +1643,7 @@ export default function MonitorPage() {
         )}
         {calls.length > 10 && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Showing 10 of {calls.length} calls. Scroll within this panel for operational triage.
+            {calls.length} interactions. Scroll within this panel for operational triage.
           </p>
         )}
       </div>
@@ -1989,58 +1652,21 @@ export default function MonitorPage() {
 
   return (
     <SupervisorPageShell>
-        <SupervisorPageHeader
-          title="Supervisory Console"
-          badges={(
-            <Badge
-              variant="outline"
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
-                connected
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-              }`}
-            >
-              <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-              {connected ? "Connected" : "Disconnected"}
-            </Badge>
-          )}
-          actions={(
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setLoading(true);
-                loadDashboard();
-              }}
-              disabled={loading}
-            >
-              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              {loading ? "Loading…" : "Refresh"}
-            </Button>
-          )}
-        />
-
         <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
-          <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
-          <section className="h-full min-h-0 overflow-hidden pr-1">
-            {activeTab === "overview" ? (
-              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-                <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
-                  <OverviewDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
-                </CardContent>
-              </Card>
-            ) : activeTab === "dashboard" ? (
-              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-                <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
-                  <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
-                </CardContent>
-              </Card>
+          <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" screenGroup="supervisor.monitor" />
+          <section className="h-full min-h-0 overflow-hidden" aria-label="Monitoring content">
+            {activeTab === "dashboard" ? (
+              <div className="h-full overflow-y-auto"><MultichannelDashboard /></div>
+            ) : activeTab === "interactions" ? (
+              <LiveInteractionsView channel={channel} onChannelChange={onChannelChange} />
+            ) : activeTab === "operations" ? (
+              <div className="h-full overflow-y-auto"><AcdOperationsPanel /></div>
             ) : (
-              <>
-      {/* Statistics Section */}
-      <Card className="mb-0 flex h-full min-h-0 flex-col overflow-hidden">
-        <CardContent className="flex-1 overflow-y-auto min-h-0 p-6">
-          {activeTab === "agents" ? (
+              <div className="h-full min-h-0 space-y-4 overflow-y-auto">
+                <MonitoringFilters channel={channel} onChannelChange={onChannelChange} onRefresh={() => { setLoading(true); loadDashboard(); }} loading={loading} status={connected ? "Connected" : "Disconnected"} />
+                {dashboardError && <div role="alert" className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive">{dashboardError}. {data ? "Showing the last successful snapshot." : "Use Refresh to retry."}</div>}
+                {activeTab === "overview" ? (loading && !data ? <div className="space-y-4" aria-label="Loading overview"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0,1,2,3].map(index => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-80" /></div> : data ? <OverviewDashboardView overall={overall} agents={allAgents} queues={queues} onSelectSection={selectMonitorSection} /> : null) : (
+          !loading && !data ? null : activeTab === "agents" ? (
 
             <>
               {loading ? (
@@ -2051,25 +1677,11 @@ export default function MonitorPage() {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          <IconSparkles className="h-4 w-4 text-telnyx-green" />
-                          Agent operations
-                        </div>
-                        <h3 className="mt-2 text-xl font-semibold tracking-tight">Live roster command surface</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Fast snapshot of filtered agents, availability, live workload, and today's completions.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                       <OverviewMetricCard icon={IconUsers} label="Roster coverage" value={formatShortNumber(filteredAgentMetrics.total)} detail={`${allAgents.length} total · ${selectedStatuses.length + selectedQueues.length + (agentNameFilter ? 1 : 0)} filters`} progress={pct(filteredAgentMetrics.total, Math.max(allAgents.length, 1))} chip="Filtered" tone="slate" />
                       <OverviewMetricCard icon={IconCheck} label="Available now" value={formatShortNumber(filteredAgentMetrics.available)} detail={`${filteredAgentMetrics.availability}% ready to route`} progress={filteredAgentMetrics.availability} chip="Realtime" tone="emerald" />
-                      <OverviewMetricCard icon={IconPhone} label="Live conversations" value={formatShortNumber(filteredAgentMetrics.activeCalls)} detail={`${filteredAgentMetrics.occupancy}% occupancy · ${filteredAgentMetrics.busy} busy`} progress={filteredAgentMetrics.occupancy} chip="Realtime" tone="sky" />
-                      <OverviewMetricCard icon={IconTrendingUp} label="Queue activations" value={formatShortNumber(filteredAgentMetrics.activeQueues)} detail={`${filteredAgentMetrics.completedToday} completed today`} progress={pct(filteredAgentMetrics.activeQueues, Math.max(filteredAgentMetrics.total * 3, 1))} chip="Today" tone="violet" />
-                    </div>
+                      <OverviewMetricCard icon={IconPhone} label="Assigned interactions" value={formatShortNumber(filteredAgentMetrics.activeCalls)} detail={`${filteredAgentMetrics.occupancy}% global capacity used · ${filteredAgentMetrics.busy} busy`} progress={filteredAgentMetrics.occupancy} chip="Realtime" tone="sky" />
+                      <OverviewMetricCard icon={IconTrendingUp} label="Queue activations" value={formatShortNumber(filteredAgentMetrics.activeQueues)} detail={`${filteredAgentMetrics.completedToday} agent completions today`} progress={pct(filteredAgentMetrics.activeQueues, Math.max(filteredAgentMetrics.total * 3, 1))} chip="Today" tone="violet" />
                   </div>
 
                   {/* Filters */}
@@ -2279,10 +1891,10 @@ export default function MonitorPage() {
                             <TableHead>Idle Time</TableHead>
                             <TableHead>Active Queues</TableHead>
                             <TableHead>Active Campaigns</TableHead>
-                            <TableHead>Current Calls</TableHead>
+                            <TableHead>Current interactions</TableHead>
                             <TableHead>Today: Total</TableHead>
                             <TableHead>Today: Completed</TableHead>
-                            <TableHead>Avg Talk Time</TableHead>
+                            <TableHead>Avg handling</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2331,7 +1943,7 @@ export default function MonitorPage() {
                             const agentId = String(agent.userId);
                             const isExpanded = expandedAgentId === agentId;
                             const activeCalls =
-                              agentActiveCallsMap[agentId] || [];
+                              (agentActiveCallsMap[agentId] || []).filter(item=>channel==="all"||item.channel===channel);
                             const isLoading = loadingAgentCalls.has(agentId);
 
                             return (
@@ -2380,6 +1992,17 @@ export default function MonitorPage() {
                                         />
                                         {agent.status}
                                       </span>
+                                      {agent.pendingStatus && (
+                                        <span
+                                          data-testid="agent-pending-status"
+                                          data-status={agent.pendingStatus}
+                                          title={`${agent.pendingStatus} applies after the agent's current interactions end. No new interactions are offered.`}
+                                          className="inline-flex items-center gap-1 rounded-md border border-dashed border-amber-500/70 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+                                        >
+                                          <IconClock className="h-3.5 w-3.5" aria-hidden="true" />
+                                          {agent.pendingStatus}
+                                        </span>
+                                      )}
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -2479,8 +2102,8 @@ export default function MonitorPage() {
                                         : ""
                                     }
                                   >
-                                    {agent.currentCalls} /{" "}
-                                    {agent.maxConcurrentCalls}
+                                    <span className="block">{agent.currentInteractions ?? agent.currentCalls} interactions</span>
+                                    <span className="text-[10px] text-muted-foreground">{formatCapacityUtilization(agent.usedCapacity ?? 0, agent.capacityBudget ?? 1)} global capacity</span>
                                   </TableCell>
                                   <TableCell>
                                     {agent.today?.totalCalls || 0}
@@ -2489,9 +2112,9 @@ export default function MonitorPage() {
                                     {agent.today?.completedCalls || 0}
                                   </TableCell>
                                   <TableCell>
-                                    {agent.today?.avgTalkTimeSeconds
+                                    {agent.today?.avgHandleTimeSeconds
                                       ? `${Math.round(
-                                          agent.today.avgTalkTimeSeconds,
+                                          agent.today.avgHandleTimeSeconds,
                                         )}s`
                                       : "—"}
                                   </TableCell>
@@ -2510,39 +2133,31 @@ export default function MonitorPage() {
                                           </div>
                                         ) : activeCalls.length === 0 ? (
                                           <p className="text-sm text-muted-foreground text-center py-4">
-                                            No active calls
+                                            No active interactions
                                           </p>
                                         ) : (
                                           <div className="overflow-x-auto">
                                             <Table>
                                               <TableHeader>
                                                 <TableRow>
-                                                  <TableHead>From</TableHead>
+                                                  <TableHead className="w-12">Channel</TableHead><TableHead>From</TableHead>
                                                   <TableHead>To</TableHead>
                                                   <TableHead>State</TableHead>
                                                   <TableHead>Queue</TableHead>
                                                   <TableHead>
-                                                    Talk Time
+                                                    Required Skills
                                                   </TableHead>
+                                                  <TableHead>Priority</TableHead>
+                                                  <TableHead>
+                                                    Handling elapsed
+                                                  </TableHead>
+                                                  <TableHead>SLA</TableHead>
                                                   <TableHead>Actions</TableHead>
                                                 </TableRow>
                                               </TableHeader>
                                               <TableBody>
                                                 {activeCalls.map((call) => {
-                                                  // Calculate real-time talk time
-                                                  const talkTimeSeconds =
-                                                    call.answeredAt
-                                                      ? Math.max(
-                                                          0,
-                                                          Math.floor(
-                                                            (currentTime.getTime() -
-                                                              new Date(
-                                                                call.answeredAt,
-                                                              ).getTime()) /
-                                                              1000,
-                                                          ),
-                                                        )
-                                                      : call.talkSeconds || 0;
+                                                  const talkTimeSeconds = realtimeDurations(call, currentTime.getTime()).handling;
 
                                                   // Determine state
                                                   // Don't override terminal states (completed, abandoned, failed)
@@ -2590,6 +2205,7 @@ export default function MonitorPage() {
 
                                                   return (
                                                     <TableRow key={call.id}>
+                                                      <TableCell><InteractionChannel channel={call.channel} /></TableCell>
                                                       <TableCell>
                                                         {call.fromNumber || "—"}
                                                       </TableCell>
@@ -2608,6 +2224,34 @@ export default function MonitorPage() {
                                                         {call.queueName || "—"}
                                                       </TableCell>
                                                       <TableCell>
+                                                        {call.requiredSkills &&
+                                                        Object.keys(
+                                                          call.requiredSkills,
+                                                        ).length > 0 ? (
+                                                          <RelaxationIndicator
+                                                            requiredSkills={
+                                                              call.requiredSkills
+                                                            }
+                                                            relaxedSkills={
+                                                              call.relaxedSkills
+                                                            }
+                                                            isRelaxed={
+                                                              call.isRelaxed
+                                                            }
+                                                            skillNames={
+                                                              call.skillNames
+                                                            }
+                                                          />
+                                                        ) : (
+                                                          "—"
+                                                        )}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        <CallPriorityIndicator
+                                                          priority={call.priority}
+                                                        />
+                                                      </TableCell>
+                                                      <TableCell>
                                                         {talkTimeSeconds > 0
                                                           ? `${Math.round(
                                                               talkTimeSeconds,
@@ -2615,25 +2259,10 @@ export default function MonitorPage() {
                                                           : "—"}
                                                       </TableCell>
                                                       <TableCell>
-                                                        {/* Only show supervision button for answered calls (not queued/ringing) */}
-                                                        {call.answeredAt ? (
-                                                          <button
-                                                            onClick={() => {
-                                                              setSelectedCallForSupervision(
-                                                                call,
-                                                              );
-                                                              setSupervisionModalOpen(
-                                                                true,
-                                                              );
-                                                            }}
-                                                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
-                                                            title="Supervise this call"
-                                                          >
-                                                            <IconEye className="h-4 w-4" />
-                                                          </button>
-                                                        ) : (
-                                                          "—"
-                                                        )}
+                                                        <InteractionSla sla={call.sla} />
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        <InteractionPreviewAction interaction={call} />
                                                       </TableCell>
                                                     </TableRow>
                                                   );
@@ -2668,25 +2297,11 @@ export default function MonitorPage() {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70" data-testid="queue-pressure-card">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          <IconGauge className="h-4 w-4 text-telnyx-green" />
-                          Queue command center
-                        </div>
-                        <h3 className="mt-2 text-xl font-semibold tracking-tight">Routing pressure and service health</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Dark-theme queue cards show waiting load, active calls, agent supply, and today's service level.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-testid="queue-pressure-card">
                       <OverviewMetricCard icon={IconTrendingUp} label="Queues monitored" value={formatShortNumber(queueViewMetrics.total)} detail={`${queueViewMetrics.availableAgents} available agents`} progress={pct(queueViewMetrics.total, Math.max(queues.length, 1))} chip="Realtime" tone="slate" />
-                      <OverviewMetricCard icon={IconClock} label="Waiting callers" value={formatShortNumber(queueViewMetrics.waiting)} detail={`Longest wait ${formatDurationShort(queueViewMetrics.longestWait)}`} progress={queueViewMetrics.pressure} chip="Live" tone="amber" />
-                      <OverviewMetricCard icon={IconPhoneIncoming} label="Active calls" value={formatShortNumber(queueViewMetrics.active)} detail={`${queueViewMetrics.busyAgents} busy agents`} progress={pct(queueViewMetrics.active, Math.max(queueViewMetrics.active + queueViewMetrics.waiting, 1))} chip="Realtime" tone="sky" />
-                      <OverviewMetricCard icon={IconCheck} label="Service level" value={`${queueViewMetrics.serviceLevel}%`} detail={`${queueViewMetrics.answeredCalls}/${queueViewMetrics.totalCalls} answered today`} progress={queueViewMetrics.serviceLevel} chip="Today" tone="emerald" />
-                    </div>
+                      <OverviewMetricCard icon={IconClock} label="Waiting interactions" value={formatShortNumber(queueViewMetrics.waiting)} detail={`Longest wait ${formatDurationShort(queueViewMetrics.longestWait)}`} progress={queueViewMetrics.pressure} chip="Live" tone="amber" />
+                      <OverviewMetricCard icon={IconPhoneIncoming} label="Active interactions" value={formatShortNumber(queueViewMetrics.active)} detail={`${queueViewMetrics.busyAgents} busy agents`} progress={pct(queueViewMetrics.active, Math.max(queueViewMetrics.active + queueViewMetrics.waiting, 1))} chip="Realtime" tone="sky" />
+                      <OverviewMetricCard icon={IconCheck} label="Service level" value={queueViewMetrics.serviceLevel==null?"—":`${queueViewMetrics.serviceLevel}%`} detail={`${queueViewMetrics.slaMet} met · ${queueViewMetrics.slaBreached} breached/unserved · ${queueViewMetrics.slaPending} pending · ${queueViewMetrics.slaUnavailable} unavailable`} progress={queueViewMetrics.serviceLevel} chip="Today" tone="emerald" />
                   </div>
 
                   {queues.length === 0 ? (
@@ -2705,12 +2320,13 @@ export default function MonitorPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Queue Name</TableHead>
+                                <TableHead title="Waiting + active interactions">Total</TableHead>
                                 <TableHead>Waiting</TableHead>
                                 <TableHead>Active</TableHead>
                                 <TableHead>Agents</TableHead>
                                 <TableHead>Longest Wait</TableHead>
                                 <TableHead>Today: Total</TableHead>
-                                <TableHead>Today: Answered</TableHead>
+                                <TableHead>Today: Completed</TableHead>
                                 <TableHead>Service Level</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -2723,6 +2339,7 @@ export default function MonitorPage() {
                                     <TableRow className="hover:bg-muted/50">
                                       <TableCell className="font-medium">
                                         <button
+                                          data-testid="queue-expand" data-queue-id={queue.queueId}
                                           onClick={() => toggleExpandedQueue(queue.queueId)}
                                           className="flex items-center gap-2 text-left text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                           aria-expanded={isExpanded}
@@ -2730,6 +2347,19 @@ export default function MonitorPage() {
                                           <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                                           {queue.queueName || queue.queueId}
                                         </button>
+                                      </TableCell>
+                                      <TableCell
+                                        className={
+                                          highlightedCells.has(`queue-${queue.queueId}-waiting`) ||
+                                          highlightedCells.has(`queue-${queue.queueId}-active`)
+                                            ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                            : ""
+                                        }
+                                      >
+                                        <Badge variant="outline">
+                                          {Number(queue.realtime?.waitingCalls || 0) +
+                                            Number(queue.realtime?.activeCalls || 0)}
+                                        </Badge>
                                       </TableCell>
                                       <TableCell
                                         className={
@@ -2784,37 +2414,13 @@ export default function MonitorPage() {
                                       </TableCell>
                                       <TableCell>
                                         <div className="flex items-center gap-1">
-                                          {queue.today?.serviceLevelPercentage >= 80 ? (
-                                            <Badge
-                                              variant="default"
-                                              className="bg-green-600"
-                                            >
-                                              {queue.today?.serviceLevelPercentage.toFixed(
-                                                1,
-                                              )}
-                                              %
-                                            </Badge>
-                                          ) : queue.today?.serviceLevelPercentage >= 60 ? (
-                                            <Badge variant="secondary">
-                                              {queue.today?.serviceLevelPercentage.toFixed(
-                                                1,
-                                              )}
-                                              %
-                                            </Badge>
-                                          ) : (
-                                            <Badge variant="destructive">
-                                              {queue.today?.serviceLevelPercentage?.toFixed
-                                                ? queue.today.serviceLevelPercentage.toFixed(1)
-                                                : "0.0"}
-                                              %
-                                            </Badge>
-                                          )}
+                                          {queue.today?.serviceLevelPercentage == null ? <span title={`${queue.sla?.pending || 0} pending; ${queue.sla?.unavailable || 0} without a recorded measurement; ${queue.sla?.not_configured || 0} not configured`}>—</span> : <Badge variant="outline" title={`${queue.sla?.met || 0} met / ${queue.sla?.denominator || 0} evaluated; ${queue.sla?.pending || 0} pending; ${queue.sla?.unavailable || 0} unavailable; per-channel policies apply`}>{Number(queue.today.serviceLevelPercentage).toFixed(1)}%</Badge>}
                                         </div>
                                       </TableCell>
                                     </TableRow>
                                     {isExpanded && (
                                       <TableRow className="bg-muted/20 hover:bg-muted/20">
-                                        <TableCell colSpan={8} className="p-4">
+                                        <TableCell colSpan={9} className="p-4">
                                           {renderQueueCallsPanel(queue)}
                                         </TableCell>
                                       </TableRow>
@@ -2831,10 +2437,9 @@ export default function MonitorPage() {
                 </div>
               )}
             </>
-          )}
-        </CardContent>
-      </Card>
-              </>
+          )
+                )}
+              </div>
             )}
           </section>
         </main>
@@ -2863,7 +2468,9 @@ export default function MonitorPage() {
               )}
             </DialogTitle>
             <DialogDescription>
-              Select a new status for this agent.
+              {selectedAgent?.pendingStatus
+                ? `The agent is ${selectedAgent.status}. ${selectedAgent.pendingStatus} applies after their current interactions end; new interactions are not offered meanwhile. Choose Available to cancel it.`
+                : "Select a new status for this agent. A break chosen while the agent is busy applies after their current interactions end."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2880,6 +2487,7 @@ export default function MonitorPage() {
                     STATUS_NAME_ICON_FALLBACK[status.name] ||
                     STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
                   const isCurrentStatus = selectedAgent?.status === status.name;
+                  const isPendingStatus = selectedAgent?.pendingStatus === status.name;
                   const statusColor =
                     status.name === "Available"
                       ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
@@ -2896,8 +2504,7 @@ export default function MonitorPage() {
                     : undefined;
 
                   return (
-                    <button
-                      key={status.name}
+                    <Can key={status.name} permission="agents:status.set"><button
                       onClick={() => changeAgentStatus(status.name)}
                       disabled={isCurrentStatus}
                       className={`w-full flex items-center justify-between p-3 border rounded-lg transition-colors ${
@@ -2929,7 +2536,13 @@ export default function MonitorPage() {
                           Current
                         </Badge>
                       )}
-                    </button>
+                      {isPendingStatus && (
+                        <Badge variant="outline" className="gap-1 text-xs">
+                          <IconClock className="h-3 w-3" aria-hidden="true" />
+                          Pending
+                        </Badge>
+                      )}
+                    </button></Can>
                   );
                 })}
               </div>
@@ -2963,7 +2576,7 @@ export default function MonitorPage() {
             </DialogTitle>
             <DialogDescription>
               Manage queue activations for this agent. Only activated queues
-              will receive calls.
+              will receive interactions.
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0">
@@ -3118,13 +2731,13 @@ export default function MonitorPage() {
           <DialogHeader>
             <DialogTitle>Skills Not Matched</DialogTitle>
             <DialogDescription>
-              Required skills for this call and available agents' skills
+              Required skills for this interaction and available agents&apos; skills
             </DialogDescription>
           </DialogHeader>
           {selectedCallForSkills && (
             <div className="space-y-4 py-4">
               <div>
-                <h4 className="font-semibold mb-2">Required Skills for Call</h4>
+                <h4 className="font-semibold mb-2">Required skills for interaction</h4>
                 <div className="space-y-1">
                   {Object.keys(selectedCallForSkills.requiredSkills || {})
                     .length === 0 ? (
@@ -3139,7 +2752,7 @@ export default function MonitorPage() {
                         key={skillName}
                         className="flex items-center justify-between p-2 border rounded"
                       >
-                        <span className="font-medium">{skillName}</span>
+                        <span className="font-medium">{selectedCallForSkills.skillNames?.[skillName] || skillName}</span>
                         <Badge variant="outline">
                           Required: {requiredLevel}
                         </Badge>
@@ -3170,10 +2783,12 @@ export default function MonitorPage() {
                       // Calculate which skills are missing or insufficient
                       const skillAnalysis = Object.entries(requiredSkills).map(
                         ([skillName, requiredLevel]) => {
-                          const agentLevel = agentSkills[skillName] || 0;
+                          const displayName = selectedCallForSkills.skillNames?.[skillName] || skillName;
+                          const agentLevel = agentSkills[skillName] ?? agentSkills[displayName] ?? 0;
                           const hasSkill = agentLevel >= requiredLevel;
                           return {
                             skillName,
+                            displayName,
                             requiredLevel,
                             agentLevel,
                             hasSkill,
@@ -3228,7 +2843,7 @@ export default function MonitorPage() {
                               >
                                 <span className="flex items-center gap-2">
                                   <span className="font-medium">
-                                    {skill.skillName}
+                                    {skill.displayName}
                                   </span>
                                   {skill.hasSkill ? (
                                     <IconCheck className="h-4 w-4 text-green-600" />
@@ -3264,12 +2879,6 @@ export default function MonitorPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Supervision Modal */}
-      <SupervisionModal
-        open={supervisionModalOpen}
-        onOpenChange={setSupervisionModalOpen}
-        call={selectedCallForSupervision}
-      />
     </SupervisorPageShell>
   );
 }

@@ -1,8 +1,9 @@
+import { parseChannel } from "@/lib/acd/interaction-channels.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { createDiagnosticLogger } from "@/lib/diagnostic-logger.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { interactionScopeSql } from "@/lib/authz/scope.mjs";
 
 const qualityLogger = createDiagnosticLogger("contact-center.quality");
 
@@ -26,15 +27,9 @@ function clampDateRange(fromIso, toIso) {
  * Quality overview for the supervisor dashboard: totals, averages,
  * per-agent / per-form / per-queue scores, and daily trend.
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
     const pool = getPostgresPool();
     if (!pool) {
       return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
@@ -42,8 +37,12 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
     const { from, to } = clampDateRange(searchParams.get("from"), searchParams.get("to"));
-    const vals = [from, to];
-    const whereSql = "WHERE e.created_at >= $1 AND e.created_at <= $2";
+    const channel=parseChannel(searchParams.get("channel"));
+    const vals = [from, to,channel];
+    // Evaluations of interactions outside the caller's data scope are left out (Phase 3a).
+    const restriction = interactionScopeSql(authz.scope, { queue: "w.queue_id", workItem: "w.id", channel: "w.channel" }, null);
+    const restrictionSql = restriction.length ? ` AND EXISTS(SELECT 1 FROM acd_work_items w WHERE w.id=e.work_item_id AND ${restriction.join(" AND ")})` : "";
+    const whereSql = `WHERE e.created_at >= $1 AND e.created_at < $2 AND ($3::text IS NULL OR EXISTS(SELECT 1 FROM acd_work_items w WHERE w.id=e.work_item_id AND w.channel=$3))${restrictionSql}`;
 
     const totalsQuery = `
       SELECT
@@ -64,7 +63,7 @@ export async function GET(request) {
         e.agent_username,
         COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), e.agent_username) AS agent_name,
         COUNT(*)::int AS evaluations,
-        AVG(e.score_percent)::NUMERIC(5,2) AS avg_score_percent
+        AVG(e.score_percent) FILTER(WHERE e.status IN ('reviewed','final'))::NUMERIC(5,2) AS avg_score_percent
       FROM quality_evaluations e
       LEFT JOIN users u ON u.username = e.agent_username
       ${whereSql} AND e.agent_username IS NOT NULL AND e.status IN ('reviewed', 'final')
@@ -76,7 +75,7 @@ export async function GET(request) {
       SELECT
         f.name AS form_name,
         COUNT(*)::int AS evaluations,
-        AVG(e.score_percent)::NUMERIC(5,2) AS avg_score_percent
+        AVG(e.score_percent) FILTER(WHERE e.status IN ('reviewed','final'))::NUMERIC(5,2) AS avg_score_percent
       FROM quality_evaluations e
       JOIN quality_forms f ON f.id = e.form_id
       ${whereSql}
@@ -88,7 +87,7 @@ export async function GET(request) {
       SELECT
         COALESCE(e.queue_name, 'No queue') AS queue_name,
         COUNT(*)::int AS evaluations,
-        AVG(e.score_percent)::NUMERIC(5,2) AS avg_score_percent
+        AVG(e.score_percent) FILTER(WHERE e.status IN ('reviewed','final'))::NUMERIC(5,2) AS avg_score_percent
       FROM quality_evaluations e
       ${whereSql}
       GROUP BY COALESCE(e.queue_name, 'No queue')
@@ -99,7 +98,7 @@ export async function GET(request) {
       SELECT
         DATE(e.created_at) AS day,
         COUNT(*)::int AS evaluations,
-        AVG(e.score_percent)::NUMERIC(5,2) AS avg_score_percent
+        AVG(e.score_percent) FILTER(WHERE e.status IN ('reviewed','final'))::NUMERIC(5,2) AS avg_score_percent
       FROM quality_evaluations e
       ${whereSql}
       GROUP BY DATE(e.created_at)
@@ -167,3 +166,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("quality:read", GET_handler, { route: "/api/contact-center/quality/dashboard" });

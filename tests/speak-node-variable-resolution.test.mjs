@@ -38,13 +38,13 @@ test("Speak node TTS payload resolves {{contact_data.first_name}} before Telnyx 
   const payload = replaceTemplateVariables(
     "Welcome to Contact Center Services {{contact_data.first_name}}! Please wait.",
     {
-      contact_data: { first_name: "Leszek" },
+      contact_data: { first_name: "Demo" },
     },
   );
 
   assert.equal(
     payload,
-    "Welcome to Contact Center Services Leszek! Please wait.",
+    "Welcome to Contact Center Services Demo! Please wait.",
   );
 });
 

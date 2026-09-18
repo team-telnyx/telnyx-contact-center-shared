@@ -8,10 +8,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
 import { getFlowEvents } from "@/lib/call-monitor-store";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -44,3 +45,6 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("call_flows:monitor", GET_handler, { route: "/api/voice/flows/[id]/monitor/webhooks" });

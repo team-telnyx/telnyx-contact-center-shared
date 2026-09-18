@@ -1,27 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
+import { isProtectedSystemAgentStatus } from "@/lib/acd/system-agent-statuses.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
 
-export async function GET(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, { params }, authz) {
+  const user = authz.user;
 
   const pool = getPostgresPool();
   if (!pool)
@@ -51,9 +36,8 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, { params }, authz) {
+  const user = authz.user;
 
   const pool = getPostgresPool();
   if (!pool)
@@ -64,6 +48,16 @@ export async function PUT(request, { params }) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   try {
+    const current = (
+      await pool.query("SELECT id, name FROM cc_user_statuses WHERE id = $1", [id])
+    ).rows[0];
+    if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (isProtectedSystemAgentStatus(current)) {
+      return NextResponse.json(
+        { error: "This status is managed by Agent lifecycle settings and cannot be edited" },
+        { status: 409 },
+      );
+    }
     const body = await request.json();
     const {
       name,
@@ -123,9 +117,8 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, { params }, authz) {
+  const user = authz.user;
 
   const pool = getPostgresPool();
   if (!pool)
@@ -136,13 +129,22 @@ export async function DELETE(request, { params }) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   try {
-    // Check if status is in use. Runtime agent status is stored in cc_agent_state;
-    // users.agent_status is a removed legacy column.
+    const current = (
+      await pool.query("SELECT id, name FROM cc_user_statuses WHERE id = $1", [id])
+    ).rows[0];
+    if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (isProtectedSystemAgentStatus(current)) {
+      return NextResponse.json(
+        { error: "This status is managed by Agent lifecycle settings and cannot be deleted" },
+        { status: 409 },
+      );
+    }
+    // Manual status selection is owned by ACD Core. Busy/wrap-up/offline are
+    // workflow projections and never make a configurable status deletable.
     const usageRes = await pool.query(
       `SELECT COUNT(*) as count
-       FROM cc_agent_state ast
-       JOIN cc_user_statuses status ON status.name = ast.agent_status
-       WHERE status.id = $1`,
+       FROM acd_agent_state ast
+       WHERE ast.status_id = $1`,
       [id]
     );
     const usageCount = parseInt(usageRes.rows[0]?.count || "0", 10);
@@ -167,3 +169,8 @@ export async function DELETE(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("statuses:read", GET_handler, { route: "/api/admin/statuses/[id]" });
+export const PUT = withPermission("statuses:update", PUT_handler, { route: "/api/admin/statuses/[id]" });
+export const DELETE = withPermission("statuses:delete", DELETE_handler, { route: "/api/admin/statuses/[id]" });

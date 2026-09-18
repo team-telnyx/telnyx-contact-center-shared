@@ -1,21 +1,14 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { isAdmin } from "@/lib/role-utils";
 import path from "path";
 import { getStorage } from "@/lib/storage/index.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const PUBLIC_PREFIX = "/media";
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Map([["image/png", ".png"], ["image/jpeg", ".jpg"], ["image/webp", ".webp"], ["image/gif", ".gif"], ["image/svg+xml", ".svg"]]);
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;
-  let user = id ? await PgDb.findUserById(id) : null; if (!user && email) user = await PgDb.findUserByUsername(email); return user && isAdmin(user) ? user : null;
-}
 function safeBase(name = "image") { return String(name).toLowerCase().replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "image"; }
 function titleFromFilename(name = "") { return String(name).replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim(); }
 function iso(value) {
@@ -124,13 +117,13 @@ async function listFiles() {
   return [...byUrl.values()].sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
 }
 
-export async function GET() {
-  const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
   return NextResponse.json({ ok: true, media: await listFiles() });
 }
 
-export async function POST(request) {
-  const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const form = await request.formData();
   const file = form.get("file");
   if (!file || typeof file.arrayBuffer !== "function") return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
@@ -146,8 +139,8 @@ export async function POST(request) {
   return NextResponse.json({ ok: true, media: { name: filename, filename, url, src: url, title: titleFromFilename(file.name), display_name: titleFromFilename(file.name), size: file.size, size_bytes: file.size, contentType: file.type, content_type: file.type }, mediaList: await listFiles() });
 }
 
-export async function PATCH(request) {
-  const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PATCH_handler(request, _context, authz) {
+  const user = authz.user;
   const body = await request.json().catch(() => ({}));
   const url = String(body.url || "").trim();
   const title = String(body.title || body.display_name || "").trim();
@@ -170,8 +163,8 @@ export async function PATCH(request) {
   }
 }
 
-export async function DELETE(request) {
-  const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, _context, authz) {
+  const user = authz.user;
   const body = await request.json().catch(() => ({}));
   const url = String(body.url || "").trim();
   if (!url) return NextResponse.json({ error: "Media URL is required" }, { status: 400 });
@@ -188,3 +181,9 @@ export async function DELETE(request) {
   await deleteMetadata(url);
   return NextResponse.json({ ok: true, mediaList: await listFiles() });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("forms:read", GET_handler, { route: "/api/admin/forms/media" });
+export const POST = withPermission("forms:create", POST_handler, { route: "/api/admin/forms/media" });
+export const PATCH = withPermission("forms:update", PATCH_handler, { route: "/api/admin/forms/media" });
+export const DELETE = withPermission("forms:delete", DELETE_handler, { route: "/api/admin/forms/media" });

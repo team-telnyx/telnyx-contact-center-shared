@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
-import { setUserStatus } from "@/lib/contact-center/user-status";
+import { effectiveAgentStatus, ensureAgentState, readAgentStatusPresentation, setManualAgentStatus } from "@/lib/acd/agent-state.mjs";
 import { agentPayload, contactCenterErrorPayload, statusLogger } from "@/lib/contact-center/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { agentInScope } from "@/lib/authz/scope.mjs";
 
 /**
  * PUT /api/contact-center/agent/status
  * Update agent status
  * If userId is provided and requester is supervisor/admin, update status for that user
  */
-export async function PUT(request) {
+async function PUT_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const user = authz.user;
 
     const body = await request.json();
     const { status, userId: targetUserId } = body;
@@ -41,16 +35,12 @@ export async function PUT(request) {
     // Otherwise, use the authenticated user's id
     let targetUserIdFinal = user.id;
     if (targetUserId && targetUserId !== user.id) {
-      if (!isSupervisorOrAdmin(user)) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Only supervisors and admins can manage other users' status",
-          },
-          { status: 403 },
-        );
-      }
       targetUserIdFinal = targetUserId;
+      // Changing another agent's status needs agents:status.set (`authz.elevated`)
+      // and the agent must be within the caller's data scope (Phase 3a).
+      if (!authz.elevated || !agentInScope(authz.scope, targetUserId)) {
+        return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const pool = getPostgresPool();
@@ -92,10 +82,11 @@ export async function PUT(request) {
     }
 
     // Get target user info and Contact Center authoritative status
+    await ensureAgentState(pool, targetUserIdFinal);
     const targetUserRes = await pool.query(
-      `SELECT u.id, u.username, s.agent_status AS current_agent_status
+      `SELECT u.id, u.username, s.*
          FROM users u
-         LEFT JOIN cc_agent_state s ON s.user_id = u.id
+         JOIN acd_agent_state s ON s.agent_id = u.id
         WHERE u.id = $1`,
       [targetUserIdFinal],
     );
@@ -108,15 +99,15 @@ export async function PUT(request) {
     }
 
     const targetUser = targetUserRes.rows[0];
-    const previousStatus = targetUser.current_agent_status || "Unknown";
+    const previousStatus = effectiveAgentStatus(targetUser);
 
-    // Update status using the setUserStatus function which handles all the necessary updates
+    // Commit the operator's selection through the canonical Core state writer.
     const statusUpdateStartedAt = Date.now();
-    const effectiveStatus = await setUserStatus({
-      userId: String(targetUserIdFinal),
-      username: targetUser.username,
+    const effectiveStatus = await setManualAgentStatus(pool, {
+      agentId: String(targetUserIdFinal),
       status,
-      previousStatus,
+      actor: targetUserIdFinal !== user.id ? `supervisor:${user.id}` : `agent:${user.id}`,
+      expectedVersion: body.expectedVersion ?? null,
     });
     statusLogger.info("status_update_completed", {
       ...agentPayload({ agentUserId: targetUserIdFinal, agentUsername: targetUser.username }),
@@ -154,9 +145,15 @@ export async function PUT(request) {
       }
     }
 
+    // One snapshot decides the whole tuple. Reading the status from before the
+    // write and the pending fields from after it can report Busy with no
+    // pending status while the database already holds the applied break.
+    const presentation = await readAgentStatusPresentation(pool, String(targetUserIdFinal), effectiveStatus || status);
     return NextResponse.json({
       ok: true,
-      status: effectiveStatus || status,
+      status: presentation.status,
+      pendingStatus: presentation.pendingStatus,
+      pendingSince: presentation.pendingSince,
       requestedStatus: status,
       userId: String(targetUserIdFinal),
       previousStatus,
@@ -164,7 +161,10 @@ export async function PUT(request) {
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err.message || "Server error" },
-      { status: 500 },
+      { status: err.status || 500 },
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission(["agents:status.set","agent:self"], PUT_handler, { route: "/api/contact-center/agent/status", elevated: "agents:status.set" });

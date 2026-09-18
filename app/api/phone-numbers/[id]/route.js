@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request, { params }) {
+async function PATCH_handler(request, { params }, authz) {
   try {
+    const user = authz.user;
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -57,3 +59,6 @@ export async function PATCH(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const PATCH = withPermission("numbers:update", PATCH_handler, { route: "/api/phone-numbers/[id]" });

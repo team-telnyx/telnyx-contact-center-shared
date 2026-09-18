@@ -194,13 +194,29 @@ test("a customer utterance is NOT appended to a stale open bubble after the agen
     call_control_id: "call-control-1",
     transcription_track: "inbound",
     transcription_key: "cust-1",
-    transcript: "Texas Health Presbyterian Hospital Dent",
+    transcript: "Northgate Presbyterian Hospital Dent",
     is_final: false,
   });
 
   const { transcriptions } = useActiveCallStore.getState();
-  // 5 bubbles: customer, agent x3, customer (new) — NOT 4 with a merged customer.
-  assert.equal(transcriptions.length, 5);
+  // Consecutive agent finals are coalesced into one bubble by design, so the
+  // agent turn is asserted as a block rather than by bubble count. What must
+  // hold is the turn boundary itself: the customer's stale bubble closes and
+  // the later customer speech starts a new one after the agent's.
+  const tracks = transcriptions.map((item) => item.track);
+  assert.deepEqual([...new Set(tracks)], ["inbound", "outbound"]);
+  assert.equal(tracks[0], "inbound");
+  assert.equal(tracks[tracks.length - 1], "inbound");
+  assert.ok(tracks.slice(1, -1).every((track) => track === "outbound"),
+    "the agent turn sits between the two customer utterances");
+  assert.equal(transcriptions.filter((item) => item.track === "inbound").length, 2,
+    "the customer's two utterances are never merged across the agent turn");
+  const agentText = transcriptions.filter((item) => item.track === "outbound")
+    .map((item) => item.transcript).join(" ");
+  for (const line of ["Sorry. Could you repeat", "And what is, uh, the gender",
+    "What will be the facility name for the pickup?"]) {
+    assert.ok(agentText.includes(line), `the agent turn keeps "${line}"`);
+  }
 
   // The stale customer bubble was closed and keeps only its original text.
   assert.equal(
@@ -212,7 +228,7 @@ test("a customer utterance is NOT appended to a stale open bubble after the agen
   // The new customer utterance is the LAST bubble, after the agent's lines.
   const last = transcriptions[transcriptions.length - 1];
   assert.equal(last.track, "inbound");
-  assert.equal(last.transcript, "Texas Health Presbyterian Hospital Dent");
+  assert.equal(last.transcript, "Northgate Presbyterian Hospital Dent");
   assert.notEqual(last.id, transcriptions[0].id);
   assert.notEqual(last.transcriptionKey, transcriptions[0].transcriptionKey);
   assert.equal(last.originalTranscriptionKey, "cust-1");

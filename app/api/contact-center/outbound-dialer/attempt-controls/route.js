@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapOutboundAttemptControl, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, mapOutboundAttemptControl, optionalString, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeAttemptControlLimits, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const STATUSES = ["draft", "active", "paused"];
 const RESET_PERIODS = ["daily", "weekly", "monthly", "campaign", "lifetime"];
@@ -30,15 +31,15 @@ function normalizeAttemptControl(body = {}, globalMaxAttempts = 5) {
   };
 }
 
-export async function GET() {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows } = await pool.query(`SELECT * FROM outbound_attempt_controls WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 200`);
   return NextResponse.json({ ok: true, attemptControls: rows.map(mapOutboundAttemptControl) });
 }
 
-export async function POST(request) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
     const globalMaxAttempts = await getGlobalMaxAttempts(pool);
@@ -48,3 +49,7 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, attemptControl: mapOutboundAttemptControl(rows[0]) });
   } catch (err) { campaignsLogger.error("attempt_control_create_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to create attempt control", 400); }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("dialer_attempt_controls:read", GET_handler, { route: "/api/contact-center/outbound-dialer/attempt-controls" });
+export const POST = withPermission("dialer_attempt_controls:create", POST_handler, { route: "/api/contact-center/outbound-dialer/attempt-controls" });

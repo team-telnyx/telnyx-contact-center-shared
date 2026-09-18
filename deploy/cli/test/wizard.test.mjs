@@ -301,7 +301,7 @@ describe('wizard.mjs — step units', () => {
   it('runParamsStep: slugifies deployment name and derives baseUrl from domain', async () => {
     const { io } = fakeIo({
       asks: ['My CC Deployment!', 'cc.example.com'],
-      secrets: ['leszek@example.com'.length ? '' : '', 'KEY123'], // ownerPassword blank, telnyxApiKey set
+      secrets: ['demo@example.com'.length ? '' : '', 'KEY123'], // ownerPassword blank, telnyxApiKey set
     });
     // fix ask order: name, domain ; then plain ask for email is separate call via ask? -> email uses ask too
     const state = defaultState();
@@ -594,13 +594,13 @@ describe('wizard.mjs — runAwsDnsStep', () => {
 
   it('single-node: no cert in the deployment region but a wildcard exists in another region -> logs why it can\'t be reused (2026-07-06 regression: silent new-cert request with no explanation)', async () => {
     const { io, logs } = makeIo({ confirms: { 'set up https': true } });
-    const state = { ...defaultState(), target: 'aws', domain: 'cc-test3.demotelnyx.com', region: 'us-west-2', infra: { awsTopology: 'single' } };
-    const listHostedZonesImpl = async () => [{ id: 'Z1', name: 'demotelnyx.com' }];
+    const state = { ...defaultState(), target: 'aws', domain: 'cc-demo.example.com', region: 'us-west-2', infra: { awsTopology: 'single' } };
+    const listHostedZonesImpl = async () => [{ id: 'Z1', name: 'example.com' }];
     const findRecordForHostImpl = async () => null;
     const listCertificatesForDomainImpl = async () => []; // nothing in us-west-2 itself
     const findCertificateInOtherRegionsImpl = async () => ({
       region: 'us-east-2',
-      certificates: [{ certificateArn: 'arn:wild-east', domainName: '*.demotelnyx.com' }],
+      certificates: [{ certificateArn: 'arn:wild-east', domainName: '*.example.com' }],
     });
     const result = await runAwsDnsStep({
       state, io, listHostedZonesImpl, findRecordForHostImpl, listCertificatesForDomainImpl, findCertificateInOtherRegionsImpl,
@@ -609,7 +609,7 @@ describe('wizard.mjs — runAwsDnsStep', () => {
     assert.strictEqual(result.state.infra.acm.certificateArn, null);
     assert.strictEqual(result.state.infra.acm.issued, false);
     // But now explains WHY, instead of silently doing so.
-    assert.ok(logs.some((l) => l.includes('*.demotelnyx.com') && l.includes('us-east-2') && l.includes('us-west-2')),
+    assert.ok(logs.some((l) => l.includes('*.example.com') && l.includes('us-east-2') && l.includes('us-west-2')),
       `expected a log line explaining the cross-region certificate, got: ${JSON.stringify(logs)}`);
   });
 
@@ -688,7 +688,7 @@ describe('wizard.mjs — runPortConflictStep', () => {
         if (q.includes('use a different database name')) return 'contact_center_v2';
         if (q.includes('postgres host')) return 'localhost';
         if (q.includes('postgres port')) return '5433';
-        if (q.includes('postgres user')) return 'leszek';
+        if (q.includes('postgres user')) return 'demo';
         if (q.includes('database name')) return 'contact_center';
         return defaultValue;
       },
@@ -710,10 +710,10 @@ describe('wizard.mjs — runPortConflictStep', () => {
     assert.strictEqual(result.state.postgres.mode, 'existing');
     assert.strictEqual(result.state.postgres.host, 'localhost');
     assert.strictEqual(result.state.postgres.port, 5433);
-    assert.strictEqual(result.state.postgres.user, 'leszek');
+    assert.strictEqual(result.state.postgres.user, 'demo');
     assert.strictEqual(result.state.postgres.database, 'contact_center_v2');
     assert.deepStrictEqual(result.answers.existingPostgres, {
-      host: 'localhost', port: 5433, user: 'leszek', password: 'pg-secret', database: 'contact_center_v2',
+      host: 'localhost', port: 5433, user: 'demo', password: 'pg-secret', database: 'contact_center_v2',
     });
     assert.strictEqual(result.answers.postgresMode, 'existing');
   });
@@ -2132,7 +2132,7 @@ describe('wizard.mjs — runLocalProvisionStep (Postgres wiring threading)', () 
         mode: 'existing',
         host: 'localhost',
         port: 5432,
-        user: 'leszek',
+        user: 'demo',
         database: 'cc_main_db',
       },
     };
@@ -2151,7 +2151,7 @@ describe('wizard.mjs — runLocalProvisionStep (Postgres wiring threading)', () 
     assert.match(envText, /^POSTGRES_MODE=existing$/m, '.env must record existing mode (regression: was bundled)');
     assert.match(envText, /^COMPOSE_PROFILES=no-with-pg$/m, '.env must suppress the bundled container (regression: was with-pg)');
     assert.match(envText, /^POSTGRES_HOST=localhost$/m);
-    assert.match(envText, /^POSTGRES_USER=leszek$/m);
+    assert.match(envText, /^POSTGRES_USER=demo$/m);
     assert.match(envText, /^POSTGRES_DB=cc_main_db$/m);
   });
 
@@ -2163,7 +2163,7 @@ describe('wizard.mjs — runLocalProvisionStep (Postgres wiring threading)', () 
       ...defaultState(),
       target: 'local',
       deploymentName: 'cc-main',
-      postgres: { mode: 'existing', host: 'localhost', port: 5432, user: 'leszek', database: 'cc_main_db' },
+      postgres: { mode: 'existing', host: 'localhost', port: 5432, user: 'demo', database: 'cc_main_db' },
     };
     const answers = {
       baseUrl: 'http://localhost:3000',

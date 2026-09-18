@@ -100,5 +100,21 @@ test("logout emits a terminal auth event for every successful request, even with
 
   assert.match(src, /let revokedRefreshToken = false;/);
   assert.match(src, /await logAuthEvent\("info", "logout_success", \{[\s\S]*hasRefreshToken: Boolean\(refreshToRevoke\)[\s\S]*revokedRefreshToken[\s\S]*\}\);/);
-  assert.ok(src.indexOf('await logAuthEvent("info", "logout_success"') > src.indexOf('if (userId && refreshToRevoke)'), "logout_success should be emitted after optional revoke flow, not only inside it");
+  assert.ok(src.indexOf('await logAuthEvent("info", "logout_success"') > src.indexOf('if (user && refreshToRevoke)'), "logout_success should be emitted after optional revoke flow, not only inside it");
+});
+
+test("NextAuth login and logout tracking is lifecycle-based and cookie-complete", async () => {
+  const nextAuth = await source("app/api/auth/[...nextauth]/route.js");
+  const logout = await source("app/api/auth/logout/route.js");
+
+  assert.match(nextAuth, /\(user \|\| account\)[\s\S]*openTrackedAuthSession/);
+  assert.match(nextAuth, /authTrackingSessionId/);
+  assert.match(nextAuth, /events:\s*\{[\s\S]*async signOut\(\{ token \}\)[\s\S]*completeTrackedLogout/);
+  assert.doesNotMatch(nextAuth, /loginTracked/);
+
+  assert.match(logout, /getToken\(\{/);
+  assert.match(logout, /completeTrackedLogout\(\{/);
+  assert.match(logout, /__Secure-next-auth\.session-token/);
+  assert.match(logout, /cookie\.name\.startsWith\(`\$\{base\}\.\`\)/);
+  assert.match(logout, /expireAuthCookies\(request, res\)/);
 });

@@ -29,10 +29,23 @@ import {
 } from "lucide-react";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
+import { VoiceRecoveryBadge } from "@/components/voice-recovery-badge";
 import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
 import { HEADSET_COMMANDS } from "@/lib/headsets/headset-control-service.mjs";
 import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
 import { useExperimentalFeatures } from "@/lib/experimental-features-client";
+import { submitCoreHoldIntent } from "@/lib/acd/client-hold-intent";
+import { notify } from "@/components/ToastNotify";
+import { interactionCallControls,matchesInteractionCall,voiceInteractionPhase } from "@/lib/telephony/interaction-controls.mjs";
+import {
+  cancelUnstartedWebrtcIntent,
+  claimWebrtcDialFailure,
+  describeWebrtcDialFailure,
+  directIntentIdFromCall,
+  isWebrtcDialFailureState,
+  markWebrtcCallConnected,
+  shouldHandleWebrtcDialFailure,
+} from "@/lib/webrtc-dial-failure";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -70,7 +83,7 @@ function isValidDialTo(value) {
 }
 
 export default function SoftphoneMini() {
-  const { client } = useTelnyx();
+  const { client, status: telephonyStatus } = useTelnyx();
   const { toggle } = usePhoneUi();
   const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
 
@@ -81,6 +94,10 @@ export default function SoftphoneMini() {
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
   const activeCallDirection = useActiveCallStore((state) => state.direction);
+  const testInteractionId = useActiveCallStore((state) => state.contactCenter?.interactionId);
+  const recoveredCallHeaders = useActiveCallStore((state) => state.recoveredCallHeaders);
+  const callHeaders = [activeCall?.options?.customHeaders, activeCall?.inviteCustomHeaders, activeCall?.customHeaders, recoveredCallHeaders].filter(Array.isArray).flat();
+  const callHeader = (name) => callHeaders.find(h => String(h.name).toLowerCase() === name)?.value || "";
 
   // Zustand stores - dial state
   const { toNumber, setToNumber: setDialToNumber } = useDialStore();
@@ -120,6 +137,7 @@ export default function SoftphoneMini() {
   // Local UI state
   const [toInput, setToInput] = useState(toNumber || "");
   const [showTransfer, setShowTransfer] = useState(false);
+  const [cardTransferInteraction,setCardTransferInteraction]=useState(null);
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [interaction, setInteraction] = useState(null);
   const [outboundCallerName, setOutboundCallerName] = useState("");
@@ -149,12 +167,26 @@ export default function SoftphoneMini() {
   const shouldMarqueeMiniInput = Boolean(isIncomingCall && incomingCallerDisplay && incomingCallerDisplay.length > 18);
 
   headsetCommandHandlersRef.current = {
+    call: activeCall,
     answer: handleAnswerCall,
     reject: handleRejectCall,
     hangup,
     mute: toggleMute,
     hold: toggleHold,
+    transfer: target=>{setCardTransferInteraction(target);setShowTransfer(true);},
   };
+
+  useEffect(()=>interactionCallControls.register({
+    getState:useActiveCallStore.getState,
+    getHandlers:()=>headsetCommandHandlersRef.current,
+  }),[]);
+
+  useEffect(()=>{
+    const state=useActiveCallStore.getState();
+    if(cardTransferInteraction&&!state.consultInProgress&&(!matchesInteractionCall(cardTransferInteraction,state)||voiceInteractionPhase(cardTransferInteraction,state)==="ended")){
+      setShowTransfer(false);setCardTransferInteraction(null);
+    }
+  },[activeCall,callStatus,testInteractionId,cardTransferInteraction]);
 
   useEffect(() => {
     if (!experimentalFeaturesEnabled) return;
@@ -251,6 +283,7 @@ export default function SoftphoneMini() {
       customerId: interaction.customer_id || interaction.customerId || null,
       customerData:
         interaction.customer_data || interaction.customerData || null,
+      metadata: interaction.metadata || null,
     });
   };
 
@@ -260,7 +293,8 @@ export default function SoftphoneMini() {
       const storeState = useActiveCallStore.getState();
 
       // For contact center calls, we have the interactionId from metadata
-      let interactionId = storeState.contactCenter?.interactionId;
+      let interactionId =
+        testInteractionId || storeState.contactCenter?.interactionId;
 
       // For incoming calls, check the incoming call store first (fastest method)
       // The SSE event from webrtc-bridge includes the interaction ID
@@ -320,17 +354,17 @@ export default function SoftphoneMini() {
                 interactionId &&
                 interactionId !== lastFetchedInteractionIdRef.current
               ) {
-                lastFetchedInteractionIdRef.current = interactionId;
-
                 const res = await fetch(
                   `/api/contact-center/interactions/${interactionId}`
                 );
                 const data = await res.json();
 
                 if (data.ok && data.interaction) {
+                  lastFetchedInteractionIdRef.current = interactionId;
                   setInteraction(data.interaction);
                   applyContactCenterMetadata(data.interaction);
                 } else {
+                  lastFetchedInteractionIdRef.current = null;
                   setInteraction(null);
                 }
               }
@@ -345,8 +379,6 @@ export default function SoftphoneMini() {
             callControlId &&
             callControlId !== lastFetchedInteractionIdRef.current
           ) {
-            lastFetchedInteractionIdRef.current = callControlId;
-
             try {
               const res = await fetch(
                 `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
@@ -356,12 +388,15 @@ export default function SoftphoneMini() {
               const data = await res.json();
 
               if (data.ok && data.interaction) {
+                lastFetchedInteractionIdRef.current = callControlId;
                 setInteraction(data.interaction);
                 applyContactCenterMetadata(data.interaction);
               } else {
+                lastFetchedInteractionIdRef.current = null;
                 setInteraction(null);
               }
             } catch (err) {
+              lastFetchedInteractionIdRef.current = null;
               setInteraction(null);
             }
           }
@@ -374,8 +409,6 @@ export default function SoftphoneMini() {
         interactionId &&
         interactionId !== lastFetchedInteractionIdRef.current
       ) {
-        lastFetchedInteractionIdRef.current = interactionId;
-
         const fetchInteraction = async () => {
           try {
             const res = await fetch(
@@ -384,12 +417,15 @@ export default function SoftphoneMini() {
             const data = await res.json();
 
             if (data.ok && data.interaction) {
+              lastFetchedInteractionIdRef.current = interactionId;
               setInteraction(data.interaction);
               applyContactCenterMetadata(data.interaction);
             } else {
+              lastFetchedInteractionIdRef.current = null;
               setInteraction(null);
             }
           } catch (err) {
+            lastFetchedInteractionIdRef.current = null;
             setInteraction(null);
           }
         };
@@ -400,7 +436,7 @@ export default function SoftphoneMini() {
       lastFetchedInteractionIdRef.current = null;
       setInteraction(null);
     }
-  }, [activeCall]);
+  }, [activeCall, callStatus, testInteractionId]);
 
   // Sync toInput with store toNumber
   useEffect(() => {
@@ -418,10 +454,19 @@ export default function SoftphoneMini() {
         if (notification.type === "callUpdate" || notification?.call) {
           const call = notification?.call || null;
           const callState = call?.state || notification?.call?.state || "";
+          if (useActiveCallStore.getState().adoptRecoveredCall(call)) {
+            wireCall(call);
+            lastWiredCallRef.current = call;
+          }
 
           // Detect call end states - when call object is missing or in end state
+          if (!call) {
+            // A callUpdate without a call identity cannot prove which SDK leg
+            // ended. This occurs while consult replaces the original leg; an
+            // ambiguous notification must never clear the new active call.
+            return;
+          }
           if (
-            !call ||
             [
               "done",
               "hangup",
@@ -434,13 +479,23 @@ export default function SoftphoneMini() {
             ].includes(callState.toLowerCase())
           ) {
             // If we have an active call and it just ended
-            if (activeCall) {
+            if (activeCall && useActiveCallStore.getState().call === call) {
               handleCallEnd();
             }
             return;
           }
 
           if (call) {
+            // Reattached inbound calls do not pass through the Answer button,
+            // and their stream can arrive after the replacement object.
+            if (useActiveCallStore.getState().call === call &&
+                ["active", "connected", "answered"].includes(callState.toLowerCase())) {
+              updateStatus(callState.toLowerCase());
+              attachAudio(call);
+              if (call.recoveredCallId) {
+                for (const delay of [100, 300, 1000]) setTimeout(() => attachAudio(call), delay);
+              }
+            }
             const callDirection =
               call.direction || notification?.call?.direction || "";
             const fromNumber =
@@ -533,22 +588,39 @@ export default function SoftphoneMini() {
 
                   // Try to get caller name from SSE store first
                   const storedInfo = await getStoredCallerInfo(fromNumber);
+                  const storedIdentityMatches = Boolean(
+                    metadata.interactionId &&
+                      storedInfo?.interactionId &&
+                      String(metadata.interactionId) ===
+                        String(storedInfo.interactionId),
+                  );
+                  const mayUseStoredIdentity =
+                    !metadata.interactionId || storedIdentityMatches;
                   if (!metadata.fromName && storedInfo?.fromName) {
                     metadata.fromName = storedInfo.fromName;
                   }
-                  if (storedInfo?.originalCallControlId) {
+                  if (
+                    mayUseStoredIdentity &&
+                    storedInfo?.originalCallControlId
+                  ) {
                     metadata.originalCallControlId =
                       storedInfo.originalCallControlId;
                   }
-                  if (storedInfo?.callSessionId) {
+                  if (mayUseStoredIdentity && storedInfo?.callSessionId) {
                     metadata.originalCallSessionId = storedInfo.callSessionId;
                   }
                   if (storedInfo?.interactionId && !metadata.interactionId) {
                     metadata.interactionId = storedInfo.interactionId;
                   }
+                  if (mayUseStoredIdentity && storedInfo?.metadata) {
+                    metadata.metadata = {
+                      ...(metadata.metadata || {}),
+                      ...storedInfo.metadata,
+                    };
+                  }
 
                   // Populate contact center metadata from SSE if available
-                  if (storedInfo?.contactCenter) {
+                  if (mayUseStoredIdentity && storedInfo?.contactCenter) {
                     metadata.interactionId =
                       storedInfo.contactCenter.interactionId;
                     metadata.queueName = storedInfo.contactCenter.queueName;
@@ -591,6 +663,7 @@ export default function SoftphoneMini() {
                     assignedAt: metadata.assignedAt || Date.now(),
                     customerId: metadata.customerId,
                     customerData: metadata.customerData,
+                    metadata: metadata.metadata || {},
                   });
 
                   // Wire up call events
@@ -767,6 +840,7 @@ export default function SoftphoneMini() {
     try {
       const el = audioRef.current;
       if (!el || !call) return;
+      if (useActiveCallStore.getState().call !== call) return;
 
       // Ensure audio element is properly configured
       el.muted = false;
@@ -844,6 +918,7 @@ export default function SoftphoneMini() {
       // Update call state and sync mute/hold status
       const syncCallState = () => {
         try {
+          if (useActiveCallStore.getState().call !== call) return;
           const s = String(call.state || "").toLowerCase();
           if (s) {
             updateStatus(s);
@@ -917,6 +992,7 @@ export default function SoftphoneMini() {
 
       if (typeof call.on === "function") {
         call.on("active", () => {
+          markWebrtcCallConnected(call);
           updateStatus("active");
           syncCallState();
           attachAudio(call);
@@ -929,6 +1005,7 @@ export default function SoftphoneMini() {
         registeredEvents.push("active");
 
         call.on("connected", () => {
+          markWebrtcCallConnected(call);
           updateStatus("connected");
           syncCallState();
           attachAudio(call);
@@ -941,6 +1018,7 @@ export default function SoftphoneMini() {
         registeredEvents.push("connected");
 
         call.on("answered", () => {
+          markWebrtcCallConnected(call);
           updateStatus("answered");
           syncCallState();
           attachAudio(call);
@@ -971,9 +1049,7 @@ export default function SoftphoneMini() {
         });
         registeredEvents.push("early");
 
-        call.on("busy", () => {
-          updateStatus("busy");
-        });
+        call.on("busy", () => handleDialFailure(call, "busy"));
         registeredEvents.push("busy");
 
         call.on("held", () => {
@@ -985,30 +1061,34 @@ export default function SoftphoneMini() {
       // Register hangup handlers - try both with and without optional chaining
       // Some versions of the SDK might need direct .on() calls
       const onHangup = () => {
+        if (useActiveCallStore.getState().call !== call) return;
         updateStatus("ended");
         setTimeout(() => {
-          handleCallEnd();
+          if (useActiveCallStore.getState().call === call) handleCallEnd();
         }, 100);
       };
 
       const onDestroy = () => {
+        if (useActiveCallStore.getState().call !== call) return;
         updateStatus("ended");
         setTimeout(() => {
-          handleCallEnd();
+          if (useActiveCallStore.getState().call === call) handleCallEnd();
         }, 100);
       };
 
       const onEnded = () => {
+        if (useActiveCallStore.getState().call !== call) return;
         updateStatus("ended");
         setTimeout(() => {
-          handleCallEnd();
+          if (useActiveCallStore.getState().call === call) handleCallEnd();
         }, 100);
       };
 
       const onPurge = () => {
+        if (useActiveCallStore.getState().call !== call) return;
         updateStatus("ended");
         setTimeout(() => {
-          handleCallEnd();
+          if (useActiveCallStore.getState().call === call) handleCallEnd();
         }, 100);
       };
 
@@ -1022,8 +1102,13 @@ export default function SoftphoneMini() {
 
       // Listen to stateChanged for all state transitions
       call.on?.("stateChanged", (newState) => {
+        if (useActiveCallStore.getState().call !== call) return;
         if (newState) {
           const lowerState = String(newState).toLowerCase();
+          if (isWebrtcDialFailureState(lowerState)) {
+            handleDialFailure(call, lowerState);
+            return;
+          }
           updateStatus(lowerState);
 
           // Check if call ended via state change
@@ -1040,7 +1125,7 @@ export default function SoftphoneMini() {
             ].includes(lowerState)
           ) {
             setTimeout(() => {
-              handleCallEnd();
+              if (useActiveCallStore.getState().call === call) handleCallEnd();
             }, 100);
           }
 
@@ -1052,31 +1137,7 @@ export default function SoftphoneMini() {
         syncCallState();
       });
 
-      // Also listen to RTCPeerConnection events if available
-      // The WebRTC SDK might expose lower-level events
-      if (call._peer) {
-        const peer = call._peer;
-
-        const checkConnectionState = () => {
-          const state = peer.connectionState;
-
-          if (
-            state === "disconnected" ||
-            state === "closed" ||
-            state === "failed"
-          ) {
-            setTimeout(() => {
-              handleCallEnd();
-            }, 100);
-          }
-        };
-
-        peer.addEventListener?.("connectionstatechange", checkConnectionState);
-        peer.addEventListener?.(
-          "iceconnectionstatechange",
-          checkConnectionState
-        );
-      }
+      // Transport failures are recoverable; only SDK/Core termination ends the UI.
 
       // Initial state sync
       syncCallState();
@@ -1085,7 +1146,31 @@ export default function SoftphoneMini() {
     }
   }
 
+  function handleDialFailure(call, state) {
+    const store = useActiveCallStore.getState();
+    if (!shouldHandleWebrtcDialFailure({
+      call,
+      state,
+      direction: store.direction,
+      currentStatus: store.status,
+    })) return;
+    if (!claimWebrtcDialFailure(call)) return;
+    const intentId = directIntentIdFromCall(call);
+    try { call.hangup?.(); } catch (_) {}
+    if (intentId) void cancelUnstartedWebrtcIntent(intentId);
+    notify({
+      title: "Call failed",
+      description: describeWebrtcDialFailure(state),
+      variant: "error",
+    });
+    updateStatus("ended");
+    setTimeout(() => {
+      if (useActiveCallStore.getState().call === call) void handleCallEnd();
+    }, 100);
+  }
+
   async function handleCallEnd() {
+    const endingCall=useActiveCallStore.getState().call;
     try {
       const storeState = useActiveCallStore.getState();
 
@@ -1150,25 +1235,15 @@ export default function SoftphoneMini() {
         }
       }
 
-      // Ensure hold/transfer metrics are synced before clearing
-      try {
-        await useActiveCallStore.getState().syncCallMetricsToDb();
-      } catch (err) {
-        // Failed to sync metrics
-      }
-
-      // Metrics are synced via /api/contact-center/interactions/:id/metrics
-
-      // Clear active call from store
-      clearActiveCall();
+      // A different call may arrive while finalization waits for wrap-up.
+      if(useActiveCallStore.getState().call===endingCall)clearActiveCall();
 
       // Also trigger refresh event as backup
       window.dispatchEvent(
         new CustomEvent("contact-center:refresh-interactions")
       );
     } catch (err) {
-      // Always clear call even if finalization fails
-      clearActiveCall();
+      if(useActiveCallStore.getState().call===endingCall)clearActiveCall();
     }
   }
 
@@ -1208,6 +1283,7 @@ export default function SoftphoneMini() {
       }
     }
 
+    let directIntentId = null;
     try {
       // Ensure mic is available
       try {
@@ -1216,13 +1292,20 @@ export default function SoftphoneMini() {
 
       const experimentalOptions = getWebrtcExperimentalOptions();
       console.log("[webrtc] Starting outbound call", experimentalOptions);
+      const prepared = await fetch("/api/voice/direct-intent", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: crypto.randomUUID(), target: to }),
+      });
+      const directIntent = await prepared.json();
+      if (!prepared.ok) throw new Error(directIntent.error || "Voice capacity unavailable");
+      directIntentId = directIntent.intentId || null;
       const call = client.newCall({
         destinationNumber: to,
         callerNumber: from || undefined,
         callerName: callerName || undefined,
         audio: true,
         video: false,
-        ...(overrides.customHeaders ? { customHeaders: overrides.customHeaders } : {}),
+        customHeaders: [...(overrides.customHeaders || []), ...directIntent.customHeaders],
         ...(experimentalOptions.prefetchIceCandidates && {
           prefetchIceCandidates: true,
         }),
@@ -1234,6 +1317,7 @@ export default function SoftphoneMini() {
         fromNumber: from,
         fromName: callerName || undefined,
         toNumber: to,
+        interactionId: directIntent.workItemId || null,
         ...(overrides.metadata || {}),
       });
 
@@ -1259,7 +1343,6 @@ export default function SoftphoneMini() {
       }
 
       wireCall(call);
-      call.invite?.();
 
       // Proactively try to attach audio with retries
       // This helps ensure audio works when the other party answers
@@ -1272,6 +1355,12 @@ export default function SoftphoneMini() {
         }, delay);
       });
     } catch (err) {
+      if (directIntentId) void cancelUnstartedWebrtcIntent(directIntentId);
+      notify({
+        title: "Call failed",
+        description: err?.message || "The call could not be started.",
+        variant: "error",
+      });
       clearActiveCall();
     }
   }
@@ -1321,12 +1410,16 @@ export default function SoftphoneMini() {
         // Update status before clearing held state so resume metrics close the hold interval
         updateStatus("active");
         storeSetHeld(false);
+        const workItemId = useActiveCallStore.getState().contactCenter?.interactionId;
+        if (workItemId) await submitCoreHoldIntent(workItemId, "unhold");
       } else {
         const hold = activeCall.hold || activeCall.pause;
         await hold?.call(activeCall);
         storeSetHeld(true);
         // Update status to 'held' to track hold start
         updateStatus("held");
+        const workItemId = useActiveCallStore.getState().contactCenter?.interactionId;
+        if (workItemId) await submitCoreHoldIntent(workItemId, "hold");
       }
     } catch (err) {
       // Toggle hold error
@@ -1345,22 +1438,11 @@ export default function SoftphoneMini() {
       // Answer the call
       activeCall.answer?.();
 
-      // Update status
+      // The WebRTC leg is already the agent leg created by the routing engine.
+      // Do not call the interaction /answer endpoint here: that endpoint is for
+      // picking up a queued interaction before a WebRTC leg exists and would
+      // initiate a second transfer for an already-ringing ACD call.
       updateStatus("answered");
-      if (interaction?.id) {
-        fetch(
-          `/api/contact-center/interactions/${encodeURIComponent(
-            interaction.id
-          )}/answer`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ answeredAt: new Date().toISOString() }),
-          }
-        ).catch((err) => {
-          // Failed to mark answered
-        });
-      }
 
       // Force audio attachment with multiple retries
       // This ensures the remote stream is available after the answer
@@ -1499,9 +1581,9 @@ export default function SoftphoneMini() {
           // and call handleCallEnd(). Add a fallback timeout just in case.
           setTimeout(() => {
             const currentState = useActiveCallStore.getState();
-            if (currentState.call) {
+            if (currentState.call===activeCall) {
               handleCallEnd();
-            } else {
+            } else if (!currentState.call) {
               // Call already cleared, but ensure it's removed from calls store
               if (callControlId) {
                 useCallsStore.getState().removeCall(callControlId);
@@ -1546,17 +1628,28 @@ export default function SoftphoneMini() {
 
   return (
     <div
+      data-testid="voice-softphone"
+      data-voice-ready={telephonyStatus === "connected" ? "true" : "false"}
+      data-call-status={callStatus || "idle"}
+      data-rtc-call-id={activeCall?.id || ""}
+      data-work-item-id={callHeader("x-cc-work-item-id")}
+      data-offer-generation={callHeader("x-cc-offer-generation")}
+      data-interaction-id={testInteractionId || ""}
+      data-call-control-id={activeCall?.callControlId || activeCall?.call_control_id || ""}
+      data-held={callUI.isHeld ? "true" : "false"}
+      data-muted={callUI.isMuted ? "true" : "false"}
       className={`hidden sm:flex items-center gap-2 rounded-md bg-muted text-foreground border px-2 py-1 transition-all ${
         isRinging
           ? "border-telnyx-green shadow-[0_0_0_2px_rgba(34,211,110,0.3)] animate-pulse"
           : "border-border"
       }`}
     >
-      <audio ref={audioRef} autoPlay playsInline className="hidden" />
+      <audio data-testid="voice-remote-audio" ref={audioRef} autoPlay playsInline className="hidden" />
+      <VoiceRecoveryBadge />
       {experimentalFeaturesEnabled ? <HeadsetStatusBadge /> : null}
       <button
         className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white hover:bg-zinc-700"
-        title="Select number from contacts"
+        data-testid="voice-number-select" title="Select number from contacts"
         onClick={() => setShowNumberModal(true)}
       >
         <IconContact className="h-4 w-4" />
@@ -1600,14 +1693,14 @@ export default function SoftphoneMini() {
         <>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-red-600 text-white"
-            title="Reject"
+            data-testid="voice-reject" title="Reject"
             onClick={() => handleRejectCall()}
           >
             <IconPhoneOff className="h-4 w-4" />
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-emerald-600 text-white"
-            title="Answer"
+            data-testid="voice-answer" title="Answer"
             onClick={() => handleAnswerCall()}
           >
             <IconPhone className="h-4 w-4" />
@@ -1618,7 +1711,7 @@ export default function SoftphoneMini() {
           {/* Show only disconnect button for outbound calls in progress (dialing/ringing) */}
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-red-600 text-white"
-            title="Disconnect"
+            data-testid="voice-disconnect" title="Disconnect"
             onClick={hangup}
           >
             <IconPhoneOff className="h-4 w-4" />
@@ -1629,7 +1722,7 @@ export default function SoftphoneMini() {
           {/* Show CTI buttons when call is connected/answered */}
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white"
-            title={callUI.isMuted ? "Unmute" : "Mute"}
+            data-testid="voice-mute" title={callUI.isMuted ? "Unmute" : "Mute"}
             onClick={toggleMute}
           >
             {callUI.isMuted ? (
@@ -1640,14 +1733,14 @@ export default function SoftphoneMini() {
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-red-600 text-white"
-            title="Hang up"
+            data-testid="voice-hangup" title="Hang up"
             onClick={hangup}
           >
             <IconPhoneOff className="h-4 w-4" />
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white"
-            title={callUI.isHeld ? "Unhold" : "Hold"}
+            data-testid="voice-hold" title={callUI.isHeld ? "Unhold" : "Hold"}
             onClick={toggleHold}
           >
             {callUI.isHeld ? (
@@ -1658,8 +1751,8 @@ export default function SoftphoneMini() {
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white"
-            title="Transfer"
-            onClick={() => setShowTransfer(true)}
+            data-testid="voice-transfer" title="Transfer"
+            onClick={() => {setCardTransferInteraction(null);setShowTransfer(true);}}
           >
             <IconPhoneForwarded className="h-4 w-4" />
           </button>
@@ -1673,7 +1766,7 @@ export default function SoftphoneMini() {
                 ? "bg-emerald-600 text-white"
                 : "bg-zinc-700/70 text-white/70"
             }`}
-            title="Call"
+            data-testid="voice-dial" title="Call"
             onClick={startCall}
             disabled={!canCall}
           >
@@ -1683,7 +1776,7 @@ export default function SoftphoneMini() {
       )}
       <button
         className="ml-1 h-7 w-7 rounded-full bg-zinc-700/70 text-white grid place-items-center"
-        title="Show phone"
+        data-testid="voice-expand" title="Show phone"
         onClick={toggle}
       >
         <IconChevronDown className="h-4 w-4" />
@@ -1692,10 +1785,19 @@ export default function SoftphoneMini() {
           (because consult hangs up original call before initiating new WebRTC call) */}
       <TransferModal
         open={showTransfer}
-        onOpenChange={setShowTransfer}
-        interaction={interaction}
+        onOpenChange={open=>{setShowTransfer(open);if(!open)setCardTransferInteraction(null);}}
+        interaction={cardTransferInteraction||interaction}
+        onConsultCallCreated={(call) => {
+          wireCall(call);
+          lastWiredCallRef.current = call;
+          attachAudio(call);
+          for (const delay of [100, 300, 700, 1500]) {
+            setTimeout(() => attachAudio(call), delay);
+          }
+        }}
         onTransfer={() => {
           setShowTransfer(false);
+          setCardTransferInteraction(null);
           console.log("[SoftphoneMini] Transfer successful");
         }}
       />

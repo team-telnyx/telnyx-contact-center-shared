@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  GMR_SLOT_SUGGESTION_TEMPLATES,
+  MEDICAL_TRANSPORT_SLOT_TEMPLATES,
   extractExplicitSuggestionScript,
   phraseSlotCollection,
   resolveFastSuggestionTemplate,
 } from "../lib/agent-assist/suggestion-templates.mjs";
 
-test("GMR healthcare intake maps every known slot_name to a spoken line", () => {
+test("the reference workflow healthcare intake maps every known slot_name to a spoken line", () => {
   const required = [
     "caller_first_name",
     "callback_number",
@@ -16,11 +16,32 @@ test("GMR healthcare intake maps every known slot_name to a spoken line", () => 
     "patient_dob",
     "weather_declined",
     "other_aircraft",
+    // Granular pickup/destination location fields (address, department, room,
+    // bed) and sending/receiving physician — these already appear elsewhere
+    // in the codebase (buildTransportReadBack in readback.mjs, various
+    // resolver tests) as the live slot_name convention, even though earlier
+    // versions of this template map only had a single combined
+    // "pickup_location"/no-destination-breakdown entry.
+    "pickup_address",
+    "pickup_department",
+    "pickup_room",
+    "pickup_bed",
+    "sending_physician",
+    "destination_address",
+    "destination_department",
+    "destination_room",
+    "destination_bed",
+    "receiving_physician",
+    "trip_notes",
   ];
   for (const key of required) {
-    assert.ok(GMR_SLOT_SUGGESTION_TEMPLATES[key], `missing template for ${key}`);
-    assert.match(GMR_SLOT_SUGGESTION_TEMPLATES[key], /\?$/);
+    assert.ok(MEDICAL_TRANSPORT_SLOT_TEMPLATES[key], `missing template for ${key}`);
+    assert.match(MEDICAL_TRANSPORT_SLOT_TEMPLATES[key], /\?$/);
   }
+  // The old combined "pickup department or room" slot is gone now that the
+  // granular pickup_department/pickup_room/pickup_bed fields cover the same
+  // ground — keeping both was duplicated info on the same workflow.
+  assert.equal(MEDICAL_TRANSPORT_SLOT_TEMPLATES.pickup_location, undefined);
 });
 
 test("explicit SAY: hint wins over slot_name map", () => {
@@ -43,13 +64,13 @@ test("suggestionTemplate body field wins over SAY hint", () => {
   assert.equal(text, "Please confirm your best callback number.");
 });
 
-test("GMR slot_name map is used when no explicit script is set", () => {
+test("the reference workflow slot_name map is used when no explicit script is set", () => {
   const text = resolveFastSuggestionTemplate({
     itemType: "slot",
     itemLabel: "Caller's first name",
     slotName: "caller_first_name",
   });
-  assert.equal(text, "Could you provide the caller's first name?");
+  assert.equal(text, "May I have your first name?");
 });
 
 test("generic slot phrasing is used when slot_name is unknown", () => {

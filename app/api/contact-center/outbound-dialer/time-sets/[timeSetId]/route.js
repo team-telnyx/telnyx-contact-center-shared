@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapOutboundTimeSet, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, mapOutboundTimeSet, optionalString, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const STATUSES = ["draft", "active", "paused"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
 
-export async function PUT(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function PUT_handler(request, context, authz) {
+  const user = authz.user;
   const { timeSetId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
@@ -19,11 +20,15 @@ export async function PUT(request, context) {
   } catch (err) { campaignsLogger.error("time_set_update_failed", { timeSetId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update time set", 400); }
 }
 
-export async function DELETE(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function DELETE_handler(request, context, authz) {
+  const user = authz.user;
   const { timeSetId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows } = await pool.query(`UPDATE outbound_time_sets SET status='archived', updated_by=$1, updated_at=NOW() WHERE id=$2 RETURNING *`, [usernameFor(user), timeSetId]);
   if (!rows[0]) return jsonError("Time set not found", 404);
   return NextResponse.json({ ok: true, timeSet: mapOutboundTimeSet(rows[0]) });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission("dialer_time_sets:update", PUT_handler, { route: "/api/contact-center/outbound-dialer/time-sets/[timeSetId]" });
+export const DELETE = withPermission("dialer_time_sets:delete", DELETE_handler, { route: "/api/contact-center/outbound-dialer/time-sets/[timeSetId]" });

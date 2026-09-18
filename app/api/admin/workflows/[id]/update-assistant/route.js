@@ -20,6 +20,7 @@ import { syncWorkflowInsights } from "@/lib/telnyx-insights";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
 
+import { withPermission } from "@/lib/authz/guard";
 /**
  * Get webhook URL for insights from environment
  * @returns {string|null} Webhook URL or null if not configured
@@ -72,7 +73,7 @@ async function loadWorkflowWithStages(pool, workflowId) {
   return { workflow, stages: stagesWithItems, items };
 }
 
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -380,3 +381,6 @@ async function handleFullUpdate(workflow, stages, items, workflowId, apiKey, poo
     insightGroupId,
   });
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("workflows:update", POST_handler, { route: "/api/admin/workflows/[id]/update-assistant" });

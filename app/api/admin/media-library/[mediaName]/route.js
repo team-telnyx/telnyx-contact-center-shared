@@ -1,23 +1,8 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
 
 function getApiKey() {
   const apiKey = process.env.TELNYX_API_KEY;
@@ -28,9 +13,8 @@ function getApiKey() {
 }
 
 // GET /api/admin/media-library/[mediaName] - Get a specific media file
-export async function GET(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, { params }, authz) {
+  const user = authz.user;
 
   try {
     const resolvedParams = await params;
@@ -75,9 +59,8 @@ export async function GET(request, { params }) {
 }
 
 // DELETE /api/admin/media-library/[mediaName] - Delete a media file
-export async function DELETE(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, { params }, authz) {
+  const user = authz.user;
 
   try {
     const resolvedParams = await params;
@@ -119,3 +102,6 @@ export async function DELETE(request, { params }) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("media:read", GET_handler, { route: "/api/admin/media-library/[mediaName]" });
+export const DELETE = withPermission("media:delete", DELETE_handler, { route: "/api/admin/media-library/[mediaName]" });

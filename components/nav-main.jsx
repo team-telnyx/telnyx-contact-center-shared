@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   IconActivity,
   IconArrowLeft,
@@ -10,6 +10,14 @@ import {
   IconHeadset,
   IconShieldCog,
 } from "@tabler/icons-react";
+import useAppStateStore from "@/lib/stores/app-state-store";
+import {
+  workspaceLabelForPath,
+  workspaceMenuTarget,
+} from "@/lib/workspace-navigation";
+import { menuItemScreens } from "@/config/menu";
+import { useAuth } from "@/components/auth-provider";
+import { listScreenLeaves, resolveScreenForPath } from "@/lib/authz/permissions.mjs";
 
 const WORKSPACE_META = {
   AGENT: {
@@ -44,42 +52,46 @@ const WORKSPACE_META = {
   },
 };
 
-export function NavMain({ groups = [], userRole = "guest", userRoles = [] }) {
+export function NavMain({ groups = [] }) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [selectedWorkspace, setSelectedWorkspace] = useState(() => {
-    if (pathname.startsWith("/agent")) return "AGENT";
-    if (pathname.startsWith("/supervisor")) return "SUPERVISOR";
-    if (pathname.startsWith("/admin") || pathname.startsWith("/settings")) {
-      return "ADMIN";
-    }
-    return null;
-  });
+  const { canScreen, loaded } = useAuth();
+  const workspaceLastMenu = useAppStateStore(
+    (state) => state.workspaceLastMenu,
+  );
+  const setWorkspaceLastMenu = useAppStateStore(
+    (state) => state.setWorkspaceLastMenu,
+  );
+  const [selectedWorkspace, setSelectedWorkspace] = useState(() =>
+    workspaceLabelForPath(pathname),
+  );
+  const [workspaceChooserPath, setWorkspaceChooserPath] = useState(null);
 
-  const normalizedRoles =
-    Array.isArray(userRoles) && userRoles.length > 0
-      ? userRoles.map((role) => String(role).toLowerCase())
-      : userRole
-        ? [String(userRole).toLowerCase()]
-        : ["guest"];
+  // An item is visible when a role grants its screen (or any leaf below a
+  // screen group); a group is visible when one of its items is. Items without
+  // a screen declaration stay visible.
+  const screenVisible = (item) => {
+    const screens = menuItemScreens(item);
+    if (!screens.length) return true;
+    return loaded && screens.some((screen) => canScreen(screen));
+  };
 
-  const hasRole = (requiredRoles) => {
-    const roles = Array.isArray(requiredRoles)
-      ? requiredRoles
-      : [requiredRoles];
-    return roles.some((role) =>
-      normalizedRoles.includes(String(role).toLowerCase()),
-    );
+  // A group tile links to its default page only when the role holds that leaf;
+  // otherwise to the first granted leaf of the group (shipped roles such as
+  // Routing Administrator hold queues but not users).
+  const resolveItemUrl = (item) => {
+    if (!item.url || !item.screen || !loaded) return item.url || "#";
+    const target = resolveScreenForPath(item.url);
+    if (!target?.screen || canScreen(target.screen)) return item.url;
+    const leaf = listScreenLeaves().find((entry) => entry.id.startsWith(`${item.screen}.`) && entry.path?.startsWith("/") && canScreen(entry.id));
+    return leaf?.path || item.url;
   };
 
   const visibleGroups = groups
-    .filter((group) => !group.role_access || hasRole(group.role_access))
     .map((group) => ({
       ...group,
-      items:
-        group.items?.filter(
-          (item) => !item.role_access || hasRole(item.role_access),
-        ) || [],
+      items: group.items?.filter(screenVisible) || [],
     }))
     .filter((group) => group.items.length > 0);
 
@@ -99,8 +111,41 @@ export function NavMain({ groups = [], userRole = "guest", userRoles = [] }) {
     );
   };
 
+  const workspaceFromPath =
+    visibleGroups.find((group) => group.items.some(isItemActive)) ||
+    visibleGroups.find(
+      (group) => group.label === workspaceLabelForPath(pathname),
+    );
+  const activeMenuFromPath = workspaceFromPath?.items.find(isItemActive);
+  const workspaceFromPathLabel = workspaceFromPath?.label || null;
+  const activeMenuFromPathUrl = activeMenuFromPath?.url || null;
+
+  useEffect(() => {
+    if (!workspaceFromPathLabel) return;
+    if (activeMenuFromPathUrl) {
+      setWorkspaceLastMenu(workspaceFromPathLabel, activeMenuFromPathUrl);
+    }
+  }, [
+    activeMenuFromPathUrl,
+    setWorkspaceLastMenu,
+    workspaceFromPathLabel,
+  ]);
+
+  const openWorkspace = (group) => {
+    const target = workspaceMenuTarget(group, workspaceLastMenu);
+    setSelectedWorkspace(group.label);
+    setWorkspaceChooserPath(null);
+    if (!target) return;
+    setWorkspaceLastMenu(group.label, target);
+    router.push(target);
+  };
+
+  const selectedWorkspaceLabel =
+    workspaceChooserPath === pathname
+      ? null
+      : workspaceFromPathLabel || selectedWorkspace;
   const activeWorkspace = visibleGroups.find(
-    (group) => group.label === selectedWorkspace,
+    (group) => group.label === selectedWorkspaceLabel,
   );
 
   if (!activeWorkspace) {
@@ -123,7 +168,7 @@ export function NavMain({ groups = [], userRole = "guest", userRoles = [] }) {
             <button
               key={group.label}
               type="button"
-              onClick={() => setSelectedWorkspace(group.label)}
+              onClick={() => openWorkspace(group)}
               className={`group flex aspect-square w-full shrink-0 flex-col justify-between rounded-2xl border bg-card/70 p-5 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${meta.hoverBorder}`}
             >
               <span className="flex w-full items-center gap-4">
@@ -201,11 +246,15 @@ export function NavMain({ groups = [], userRole = "guest", userRoles = [] }) {
         {activeWorkspace.items.map((item) => {
           const ItemIcon = item.icon;
           const active = isItemActive(item);
+          const itemUrl = resolveItemUrl(item);
 
           return (
             <Link
               key={`${activeWorkspace.label}::${item.title}`}
-              href={item.url || "#"}
+              href={itemUrl}
+              onClick={() =>
+                item.url && setWorkspaceLastMenu(activeWorkspace.label, itemUrl)
+              }
               aria-current={active ? "page" : undefined}
               className={`group flex h-28 w-full items-center gap-3 rounded-2xl border p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${
                 active
@@ -238,7 +287,7 @@ export function NavMain({ groups = [], userRole = "guest", userRoles = [] }) {
 
       <button
         type="button"
-        onClick={() => setSelectedWorkspace(null)}
+        onClick={() => setWorkspaceChooserPath(pathname)}
         className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-card/70 px-4 text-left text-sm font-semibold shadow-xs transition-all hover:border-brand-primary/55 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="flex size-9 items-center justify-center rounded-xl bg-muted text-foreground">

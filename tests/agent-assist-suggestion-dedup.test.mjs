@@ -104,7 +104,7 @@ test("suggestionTargetKey keys by itemId + NORMALIZED mode (collect vs confirm)"
 });
 
 test("upsert: the opening greeting is NOT duplicated across continue_workflow/continue_stage", () => {
-  const text = "Hi, thanks for calling GMR. How can I help you today?";
+  const text = "Hi, thanks for calling the reference workflow. How can I help you today?";
   let list = upsertSuggestionByTarget([], { itemId: "greet", targetMode: "continue_workflow", text });
   list = upsertSuggestionByTarget(list, { itemId: "greet", targetMode: "continue_stage", text });
   assert.equal(list.length, 1);

@@ -42,25 +42,28 @@ import {
   Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTelnyx } from "@/components/telephony-provider";
 import {
   STATUS_ICON_MAP,
   STATUS_NAME_ICON_FALLBACK,
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
-import { useTelnyx } from "@/components/telephony-provider";
 import useActiveCallStore, {
   useActiveCall,
   useCallUI,
   useCallStatus,
-  useIsRinging,
 } from "@/lib/stores/active-call-store";
-import useCallsStore from "@/lib/stores/calls-store";
+import { transferDirectory } from "@/lib/contact-center/transfer-directory.mjs";
+import { useAuth } from "@/components/auth-provider";
+import { createLatestRequestScope } from "@/lib/contact-center/latest-request";
 
 // Prevent hydration mismatch by only rendering Select components after mount
 function ClientOnlySelect({ children, ...props }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Client-only Radix Select must wait until hydration has completed.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -73,19 +76,6 @@ function ClientOnlySelect({ children, ...props }) {
   }
 
   return <Select {...props}>{children}</Select>;
-}
-
-// Helper to detect VoIP/SIP numbers (long generated telephony account names)
-function isVoipNumber(number) {
-  if (!number) return false;
-  const str = String(number).trim();
-  // Detect SIP URIs or long alphanumeric strings (generated telephony usernames)
-  return (
-    str.startsWith("sip:") ||
-    str.includes("@sip.") ||
-    str.includes("@") ||
-    (str.length > 20 && /^[a-zA-Z0-9_-]+$/.test(str))
-  );
 }
 
 // Helper to format phone display - show "VoIP Call" for generated telephony names
@@ -118,7 +108,132 @@ function formatPhoneDisplay(number) {
   return str;
 }
 
-export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
+function getCoreIntentFailure(intent) {
+  if (!intent) return null;
+  const failed =
+    intent.state === "failed" ||
+    (intent.state === "cancelled" &&
+      intent.error &&
+      intent.error !== "intent.cancel");
+  if (!failed) return null;
+  return intent.error || "The consultant call could not be created";
+}
+
+function ConsultTopology({
+  activeLeg,
+  agentName,
+  customer,
+  consultant,
+  onSwitch,
+  disabled,
+  connecting,
+}) {
+  const customerActive = activeLeg === "parked";
+  const consultantActive = activeLeg === "consultant";
+  const connectorClass = (active, side) =>
+    cn(
+      "pointer-events-none absolute top-1/2 h-[calc(50%+3rem)] w-8 border-t-2",
+      side === "left"
+        ? "right-full rounded-tl-xl border-l-2"
+        : "left-full rounded-tr-xl border-r-2",
+      active
+        ? side === "left"
+          ? "border-blue-500"
+          : "border-green-500"
+        : "border-dashed border-zinc-500",
+    );
+  const partyCard = (kind, party, active, color) => (
+    <button
+      type="button"
+      data-testid={`consult-party-${kind}`}
+      data-active={active ? "true" : "false"}
+      onClick={() => onSwitch(kind)}
+      disabled={disabled || active}
+      className={cn(
+        "relative z-10 min-w-0 rounded-xl border-2 p-3 text-left transition-all disabled:cursor-default",
+        active
+          ? color === "blue"
+            ? "border-blue-500 bg-blue-500/20 shadow-[0_0_18px_rgba(59,130,246,0.22)]"
+            : "border-green-500 bg-green-500/20 shadow-[0_0_18px_rgba(34,197,94,0.22)]"
+          : "border-border bg-background/95 hover:bg-muted/70",
+      )}
+      title={active ? "Active conversation" : `Switch to ${party.label}`}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className={cn(
+            "grid h-9 w-9 shrink-0 place-items-center rounded-full",
+            color === "blue" ? "bg-blue-500/20 text-blue-500" : "bg-green-500/20 text-green-500",
+          )}
+        >
+          {color === "blue" ? <Phone className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold">{party.label}</div>
+          <div className="truncate text-xs text-muted-foreground">{party.detail}</div>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "shrink-0 text-[10px]",
+            active
+              ? color === "blue"
+                ? "border-blue-500 text-blue-500"
+                : "border-green-500 text-green-500"
+              : "text-muted-foreground",
+          )}
+        >
+          {active ? "ACTIVE" : kind === "consultant" && connecting ? "RINGING" : "ON HOLD"}
+        </Badge>
+      </div>
+    </button>
+  );
+
+  return (
+    <div className="relative rounded-xl border bg-muted/20 p-4">
+      <div className="relative z-10 mx-auto flex w-fit min-w-[220px] items-center gap-3 rounded-xl border-2 border-violet-500 bg-violet-500/15 px-4 py-3">
+        <span
+          aria-hidden="true"
+          data-testid="consult-connector-customer"
+          className={connectorClass(customerActive, "left")}
+        />
+        <span
+          aria-hidden="true"
+          data-testid="consult-connector-consultant"
+          className={connectorClass(consultantActive, "right")}
+        />
+        <div className="grid h-9 w-9 place-items-center rounded-full bg-violet-500/20 text-violet-500">
+          <UserCircle className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-500">Agent</div>
+          <div className="max-w-[240px] truncate text-sm font-semibold">{agentName}</div>
+        </div>
+      </div>
+
+      <div className="h-12" aria-hidden="true" />
+
+      <div className="grid grid-cols-2 gap-3">
+        {partyCard("parked", customer, customerActive, "blue")}
+        {partyCard("consultant", consultant, consultantActive, "green")}
+      </div>
+      <p className="mt-3 text-center text-xs text-muted-foreground">
+        The solid line shows which party is currently connected to the agent.
+      </p>
+    </div>
+  );
+}
+
+export function TransferModal({
+  open,
+  onOpenChange,
+  interaction: currentInteraction,
+  onTransfer,
+  onConsultCallCreated,
+}) {
+  // Other agents' live statistics need agents:read (RBAC Phase 5); one's own are always visible.
+  const { can } = useAuth();
+  const canReadAgents = can("agents:read");
   const { client } = useTelnyx();
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -128,13 +243,14 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   const activeCall = useActiveCall();
   const callUI = useCallUI();
   const callStatus = useCallStatus(); // Get call status from store root (not ui)
-  const isRinging = useIsRinging();
-  const { clearActiveCall, setMuted } = useActiveCallStore();
+  const { clearActiveCall, setActiveCall, updateStatus, setMuted } =
+    useActiveCallStore();
 
   // Queue state
   const [queues, setQueues] = useState([]);
   const [selectedQueueId, setSelectedQueueId] = useState("");
   const [queueStats, setQueueStats] = useState(null);
+  const [queueStatsUnavailable, setQueueStatsUnavailable] = useState(false);
   const [sourceQueue, setSourceQueue] = useState(null);
   const [preserveRoutingOptions, setPreserveRoutingOptions] = useState(true);
 
@@ -170,165 +286,173 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     consultantCall: null, // { callControlId, toNumber, toName }
     agentCallControlId: null, // Agent's WebRTC call control ID
   });
+  const [coreIntent, setCoreIntent] = useState(null);
+  const [completeRequested, setCompleteRequested] = useState(false);
+  const [closeRequested, setCloseRequested] = useState(false);
+  const closeCancelInFlightRef = useRef(false);
+  const cancelConsultForCloseRef = useRef(null);
+  const coreIntentFailureNotifiedRef = useRef(null);
+  const consultStartPendingRef = useRef(false);
+  const currentConsultSagaIdRef = useRef(null);
+  // Replacing the original WebRTC leg briefly clears the parent softphone's
+  // interaction lookup. Retain the authoritative Core object for the lifetime
+  // of the open modal so completion/cancellation still address the same work.
+  const retainedInteractionRef = useRef(null);
+  if (currentInteraction?.id) retainedInteractionRef.current = currentInteraction;
+  const interaction = currentInteraction?.id
+    ? currentInteraction
+    : retainedInteractionRef.current;
+  // Every supported voice call is represented by an ACD Core work item.
+  const hasCoreInteraction = Boolean(interaction?.id);
 
-  // Helper to clean up consult state in database (for error recovery)
-  const cleanupConsultStateInDb = async (
-    interactionId,
-    hangupParked = false
-  ) => {
-    if (!interactionId) return;
-    try {
-      const url = hangupParked
-        ? `/api/contact-center/interactions/${interactionId}/consult?hangupParked=true`
-        : `/api/contact-center/interactions/${interactionId}/consult`;
-      const res = await fetch(url, { method: "DELETE" });
-      const data = await res.json();
-      console.log(`[TransferModal] Cleaned up consult state in DB:`, data);
-    } catch (err) {
-      console.error(
-        `[TransferModal] Failed to cleanup consult state in DB:`,
-        err
-      );
-    }
+  const postCoreIntent = async (action, options = {}) => {
+    if (!interaction?.id) throw new Error("Missing Core ACD interaction ID");
+    const res = await fetch(
+      `/api/contact-center/interactions/${encodeURIComponent(interaction.id)}/intents`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...options }),
+      },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Core ACD intent failed");
+    setCoreIntent(data.intent || null);
+    return data.intent || null;
   };
 
-  // Reset consult state when CONSULT call ends (not the original call)
-  // We need to be careful here - when we start consult, the original call hangs up first
-  // We should only reset when the CONSULT call ends, not the original
   useEffect(() => {
-    // Skip if consult is not active or is being initiated
-    if (!consultState.isActive || consultState.initiating) {
-      return;
-    }
-
-    // CRITICAL: Don't reset within 2 seconds of activation
-    // This prevents resetting due to stale "ended" status from the old call
-    const activatedAt = consultState.activatedAt;
-    if (activatedAt) {
-      const timeSinceActivation = Date.now() - activatedAt;
-      if (timeSinceActivation < 2000) {
-        console.log(
-          "[TransferModal] Skipping reset - too soon after activation",
-          {
-            timeSinceActivation,
-            activatedAt,
-          }
-        );
+    if (!hasCoreInteraction || !interaction?.id) return undefined;
+    const applyIntent = (intent) => {
+      if (!intent) return;
+      if (intent.intent !== "consult") return;
+      // Polling can finish with the previous consult intent while a new start
+      // request is in flight. Do not briefly tear down and recreate the graph;
+      // fence updates by the new saga generation instead.
+      if (consultStartPendingRef.current) return;
+      if (
+        currentConsultSagaIdRef.current &&
+        intent.sagaId &&
+        String(intent.sagaId) !== String(currentConsultSagaIdRef.current)
+      ) {
         return;
       }
-    }
-
-    // CRITICAL: Get callControlId from store to verify this is actually the consult call ending
-    // not stale status from the old call
-    const storeCallControlId = useActiveCallStore.getState().callControlId;
-    const consultCallControlId = consultState.consultantCall?.callControlId;
-
-    // If store's callControlId doesn't match our consult call, skip
-    // This prevents resetting state when stale "ended" status from old call triggers this effect
-    if (
-      consultCallControlId &&
-      storeCallControlId &&
-      storeCallControlId !== consultCallControlId
-    ) {
-      console.log("[TransferModal] Skipping reset - callControlId mismatch", {
-        storeCallControlId,
-        consultCallControlId,
-      });
-      return;
-    }
-
-    // Use callStatus from hook (not callUI.status which is undefined)
-    const effectiveStatus = callStatus || activeCall?.state || "";
-    const lowerStatus = String(effectiveStatus).toLowerCase();
-
-    // Only check for actual end states, NOT "idle" (which could be initial state)
-    const isCallEnded = [
-      "hangup",
-      "ended",
-      "destroy",
-      "purge",
-      "terminated",
-    ].includes(lowerStatus);
-
-    // Only reset if the consult call itself ended (not the original call being parked)
-    // Check that we actually have an active consult call that's ending
-    if (isCallEnded && consultCallControlId) {
-      console.log(
-        "[TransferModal] Consult call ended, resetting consult state. status=",
-        effectiveStatus
-      );
-
-      const parkedCallControlId = consultState.parkedCall?.callControlId;
-      const currentAgentCallControlId =
-        consultState.agentCallControlId ||
-        consultCallControlId ||
-        storeCallControlId;
-
-      const resetConsultState = () => {
+      if (intent.sagaId) currentConsultSagaIdRef.current = intent.sagaId;
+      setCoreIntent(intent);
+      const consultCompleted =
+        ["succeeded", "completed"].includes(intent.state || intent.status) ||
+        intent.step === "monitor_transfer";
+      if (consultCompleted || ["failed", "cancelled"].includes(intent.state)) {
+        useActiveCallStore.getState().setConsultInProgress(false);
+        const failure = getCoreIntentFailure(intent);
+        const failureKey = `${intent.sagaId || "consult"}:${intent.state}:${intent.step}:${failure || ""}`;
+        if (failure && coreIntentFailureNotifiedRef.current !== failureKey) {
+          coreIntentFailureNotifiedRef.current = failureKey;
+          notify({ title: "Consult failed", description: failure, variant: "error" });
+        }
         setConsultState({
           isActive: false,
-          activeLeg: "consultant",
           initiating: false,
           activatedAt: null,
+          activeLeg: "consultant",
           parkedCall: null,
           consultantCall: null,
           agentCallControlId: null,
         });
-      };
-
-      if (parkedCallControlId && currentAgentCallControlId) {
-        (async () => {
-          try {
-            console.log(
-              "[TransferModal] Bridging back to parked call after consult ended",
-              {
-                currentAgentCallControlId,
-                parkedCallControlId,
-              }
-            );
-            const res = await fetch("/api/voice/call-action", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "bridge",
-                callControlId: currentAgentCallControlId,
-                params: {
-                  call_control_id: parkedCallControlId,
-                  park_after_unbridge: "self",
-                },
-              }),
-            });
-
-            const data = await res.json();
-            if (!data.ok) {
-              console.error(
-                "[TransferModal] Failed to bridge back to parked call after consult ended:",
-                data.error || data
-              );
-            } else {
-              console.log(
-                "[TransferModal] Bridged back to parked call after consult ended"
-              );
-            }
-          } catch (err) {
-            console.error(
-              "[TransferModal] Error bridging back to parked call after consult ended:",
-              err
-            );
-          }
-        })().finally(resetConsultState);
+        setCompleteRequested(false);
+        if (consultCompleted) onOpenChange(false);
         return;
       }
-
-      resetConsultState();
-    }
+      const active =
+        ["running", "compensating", "active"].includes(intent.state || intent.status) &&
+        ![
+          "release_source_agent",
+          "route_initial_hold_before_browser",
+          "start_initial_browser_hold_audio",
+          "speak_initial_browser_hold_announcement",
+          "await_browser_originator",
+          "dial_target",
+          "await_target",
+          "await_target_bridge",
+        ].includes(intent.step);
+      if (active) {
+        // The fresh browser leg is now bridged and owns the consultation.
+        // Only at this point can ordinary terminal notifications clear it.
+        useActiveCallStore.getState().setConsultInProgress(false);
+      }
+      setConsultState((prev) => ({
+        ...prev,
+        isActive: active,
+        initiating: !active && ["running", "compensating"].includes(intent.state || intent.status),
+        activatedAt: active ? prev.activatedAt || Date.now() : null,
+        activeLeg:
+          intent.activeLeg ||
+          ([
+            "release_source_agent",
+            "route_initial_hold_before_browser",
+            "start_initial_browser_hold_audio",
+            "speak_initial_browser_hold_announcement",
+            "await_browser_originator",
+            "dial_target",
+            "await_target",
+            "await_target_bridge",
+          ].includes(intent.step)
+            ? "parked"
+            : prev.activeLeg || "parked"),
+        parkedCall: prev.parkedCall || {
+          callControlId:
+            interaction?.metadata?.original_call_control_id || interaction?.call_control_id,
+          fromNumber: interaction?.from_number || null,
+          fromName: interaction?.from_name || null,
+          interactionId: interaction.id,
+        },
+        consultantCall: {
+          callControlId: prev.consultantCall?.callControlId || null,
+          toNumber: intent.target || prev.consultantCall?.toNumber || null,
+          toName: intent.targetLabel || prev.consultantCall?.toName || null,
+        },
+        agentCallControlId:
+          prev.agentCallControlId || interaction?.metadata?.agent_call_control_id || null,
+      }));
+    };
+    const onIntent = (event) => {
+      const detail = event.detail || {};
+      if (String(detail.interactionId) !== String(interaction.id)) return;
+      applyIntent({
+        ...detail,
+        intent: detail.intent,
+        state: detail.status,
+        status: detail.status,
+      });
+    };
+    window.addEventListener("contact-center:acd-intent-updated", onIntent);
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `/api/contact-center/interactions/${encodeURIComponent(interaction.id)}/intents`,
+          { cache: "no-store" },
+        );
+        const data = await res.json();
+        if (!cancelled && data.ok) applyIntent(data.intent);
+      } catch (_) {}
+    };
+    poll();
+    const timer = setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener("contact-center:acd-intent-updated", onIntent);
+    };
   }, [
-    activeCall,
-    callStatus,
-    consultState.isActive,
-    consultState.initiating,
-    consultState.activatedAt,
-    consultState.consultantCall?.callControlId,
+    hasCoreInteraction,
+    interaction?.id,
+    interaction?.call_control_id,
+    interaction?.from_name,
+    interaction?.from_number,
+    interaction?.metadata?.agent_call_control_id,
+    interaction?.metadata?.original_call_control_id,
+    onOpenChange,
   ]);
 
   // Listen for parked call hangup events
@@ -394,6 +518,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
   // Refs for polling intervals
   const queueStatsIntervalRef = useRef(null);
+  const queueStatsRequestsRef = useRef(createLatestRequestScope());
+  const queueStatsInFlightRef = useRef(null);
   const agentStatsIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -417,6 +543,13 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setQueueStats(null);
       setAgentStats(null);
       setPreserveRoutingOptions(true);
+      setCoreIntent(null);
+      setCompleteRequested(false);
+      coreIntentFailureNotifiedRef.current = null;
+      consultStartPendingRef.current = false;
+      currentConsultSagaIdRef.current = null;
+      setCloseRequested(false);
+      closeCancelInFlightRef.current = false;
       // Reset consult state when modal opens (fresh start)
       setConsultState({
         isActive: false,
@@ -459,6 +592,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
   // Load queue stats when queue is selected
   useEffect(() => {
+    const requests = queueStatsRequestsRef.current;
+    setQueueStats(null);
+    setQueueStatsUnavailable(false);
     if (open && selectedQueueId) {
       loadQueueStats(selectedQueueId);
       // Set up polling for queue stats
@@ -476,6 +612,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     }
 
     return () => {
+      requests.cancel();
       if (queueStatsIntervalRef.current) {
         clearInterval(queueStatsIntervalRef.current);
       }
@@ -484,7 +621,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
   // Load agent stats when agent is selected
   useEffect(() => {
-    if (open && selectedAgentId) {
+    if (open && selectedAgentId && (canReadAgents || selectedAgentId === user?.id)) {
       loadAgentStats(selectedAgentId);
       // Set up polling for agent stats
       if (agentStatsIntervalRef.current) {
@@ -505,7 +642,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         clearInterval(agentStatsIntervalRef.current);
       }
     };
-  }, [open, selectedAgentId]);
+  }, [open, selectedAgentId, user]);
 
   const loadData = async () => {
     setLoadingData(true);
@@ -526,21 +663,13 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         setQueues(queuesData.queues);
       }
 
-      // Load agents stats
-      const agentsRes = await fetch("/api/contact-center/stats/agents", {
-        cache: "no-store",
-      });
-      const agentsData = await agentsRes.json();
-      if (agentsData.stats && Array.isArray(agentsData.stats)) {
-        setAgents(agentsData.stats);
-      }
-
       // Load contacts for fallback and to get full user profiles with telephony_user_name
       const contactsRes = await fetch("/api/user/contacts", {
         cache: "no-store",
       });
       const contactsData = await contactsRes.json();
       if (contactsData.ok) {
+        setAgents(transferDirectory(contactsData.users, userData.user?.id));
         setCustomers(contactsData.customers || []);
         setPatients(contactsData.patients || []);
         setRegisteredUsers(contactsData.users || []);
@@ -570,19 +699,34 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   };
 
   const loadQueueStats = async (queueId) => {
+    // A slow current request must be allowed to finish before the next poll.
+    // Selection changes cancel its scope, so the new queue starts immediately.
+    if (queueStatsInFlightRef.current?.isCurrent()) return;
+    const request = queueStatsRequestsRef.current.begin();
+    queueStatsInFlightRef.current = request;
     try {
       const res = await fetch(
         `/api/contact-center/stats/queues?queueId=${encodeURIComponent(
           queueId
         )}`,
-        { cache: "no-store" }
+        { cache: "no-store", signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]) }
       );
       const data = await res.json();
-      if (data.stats) {
+      if (!request.isCurrent()) return;
+      if (res.ok && data.stats) {
         setQueueStats(data.stats);
+        setQueueStatsUnavailable(false);
+      } else {
+        setQueueStats(null);
+        setQueueStatsUnavailable(true);
       }
     } catch (err) {
+      if (!request.isCurrent()) return;
+      setQueueStats(null);
+      setQueueStatsUnavailable(true);
       console.error("[TransferModal] Failed to load queue stats:", err);
+    } finally {
+      if (queueStatsInFlightRef.current === request) queueStatsInFlightRef.current = null;
     }
   };
 
@@ -717,131 +861,107 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     return numbers;
   };
 
+  const getDefaultAgentNumber = (agentStats, fullUserProfile) =>
+    getAgentNumbers(agentStats, fullUserProfile).find(
+      (number) => number.type === "sip"
+    )?.value || "";
+
   const handleTransfer = async (
     target,
     type = "external",
-    preserveRouting = false
+    preserveRouting = false,
+    targetLabel = null,
   ) => {
-    // Allow transfer even without interaction (for direct WebRTC calls)
-    let interactionId = interaction?.id;
-    let callControlId =
-      interaction?.metadata?.original_call_control_id ||
-      interaction?.call_control_id;
+    const interactionId = interaction?.id;
+    if (!interactionId) {
+      notify({
+        title: "Transfer unavailable",
+        description: "This call is not attached to an ACD Core work item.",
+        variant: "warning",
+      });
+      return;
+    }
 
-    if (!interactionId && !callControlId) {
-      // Get call control ID from stores (use statically imported stores)
-      const storeState = useActiveCallStore.getState();
-      const callsStoreState = useCallsStore.getState();
+    const transferType = type || "external";
+    const targetValue = target.trim();
+    const targetAgent =
+      selectionType === "agents"
+        ? agents.find((item) => item.userId === selectedAgentId)
+        : null;
 
-      if (!storeState.call) {
-        notify({ title: "No active call", description: "No active call to transfer", variant: "warning" });
-        return;
-      }
-
-      const webrtcCallControlId = storeState.callControlId;
-      if (webrtcCallControlId) {
-        const callData = callsStoreState.getCall(webrtcCallControlId);
-        if (callData?.originalCallControlId) {
-          callControlId = callData.originalCallControlId;
-        }
-      }
-
-      if (!callControlId && storeState.originalCallControlId) {
-        callControlId = storeState.originalCallControlId;
-      }
-
-      if (!callControlId && (storeState.rtcCallId || webrtcCallControlId)) {
-        try {
-          const lookupId = storeState.rtcCallId || webrtcCallControlId;
-          const res = await fetch(
-            `/api/voice/call-leg/${encodeURIComponent(lookupId)}`
-          );
-          const data = await res.json();
-
-          if (data.ok && data.call_control_id) {
-            callControlId = data.call_control_id;
-          }
-        } catch (err) {
-          // Silently handle error
-        }
-      }
-
-      if (!callControlId) {
-        callControlId = webrtcCallControlId;
-      }
-
-      if (!callControlId) {
-        notify({ title: "Transfer unavailable", description: "Cannot determine call control ID for transfer. Missing call information.", variant: "warning" });
-        return;
-      }
+    if (!targetValue) {
+      notify({
+        title: "Destination required",
+        description: "Please select a transfer destination",
+        variant: "warning",
+      });
+      return;
     }
 
     setLoading(true);
     try {
-      const transferType = type || "external";
-      const targetValue = target.trim();
-
-      if (!targetValue) {
-        notify({ title: "Destination required", description: "Please select a transfer destination", variant: "warning" });
-        setLoading(false);
-        return;
+      if (transferType === "queue") {
+        // The destination agent may answer immediately. Persist this segment
+        // before enqueue so their workflow panel can hydrate the full
+        // conversation instead of racing the source component's unmount save.
+        await useActiveCallStore.getState().syncAgentAssistToDb();
       }
 
-      let endpoint;
-      let body;
-
-      if (interactionId) {
-        endpoint = `/api/contact-center/interactions/${interactionId}/transfer`;
-        body = {
-          type: transferType,
-          target: targetValue,
-          preserveRoutingOptions: preserveRouting,
-        };
-      } else if (callControlId) {
-        endpoint = `/api/contact-center/interactions/by-call-control-id/transfer?callControlId=${encodeURIComponent(
-          callControlId
-        )}`;
-        body = {
-          type: transferType,
-          target: targetValue,
-          preserveRoutingOptions: preserveRouting,
-        };
-      } else {
-        notify({ title: "Transfer unavailable", description: "Cannot determine call control ID for transfer", variant: "warning" });
-        setLoading(false);
-        return;
-      }
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
+      const res = await fetch(
+        `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/intents`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: transferType === "queue" ? "queue_transfer" : "blind_transfer",
+            target: targetValue,
+            targetKind: selectionType,
+            targetUserId:
+              selectionType === "agents"
+                ? targetAgent?.userId || selectedAgentId || null
+                : null,
+            targetUsername: targetAgent?.username || null,
+            targetLabel: targetLabel || targetValue,
+            preserveRoutingOptions: preserveRouting,
+          }),
+        },
+      );
       const data = await res.json();
-      if (data.ok) {
-        // Record transfer in active call store (use statically imported store)
-        useActiveCallStore.getState().recordTransfer({
-          to: targetValue,
-          type: transferType,
-          callControlId: callControlId,
-        });
 
-        onOpenChange(false);
-        try {
-          onTransfer?.();
-        } catch (callbackErr) {
-          console.error(
-            "[TransferModal] Error in onTransfer callback:",
-            callbackErr
-          );
-        }
-      } else {
-        notify({ title: "Transfer failed", description: data.error || "Transfer failed", variant: "error" });
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Transfer failed");
       }
+
+      useActiveCallStore.getState().recordTransfer({
+        to: targetValue,
+        type: transferType,
+        callControlId:
+          interaction?.metadata?.original_call_control_id ||
+          interaction?.call_control_id ||
+          null,
+      });
+      if (transferType === "queue") {
+        window.dispatchEvent(
+          new CustomEvent("contact-center:queue-transfer-accepted", {
+            detail: {
+              interactionId,
+              callControlId:
+                interaction?.metadata?.original_call_control_id ||
+                interaction?.call_control_id ||
+                null,
+            },
+          }),
+        );
+      }
+      onOpenChange(false);
+      onTransfer?.();
     } catch (err) {
       console.error("[TransferModal] Transfer error:", err);
-      notify({ title: "Transfer failed", description: err.message || "Unknown error", variant: "error" });
+      notify({
+        title: "Transfer failed",
+        description: err.message || "Unknown error",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -849,11 +969,14 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
   const handleConfirm = () => {
     let target = "";
+    let targetLabel = "";
     let transferType = "external"; // Default to external transfer
 
     if (selectionType === "queues" && selectedQueueId) {
       // Transfer to queue - use queue ID
       target = selectedQueueId;
+      const queue = queues.find((item) => item.id === selectedQueueId);
+      targetLabel = queue?.display_name || queue?.name || selectedQueueId;
       transferType = "queue";
     } else if (
       selectionType === "agents" &&
@@ -861,6 +984,11 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       selectedAgentNumber
     ) {
       target = selectedAgentNumber;
+      const agent = agents.find((item) => item.userId === selectedAgentId);
+      targetLabel =
+        `${agent?.firstName || ""} ${agent?.lastName || ""}`.trim() ||
+        agent?.username ||
+        selectedAgentNumber;
       transferType = "external";
     } else if (
       selectionType === "contacts" &&
@@ -868,863 +996,284 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       selectedNumber
     ) {
       target = selectedNumber;
+      targetLabel =
+        recordsWithNumbers.find((item) => item.id === selectedRecordId)
+          ?.displayName || selectedNumber;
       transferType = "external";
     } else if (selectionType === "assistants" && selectedAssistantId) {
       target = `sip:user@${selectedAssistantId}.sip.telnyx.com`;
+      targetLabel =
+        assistants.find((item) => item.id === selectedAssistantId)?.name ||
+        selectedAssistantId;
       transferType = "external";
     } else if (selectionType === "manual" && manualNumber.trim()) {
       target = manualNumber.trim();
+      targetLabel = target;
       transferType = "external";
     }
 
     if (target) {
-      handleTransfer(target, transferType);
+      handleTransfer(
+        target,
+        transferType,
+        preserveRoutingOptions,
+        targetLabel || target,
+      );
     }
   };
 
   const handleConsult = async () => {
     let target = "";
-    let transferType = "external";
+    let targetLabel = "";
 
     if (selectionType === "queues" && selectedQueueId) {
-      notify({ title: "Consult unavailable", description: "Consult is only available for external transfers", variant: "warning" });
+      notify({
+        title: "Consult unavailable",
+        description: "Consult is only available for external transfers",
+        variant: "warning",
+      });
       return;
-    } else if (
+    }
+    if (
       selectionType === "agents" &&
       selectedAgentId &&
       selectedAgentNumber
     ) {
       target = selectedAgentNumber;
-      transferType = "external";
+      const agent = agents.find((item) => item.userId === selectedAgentId);
+      targetLabel =
+        `${agent?.firstName || ""} ${agent?.lastName || ""}`.trim() ||
+        agent?.username ||
+        selectedAgentNumber;
     } else if (
       selectionType === "contacts" &&
       selectedRecordId &&
       selectedNumber
     ) {
       target = selectedNumber;
-      transferType = "external";
+      targetLabel =
+        recordsWithNumbers.find((item) => item.id === selectedRecordId)
+          ?.displayName || selectedNumber;
     } else if (selectionType === "assistants" && selectedAssistantId) {
       target = `sip:user@${selectedAssistantId}.sip.telnyx.com`;
-      transferType = "external";
+      targetLabel =
+        assistants.find((item) => item.id === selectedAssistantId)?.name ||
+        selectedAssistantId;
     } else if (selectionType === "manual" && manualNumber.trim()) {
       target = manualNumber.trim();
-      transferType = "external";
+      targetLabel = target;
     }
 
     if (!target) {
-      notify({ title: "Destination required", description: "Please select a consult destination", variant: "warning" });
+      notify({
+        title: "Destination required",
+        description: "Please select a consult destination",
+        variant: "warning",
+      });
+      return;
+    }
+    if (!interaction?.id) {
+      notify({
+        title: "Consult unavailable",
+        description: "This call is not attached to an ACD Core work item.",
+        variant: "warning",
+      });
       return;
     }
 
+    if (!client) {
+      notify({
+        title: "Consult unavailable",
+        description: "The WebRTC phone is not connected.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    // Fence the normal call-end handler before Core releases the original
+    // WebRTC leg. The consult replaces it with a fresh browser-originated leg.
+    useActiveCallStore.getState().setConsultInProgress(true);
+    consultStartPendingRef.current = true;
+    currentConsultSagaIdRef.current = null;
+    setConsultState({
+      isActive: false,
+      initiating: true,
+      activatedAt: null,
+      activeLeg: "parked",
+      parkedCall: {
+        callControlId:
+          interaction?.metadata?.original_call_control_id ||
+          interaction?.call_control_id,
+        fromNumber: interaction?.from_number || null,
+        fromName: interaction?.from_name || null,
+        interactionId: interaction.id,
+      },
+      consultantCall: {
+        callControlId: null,
+        toNumber: target.trim(),
+        toName: targetLabel || null,
+      },
+      agentCallControlId:
+        interaction?.metadata?.agent_call_control_id || null,
+    });
+
     setLoading(true);
     try {
-      // Get active call from store (use statically imported stores)
-      const storeState = useActiveCallStore.getState();
-      const callsStoreState = useCallsStore.getState();
-
-      if (!storeState.call) {
-        notify({ title: "No active call", description: "No active call to consult", variant: "warning" });
-        setLoading(false);
-        return;
-      }
-
-      const activeCallFromStore = storeState.call;
-
-      let interactionId = interaction?.id;
-      let currentInteraction = interaction;
-
-      // Get call_session_id from store - this is the most reliable way to find the interaction
-      const callSessionId =
-        storeState.originalCallSessionId ||
-        storeState.call?.callSessionId ||
-        storeState.call?.call_session_id ||
-        activeCall?.callSessionId ||
-        activeCall?.call_session_id;
-
-      // If we don't have agent_call_control_id in metadata, fetch interaction by call_session_id
-      if (
-        !currentInteraction?.metadata?.agent_call_control_id &&
-        callSessionId
-      ) {
-        try {
-          const interactionRes = await fetch(
-            `/api/contact-center/interactions/by-call-session-id?callSessionId=${encodeURIComponent(
-              callSessionId
-            )}`,
-            { cache: "no-store" }
-          );
-          if (interactionRes.ok) {
-            const interactionData = await interactionRes.json();
-            if (interactionData.interaction) {
-              currentInteraction = interactionData.interaction;
-              interactionId = currentInteraction.id;
-            }
-          }
-        } catch (err) {
-          console.error(
-            "[TransferModal] Failed to fetch interaction by call_session_id:",
-            err
-          );
-        }
-      }
-
-      // If still no agent_call_control_id, try fetching by interactionId
-      if (
-        !currentInteraction?.metadata?.agent_call_control_id &&
-        interactionId
-      ) {
-        try {
-          const interactionRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(
-              interactionId
-            )}`,
-            { cache: "no-store" }
-          );
-          if (interactionRes.ok) {
-            const interactionData = await interactionRes.json();
-            if (interactionData.interaction) {
-              currentInteraction = interactionData.interaction;
-            }
-          }
-        } catch (err) {
-          console.error(
-            "[TransferModal] Failed to fetch interaction by ID:",
-            err
-          );
-        }
-      }
-
-      // Get agent_call_control_id from interaction metadata - this is the ONLY correct ID to use
-      // NOT the rtcCallId from WebRTC store!
-      const agentCallControlId =
-        currentInteraction?.metadata?.agent_call_control_id;
-
-      if (!agentCallControlId) {
-        notify({ title: "Consult unavailable", description: "Cannot find agent call control ID in interaction metadata. Please ensure the call is properly connected.", variant: "warning" });
-        setLoading(false);
-        return;
-      }
-
-      let parkedCallControlId =
-        currentInteraction?.metadata?.original_call_control_id ||
-        currentInteraction?.call_control_id ||
-        storeState.originalCallControlId;
-
-      // CRITICAL: Set consultInProgress flag BEFORE API call to prevent clearActiveCall
-      // from being called when the original call hangs up (race condition protection)
-      useActiveCallStore.getState().setConsultInProgress(true);
-      console.log(
-        "[TransferModal] Set consultInProgress=true to protect against clearActiveCall"
-      );
-
-      // Step 1: Call API to set consult state BEFORE disconnecting WebRTC
-      // This is critical - the webhook handler checks consult_state.isActive to know
-      // whether to hang up the original call leg or keep it parked
-      let endpoint;
-      if (interactionId) {
-        endpoint = `/api/contact-center/interactions/${interactionId}/consult`;
-      } else {
-        // Use agent_call_control_id from metadata to find the interaction
-        endpoint = `/api/contact-center/interactions/by-call-control-id/consult?callControlId=${encodeURIComponent(
-          agentCallControlId
-        )}`;
-      }
-
-      const requestBody = {
-        type: transferType,
+      const selectedAgent =
+        selectionType === "agents"
+          ? agents.find((item) => item.userId === selectedAgentId)
+          : null;
+      const intent = await postCoreIntent("consult_start", {
         target: target.trim(),
-        agentCallControlId: agentCallControlId, // Use the correct ID from metadata
-      };
-
-      console.log(
-        `[TransferModal] Consult request: endpoint=${endpoint}, body=${JSON.stringify(
-          requestBody
-        )}, interactionId=${interactionId}, agentCallControlId=${agentCallControlId}, parkedCallControlId=${parkedCallControlId}`
-      );
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        targetKind: selectionType,
+        targetUserId: selectedAgent?.userId || null,
+        targetUsername: selectedAgent?.username || null,
+        targetLabel: targetLabel || target.trim(),
       });
+      currentConsultSagaIdRef.current = intent?.sagaId || null;
+      consultStartPendingRef.current = false;
 
-      // Check if API call succeeded before disconnecting WebRTC
-      const data = await res.json();
-      if (!data.ok) {
-        console.error(
-          `[TransferModal] Consult API failed: ${JSON.stringify(data)}`
+      const failure = getCoreIntentFailure(intent);
+      if (failure) {
+        coreIntentFailureNotifiedRef.current =
+          `${intent.sagaId || "consult"}:${intent.state}:${intent.step}:${failure}`;
+        throw new Error(failure);
+      }
+
+      if (!intent?.browserCall?.customHeaders?.length) {
+        throw new Error(
+          "Core did not prepare the browser consultation call",
         );
-        // Clear consultInProgress flag on API error
-        useActiveCallStore.getState().setConsultInProgress(false);
-        notify({ title: "Consult failed", description: data.error || "Consult failed", variant: "error" });
-        setLoading(false);
-        return;
       }
-
-      console.log(
-        `[TransferModal] Consult API succeeded: ${JSON.stringify(
-          data
-        )}. Server hung up agent's call leg. Initiating WebRTC call to consultant.`
-      );
-
-      // Get consultant target from response or use the one from form
-      const consultantTarget = data.consultantTarget || target.trim();
-      const fromNumber =
-        currentInteraction?.from_number ||
-        currentInteraction?.to_number ||
-        storeState.call?.fromNumber ||
-        user?.mainFromNumber ||
-        null;
-
-      // Set consultState.initiating=true BEFORE WebRTC call to show loading state
-      // Keep isActive=false so buttons remain visible (but disabled with loading spinner)
-      // isActive will be set to true AFTER WebRTC call is established
-      setConsultState({
-        isActive: false, // Not active yet - still setting up
-        initiating: true, // Flag to show loading state on buttons
-        activatedAt: null, // Will be set when isActive becomes true
-        parkedCall: {
-          callControlId: data.parkedCallControlId || parkedCallControlId,
-          fromNumber: currentInteraction?.from_number || null,
-          fromName: currentInteraction?.from_name || null,
-          interactionId: interactionId,
-        },
-        consultantCall: {
-          callControlId: null, // Will be set when WebRTC call is established
-          toNumber: consultantTarget,
-          toName: null,
-        },
-        agentCallControlId: null, // Will be set when WebRTC call is established
-      });
-
-      console.log(
-        `[TransferModal] Set consultState.initiating=true, keeping buttons visible with loading`
-      );
-
-      // Step 2: Initiate WebRTC call to consultant (same as softphone outbound call)
-      // This will trigger call.initiated webhook which will use dialAndBridge
-      if (!client) {
-        notify({ title: "WebRTC unavailable", description: "WebRTC client not available. Please ensure you're connected.", variant: "warning" });
-        setLoading(false);
-        // Clear consultInProgress flag on error
-        useActiveCallStore.getState().setConsultInProgress(false);
-        // Reset consult state on error
-        setConsultState({
-          isActive: false,
-          activeLeg: "consultant",
-          initiating: false,
-          activatedAt: null,
-          parkedCall: null,
-          consultantCall: null,
-          agentCallControlId: null,
-        });
-        // Clean up consult state in database since we can't proceed
-        if (interactionId) {
-          cleanupConsultStateInDb(interactionId, true);
-        }
-        return;
-      }
-
-      console.log(
-        `[TransferModal] Initiating WebRTC call to consultant: destinationNumber=${consultantTarget}, callerNumber=${fromNumber}`
-      );
 
       try {
-        // Enable microphone
-        try {
-          client.enableMicrophone?.();
-        } catch (_) {}
+        client.enableMicrophone?.();
+      } catch (_) {}
 
-        // Create new WebRTC call (same as softphone outbound call)
-        const call = client.newCall({
-          destinationNumber: consultantTarget,
-          callerNumber: fromNumber || undefined,
-          audio: true,
-          video: false,
-        });
+      const consultCall = client.newCall({
+        customHeaders: intent.browserCall.customHeaders,
+        destinationNumber:
+          intent.browserCall.destinationNumber || target.trim(),
+        callerNumber: intent.browserCall.callerNumber || undefined,
+        audio: true,
+        video: false,
+      });
+      setActiveCall(consultCall, {
+        direction: "outbound",
+        fromNumber: intent.browserCall.callerNumber || null,
+        toNumber: intent.browserCall.destinationNumber || target.trim(),
+        interactionId: interaction.id,
+      });
+      onConsultCallCreated?.(consultCall);
+      updateStatus(consultCall.state || "trying");
 
-        // Set active call in store (consult call) - use statically imported store
-        // Small delay to ensure any pending clearActiveCall calls have been blocked
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        const activeCallStore = useActiveCallStore.getState();
-        console.log(
-          `[TransferModal] Before setActiveCall: consultInProgress=${
-            activeCallStore.consultInProgress
-          }, currentCall=${!!activeCallStore.call}, currentStatus=${
-            activeCallStore.status
-          }`
-        );
-
-        activeCallStore.setActiveCall(call, {
-          direction: "outbound",
-          fromNumber: fromNumber,
-          toNumber: consultantTarget,
-        });
-
-        // Update status immediately
-        const initialState = call.state || "trying";
-        if (initialState) {
-          activeCallStore.updateStatus(initialState);
-        }
-
-        console.log(
-          `[TransferModal] After setActiveCall: call=${!!useActiveCallStore.getState()
-            .call}, status=${
-            useActiveCallStore.getState().status
-          }, initialState=${initialState}`
-        );
-
-        // Wire call events (comprehensive - same as softphone)
-        if (typeof call.on === "function") {
-          call.on("ringing", () => {
-            console.log("[TransferModal] Call event: ringing");
-            useActiveCallStore.getState().updateStatus("ringing");
-          });
-          call.on("active", () => {
-            console.log("[TransferModal] Call event: active");
-            useActiveCallStore.getState().updateStatus("active");
-          });
-          call.on("connected", () => {
-            console.log("[TransferModal] Call event: connected");
-            useActiveCallStore.getState().updateStatus("connected");
-          });
-          call.on("answered", () => {
-            console.log("[TransferModal] Call event: answered");
-            useActiveCallStore.getState().updateStatus("answered");
-          });
-          call.on("held", () => {
-            console.log("[TransferModal] Call event: held");
-            useActiveCallStore.getState().setHeld(true);
-          });
-          call.on("hangup", () => {
-            console.log("[TransferModal] Call event: hangup");
-            useActiveCallStore.getState().updateStatus("ended");
-          });
-          call.on("destroy", () => {
-            console.log("[TransferModal] Call event: destroy");
-            useActiveCallStore.getState().updateStatus("ended");
-          });
-          call.on("ended", () => {
-            console.log("[TransferModal] Call event: ended");
-            useActiveCallStore.getState().updateStatus("ended");
-          });
-          call.on("stateChanged", (newState) => {
-            console.log(
-              `[TransferModal] Call event: stateChanged to ${newState}`
-            );
-            if (newState) {
-              const lowerState = String(newState).toLowerCase();
-              useActiveCallStore.getState().updateStatus(lowerState);
-            }
-          });
-        }
-
-        // Send invite to initiate the call
-        call.invite?.();
-
-        // Get the WebRTC call control ID from the call object
-        const newAgentCallControlId =
-          call.callControlId || call.call_control_id || call.id || null;
-
-        console.log(
-          `[TransferModal] WebRTC call initiated. callControlId=${newAgentCallControlId}. Waiting for call.initiated webhook to trigger dialAndBridge.`
-        );
-
-        // Step 3: Wait a moment for store to stabilize before setting isActive
-        // This prevents race condition where useEffect sees stale "ended" status
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        // Verify store has the new call before activating consult UI
-        const verifyStore = useActiveCallStore.getState();
-        console.log(
-          `[TransferModal] Verify store before isActive: call=${!!verifyStore.call}, status=${
-            verifyStore.status
-          }, callControlId=${verifyStore.callControlId}`
-        );
-
-        // CRITICAL: Only activate if store shows a valid call state (not ended/idle)
-        const storeStatus = String(verifyStore.status || "").toLowerCase();
-        const isStoreCallValid =
-          verifyStore.call &&
-          ![
-            "ended",
-            "hangup",
-            "destroy",
-            "idle",
-            "terminated",
-            "purge",
-          ].includes(storeStatus);
-
-        if (!isStoreCallValid) {
-          console.warn(
-            `[TransferModal] Store call not valid, status=${storeStatus}. Waiting for valid state...`
-          );
-          // Wait a bit more and check again
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          const retryStore = useActiveCallStore.getState();
-          const retryStatus = String(retryStore.status || "").toLowerCase();
-          console.log(
-            `[TransferModal] Retry verify: call=${!!retryStore.call}, status=${retryStatus}`
-          );
-        }
-
-        // Step 4: Update consult state with the new call's control ID
-        // NOW set isActive=true since call is established - this hides the Consult/Transfer buttons
-        // and shows the call legs UI
-        setConsultState((prev) => ({
-          ...prev,
-          isActive: true, // NOW activate - call is established
-          initiating: false, // No longer initiating
-          activatedAt: Date.now(), // Track when activated to prevent immediate reset
-          agentCallControlId: newAgentCallControlId,
-          consultantCall: {
-            ...prev.consultantCall,
-            callControlId: newAgentCallControlId,
-          },
-        }));
-
-        // Clear consultInProgress flag - new call is now set in the store
-        useActiveCallStore.getState().setConsultInProgress(false);
-        console.log(
-          "[TransferModal] Cleared consultInProgress flag - new consult call is established"
-        );
-
-        // Keep modal open and stop loading - consult call is being initiated
-        setLoading(false);
-        // Don't close the modal - user needs to see consult call legs and can switch between them
-        console.log(
-          `[TransferModal] Consult call initiated. Modal will stay open for call leg management.`
-        );
-      } catch (callErr) {
-        console.error(
-          "[TransferModal] Failed to initiate WebRTC call:",
-          callErr
-        );
-        notify({ title: "Consult call failed", description: "Failed to initiate consult call: " + (callErr.message || "Unknown error"), variant: "error" });
-        setLoading(false);
-        // Clear consultInProgress flag on error
-        useActiveCallStore.getState().setConsultInProgress(false);
-        // Reset consult state on error and cleanup in database
-        setConsultState({
-          isActive: false,
-          activeLeg: "consultant",
-          initiating: false,
-          activatedAt: null,
-          parkedCall: null,
-          consultantCall: null,
-          agentCallControlId: null,
-        });
-        // Clean up consult state in database and hangup parked call since consult failed
-        if (interactionId) {
-          cleanupConsultStateInDb(interactionId, true);
-        }
-        return;
-      }
+      setConsultState((previous) => ({
+        ...previous,
+        isActive: intent?.step === "in_consult",
+        initiating: intent?.step !== "in_consult",
+        activatedAt: intent?.step === "in_consult" ? Date.now() : null,
+        activeLeg: intent?.activeLeg || "parked",
+        agentCallControlId:
+          consultCall.callControlId ||
+          consultCall.call_control_id ||
+          consultCall.id ||
+          null,
+      }));
     } catch (err) {
-      console.error("[TransferModal] Consult error:", err);
-      notify({ title: "Consult failed", description: err.message || "Unknown error", variant: "error" });
-      // Clear consultInProgress flag on error
       useActiveCallStore.getState().setConsultInProgress(false);
-      // Reset consult state on outer error
+      if (currentConsultSagaIdRef.current) {
+        void postCoreIntent("consult_cancel").catch((cancelError) =>
+          console.error(
+            "[TransferModal] Failed to cancel browser consultation:",
+            cancelError,
+          ),
+        );
+      }
+      currentConsultSagaIdRef.current = null;
       setConsultState({
         isActive: false,
-        activeLeg: "consultant",
         initiating: false,
         activatedAt: null,
+        activeLeg: "consultant",
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
       });
+      notify({
+        title: "Consult failed",
+        description: err.message || "Unknown error",
+        variant: "error",
+      });
     } finally {
+      consultStartPendingRef.current = false;
       setLoading(false);
     }
   };
 
   const handleSwitchCallLeg = async (targetLegType) => {
-    // targetLegType: 'parked' or 'consultant'
-    // We need to use the correct call control IDs from the interaction metadata
-    // The parked call uses original_call_control_id
-    // The consultant call uses the PSTN leg from consult_state.pstnCallControlId
-
-    const interactionId =
-      consultState.parkedCall?.interactionId || interaction?.id;
-
-    if (!interactionId) {
-      notify({ title: "Cannot switch call leg", description: "Missing interaction information.", variant: "warning" });
+    if (!interaction?.id) {
+      notify({
+        title: "Cannot switch call leg",
+        description: "This call is not attached to an ACD Core work item.",
+        variant: "warning",
+      });
       return;
     }
 
     setLoading(true);
     try {
-      // Fetch the latest interaction to get correct call control IDs
-      const interactionRes = await fetch(
-        `/api/contact-center/interactions/${interactionId}`,
-        { cache: "no-store" }
-      );
-      const interactionData = await interactionRes.json();
-
-      if (!interactionData.ok || !interactionData.interaction) {
-        notify({ title: "Switch call leg failed", description: "Failed to fetch interaction data", variant: "error" });
-        setLoading(false);
-        return;
-      }
-
-      const currentInteraction = interactionData.interaction;
-      const parkedCallControlId =
-        currentInteraction.metadata?.original_call_control_id;
-
-      // For consult calls, the agent's current call control ID is stored in consult_state
-      // This is the Telnyx call_control_id for the consult call (not the original agent leg)
-      // Also check consultantCallControlId which may be used instead
-      let consultAgentCallControlId =
-        currentInteraction.metadata?.consult_state?.agentCallControlId ||
-        currentInteraction.metadata?.consult_state?.consultantCallControlId;
-      let consultPstnCallControlId =
-        currentInteraction.metadata?.consult_state?.pstnCallControlId;
-
-      console.log(
-        `[TransferModal] Switch call leg: targetLegType=${targetLegType}, parkedCallControlId=${parkedCallControlId}, consultAgentCallControlId=${consultAgentCallControlId}, consultPstnCallControlId=${consultPstnCallControlId}, consult_state=${JSON.stringify(
-          currentInteraction.metadata?.consult_state
-        )}`
-      );
-
-      // Get current agent's Telnyx call_control_id
-      // During consult, this should be the consult call's call_control_id
-      let currentAgentCallControlId = consultAgentCallControlId;
-
-      // If no consult agent call control ID, wait a moment and try again
-      // The webhook may not have processed yet
-      if (
-        !currentAgentCallControlId ||
-        (targetLegType === "consultant" && !consultPstnCallControlId)
-      ) {
-        console.log(
-          "[TransferModal] Missing consult call control IDs, waiting for webhook..."
-        );
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Fetch interaction again
-        const retryRes = await fetch(
-          `/api/contact-center/interactions/${interactionId}`,
-          { cache: "no-store" }
-        );
-        const retryData = await retryRes.json();
-        if (retryData.ok && retryData.interaction) {
-          consultAgentCallControlId =
-            retryData.interaction.metadata?.consult_state?.agentCallControlId ||
-            retryData.interaction.metadata?.consult_state
-              ?.consultantCallControlId;
-          consultPstnCallControlId =
-            retryData.interaction.metadata?.consult_state?.pstnCallControlId;
-          currentAgentCallControlId = consultAgentCallControlId;
-          console.log(
-            `[TransferModal] Retry found consultAgentCallControlId=${consultAgentCallControlId}, consultPstnCallControlId=${consultPstnCallControlId}`
-          );
-        }
-      }
-
-      if (!currentAgentCallControlId) {
-        notify({ title: "Cannot switch call leg", description: "Agent consult call control ID not found. Please wait a moment and try again.", variant: "warning" });
-        setLoading(false);
-        return;
-      }
-
-      // Determine target call control ID based on which leg we want to switch to
-      const targetCallControlId =
+      await postCoreIntent(
         targetLegType === "parked"
-          ? parkedCallControlId
-          : consultPstnCallControlId || consultAgentCallControlId;
-
-      if (!targetCallControlId) {
-        if (targetLegType === "consultant") {
-          notify({ title: "Cannot switch to consult call", description: "Consult PSTN call control ID not found. Please wait a moment and try again.", variant: "warning" });
-        } else {
-          notify({ title: "Cannot switch call leg", description: `Cannot switch to ${targetLegType} call. Missing call control ID.`, variant: "warning" });
-        }
-        setLoading(false);
-        return;
-      }
-
-      if (
-        targetLegType === "consultant" &&
-        !consultPstnCallControlId &&
-        consultAgentCallControlId
-      ) {
-        console.warn(
-          "[TransferModal] Consult PSTN call control ID missing, falling back to consult agent call control ID"
-        );
-      }
-
-      console.log(
-        `[TransferModal] Bridging currentAgentCallControlId=${currentAgentCallControlId} to targetCallControlId=${targetCallControlId}`
+          ? "consult_switch_customer"
+          : "consult_switch_consultant",
       );
-
-      // Use bridge with park_after_unbridge="self" so the call leg we're leaving
-      // stays parked instead of being disconnected (per Telnyx OpenAPI spec)
-      const res = await fetch("/api/voice/call-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "bridge",
-          callControlId: currentAgentCallControlId,
-          params: {
-            call_control_id: targetCallControlId,
-            park_after_unbridge: "self",
-          },
-        }),
-      });
-
-      const data = await res.json();
-      if (!data.ok) {
-        notify({ title: "Switch call leg failed", description: data.error || "Failed to switch call leg", variant: "error" });
-      } else {
-        console.log(
-          `[TransferModal] Successfully switched to ${targetLegType} call leg`
-        );
-        // Update active leg in state
-        setConsultState((prev) => ({
-          ...prev,
-          activeLeg: targetLegType,
-        }));
-      }
+      setConsultState((previous) => ({
+        ...previous,
+        activeLeg: targetLegType,
+      }));
     } catch (err) {
       console.error("[TransferModal] Switch call leg error:", err);
-      notify({ title: "Switch call leg failed", description: err.message || "Unknown error", variant: "error" });
+      notify({
+        title: "Switch call leg failed",
+        description: err.message || "Unknown error",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Call control handlers (similar to SupervisionModal)
   const handleDisconnectCall = async () => {
-    // Get interactionId from multiple sources - store, consultState, or props
-    const storeState = useActiveCallStore.getState();
-    let interactionId =
-      storeState.contactCenter?.interactionId ||
-      consultState.parkedCall?.interactionId ||
-      interaction?.id;
-
-    // If no interactionId, try to look it up by callSessionId
-    if (!interactionId && storeState.originalCallSessionId) {
-      try {
-        const res = await fetch(
-          `/api/contact-center/interactions/by-call-session-id?callSessionId=${encodeURIComponent(
-            storeState.originalCallSessionId
-          )}`,
-          { cache: "no-store" }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.interaction?.id) {
-            interactionId = data.interaction.id;
-          }
-        }
-      } catch (err) {
-        console.error(
-          "[TransferModal] Failed to look up interaction by callSessionId:",
-          err
-        );
+    if (consultState.isActive || consultState.initiating) {
+      if (!interaction?.id) {
+        notify({
+          title: "Cancel consult failed",
+          description: "This call is not attached to an ACD Core work item.",
+          variant: "error",
+        });
+        return false;
       }
-    }
-
-    const wasConsultActive =
-      consultState.isActive || consultState.initiating || isCallActive();
-
-    if (
-      consultState.isActive ||
-      consultState.initiating ||
-      consultState.parkedCall?.callControlId
-    ) {
       setLoading(true);
       try {
-        let currentInteraction = interaction || null;
-
-        if (!currentInteraction && interactionId) {
-          try {
-            const interactionRes = await fetch(
-              `/api/contact-center/interactions/${interactionId}`,
-              { cache: "no-store" }
-            );
-            const interactionData = await interactionRes.json();
-            if (interactionData.ok && interactionData.interaction) {
-              currentInteraction = interactionData.interaction;
-            }
-          } catch (err) {
-            console.error(
-              "[TransferModal] Failed to fetch interaction by ID:",
-              err
-            );
-          }
-        }
-
-        if (!currentInteraction) {
-          const lookupCallControlId =
-            storeState.callControlId ||
-            consultState.agentCallControlId ||
-            consultState.consultantCall?.callControlId;
-          if (lookupCallControlId) {
-            try {
-              const lookupRes = await fetch(
-                `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                  lookupCallControlId
-                )}`,
-                { cache: "no-store" }
-              );
-              const lookupData = await lookupRes.json();
-              if (lookupData.ok && lookupData.interaction) {
-                currentInteraction = lookupData.interaction;
-              }
-            } catch (err) {
-              console.error(
-                "[TransferModal] Failed to fetch interaction by call control ID:",
-                err
-              );
-            }
-          }
-        }
-
-        const consultMetadata =
-          currentInteraction?.metadata?.consult_state || {};
-        const consultPstnCallControlId = consultMetadata.pstnCallControlId;
-        const parkedCallControlId =
-          consultMetadata.parkedCallControlId ||
-          currentInteraction?.metadata?.original_call_control_id ||
-          consultState.parkedCall?.callControlId;
-        const currentAgentCallControlId =
-          consultMetadata.agentCallControlId ||
-          consultMetadata.consultantCallControlId ||
-          consultState.agentCallControlId ||
-          storeState.callControlId ||
-          useActiveCallStore.getState().callControlId;
-
-        if (!consultPstnCallControlId) {
-          notify({ title: "Cannot disconnect consult call", description: "Consult PSTN call control ID not found. Please wait a moment and try again.", variant: "warning" });
-          return;
-        }
-
-        console.log("[TransferModal] Disconnecting consult call leg", {
-          consultPstnCallControlId,
-          parkedCallControlId,
-          currentAgentCallControlId,
-        });
-
-        try {
-          const hangupRes = await fetch("/api/voice/call-action", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "hangup",
-              callControlId: consultPstnCallControlId,
-              params: {},
-            }),
-          });
-          const hangupData = await hangupRes.json();
-          if (!hangupData.ok) {
-            console.error(
-              "[TransferModal] Failed to hangup consult PSTN leg:",
-              hangupData.error || hangupData
-            );
-          }
-        } catch (err) {
-          console.error(
-            "[TransferModal] Error hanging up consult PSTN leg:",
-            err
-          );
-        }
-
-        if (parkedCallControlId && currentAgentCallControlId) {
-          try {
-            const bridgeRes = await fetch("/api/voice/call-action", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "bridge",
-                callControlId: currentAgentCallControlId,
-                params: {
-                  call_control_id: parkedCallControlId,
-                  park_after_unbridge: "self",
-                },
-              }),
-            });
-            const bridgeData = await bridgeRes.json();
-            if (!bridgeData.ok) {
-              console.error(
-                "[TransferModal] Failed to bridge back to parked call:",
-                bridgeData.error || bridgeData
-              );
-            }
-          } catch (err) {
-            console.error(
-              "[TransferModal] Error bridging back to parked call:",
-              err
-            );
-          }
-        } else {
-          console.warn(
-            "[TransferModal] Missing call control IDs to bridge back to parked call",
-            {
-              parkedCallControlId,
-              currentAgentCallControlId,
-            }
-          );
-        }
-
-        setConsultState({
-          isActive: false,
-          activeLeg: "consultant",
-          initiating: false,
-          activatedAt: null,
-          parkedCall: null,
-          consultantCall: null,
-          agentCallControlId: null,
-        });
-        return;
+        await postCoreIntent("consult_cancel");
+        return true;
       } catch (err) {
-        console.error("[TransferModal] Error disconnecting consult call:", err);
-        return;
+        notify({
+          title: "Cancel consult failed",
+          description: err.message,
+          variant: "error",
+        });
+        return false;
       } finally {
         setLoading(false);
       }
     }
 
-    if (!activeCall) {
-      clearActiveCall();
-      // Reset consult state when call ends
-      setConsultState({
-        isActive: false,
-        activeLeg: "consultant",
-        initiating: false,
-        activatedAt: null,
-        parkedCall: null,
-        consultantCall: null,
-        agentCallControlId: null,
-      });
-      // Clean up consult state in database if we were in a consult process
-      if (wasConsultActive && interactionId) {
-        cleanupConsultStateInDb(interactionId, true);
-      }
-      return;
-    }
     try {
-      activeCall.hangup?.();
-      clearActiveCall();
-      // Reset consult state when call ends
-      setConsultState({
-        isActive: false,
-        activeLeg: "consultant",
-        initiating: false,
-        activatedAt: null,
-        parkedCall: null,
-        consultantCall: null,
-        agentCallControlId: null,
-      });
-      // Clean up consult state in database if we were in a consult process
-      if (wasConsultActive && interactionId) {
-        cleanupConsultStateInDb(interactionId, true);
-      }
+      activeCall?.hangup?.();
     } catch (err) {
       console.error("[TransferModal] Error disconnecting call:", err);
+    } finally {
       clearActiveCall();
       setConsultState({
         isActive: false,
@@ -1735,10 +1284,31 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         consultantCall: null,
         agentCallControlId: null,
       });
-      // Clean up consult state in database on error
-      if (wasConsultActive && interactionId) {
-        cleanupConsultStateInDb(interactionId, true);
+    }
+    return true;
+  };
+
+  // Keep the latest cancellation handler available to the close-request
+  // effect without retriggering that effect on every render.
+  cancelConsultForCloseRef.current = handleDisconnectCall;
+
+  const handleCompleteConsult = async () => {
+    if (!hasCoreInteraction) return;
+    setCompleteRequested(true);
+    setLoading(true);
+    try {
+      const intent = await postCoreIntent("consult_complete");
+      if (
+        ["succeeded", "completed"].includes(intent?.state || intent?.status) ||
+        intent?.step === "monitor_transfer"
+      ) {
+        onOpenChange(false);
       }
+    } catch (err) {
+      setCompleteRequested(false);
+      notify({ title: "Complete transfer failed", description: err.message, variant: "error" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1760,13 +1330,19 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   const handleToggleHold = () => {
     if (!activeCall) return;
     try {
-      const { setHeld, updateStatus } = useActiveCallStore.getState();
+      const { updateStatus } = useActiveCallStore.getState();
       if (callUI.isHeld) {
         activeCall.unhold?.() || activeCall.resume?.();
         updateStatus("active");
+        void postCoreIntent("unhold", { requestId: crypto.randomUUID() }).catch((err) =>
+          console.error("[TransferModal] Core unhold intent failed:", err),
+        );
       } else {
         activeCall.hold?.() || activeCall.pause?.();
         updateStatus("held");
+        void postCoreIntent("hold", { requestId: crypto.randomUUID() }).catch((err) =>
+          console.error("[TransferModal] Core hold intent failed:", err),
+        );
       }
     } catch (err) {
       console.error("[TransferModal] Toggle hold error:", err);
@@ -1779,21 +1355,6 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     return callStatus || activeCall?.state || "";
   };
 
-  const isCallActive = () => {
-    if (!activeCall) return false;
-    const status = getEffectiveCallStatus();
-    const lowerStatus = String(status).toLowerCase();
-    return ![
-      "hangup",
-      "ended",
-      "destroy",
-      "purge",
-      "idle",
-      "terminated",
-      "",
-    ].includes(lowerStatus);
-  };
-
   const isCallConnected = () => {
     if (!activeCall) return false;
     const status = getEffectiveCallStatus();
@@ -1801,18 +1362,20 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     return ["active", "connected", "answered", "held"].includes(lowerStatus);
   };
 
-  // Prevent modal from closing when consult call is active or being initiated
   const handleModalOpenChange = (newOpen) => {
-    if (!newOpen) {
-      // Prevent closing if consult is active or being initiated
-      if (consultState.isActive || consultState.initiating) {
-        console.log(
-          "[TransferModal] Cannot close modal while consult call is in progress"
-        );
-        return;
-      }
+    if (newOpen) {
+      onOpenChange(true);
+      return;
     }
-    onOpenChange(newOpen);
+
+    if (consultState.isActive || consultState.initiating) {
+      // Queue a safe consult cancellation. The effect below waits out any
+      // short bridge transition, submits consult_cancel, then closes the UI.
+      setCloseRequested(true);
+      return;
+    }
+
+    onOpenChange(false);
   };
 
   const isValid = () => {
@@ -1944,9 +1507,80 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
   const selectedAgent = agents.find((a) => a.userId === selectedAgentId);
   const selectedAgentFullProfile = agentFullProfiles.get(selectedAgentId);
+  const currentAgentName =
+    `${user?.first_name || user?.firstName || ""} ${
+      user?.last_name || user?.lastName || ""
+    }`.trim() ||
+    user?.name ||
+    user?.username ||
+    interaction?.agent_name ||
+    interaction?.agent_username ||
+    "Agent";
+  const coreConsultTransitioning =
+    hasCoreInteraction && coreIntent?.intent === "consult" && coreIntent?.step !== "in_consult";
+  const coreConsultCanCancel =
+    !hasCoreInteraction ||
+    [
+      "await_target",
+      "bridge_initial_consultant",
+      "route_initial_hold_audio",
+      "start_initial_hold_audio",
+      "verify_initial_consult_bridge",
+      "await_initial_consult_bridge",
+      "protect_initial_consultant",
+      "in_consult",
+      "stop_hold_before_customer_switch",
+      "bridge_customer",
+      "bridge_consultant",
+      "route_switched_hold_audio",
+      "start_switched_hold_audio",
+      "verify_switched_consult_bridge",
+      "await_switched_consult_bridge",
+    ].includes(coreIntent?.step);
   const agentNumbers = selectedAgent
     ? getAgentNumbers(selectedAgent, selectedAgentFullProfile)
     : [];
+
+  useEffect(() => {
+    if (!closeRequested) return;
+
+    const consultOpen = consultState.isActive || consultState.initiating;
+    if (!consultOpen) {
+      setCloseRequested(false);
+      onOpenChange(false);
+      return;
+    }
+
+    if (loading || closeCancelInFlightRef.current) return;
+    if (hasCoreInteraction && !coreConsultCanCancel) return;
+
+    const cancelConsult = cancelConsultForCloseRef.current;
+    if (!cancelConsult) return;
+
+    closeCancelInFlightRef.current = true;
+    Promise.resolve(cancelConsult())
+      .then((accepted) => {
+        if (accepted === false) {
+          setCloseRequested(false);
+          return;
+        }
+        // The Core endpoint has durably accepted cancellation. Its saga can
+        // finish restoring the customer after the modal is no longer visible.
+        setCloseRequested(false);
+        onOpenChange(false);
+      })
+      .finally(() => {
+        closeCancelInFlightRef.current = false;
+      });
+  }, [
+    closeRequested,
+    consultState.isActive,
+    consultState.initiating,
+    coreConsultCanCancel,
+    hasCoreInteraction,
+    loading,
+    onOpenChange,
+  ]);
 
   if (!mounted) {
     return null;
@@ -1958,7 +1592,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         <DialogHeader>
           <DialogTitle>Transfer Call</DialogTitle>
           <DialogDescription>
-            Choose where to transfer this call
+            Choose where to transfer this call{interaction?.from_name||interaction?.from_number?` from ${interaction.from_name||interaction.from_number}`:""}.
           </DialogDescription>
         </DialogHeader>
 
@@ -1967,86 +1601,86 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           <div className="grid grid-cols-5 gap-2">
             <button
               type="button"
-              onClick={() => setSelectionType("queues")}
+              data-testid="transfer-kind-queues" onClick={() => setSelectionType("queues")}
               className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
+                "flex flex-col items-center gap-2 rounded-lg border-2 bg-background p-3 text-foreground transition-all hover:bg-muted/60",
                 selectionType === "queues"
-                  ? "bg-blue-500 text-white border-blue-600"
-                  : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20"
+                  ? "border-blue-500 ring-1 ring-blue-500/40"
+                  : "border-border"
               )}
             >
-              <UsersRound className="h-5 w-5" />
+              <UsersRound className="h-5 w-5 text-blue-500" />
               <div className="font-semibold text-xs">Queues</div>
               {selectionType === "queues" && (
-                <CheckCircle2 className="h-3 w-3" />
+                <CheckCircle2 className="h-3 w-3 text-blue-500" />
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => setSelectionType("agents")}
+              data-testid="transfer-kind-agents" onClick={() => setSelectionType("agents")}
               className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
+                "flex flex-col items-center gap-2 rounded-lg border-2 bg-background p-3 text-foreground transition-all hover:bg-muted/60",
                 selectionType === "agents"
-                  ? "bg-purple-500 text-white border-purple-600"
-                  : "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20"
+                  ? "border-purple-500 ring-1 ring-purple-500/40"
+                  : "border-border"
               )}
             >
-              <UserCheck className="h-5 w-5" />
+              <UserCheck className="h-5 w-5 text-purple-500" />
               <div className="font-semibold text-xs">Users</div>
               {selectionType === "agents" && (
-                <CheckCircle2 className="h-3 w-3" />
+                <CheckCircle2 className="h-3 w-3 text-purple-500" />
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => setSelectionType("contacts")}
+              data-testid="transfer-kind-contacts" onClick={() => setSelectionType("contacts")}
               className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
+                "flex flex-col items-center gap-2 rounded-lg border-2 bg-background p-3 text-foreground transition-all hover:bg-muted/60",
                 selectionType === "contacts"
-                  ? "bg-green-500 text-white border-green-600"
-                  : "bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20"
+                  ? "border-green-500 ring-1 ring-green-500/40"
+                  : "border-border"
               )}
             >
-              <Users className="h-5 w-5" />
+              <Users className="h-5 w-5 text-green-500" />
               <div className="font-semibold text-xs">Contacts</div>
               {selectionType === "contacts" && (
-                <CheckCircle2 className="h-3 w-3" />
+                <CheckCircle2 className="h-3 w-3 text-green-500" />
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => setSelectionType("assistants")}
+              data-testid="transfer-kind-assistants" onClick={() => setSelectionType("assistants")}
               className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
+                "flex flex-col items-center gap-2 rounded-lg border-2 bg-background p-3 text-foreground transition-all hover:bg-muted/60",
                 selectionType === "assistants"
-                  ? "bg-indigo-500 text-white border-indigo-600"
-                  : "bg-indigo-500/10 text-indigo-600 border-indigo-500/20 hover:bg-indigo-500/20"
+                  ? "border-indigo-500 ring-1 ring-indigo-500/40"
+                  : "border-border"
               )}
             >
-              <Bot className="h-5 w-5" />
+              <Bot className="h-5 w-5 text-indigo-500" />
               <div className="font-semibold text-xs">AI Agents</div>
               {selectionType === "assistants" && (
-                <CheckCircle2 className="h-3 w-3" />
+                <CheckCircle2 className="h-3 w-3 text-indigo-500" />
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => setSelectionType("manual")}
+              data-testid="transfer-kind-manual" onClick={() => setSelectionType("manual")}
               className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
+                "flex flex-col items-center gap-2 rounded-lg border-2 bg-background p-3 text-foreground transition-all hover:bg-muted/60",
                 selectionType === "manual"
-                  ? "bg-orange-500 text-white border-orange-600"
-                  : "bg-orange-500/10 text-orange-600 border-orange-500/20 hover:bg-orange-500/20"
+                  ? "border-orange-500 ring-1 ring-orange-500/40"
+                  : "border-border"
               )}
             >
-              <Phone className="h-5 w-5" />
+              <Phone className="h-5 w-5 text-orange-500" />
               <div className="font-semibold text-xs">Manual</div>
               {selectionType === "manual" && (
-                <CheckCircle2 className="h-3 w-3" />
+                <CheckCircle2 className="h-3 w-3 text-orange-500" />
               )}
             </button>
           </div>
@@ -2073,12 +1707,15 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                     value={selectedQueueId}
                     onValueChange={setSelectedQueueId}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a queue" />
+                    <SelectTrigger
+                      className="w-full"
+                      data-testid="transfer-assistant-select"
+                    >
+                      <SelectValue data-testid="transfer-queue-select" placeholder="Choose a queue" />
                     </SelectTrigger>
                     <SelectContent>
                       {queues.map((queue) => (
-                        <SelectItem key={queue.id} value={queue.id}>
+                        <SelectItem data-testid="transfer-queue-option" data-queue-id={queue.id} key={queue.id} value={queue.id}>
                           <div className="flex items-center gap-2">
                             <UsersRound className="h-4 w-4 text-blue-500" />
                             <span className="font-medium">
@@ -2144,80 +1781,86 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                         </div>
                       </div>
 
-                      {/* Preserve Routing Options Toggle */}
-                      {(() => {
-                        const targetQueue = queues.find(
-                          (q) => q.id === selectedQueueId
-                        );
-                        if (!targetQueue || !sourceQueue) return null;
 
-                        const sourceRouting =
-                          sourceQueue.routing_strategy || "FIFO";
-                        const targetRouting =
-                          targetQueue.routing_strategy || "FIFO";
-                        const hasSkills =
-                          interaction?.required_skills &&
-                          typeof interaction.required_skills === "object" &&
-                          Object.keys(interaction.required_skills).length > 0;
-
-                        // Determine toggle label
-                        let toggleLabel = "Preserve priority";
-                        let toggleDescription = "";
-
-                        if (
-                          sourceRouting === "Skill-based" &&
-                          targetRouting === "Skill-based" &&
-                          hasSkills
-                        ) {
-                          toggleLabel = "Preserve priority and skills";
-                          toggleDescription =
-                            "Will preserve call priority and required skills when transferring";
-                        } else if (
-                          sourceRouting === "FIFO" ||
-                          sourceRouting === "Priority-based" ||
-                          targetRouting === "FIFO" ||
-                          targetRouting === "Priority-based"
-                        ) {
-                          toggleLabel = "Preserve priority";
-                          toggleDescription =
-                            "Will preserve call priority when transferring";
-                        } else {
-                          // Both are skills-based but no skills assigned
-                          toggleLabel = "Preserve priority";
-                          toggleDescription =
-                            "Will preserve call priority when transferring";
-                        }
-
-                        return (
-                          <div className="flex items-center justify-end gap-2 pt-3 border-t mt-3">
-                            <div className="flex flex-col items-end gap-1">
-                              <Label
-                                className="text-xs font-medium cursor-pointer"
-                                htmlFor="preserve-routing"
-                              >
-                                {toggleLabel}
-                              </Label>
-                              {toggleDescription && (
-                                <span className="text-xs text-muted-foreground">
-                                  {toggleDescription}
-                                </span>
-                              )}
-                            </div>
-                            <Switch
-                              id="preserve-routing"
-                              checked={preserveRoutingOptions}
-                              onCheckedChange={setPreserveRoutingOptions}
-                            />
-                          </div>
-                        );
-                      })()}
                     </>
+                  ) : queueStatsUnavailable ? (
+                    <div className="text-sm text-muted-foreground">
+                      Queue statistics are unavailable.
+                    </div>
                   ) : (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading queue statistics...
                     </div>
                   )}
+
+                  {/* Preserve Routing Options Toggle */}
+                  {(() => {
+                    const targetQueue = queues.find(
+                      (q) => q.id === selectedQueueId
+                    );
+                    if (!targetQueue || !sourceQueue) return null;
+
+                    const sourceRouting =
+                      sourceQueue.routing_strategy || "FIFO";
+                    const targetRouting =
+                      targetQueue.routing_strategy || "FIFO";
+                    const hasSkills =
+                      interaction?.required_skills &&
+                      typeof interaction.required_skills === "object" &&
+                      Object.keys(interaction.required_skills).length > 0;
+
+                    // Determine toggle label
+                    let toggleLabel = "Preserve priority";
+                    let toggleDescription = "";
+
+                    if (
+                      sourceRouting === "Skill-based" &&
+                      targetRouting === "Skill-based" &&
+                      hasSkills
+                    ) {
+                      toggleLabel = "Preserve priority and skills";
+                      toggleDescription =
+                        "Will preserve call priority and required skills when transferring";
+                    } else if (
+                      sourceRouting === "FIFO" ||
+                      sourceRouting === "Priority-based" ||
+                      targetRouting === "FIFO" ||
+                      targetRouting === "Priority-based"
+                    ) {
+                      toggleLabel = "Preserve priority";
+                      toggleDescription =
+                        "Will preserve call priority when transferring";
+                    } else {
+                      // Both are skills-based but no skills assigned
+                      toggleLabel = "Preserve priority";
+                      toggleDescription =
+                        "Will preserve call priority when transferring";
+                    }
+
+                    return (
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t mt-3">
+                        <div className="flex flex-col items-end gap-1">
+                          <Label
+                            className="text-xs font-medium cursor-pointer"
+                            htmlFor="preserve-routing"
+                          >
+                            {toggleLabel}
+                          </Label>
+                          {toggleDescription && (
+                            <span className="text-xs text-muted-foreground">
+                              {toggleDescription}
+                            </span>
+                          )}
+                        </div>
+                        <Switch
+                          id="preserve-routing"
+                          checked={preserveRoutingOptions}
+                          onCheckedChange={setPreserveRoutingOptions}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -2244,12 +1887,20 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   <ClientOnlySelect
                     value={selectedAgentId}
                     onValueChange={(value) => {
+                      const nextAgent = agents.find(
+                        (agent) => agent.userId === value
+                      );
                       setSelectedAgentId(value);
-                      setSelectedAgentNumber("");
+                      setSelectedAgentNumber(
+                        getDefaultAgentNumber(
+                          nextAgent,
+                          agentFullProfiles.get(value)
+                        )
+                      );
                     }}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a user" />
+                      <SelectValue data-testid="transfer-agent-select" placeholder="Choose a user" />
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map((agent) => {
@@ -2275,7 +1926,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                             : "text-gray-600"
                           : null;
                         return (
-                          <SelectItem key={agent.userId} value={agent.userId}>
+                          <SelectItem data-testid="transfer-agent-option" data-agent-id={agent.userId} key={agent.userId} value={agent.userId}>
                             <div className="flex items-center gap-2">
                               <StatusIcon
                                 className={cn("h-4 w-4", statusColorClass)}
@@ -2349,7 +2000,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
               )}
 
               {/* Agent stats - single line layout */}
-              {selectedAgent && (
+              {selectedAgent && (canReadAgents || selectedAgentId === user?.id) && (
                 <div className="p-3 bg-muted rounded-lg">
                   {agentStats ? (
                     <div className="flex items-center justify-between gap-4">
@@ -2544,7 +2195,12 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                     </SelectTrigger>
                     <SelectContent>
                       {assistants.map((assistant) => (
-                        <SelectItem key={assistant.id} value={assistant.id}>
+                        <SelectItem
+                          key={assistant.id}
+                          value={assistant.id}
+                          data-testid="transfer-assistant-option"
+                          data-assistant-id={assistant.id}
+                        >
                           <div className="flex items-center gap-2">
                             <Bot className="h-4 w-4 text-indigo-500" />
                             <span className="font-medium">
@@ -2575,7 +2231,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
               </Label>
               <input
                 type="tel"
-                placeholder="+1234567890 or sip:user@domain.com"
+                data-testid="transfer-manual-number" placeholder="+1234567890 or sip:user@domain.com"
                 value={manualNumber}
                 onChange={(e) => setManualNumber(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -2608,90 +2264,30 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                 </Badge>
               </div>
 
-              {/* Call Legs Tiles - Clickable to switch between legs */}
-              <div className="flex gap-3">
-                {/* Parked Call Tile - Customer on hold */}
-                {consultState.parkedCall && (
-                  <div
-                    onClick={() => handleSwitchCallLeg("parked")}
-                    className={cn(
-                      "flex-1 p-3 rounded-lg cursor-pointer transition-all",
-                      consultState.activeLeg === "parked"
-                        ? "bg-amber-500/30 border-2 border-amber-500"
-                        : "bg-amber-500/10 border-2 border-amber-500/40 hover:bg-amber-500/20"
-                    )}
-                    title="Click to switch to customer"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={cn(
-                          "h-3 w-3 rounded-full",
-                          consultState.activeLeg === "parked"
-                            ? "bg-amber-500 animate-pulse"
-                            : "bg-amber-500/50"
-                        )}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-amber-700 dark:text-amber-400 truncate">
-                          {consultState.parkedCall.fromName || "Customer"}
-                        </div>
-                        <div className="text-xs text-amber-600/70 dark:text-amber-500/70 truncate">
-                          {formatPhoneDisplay(
-                            consultState.parkedCall.fromNumber
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                        {consultState.activeLeg === "parked"
-                          ? "ACTIVE"
-                          : "ON HOLD"}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Consultant Call Tile - Click to switch */}
-                <div
-                  onClick={() => handleSwitchCallLeg("consultant")}
-                  className={cn(
-                    "flex-1 p-3 rounded-lg cursor-pointer transition-all",
-                    consultState.activeLeg !== "parked"
-                      ? "bg-green-500/30 border-2 border-green-500"
-                      : "bg-green-500/10 border-2 border-green-500/40 hover:bg-green-500/20"
-                  )}
-                  title="Click to switch to consultant"
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={cn(
-                        "h-3 w-3 rounded-full",
-                        consultState.activeLeg !== "parked"
-                          ? "bg-green-500 animate-pulse"
-                          : "bg-green-500/50"
-                      )}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-green-700 dark:text-green-400 truncate">
-                        {consultState.consultantCall?.toName || "Consultant"}
-                      </div>
-                      <div className="text-xs text-green-600/70 dark:text-green-500/70 truncate">
-                        {formatPhoneDisplay(
-                          consultState.consultantCall?.toNumber ||
-                            useActiveCallStore.getState().toNumber ||
-                            "Unknown"
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
-                      {consultState.activeLeg !== "parked"
-                        ? isCallConnected()
-                          ? "ACTIVE"
-                          : "CONNECTING"
-                        : "ON HOLD"}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <ConsultTopology
+                activeLeg={consultState.activeLeg}
+                agentName={currentAgentName}
+                customer={{
+                  label: consultState.parkedCall?.fromName || "Customer",
+                  detail: formatPhoneDisplay(consultState.parkedCall?.fromNumber),
+                }}
+                consultant={{
+                  label: consultState.consultantCall?.toName || "Consultant",
+                  detail: formatPhoneDisplay(
+                    consultState.consultantCall?.toNumber ||
+                      useActiveCallStore.getState().toNumber ||
+                      "Unknown",
+                  ),
+                }}
+                onSwitch={handleSwitchCallLeg}
+                disabled={
+                  loading ||
+                  completeRequested ||
+                  consultState.initiating ||
+                  coreConsultTransitioning
+                }
+                connecting={consultState.initiating}
+              />
             </div>
           )}
 
@@ -2703,7 +2299,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   {/* Disconnect button when call not yet connected */}
                   <button
                     onClick={handleDisconnectCall}
-                    disabled={loading}
+                    disabled={loading || completeRequested || !coreConsultCanCancel}
                     className="h-10 w-10 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Disconnect"
                   >
@@ -2715,7 +2311,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   {/* Mute, Disconnect, and Hold buttons when answered */}
                   <button
                     onClick={handleToggleMute}
-                    disabled={loading}
+                    disabled={loading || completeRequested}
                     className={cn(
                       "h-10 w-10 rounded-full grid place-items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                       callUI.isMuted
@@ -2732,7 +2328,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   </button>
                   <button
                     onClick={handleDisconnectCall}
-                    disabled={loading}
+                    disabled={loading || completeRequested || !coreConsultCanCancel}
                     className="h-10 w-10 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Disconnect"
                   >
@@ -2740,7 +2336,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   </button>
                   <button
                     onClick={handleToggleHold}
-                    disabled={loading}
+                    disabled={loading || completeRequested}
                     className="h-10 w-10 rounded-full grid place-items-center bg-zinc-600 hover:bg-zinc-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title={callUI.isHeld ? "Unhold" : "Hold"}
                   >
@@ -2759,24 +2355,40 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button
               variant="outline"
-              onClick={() => handleModalOpenChange(false)}
-              disabled={
-                loading || consultState.isActive || consultState.initiating
-              }
+              data-testid="consult-cancel" onClick={() => handleModalOpenChange(false)}
+              disabled={closeRequested || completeRequested}
               title={
                 consultState.isActive || consultState.initiating
-                  ? "Cannot close while consult call is in progress"
+                  ? "Cancel consult and close"
                   : "Cancel"
               }
             >
-              Cancel
+              {closeRequested && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {closeRequested ? "Cancelling..." : "Cancel"}
             </Button>
+            {hasCoreInteraction && consultState.isActive && (
+              <Button
+                data-testid="consult-complete" onClick={handleCompleteConsult}
+                disabled={
+                  loading ||
+                  completeRequested ||
+                  coreIntent?.step !== "in_consult"
+                }
+                className="min-w-[150px] bg-green-600 text-white hover:bg-green-700"
+                title="Connect the customer to the consultant and leave the call"
+              >
+                {(loading || completeRequested) && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {completeRequested ? "Completing..." : "Complete transfer"}
+              </Button>
+            )}
             {/* Show Consult/Transfer buttons when NOT in consult mode */}
             {/* Hide when consult is active or being initiated */}
             {!(consultState.isActive || consultState.initiating) && (
               <>
                 <Button
-                  onClick={handleConsult}
+                  data-testid="consult-start" onClick={handleConsult}
                   disabled={
                     !isValid() ||
                     loading ||
@@ -2795,7 +2407,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   )}
                 </Button>
                 <Button
-                  onClick={handleConfirm}
+                  data-testid="transfer-submit" onClick={handleConfirm}
                   disabled={!isValid() || loading || loadingData}
                   className="min-w-[120px]"
                 >

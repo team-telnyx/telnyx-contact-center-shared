@@ -18,6 +18,10 @@ import { useRef } from "react";
 import { useTheme } from "next-themes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { BellRing } from "lucide-react";
+import NotificationSoundSettings from "@/components/admin/NotificationSoundSettings";
+import { notificationSoundOverridesFrom } from "@/lib/contact-center/notification-sounds.mjs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   IconUser,
@@ -62,6 +66,28 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [avatar, setAvatar] = useState("/avatar.jpeg");
   const [profileLoading, setProfileLoading] = useState(true);
+  // Interaction sounds: the system settings plus this user's own overrides.
+  const [sounds, setSounds] = useState({ system: null, overrides: null, effective: null });
+  const [soundDraft, setSoundDraft] = useState(null);
+  const [soundsLoading, setSoundsLoading] = useState(true);
+  const [soundsSaving, setSoundsSaving] = useState(false);
+  const [soundsError, setSoundsError] = useState("");
+  // Loaded on its own: a failure of another profile request must not leave
+  // this card on skeletons, and a failure here offers a retry.
+  const loadSounds = async () => {
+    setSoundsLoading(true); setSoundsError("");
+    try {
+      const response = await fetch("/api/user/notification-sounds", { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Unable to load your notification sounds");
+      setSounds(data); setSoundDraft(data.effective);
+    } catch (error) {
+      setSoundsError(error.message);
+    } finally {
+      setSoundsLoading(false);
+    }
+  };
+  useEffect(() => { void loadSounds(); }, []);
   const [authStrategy, setAuthStrategy] = useState("local");
   const [hasPassword, setHasPassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -213,6 +239,23 @@ export default function ProfilePage() {
       });
     } finally {
       setSaving(false);
+    }
+  }
+
+
+  async function saveSounds(overrides) {
+    setSoundsSaving(true);
+    try {
+      const response = await fetch("/api/user/notification-sounds", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ overrides }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Unable to save notification sounds");
+      setSounds(data);
+      setSoundDraft(data.effective);
+      notify({ title: "Notifications saved", description: data.overrides ? "Your interaction sounds apply to you only." : "Your interaction sounds follow the system settings.", variant: "success" });
+    } catch (error) {
+      notify({ title: "Notifications", description: error.message, variant: "error" });
+    } finally {
+      setSoundsSaving(false);
     }
   }
 
@@ -515,6 +558,39 @@ export default function ProfilePage() {
                     </div>
                   );
                 })()
+              )}
+            </CardContent>
+          </Card>
+          {/* Notifications: interaction sounds, inherited from Admin → System settings unless changed here */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BellRing className="size-6 text-brand-primary" /> Notifications
+                {!soundsLoading && soundDraft && (
+                  <Badge variant="outline" className="ml-auto font-normal">{sounds.overrides ? "Personalized" : "Using system settings"}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <p className="text-sm text-muted-foreground">Sounds played when a new interaction is offered to you while you are away from the desktop. They start from the settings your administrator chose; anything you change here applies to you only.</p>
+              {soundsError ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  <span>{soundsError}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void loadSounds()}>Try again</Button>
+                </div>
+              ) : (
+                <NotificationSoundSettings embedded value={soundDraft || sounds.effective} onChange={setSoundDraft} loading={soundsLoading || !soundDraft} disabled={soundsSaving} />
+              )}
+              {!soundsLoading && soundDraft && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" disabled={soundsSaving || JSON.stringify(soundDraft) === JSON.stringify(sounds.effective)} onClick={() => void saveSounds(notificationSoundOverridesFrom(sounds.system, soundDraft))}>
+                    {soundsSaving ? "Saving…" : "Save notifications"}
+                  </Button>
+                  <Button type="button" variant="outline" disabled={soundsSaving || !sounds.overrides} onClick={() => void saveSounds(null)}>Use system settings</Button>
+                  {sounds.system && soundDraft && JSON.stringify(soundDraft) !== JSON.stringify(sounds.effective) && (
+                    <Button type="button" variant="ghost" disabled={soundsSaving} onClick={() => setSoundDraft(sounds.effective)}>Discard changes</Button>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

@@ -24,6 +24,7 @@ import {
 } from "@/lib/telnyx-insights";
 
 
+import { withPermission } from "@/lib/authz/guard";
 /**
  * Get assistant details including telephony settings
  */
@@ -93,7 +94,7 @@ async function unassignPhoneNumber(phoneNumberId, apiKey) {
   return true;
 }
 
-export async function DELETE(request, { params }) {
+async function DELETE_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -432,3 +433,6 @@ async function handleFullDeletion(workflow, workflowId, apiKey, pool) {
 
   return NextResponse.json({ ok: true, results });
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const DELETE = withPermission("workflows:delete", DELETE_handler, { route: "/api/admin/workflows/[id]/delete-assistant" });

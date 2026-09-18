@@ -48,6 +48,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/wrapup-codes/EditSheet";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminWrapupCodesPage() {
   const [items, setItems] = useState([]);
@@ -135,9 +136,9 @@ export default function AdminWrapupCodesPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={handleNewWrapupCode} variant="default">
+    <Can permission="wrapup_codes:create"><Button onClick={handleNewWrapupCode} variant="default">
       New Wrapup Code
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -282,13 +283,13 @@ export default function AdminWrapupCodesPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="wrapup_codes:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete wrapup code"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

@@ -9,9 +9,19 @@ import {
   IconGitBranch,
   IconSpeakerphone,
   IconRobot,
+  IconWorld,
+  IconMail,
+  IconMessage,
+  IconBrandWhatsapp,
 } from "@tabler/icons-react";
 
-// Menu configuration for Contact Center
+// Menu configuration for Contact Center.
+//
+// Visibility follows the permission catalogue (lib/authz/permissions.mjs):
+// every item names the screen (or screen group) it opens and is shown when
+// the user's roles grant that screen or any leaf below it; a group is shown
+// when at least one of its items is. The former per-item role lists are gone
+// (RBAC Phase 3, the internal documentation).
 export const menuConfig = {
   navGroups: [
     {
@@ -23,61 +33,60 @@ export const menuConfig = {
           description: "Handle calls and customer conversations",
           url: "/agent/desktop",
           icon: IconDeviceDesktop,
-          role_access: ["agent", "supervisor", "admin", "owner"], // All authenticated users can access agent features
+          screen: "agent.desktop",
         },
       ],
     },
     {
       label: "SUPERVISOR",
       icon: null,
-      role_access: ["supervisor", "admin", "owner"], // Show this group to supervisor, admin, and owner roles
       items: [
         {
           title: "Monitoring",
           description: "Watch live agent and queue activity",
           url: "/supervisor/monitor",
           icon: IconActivity,
-          role_access: ["supervisor", "admin", "owner"],
+          screen: "supervisor.monitor",
         },
         {
           title: "Analytics",
           description: "Explore performance and operational trends",
           url: "/supervisor/analytics",
           icon: IconChartBar,
-          role_access: ["supervisor", "admin", "owner"],
+          screen: "supervisor.analytics",
         },
         {
           title: "Quality",
           description: "Review conversations and coaching results",
           url: "/supervisor/quality",
           icon: IconClipboardCheck,
-          role_access: ["supervisor", "admin", "owner"],
+          screen: "supervisor.quality",
         },
         {
           title: "Outbound Dialer",
           description: "Run and monitor outbound campaigns",
           url: "/supervisor/outbound-dialer",
           icon: IconSpeakerphone,
-          role_access: ["owner"],
+          // Decision D-13 (2026-09-15): the system admin role includes the dialer.
+          screen: "supervisor.outbound-dialer",
         },
       ],
     },
     {
       label: "ADMIN",
       icon: null,
-      role_access: ["admin", "owner"], // Only show this group to admin/owner roles
       items: [
         {
           title: "Configuration",
           description: "Manage users, routing, and shared resources",
           url: "/admin/users",
           activeUrls: [
-            "/admin/queues", "/admin/skills", "/admin/statuses", "/admin/wrapup-codes",
+            "/admin/teams", "/admin/queues", "/admin/skills", "/admin/statuses", "/admin/wrapup-codes",
             "/admin/numbers", "/admin/data-sources", "/admin/web-pages", "/admin/media-library",
-            "/admin/domains", "/admin/secrets",
+            "/admin/domains", "/admin/secrets", "/admin/permissions",
           ],
           icon: IconSettings,
-          role_access: ["admin", "owner"],
+          screen: "admin.configuration",
         },
         {
           title: "Automations",
@@ -85,7 +94,7 @@ export const menuConfig = {
           url: "/admin/call-flows",
           activeUrls: ["/admin/workflows", "/admin/forms"],
           icon: IconGitBranch,
-          role_access: ["admin", "owner"],
+          screen: "admin.automations",
         },
         {
           title: "AI Assistants",
@@ -93,7 +102,35 @@ export const menuConfig = {
           url: "/admin/ai-assistants",
           activeUrls: ["/admin/tools-library", "/admin/insights", "/supervisor/scheduled-events", "/admin/mcp-servers"],
           icon: IconRobot,
-          role_access: ["admin", "owner"],
+          screens: ["admin.ai", "supervisor.scheduled-events"],
+        },
+        {
+          title: "Email",
+          description: "Manage mailboxes, domains and email delivery",
+          url: "/admin/email",
+          icon: IconMail,
+          screen: "admin.email",
+        },
+        {
+          title: "SMS",
+          description: "Map SMS numbers to queues and manage delivery",
+          url: "/admin/sms",
+          icon: IconMessage,
+          screen: "admin.sms",
+        },
+        {
+          title: "WhatsApp",
+          description: "Connect the WhatsApp Business Account, templates and numbers",
+          url: "/admin/whatsapp",
+          icon: IconBrandWhatsapp,
+          screen: "admin.whatsapp",
+        },
+        {
+          title: "Web Widgets",
+          description: "Configure website messaging and voice widgets",
+          url: "/admin/widgets",
+          icon: IconWorld,
+          screen: "admin.widgets",
         },
         {
           title: "System",
@@ -101,11 +138,18 @@ export const menuConfig = {
           url: "/admin/system/dashboard",
           activeUrls: ["/admin/call-generator", "/admin/logging", "/admin/phones-provisioning", "/settings"],
           icon: IconSettings,
-          role_access: ["admin", "owner"],
+          screen: "admin.system",
         },
       ],
     },
   ],
 };
+
+/** Screens an item (or group) needs: any of them grants visibility. */
+export function menuItemScreens(item) {
+  if (!item) return [];
+  if (Array.isArray(item.screens)) return item.screens;
+  return item.screen ? [item.screen] : [];
+}
 
 export default menuConfig;

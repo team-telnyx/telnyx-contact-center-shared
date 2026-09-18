@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, loadOutboundContactLists, mapContactList, normalizeFieldSchema, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, loadOutboundContactLists, mapContactList, normalizeFieldSchema, optionalString, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeContactListStatus } from "@/lib/outbound-dialer/contact-list-validation";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-export async function GET() {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows } = await loadOutboundContactLists(pool, 200);
   return NextResponse.json({ ok: true, contactLists: rows.map(mapContactList) });
 }
 
-export async function POST(request) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
     const body = await request.json();
@@ -23,3 +24,7 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, contactList: mapContactList(rows[0]) });
   } catch (err) { campaignsLogger.error("contact_list_create_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to create contact list", 400); }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("contact_lists:read", GET_handler, { route: "/api/contact-center/outbound-dialer/contact-lists" });
+export const POST = withPermission("contact_lists:create", POST_handler, { route: "/api/contact-center/outbound-dialer/contact-lists" });

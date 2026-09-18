@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Phone, PhoneIncoming, Clock, Mic, MicOff, Pause } from "lucide-react";
-import { IconPhone, IconRobot, IconMessageCircle } from "@tabler/icons-react";
+import { Phone, PhoneIncoming, Clock, MicOff, Pause } from "lucide-react";
+import { IconPhone, IconRobot, IconMessageCircle, IconMail, IconMessage, IconBrandWhatsapp, IconVideo } from "@tabler/icons-react";
+import { usesNativeLifecycle } from "@/lib/acd/channel-registry.mjs";
 import { getStatusDisplay } from "@/lib/call-status-utils";
-import useActiveCallStore from "@/lib/stores/active-call-store";
 import AiConversationSheet from "./AiConversationSheet";
+import MessagingInteractionActions from "./MessagingInteractionActions";
+import VoiceInteractionActions from "./VoiceInteractionActions";
+import { matchesInteractionCall, voiceInteractionPhase } from "@/lib/telephony/interaction-controls.mjs";
 
 // Format duration in seconds to MM:SS or HH:MM:SS
 function formatDuration(seconds) {
@@ -35,34 +38,24 @@ function useCallDuration(interaction) {
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-    if (!interaction) {
-      setDuration(0);
-      return;
-    }
-
-    // If interaction has ended, use stored duration
-    if (
-      interaction.completed_at ||
-      interaction.abandoned_at ||
-      interaction.state === "completed" ||
-      interaction.state === "abandoned"
-    ) {
-      const storedDuration =
-        (interaction.talk_time_seconds !== undefined &&
-        interaction.talk_time_seconds !== null
-          ? interaction.talk_time_seconds
-          : 0) ||
-        (interaction.handle_time_seconds !== undefined &&
-        interaction.handle_time_seconds !== null
-          ? interaction.handle_time_seconds
-          : 0) ||
-        0;
-      setDuration(storedDuration);
-      return;
-    }
-
-    // Calculate live duration
     const calculateDuration = () => {
+      if (!interaction) {
+        setDuration(0);
+        return;
+      }
+      if (
+        interaction.completed_at ||
+        interaction.abandoned_at ||
+        interaction.state === "completed" ||
+        interaction.state === "abandoned"
+      ) {
+        setDuration(
+          interaction.talk_time_seconds ||
+            interaction.handle_time_seconds ||
+            0,
+        );
+        return;
+      }
       const startTime =
         interaction.answered_at ||
         interaction.assigned_at ||
@@ -78,9 +71,21 @@ function useCallDuration(interaction) {
       setDuration(Math.max(0, diffSeconds));
     };
 
-    calculateDuration();
+    const initialUpdate = setTimeout(calculateDuration, 0);
+    if (
+      !interaction ||
+      interaction.completed_at ||
+      interaction.abandoned_at ||
+      interaction.state === "completed" ||
+      interaction.state === "abandoned"
+    ) {
+      return () => clearTimeout(initialUpdate);
+    }
     const interval = setInterval(calculateDuration, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialUpdate);
+      clearInterval(interval);
+    };
   }, [interaction]);
 
   return duration;
@@ -88,119 +93,48 @@ function useCallDuration(interaction) {
 
 // Get real-time WebRTC status and state for an interaction
 function getWebRTCStatus(interaction, webrtcCallState) {
-  // If there's an active WebRTC call, check if we should use its status
-  if (!webrtcCallState || !webrtcCallState.call) {
-    return null; // No WebRTC call, use database status
-  }
+  if (!matchesInteractionCall(interaction, webrtcCallState)) return null;
+  return {
+    status: webrtcCallState.status || webrtcCallState.call.state || null,
+    isMuted: webrtcCallState.ui?.isMuted || false,
+    isHeld: webrtcCallState.ui?.isHeld || false,
+  };
+}
 
-  const call = webrtcCallState.call;
-  const callControlId = interaction.call_control_id;
-  const interactionId = interaction.id;
+// Keep the visual offer state aligned with the call controls, including SDK
+// updates that arrive before the database refresh. A stale offer stops glowing
+// at its deadline even when the next interaction refresh is delayed.
+function useIncomingOffer(interaction, callState) {
+  const [expiredDeadline, setExpiredDeadline] = useState(null);
+  const messaging = usesNativeLifecycle(interaction?.channel);
+  const offered = messaging
+    ? ["ringing", "offered"].includes(interaction?.state) && !interaction?.completed_at && !interaction?.abandoned_at
+    : voiceInteractionPhase(interaction, callState) === "incoming";
+  const deadline = interaction?.offer_deadline;
+  useEffect(() => {
+    if (!offered || !deadline) return;
+    const expiresAt = new Date(deadline).getTime();
+    if (!Number.isFinite(expiresAt)) return;
+    const timer = setTimeout(() => setExpiredDeadline(deadline), Math.max(0, expiresAt - Date.now()));
+    return () => clearTimeout(timer);
+  }, [offered, deadline]);
+  return offered && (!deadline || expiredDeadline !== deadline);
+}
 
-  // Try to match by call_control_id or interaction_id
-  const webrtcCallId =
-    call.callId || call.callControlId || call.id || call.call_control_id;
+function IncomingLabel() {
+  return <span className="inline-flex items-center gap-1"><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />Incoming</span>;
+}
 
-  const isOutbound =
-    interaction.direction === "outgoing" ||
-    interaction.direction === "outbound";
-  const isInbound =
-    interaction.direction === "inbound" ||
-    interaction.direction === "incoming" ||
-    !isOutbound; // Default to inbound if direction not set
-
-  const idsMatch = webrtcCallId === callControlId;
-  const interactionIdsMatch =
-    webrtcCallState.contactCenter?.interactionId === interactionId;
-
-  // For contact center calls (inbound), prioritize matching by interaction ID
-  // This is important because inbound calls transferred to agents have different
-  // call_control_id values (original PSTN leg vs agent's WebRTC leg)
-  if (interactionIdsMatch) {
-    const isMuted = webrtcCallState.ui?.isMuted || false;
-    const isHeld = webrtcCallState.ui?.isHeld || false;
-    const webrtcStatus = webrtcCallState.status || call.state || null;
-
-    return {
-      status: webrtcStatus,
-      isMuted,
-      isHeld,
-    };
-  }
-
-  // For inbound calls, also try matching by call_control_id (for cases where interactionId isn't set)
-  if (isInbound && idsMatch) {
-    const isMuted = webrtcCallState.ui?.isMuted || false;
-    const isHeld = webrtcCallState.ui?.isHeld || false;
-    const webrtcStatus = webrtcCallState.status || call.state || null;
-
-    return {
-      status: webrtcStatus,
-      isMuted,
-      isHeld,
-    };
-  }
-
-  // For outbound calls or matching IDs, use WebRTC status
-  if (idsMatch || (isOutbound && webrtcCallId)) {
-    const callState = call.state || "";
-    const storeStatus = webrtcCallState.status || "";
-    const webrtcStatus = String(storeStatus || callState).toLowerCase();
-
-    // If status indicates call ended, return null so we show database state
-    if (
-      ["hangup", "ended", "destroy", "idle", "terminated"].includes(
-        webrtcStatus,
-      )
-    ) {
-      return null;
-    }
-
-    const isMuted = webrtcCallState.ui?.isMuted || false;
-    const isHeld = webrtcCallState.ui?.isHeld || false;
-
-    return {
-      status: webrtcStatus || null,
-      isMuted,
-      isHeld,
-    };
-  }
-
-  // Fallback: For inbound calls, if there's an active WebRTC call and this interaction is active,
-  // match them even if interactionId isn't set in the store
-  // This handles cases where the store metadata wasn't properly set but we still want to show
-  // real-time status (hold, mute) for the active call
-  if (isInbound && webrtcCallState.call) {
-    // Only match if this interaction is active (not completed/abandoned)
-    const isActive =
-      !interaction.completed_at &&
-      !interaction.abandoned_at &&
-      interaction.state !== "completed" &&
-      interaction.state !== "abandoned";
-
-    // Also check if the interaction state suggests it's an active call
-    const isActiveState = [
-      "ringing",
-      "active",
-      "connected",
-      "answered",
-      "queued",
-    ].includes(interaction.state?.toLowerCase());
-
-    if (isActive && isActiveState) {
-      const isMuted = webrtcCallState.ui?.isMuted || false;
-      const isHeld = webrtcCallState.ui?.isHeld || false;
-      const webrtcStatus = webrtcCallState.status || call.state || null;
-
-      return {
-        status: webrtcStatus,
-        isMuted,
-        isHeld,
-      };
-    }
-  }
-
-  return null; // No match, use database status
+// Selection is a sibling of the controls, so buttons and portalled dialogs do
+// not select a card or create nested interactive elements.
+function InteractionCardFrame({interaction,isSelected,onSelect,label,className,incoming,children}) {
+  const descriptionId = useId();
+  return <div className={cn("relative w-full text-left",className,incoming && "cc-interaction-offer")} data-incoming={incoming || undefined} data-channel={interaction.channel || "voice"} data-testid={`${interaction.channel||"voice"}-interaction-card`} data-work-item-id={interaction.id}>
+    <button type="button" onClick={()=>onSelect(interaction)} aria-label={label} aria-pressed={isSelected} aria-describedby={incoming ? descriptionId : undefined}
+      className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"/>
+    {incoming && <span id={descriptionId} className="sr-only">Incoming interaction awaiting your response.</span>}
+    <div className="pointer-events-none relative">{children}</div>
+  </div>;
 }
 
 // Contact Center Interaction Card Component
@@ -209,10 +143,77 @@ function InteractionCard({
   isSelected,
   onSelect,
   webrtcState,
-  currentUsername,
+  callState,
+  onChanged,
 }) {
-  if (!interaction) return null;
   const duration = useCallDuration(interaction);
+  const incoming = useIncomingOffer(interaction, callState);
+  if (!interaction) return null;
+  if (interaction.channel === "email") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Email from ${interaction.from_name||"Email customer"}`}
+    className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-amber-500 shadow-lg ring-1 ring-amber-500/30":"border-amber-500/60 hover:border-amber-500")}
+    >
+    <div className="mb-2 flex items-start gap-2">
+      <div className="relative shrink-0 rounded-lg bg-amber-500 p-2 text-white shadow-sm"><IconMail className="size-4"/>{interaction.attributes?.handoff&&<span className="absolute -right-1 -top-1 rounded-full bg-violet-500 p-0.5"><IconRobot className="size-3.5"/></span>}</div>
+      <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">{interaction.queue_name||"Contact Center"}</div>
+        <div className="truncate text-sm font-bold text-amber-700 dark:text-amber-300">{interaction.from_name||"Email customer"}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.subject||"Email"}</div>
+      </div><span className="shrink-0 rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+    </div>
+    <div className="flex items-center justify-between border-t border-amber-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-amber-600"/><span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-amber-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
+  </InteractionCardFrame>;
+  if (interaction.channel === "sms") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`SMS from ${interaction.from_name||interaction.customer_address||"Mobile customer"}`}
+    className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-sky-500 shadow-lg ring-1 ring-sky-500/30":"border-sky-500/60 hover:border-sky-500")}
+    >
+    <div className="mb-2 flex items-start gap-2">
+      <div className="relative shrink-0 rounded-lg bg-sky-500 p-2 text-white shadow-sm"><IconMessage className="size-4"/></div>
+      <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{interaction.queue_name||"Contact Center"}</div>
+        <div className="truncate text-sm font-bold text-sky-700 dark:text-sky-300">{interaction.from_name||interaction.customer_address||"Mobile customer"}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.number_name?`SMS · ${interaction.attributes.number_name}`:interaction.attributes?.business_number?`SMS · ${interaction.attributes.business_number}`:"SMS"}</div>
+      </div><span className="shrink-0 rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+    </div>
+    <div className="flex items-center justify-between border-t border-sky-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-sky-600"/><span className="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-sky-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
+  </InteractionCardFrame>;
+  if (interaction.channel === "whatsapp") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`WhatsApp from ${interaction.from_name||interaction.customer_address||"WhatsApp customer"}`}
+    className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-green-600 shadow-lg ring-1 ring-green-600/30":"border-green-600/60 hover:border-green-600")}
+    >
+    <div className="mb-2 flex items-start gap-2">
+      <div className="relative shrink-0 rounded-lg bg-green-600 p-2 text-white shadow-sm"><IconBrandWhatsapp className="size-4"/></div>
+      <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">{interaction.queue_name||"Contact Center"}</div>
+        <div className="truncate text-sm font-bold text-green-700 dark:text-green-300">{interaction.from_name||interaction.customer_address||"WhatsApp customer"}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.number_name?`WhatsApp · ${interaction.attributes.number_name}`:interaction.attributes?.business_number?`WhatsApp · ${interaction.attributes.business_number}`:"WhatsApp"}</div>
+      </div><span className="shrink-0 rounded border border-green-600/25 bg-green-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 dark:text-green-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+    </div>
+    <div className="flex items-center justify-between border-t border-green-600/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-green-600"/><span className="font-mono text-xs font-semibold text-green-700 dark:text-green-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-green-600">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
+  </InteractionCardFrame>;
+  if (interaction.channel === "video") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Video call with ${interaction.from_name||"Website visitor"}`}
+    className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-rose-500 shadow-lg ring-1 ring-rose-500/30":"border-rose-500/60 hover:border-rose-500")}
+    >
+    <div className="mb-2 flex items-start gap-2">
+      <div className="relative shrink-0 rounded-lg bg-rose-500 p-2 text-white shadow-sm"><IconVideo className="size-4"/></div>
+      <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">{interaction.queue_name||"Contact Center"}</div>
+        <div className="truncate text-sm font-bold text-rose-700 dark:text-rose-300">{interaction.from_name||"Website visitor"}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">Web video call</div>
+      </div><span className="shrink-0 rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+    </div>
+    <div className="flex items-center justify-between border-t border-rose-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-rose-600"/><span className="font-mono text-xs font-semibold text-rose-700 dark:text-rose-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-rose-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
+  </InteractionCardFrame>;
+  if (interaction.channel === "chat") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Chat with ${interaction.from_name||"Website visitor"}`}
+    className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-teal-500 shadow-lg ring-1 ring-teal-500/30":"border-teal-500/60 hover:border-teal-500")}
+    >
+    <div className="mb-2 flex items-start gap-2">
+      <div className="relative shrink-0 rounded-lg bg-teal-500 p-2 text-white shadow-sm"><IconMessageCircle className="size-4"/>{interaction.attributes?.handoff&&<span className="absolute -right-1 -top-1 rounded-full bg-violet-500 p-0.5"><IconRobot className="size-3.5"/></span>}</div>
+      <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">{interaction.queue_name||"Contact Center"}</div>
+        <div className="truncate text-sm font-bold text-teal-700 dark:text-teal-300">{interaction.from_name||"Website visitor"}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.handoff?"AI handoff · Web chat":"Web chat"}</div>
+      </div><span className="shrink-0 rounded border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+    </div>
+    <div className="flex items-center justify-between border-t border-teal-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-teal-600"/><span className="font-mono text-xs font-semibold text-teal-700 dark:text-teal-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-teal-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
+  </InteractionCardFrame>;
 
   // Get WebRTC status if available
   const webrtcStatus = webrtcState?.status || null;
@@ -306,8 +307,7 @@ function InteractionCard({
   );
 
   return (
-    <div
-      onClick={() => onSelect(interaction)}
+    <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Voice call with ${callerNameLabel||callerNumberLabel}`}
       className={cn(
         "p-2.5 rounded-lg border-2 cursor-pointer transition-all hover:shadow-lg bg-card",
         isSelected
@@ -351,6 +351,7 @@ function InteractionCard({
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              <div className="pointer-events-auto relative z-10"><AiConversationSheet interaction={interaction} triggerClassName="h-6 w-6" iconClassName="h-4 w-4" stopPropagation/></div>
               {(isMuted || isHeld) && (
                 <div className="flex items-center gap-0.5">
                   {isMuted && (
@@ -367,7 +368,7 @@ function InteractionCard({
               <span
                 className={`border px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusDisplay.color}`}
               >
-                {statusDisplay.text}
+                {incoming ? <IncomingLabel /> : statusDisplay.text}
               </span>
             </div>
           </div>
@@ -381,27 +382,12 @@ function InteractionCard({
             {formatDuration(duration)}
           </span>
           {isActive && !isEnded && (
-            <span className="text-orange-500 animate-pulse text-xs">●</span>
+            <span className="text-orange-500 text-xs">●</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {interaction.to_number && (
-            <div className="text-[10px] text-gray-600 font-medium bg-gray-100 px-1.5 py-0.5 rounded">
-              {interaction.to_number}
-            </div>
-          )}
-          <AiConversationSheet
-            interaction={interaction}
-            triggerClassName="h-7 w-7"
-            iconClassName="h-4.5 w-4.5"
-            stopPropagation
-          />
-        </div>
+        <VoiceInteractionActions interaction={interaction} callState={callState}/>
       </div>
-
-      {/* All calls are controlled from WebRTC mini/floating phones */}
-      {/* Answer/Reject buttons are shown in the WebRTC client, not here */}
-    </div>
+    </InteractionCardFrame>
   );
 }
 
@@ -411,6 +397,7 @@ export function InteractionsList({
   onSelect,
   webrtcCallState,
   currentUsername,
+  onChanged,
 }) {
   return (
     <div className="flex flex-col h-full">
@@ -424,7 +411,7 @@ export function InteractionsList({
           </h2>
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
         <div className="p-3 space-y-3">
           {(() => {
             const filteredInteractions = interactions.filter((interaction) => {
@@ -473,7 +460,8 @@ export function InteractionsList({
                   isSelected={selectedId === interaction.id}
                   onSelect={onSelect}
                   webrtcState={webrtcState}
-                  currentUsername={currentUsername}
+                  callState={webrtcCallState}
+                  onChanged={onChanged}
                 />
               );
             });

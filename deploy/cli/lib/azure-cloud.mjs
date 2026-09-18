@@ -781,7 +781,7 @@ export async function destroyAzureInfra({
 
   // Note: NOT calling `az keyvault purge` here. The azurerm provider's
   // key_vault.purge_soft_delete_on_destroy defaults to true (see
-  // https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/features-block
+  // https://registry.terraform.io/providers/hashicorp/azurerm/latest/the internal documentation
   // - our versions.tf's `features {}` block takes every default as-is),
   // so `terraform destroy` already fully purges azurerm_key_vault.main as
   // part of destroying that resource — that's why it took ~10 minutes in

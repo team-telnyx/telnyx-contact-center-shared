@@ -39,7 +39,9 @@ test("accumulateSlotValue dedupes repeats and supersets", () => {
 test("live analyze route guards the read-back item and accumulates notes slots", async () => {
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
   // Read-back/confirm-all item must not complete while a slot is still unconfirmed.
-  assert.match(route, /hasUnconfirmedSlot = pendingItems\.some\(\(p\) => p\.type === "slot"\)/);
+  // Checked against allPendingItems (whole workflow), not the possibly concept-
+  // group-scoped pendingItems — see the concurrent-group-batching comments.
+  assert.match(route, /hasUnconfirmedSlot = allPendingItems\.some\(\(p\) => p\.type === "slot"\)/);
   assert.match(route, /isReadBackItem\(\{[\s\S]*?itemHints: item\.hints/);
   // Notes slots accumulate instead of overwrite.
   assert.match(route, /isAccumulatingSlot\(item\)\s*\?\s*accumulateSlotValue\(/);
@@ -69,8 +71,8 @@ test("live route keeps COMPLETED notes slots analyzable so later fragments accum
   // The completion loop looks items up in analyzerItems and appends for a completed notes slot.
   assert.match(route, /analyzerItems\.find\(p => p\.item_id === completed\.item_id\)/);
   assert.match(route, /item\.current_status === "completed" && item\.type === "slot" && isAccumulatingSlot\(item\)/);
-  // The read-back guard must NOT be fooled by the re-included completed slot — it still keys on pendingItems.
-  assert.match(route, /hasUnconfirmedSlot = pendingItems\.some\(\(p\) => p\.type === "slot"\)/);
+  // The read-back guard must NOT be fooled by the re-included completed slot — it still keys on allPendingItems.
+  assert.match(route, /hasUnconfirmedSlot = allPendingItems\.some\(\(p\) => p\.type === "slot"\)/);
 });
 
 test("live route fetches completed notes BEFORE the empty-pending return and gates append on threshold (Codex #1164)", async () => {

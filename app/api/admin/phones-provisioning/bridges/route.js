@@ -1,24 +1,9 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user) || user.experimental_features !== true) return null;
-  return user;
-}
 
 function tokenHash(token) {
   return crypto.createHash("sha256").update(String(token || "")).digest("hex");
@@ -74,9 +59,10 @@ async function liveBridges() {
   }
 }
 
-export async function GET() {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -103,9 +89,10 @@ export async function GET() {
   }
 }
 
-export async function POST(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -128,9 +115,10 @@ export async function POST(request) {
   }
 }
 
-export async function PATCH(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PATCH_handler(request, _context, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -155,9 +143,10 @@ export async function PATCH(request) {
   }
 }
 
-export async function DELETE(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, _context, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -189,3 +178,9 @@ export async function DELETE(request) {
     return NextResponse.json({ error: "Failed to delete local bridge" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("phones:read", GET_handler, { route: "/api/admin/phones-provisioning/bridges" });
+export const POST = withPermission("phones:create", POST_handler, { route: "/api/admin/phones-provisioning/bridges" });
+export const PATCH = withPermission("phones:update", PATCH_handler, { route: "/api/admin/phones-provisioning/bridges" });
+export const DELETE = withPermission("phones:delete", DELETE_handler, { route: "/api/admin/phones-provisioning/bridges" });

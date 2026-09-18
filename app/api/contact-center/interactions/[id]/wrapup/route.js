@@ -1,176 +1,77 @@
 import { NextResponse } from "next/server";
-import { PgDb } from "@/lib/pgdb";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { wrapupLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
-import {
-  addTimelineEvent,
-  TimelineEventTypes,
-} from "@/lib/contact-center/call-timeline-tracker";
+
+import { completeAcdWrapup } from "@/lib/acd/wrapup.mjs";
+import { findPendingAcdWrapupSegment } from "@/lib/acd/wrapup-context.mjs";
+import { findInteractionViewByReference } from "@/lib/acd/work-item-repository.mjs";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { interactionAgentMatches } from "@/lib/contact-center/interaction-agent-access.mjs";
-import { handleAgentCallLifecycleStatus } from "@/lib/contact-center/agent-call-lifecycle-status";
+import {
+  contactCenterErrorPayload,
+  wrapupLogger,
+} from "@/lib/contact-center/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function getUsernameForUserId(userId) {
-  const pool = getPostgresPool();
-  if (!pool) return null;
-  const userResult = await pool.query(
-    "SELECT username FROM users WHERE id = $1 LIMIT 1",
-    [userId],
-  );
-  return userResult.rows?.[0]?.username || null;
-}
-
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }, authz) {
   try {
     const { id } = await params;
     if (!id) {
-      return NextResponse.json(
-        { ok: false, error: "Interaction ID is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ ok: false, error: "Interaction ID is required" }, { status: 400 });
     }
-
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
+    const user = authz.user;
+    const pool = getPostgresPool();
+    if (!pool) {
+      return NextResponse.json({ ok: false, error: "Database unavailable" }, { status: 503 });
     }
-
-    const interaction = await PgDb.findInteractionById(id);
+    const interaction = await findInteractionViewByReference(pool, id);
     if (!interaction) {
-      return NextResponse.json(
-        { ok: false, error: "Interaction not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ ok: false, error: "Interaction not found" }, { status: 404 });
     }
-
-    const currentUsername = await getUsernameForUserId(user.id);
-    if (!interactionAgentMatches(interaction, [user.username, currentUsername])) {
+    const { action, nextStatus = null, segmentId = null } = await request.json();
+    const segment = await findPendingAcdWrapupSegment(pool, {
+      workItemId: interaction.id,
+      agentId: user.id,
+      segmentId,
+    });
+    if (!segment) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Unauthorized - interaction belongs to different agent",
-        },
+        { ok: false, error: "No pending wrap-up belongs to this agent" },
         { status: 403 },
       );
     }
 
-    const body = await request.json();
-    const action = body?.action;
-    if (!["start", "end"].includes(action)) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid wrapup action" },
-        { status: 400 },
-      );
+    if (!['start', 'end'].includes(action)) {
+      return NextResponse.json({ ok: false, error: "Invalid wrapup action" }, { status: 400 });
     }
-
-    const wasAnswered = Boolean(interaction.answered_at);
-    if (action === "start" && !wasAnswered) {
-      return NextResponse.json(
-        { ok: false, error: "Wrapup requires an answered call" },
-        { status: 409 },
-      );
+    if (nextStatus !== null && nextStatus !== "Break") {
+      return NextResponse.json({ ok: false, error: "Invalid next status" }, { status: 400 });
     }
-
-    const updates = {};
-    const metadata = {
-      ...(interaction.metadata || {}),
-    };
-    let updatedRoutingMetadata = interaction.routing_metadata || {};
-
     if (action === "start") {
-      if (!metadata.wrapup_started_at) {
-        const timeline = Array.isArray(updatedRoutingMetadata.timeline)
-          ? updatedRoutingMetadata.timeline
-          : [];
-        const disconnectedEvent = timeline.find(
-          (event) => event.type === TimelineEventTypes.DISCONNECTED,
-        );
-        const completedAt =
-          interaction.completed_at ||
-          interaction.abandoned_at ||
-          disconnectedEvent?.timestamp ||
-          null;
-
-        // Check if call is in a terminal state (completed/abandoned) even if timestamp isn't set yet
-        const isTerminalState =
-          interaction.state === "completed" ||
-          interaction.state === "abandoned" ||
-          interaction.state === "failed";
-
-        if (!completedAt && !isTerminalState) {
-          return NextResponse.json(
-            { ok: false, error: "Call not disconnected yet", retry: true },
-            { status: 409 },
-          );
-        }
-
-        const nowMs = Date.now();
-        // If we have a completedAt timestamp, use it; otherwise use current time for terminal states
-        const completedMs = completedAt
-          ? new Date(completedAt).getTime()
-          : nowMs;
-        const startedAt = new Date(
-          Math.max(nowMs, Number.isNaN(completedMs) ? nowMs : completedMs),
-        ).toISOString();
-        metadata.wrapup_started_at = startedAt;
-        updatedRoutingMetadata = addTimelineEvent(
-          updatedRoutingMetadata,
-          TimelineEventTypes.WRAPUP_START,
-          {
-            timestamp: startedAt,
-            agentUsername: interaction.agent_username || null,
-          },
-        );
-        updates.metadata = metadata;
-        updates.routingMetadata = updatedRoutingMetadata;
-      }
-    } else {
-      const endedAt = new Date().toISOString();
-      metadata.wrapup_ended_at = endedAt;
-      let durationSeconds = null;
-      if (metadata.wrapup_started_at) {
-        const startMs = new Date(metadata.wrapup_started_at).getTime();
-        const endMs = new Date(endedAt).getTime();
-        if (!Number.isNaN(startMs) && !Number.isNaN(endMs)) {
-          durationSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
-        }
-      }
-      if (durationSeconds != null) {
-        metadata.wrapup_duration_seconds = durationSeconds;
-      }
-      updatedRoutingMetadata = addTimelineEvent(
-        updatedRoutingMetadata,
-        TimelineEventTypes.WRAPUP_END,
-        {
-          timestamp: endedAt,
-          wrapupDurationSeconds: durationSeconds,
-          agentUsername: interaction.agent_username || null,
-        },
-      );
-      updates.metadata = metadata;
-      updates.routingMetadata = updatedRoutingMetadata;
-    }
-
-    await PgDb.updateInteractionById(id, updates);
-
-    if (interaction.agent_username) {
-      await handleAgentCallLifecycleStatus({
-        event: action === "start" ? "disconnected" : "wrapup-ended",
-        userId: user.id,
-        username: interaction.agent_username,
-        interaction,
+      return NextResponse.json({
+        ok: true,
+        startedAt: segment.ended_at,
+        deadlineAt: segment.wrapup_deadline_at || null,
       });
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    wrapupLogger.error("wrapup_error_0", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
+    const result = await completeAcdWrapup(pool, {
+      workItemId: interaction.id,
+      expectedAgentId: user.id,
+      segmentId: segment.id,
+      nextManualStatus: nextStatus,
+      actor: `agent:${user.id}`,
+    });
+    if (!result.completed) {
+      const status = result.reason === "work_item_not_found" ? 404 : 409;
+      return NextResponse.json({ ok: false, error: result.reason }, { status });
+    }
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    wrapupLogger.error("wrapup_failed", contactCenterErrorPayload(error));
     return NextResponse.json(
       { ok: false, error: "Failed to update wrapup status" },
       { status: 500 },
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission(["agent:self", "interactions:annotate"], POST_handler, { route: "/api/contact-center/interactions/[id]/wrapup" });

@@ -64,16 +64,16 @@ test("contact dynamic variables helpers validate initialization and lookup targe
     extractDynamicVariablesTarget({
       data: {
         event_type: "assistant.initialization",
-        payload: { telnyx_end_user_target: "+48 602 410 402" },
+        payload: { telnyx_end_user_target: "+48 600 000 001" },
       },
     }),
-    "+48 602 410 402"
+    "+48 600 000 001"
   );
   assert.equal(extractDynamicVariablesTarget({ data: { event_type: "other" } }), "");
-  assert.deepEqual(normalizeContactTarget("+48 602-410-402"), {
-    raw: "+48 602-410-402",
+  assert.deepEqual(normalizeContactTarget("+48 600-000-001"), {
+    raw: "+48 600-000-001",
     email: "",
-    digits: "48602410402",
+    digits: "48600000001",
   });
   assert.deepEqual(normalizeContactTarget("Ada@Example.com"), {
     raw: "Ada@Example.com",

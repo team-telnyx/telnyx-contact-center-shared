@@ -175,7 +175,7 @@
                 setTimeout(() => {
                     this.addTranscriptItem({
                         role: 'assistant',
-                        content: 'Thank you for calling Global Medical Response. My name is your AI assistant. How may I assist you today?',
+                        content: 'Thank you for calling Acme Air Medical. My name is your AI assistant. How may I assist you today?',
                         isFinal: true
                     });
                     this.emit('conversation.agent.state', 'listening');
@@ -262,10 +262,10 @@
                     return 'Let me confirm the details: Patient Maria Garcia, DOB March 15 1965, Female, 140 lbs. Pickup from Memorial Hospital Room 302 ICU. Reason: Cardiac surgery. 2 IVs, oxygen support. Husband accompanying. No isolation. Is this correct?';
                 }
                 if (input.includes('all') && input.includes('correct')) {
-                    return 'Your transport request has been submitted. Reference number: GMR-123456. Is there anything else I can help with?';
+                    return 'Your transport request has been submitted. Reference number: the reference workflow-123456. Is there anything else I can help with?';
                 }
                 if (input.includes('thank') || input.includes('that\'s all')) {
-                    return 'Thank you for calling Global Medical Response. Have a great day!';
+                    return 'Thank you for calling Acme Air Medical. Have a great day!';
                 }
                 if (input.includes('human') || input.includes('agent') || input.includes('person')) {
                     return 'I understand you\'d like to speak with a team member. Let me transfer you now. I\'ve collected: caller name and facility. Transferring...';
@@ -295,7 +295,7 @@
         }
 
         function App() {
-            const [assistantId, setAssistantId] = useState('assistant-06fd0ed6-69fd-4235-986b-72e5ae1af71c');
+            const [assistantId, setAssistantId] = useState('assistant-00000000-0000-0000-0000-000000000000');
             const [scenario, setScenario] = useState('full_workflow');
             const [isRunning, setIsRunning] = useState(false);
             const [status, setStatus] = useState('idle');

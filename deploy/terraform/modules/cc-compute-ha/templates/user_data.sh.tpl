@@ -56,7 +56,7 @@ mkdir -p /opt/cc/logs /opt/cc/releases
 # Caddy — TLS terminates at the ALB, not per-node), so unlike single-node
 # there's no compose.yaml `cloud` profile involved here: cloud-deploy.mjs's
 # per-node deploy script runs the app image with a plain `docker run`
-# (ported from fde-internals/scripts/deploy-from-s3.sh), binding directly to
+# (ported from internal-tooling/scripts/deploy-from-s3.sh), binding directly to
 # app_port/streaming_ws_port. See cloud-deploy.mjs for the exact invocation.
 
 aws secretsmanager get-secret-value \

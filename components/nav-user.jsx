@@ -8,7 +8,8 @@ import {
 } from "@tabler/icons-react";
 import { USER_STATUS_OPTIONS, DEFAULT_USER_STATUS } from "@/config/user";
 
-import { Moon, Sun, Monitor } from "lucide-react";
+import { Moon, Sun, Monitor, Info } from "lucide-react";
+import { ApplicationVersionDialog, ApplicationVersionLabel } from "@/components/application-version";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -65,6 +66,7 @@ export function NavUser({ user, hideExtras }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const [aboutOpen, setAboutOpen] = useState(false);
   const logoutInFlightRef =
     typeof window !== "undefined"
       ? (window.__logoutInFlightRef ||= { v: false })
@@ -117,20 +119,6 @@ export function NavUser({ user, hideExtras }) {
     return unsubscribe;
   }, []);
 
-  async function updateStatusOnServer(nextStatus) {
-    // Persist status to database
-    try {
-      await fetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: nextStatus,
-          system: nextStatus === "Offline",
-        }),
-      });
-    } catch (_) {}
-  }
-
   async function handleLogout() {
     if (logoutInFlightRef.v) return;
     logoutInFlightRef.v = true;
@@ -141,10 +129,6 @@ export function NavUser({ user, hideExtras }) {
     }
 
     try {
-      try {
-        await updateStatusOnServer("Offline");
-      } catch (_) {}
-
       try {
         useCallsStore.getState().clearAllCalls();
         useActiveCallStore.getState().clearActiveCall();
@@ -208,15 +192,17 @@ export function NavUser({ user, hideExtras }) {
                 <span className="text-muted-foreground truncate text-xs">
                   {user?.email || ""}
                 </span>
+                <ApplicationVersionLabel />
               </div>
               <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+            className="z-[110] w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={4}
+            onCloseAutoFocus={(event) => { if (aboutOpen) event.preventDefault(); }}
           >
             {/* Status selector for authenticated users */}
             <DropdownMenuLabel className="p-0 font-normal">
@@ -236,6 +222,7 @@ export function NavUser({ user, hideExtras }) {
                   <span className="text-muted-foreground truncate text-xs">
                     {user.email}
                   </span>
+                  <ApplicationVersionLabel />
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -301,12 +288,18 @@ export function NavUser({ user, hideExtras }) {
               </>
             )}
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setAboutOpen(true)}>
+              <Info />
+              About Contact Center
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <IconLogout />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <ApplicationVersionDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       </SidebarMenuItem>
     </SidebarMenu>
   );

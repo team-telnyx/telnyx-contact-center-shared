@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "next-auth/middleware";
+import { getToken } from "next-auth/jwt";
+import { authorizePage } from "@/lib/authz/page-access-server.mjs";
+import { deniedRedirectPath } from "@/lib/authz/page-access.mjs";
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
@@ -33,6 +36,12 @@ export async function proxy(request) {
   const isNext = pathname.startsWith("/_next");
   const isFavicon = pathname === "/favicon.ico";
   const isApi = pathname.startsWith("/api");
+
+  // Widget bootstrap validates CORS against each published widget's origin
+  // allowlist. The embedded frame and token-scoped session API are public.
+  if (pathname === "/widget/frame" || pathname.startsWith("/api/widgets/") || pathname.startsWith("/api/widget-sessions/")) {
+    return NextResponse.next();
+  }
 
   // CORS support for API routes with allowed origins
   if (isApi) {
@@ -78,6 +87,25 @@ export async function proxy(request) {
 
   if (isAsset || isNext || isFavicon) {
     return NextResponse.next();
+  }
+
+  // Page authorisation (RBAC Phase 3): a signed-in user may open a portal
+  // path only when a role grants its screen. The decision comes from the
+  // database (10 s per-instance cache) with the token snapshot as fallback;
+  // refused requests land on the home page, which names the missing screen.
+  try {
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    if (token) {
+      const decision = await authorizePage({ token, pathname, search: request.nextUrl.search });
+      if (!decision.allowed) {
+        console.warn(`[authz] page refused: ${pathname} (${decision.reason}, screen ${decision.screen || "unknown"})`);
+        if (pathname !== "/") return NextResponse.redirect(new URL(deniedRedirectPath(decision.screen), request.url));
+      }
+      return NextResponse.next();
+    }
+  } catch (error) {
+    // Authentication below still applies; authorisation is retried on the next request.
+    console.error("[authz] page authorisation failed", error?.message || error);
   }
 
   // Use withAuth to protect routes

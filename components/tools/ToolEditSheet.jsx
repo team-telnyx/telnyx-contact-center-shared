@@ -25,6 +25,8 @@ import {
   IconDatabaseSearch,
   IconPlayerSkipForward,
   IconFlask,
+  IconBrandWhatsapp,
+  IconDeviceDesktopCog,
 } from "@tabler/icons-react";
 import { toast } from "@/lib/toast";
 import WebhookTestSheet from "@/components/assistants/tools/WebhookTestSheet";
@@ -40,8 +42,11 @@ import ReferToolEditor from "@/components/assistants/tools/ReferToolEditor";
 import DTMFToolEditor from "@/components/assistants/tools/DTMFToolEditor";
 import RetrievalToolEditor from "@/components/assistants/tools/RetrievalToolEditor";
 import SkipTurnToolEditor from "@/components/assistants/tools/SkipTurnToolEditor";
+import WhatsAppTemplateToolEditor from "@/components/assistants/tools/WhatsAppTemplateToolEditor";
+import ClientSideToolEditor from "@/components/assistants/tools/ClientSideToolEditor";
+import { validateAssistantToolConfiguration } from "@/lib/ai/assistant-tool-validation";
 // ============================================================
-// Tool type definitions (all 10 supported types)
+// Tool type definitions (all 12 supported types)
 // ============================================================
 const TOOL_TYPES = [
   {
@@ -114,6 +119,20 @@ const TOOL_TYPES = [
     icon: IconPlayerSkipForward,
     color: "text-slate-500",
   },
+  {
+    value: "whatsapp_template",
+    label: "WhatsApp Template",
+    description: "Send approved WhatsApp templates",
+    icon: IconBrandWhatsapp,
+    color: "text-green-500",
+  },
+  {
+    value: "client_side_tool",
+    label: "Client-Side Tool",
+    description: "Run a function in the Voice SDK client",
+    icon: IconDeviceDesktopCog,
+    color: "text-sky-500",
+  },
 ];
 
 // ============================================================
@@ -155,6 +174,19 @@ function apiToFormState(tool) {
     send_dtmf: type === "send_dtmf" ? getTypeData("send_dtmf") : {},
     retrieval: type === "retrieval" ? getTypeData("retrieval") : { bucket_ids: [] },
     skip_turn: type === "skip_turn" ? getTypeData("skip_turn") : {},
+    whatsapp_template:
+      type === "whatsapp_template"
+        ? getTypeData("whatsapp_template")
+        : { templates: [] },
+    client_side_tool:
+      type === "client_side_tool"
+        ? getTypeData("client_side_tool")
+        : {
+            name: "",
+            description: "",
+            parameters: { type: "object", properties: {}, required: [] },
+          },
+    timeout_ms: tool.timeout_ms ?? 5000,
   };
 }
 
@@ -214,6 +246,16 @@ function buildPayload(formData) {
     case "skip_turn":
       payload.skip_turn = formData.skip_turn || {};
       break;
+    case "whatsapp_template":
+      payload.whatsapp_template = formData.whatsapp_template || {
+        templates: [],
+      };
+      payload.timeout_ms = Number(formData.timeout_ms || 5000);
+      break;
+    case "client_side_tool":
+      payload.client_side_tool = formData.client_side_tool || {};
+      payload.timeout_ms = Number(formData.timeout_ms || 5000);
+      break;
     default:
       if (formData._originalTypeData && Object.keys(formData._originalTypeData).length) {
         payload[type] = formData._originalTypeData;
@@ -228,7 +270,12 @@ function buildPayload(formData) {
 // Type-specific editor renderer
 // Adapts the formData <-> each editor's value/onChange API
 // ============================================================
-function ToolTypeEditor({ type, formData, setFormData }) {
+function ToolTypeEditor({
+  type,
+  formData,
+  setFormData,
+  onValidationChange,
+}) {
   // Each editor expects: value = full tool object (with type key + nested data)
   // onChange receives the same shape back
   const value = { type, ...formData };
@@ -329,6 +376,24 @@ function ToolTypeEditor({ type, formData, setFormData }) {
         />
       );
 
+    case "whatsapp_template":
+      return (
+        <WhatsAppTemplateToolEditor
+          value={value}
+          onChange={onChange}
+          onValidationChange={onValidationChange}
+        />
+      );
+
+    case "client_side_tool":
+      return (
+        <ClientSideToolEditor
+          value={value}
+          onChange={onChange}
+          onValidationChange={onValidationChange}
+        />
+      );
+
     default:
       return (
         <p className="text-xs text-muted-foreground">
@@ -346,11 +411,13 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const [editorValidationError, setEditorValidationError] = useState("");
 
   // Initialize form when sheet opens
   useEffect(() => {
     if (open) {
       setFormData(apiToFormState(tool));
+      setEditorValidationError("");
     }
   }, [open, tool]);
 
@@ -359,6 +426,7 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
       ...prev,
       type: newType,
     }));
+    setEditorValidationError("");
   }, []);
 
   async function handleSave() {
@@ -393,6 +461,9 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
   const type = formData.type || "webhook";
   const typeDef = TOOL_TYPES.find((t) => t.value === type);
   const TypeIcon = typeDef?.icon || IconTools;
+  const validationError =
+    editorValidationError ||
+    validateAssistantToolConfiguration({ type, ...formData });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -461,6 +532,7 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
                 type={type}
                 formData={formData}
                 setFormData={setFormData}
+                onValidationChange={setEditorValidationError}
               />
             </Card>
           </div>
@@ -488,6 +560,11 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
               Test
             </Button>
           )}
+          {validationError ? (
+            <p className="max-w-sm text-xs text-destructive">
+              {validationError}
+            </p>
+          ) : null}
           <div className="flex gap-2 ml-auto">
           <Button
             variant="outline"
@@ -496,7 +573,10 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
           >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button
+            onClick={handleSave}
+            disabled={saving || Boolean(validationError)}
+          >
             {saving ? (
               <>
                 <IconLoader2 className="size-4 mr-2 animate-spin" />

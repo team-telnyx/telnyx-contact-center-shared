@@ -24,7 +24,10 @@ async function walk(dir, files = []) {
 test("project does not import or depend on sonner", async () => {
   const packageJson = await readFile(new URL("../package.json", import.meta.url), "utf8");
   const yarnLock = await readFile(new URL("../yarn.lock", import.meta.url), "utf8");
-  const packageLock = await readFile(new URL("../package-lock.json", import.meta.url), "utf8");
+  const packageLock = await readFile(new URL("../package-lock.json", import.meta.url), "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  });
   assert.doesNotMatch(packageJson, /"sonner"\s*:/, "package.json should not depend on sonner");
   assert.doesNotMatch(yarnLock, /sonner@|sonner:/, "yarn.lock should not resolve sonner");
   assert.doesNotMatch(packageLock, /"sonner"\s*:|node_modules\/sonner/, "package-lock.json should not resolve sonner");

@@ -24,15 +24,15 @@ export const ANALYTICS_ACTIVE_SECTION_STORAGE_KEY =
 
 export const ANALYTICS_RAIL_ITEMS = [
   { id: "queue-performance", label: "Queue Performance", icon: IconTrendingUp, description: "Historical queue volumes, SLA, and handle times" },
-  { id: "agent-performance", label: "Agent Scorecard", icon: IconUsers, description: "Agent handled volume, AHT, holds, transfers, occupancy" },
-  { id: "abandonment", label: "Abandonment", icon: IconPhoneOff, description: "Abandon rates, wait distribution, and callback list" },
+  { id: "agent-performance", label: "Agent Scorecard", icon: IconUsers, description: "Agent participation, channel-specific durations and outcomes" },
+  { id: "abandonment", label: "Unserved & Abandonment", icon: IconPhoneOff, description: "Abandoned and failed interactions, waiting and SLA evidence" },
   { id: "agent-adherence", label: "Adherence", icon: IconClockPause, description: "Agent status mix, logins, breaks, and recent transitions" },
   { id: "transfers-holds", label: "Transfers & Holds", icon: IconArrowBounce, description: "Transfer and hold pressure by agent and queue" },
-  { id: "wrapup-codes", label: "Wrap-up Codes", icon: IconTag, description: "Why customers call — disposition mix and coverage" },
+  { id: "wrapup-codes", label: "Wrap-up Codes", icon: IconTag, description: "Interaction reasons — disposition mix and coverage" },
   { id: "ai-handoffs", label: "AI Handoffs", icon: IconRobot, description: "AI assistant to agent handoffs, outcomes, and health" },
   { id: "outbound-campaigns", label: "Outbound", icon: IconSpeakerphone, description: "Campaign attempts, connect rates, and failure reasons" },
   { id: "skills-gap", label: "Skills Gap", icon: IconPuzzle, description: "Skill supply vs demand and queue coverage" },
-  { id: "call-history", label: "Call History", icon: IconHistory, description: "Historical interactions, recordings, and workflow details" },
+  { id: "call-history", label: "Interactions History", icon: IconHistory, description: "Historical interactions, recordings, and workflow details" },
 ];
 
 export function persistAnalyticsSection(sectionId) {
@@ -54,6 +54,7 @@ export function AnalyticsSectionRailNav({ activeId = "call-history" }) {
         router.push(`/supervisor/analytics?section=${encodeURIComponent(sectionId)}`);
       }}
       ariaLabel="Supervisor analytics reports"
+      screenGroup="supervisor.analytics"
     />
   );
 }

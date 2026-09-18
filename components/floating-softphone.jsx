@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { VoiceRecoveryBadge } from "@/components/voice-recovery-badge";
 import { Softphone } from "@/components/softphone";
 import { usePhoneUi } from "@/components/phone-ui-provider";
-import { X as IconClose, Phone as IconPhone } from "lucide-react";
+import { X as IconClose, Copy } from "lucide-react";
+import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
+import { useExperimentalFeatures } from "@/lib/experimental-features-client";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import clsx from "clsx";
 import { getStatusDisplay } from "@/lib/call-status-utils";
@@ -11,6 +14,7 @@ import { notify } from "@/components/ToastNotify";
 
 export default function FloatingSoftphone() {
   const { visible, toggle } = usePhoneUi();
+  const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
   const boxRef = useRef(null);
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
   const PAD = 12;
@@ -129,6 +133,7 @@ export default function FloatingSoftphone() {
 
     function onMouseDown(e) {
       if (!e.target.closest("[data-drag-handle]")) return;
+      if (e.target.closest("button, [role='status']")) return;
       dragRef.current.dragging = true;
       dragRef.current.dx = e.clientX - pos.x;
       dragRef.current.dy = e.clientY - pos.y;
@@ -204,7 +209,8 @@ export default function FloatingSoftphone() {
           <div className="relative cursor-move" data-drag-handle>
             <div className="rounded-t-xl bg-zinc-700 text-background/80 dark:text-foreground/80 border border-border border-b-0 px-3 py-2 text-xs flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <IconPhone className="w-4 h-4" />
+                <VoiceRecoveryBadge />
+                {experimentalFeaturesEnabled ? <HeadsetStatusBadge /> : null}
                 <PhoneStatus />
               </div>
               <div className="flex items-center gap-1">
@@ -212,11 +218,11 @@ export default function FloatingSoftphone() {
                   type="button"
                   aria-label="Copy WebRTC URI"
                   title={sipUri ? `Copy ${sipUri}` : "WebRTC URI not configured"}
-                  className="rounded-md border border-emerald-500/60 bg-emerald-500/15 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="grid h-7 w-7 place-items-center rounded-full text-background/80 hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={copySipUri}
                   disabled={!sipUri}
                 >
-                  WebRTC URI
+                  <Copy aria-hidden="true" className="h-4 w-4" />
                 </button>
                 {/* Close button */}
                 <button
@@ -270,40 +276,14 @@ function PhoneStatus() {
     : statusDisplay.color;
 
   // Use ref to track the last rendered value (initialized once)
-  const lastRenderedRef = useRef(null);
-
-  // Local state that only updates when the displayed value actually changes
-  const [displayValue, setDisplayValue] = useState(() => ({
-    text: currentText,
-    color: currentColor,
-  }));
-
-  // Initialize ref on first render
-  if (lastRenderedRef.current === null) {
-    lastRenderedRef.current = { text: currentText, color: currentColor };
-  }
-
-  // Update state only when the displayed value actually changes
-  // This prevents rapid re-renders when status changes rapidly (answered -> connected -> active)
-  useEffect(() => {
-    if (
-      lastRenderedRef.current === null ||
-      lastRenderedRef.current.text !== currentText ||
-      lastRenderedRef.current.color !== currentColor
-    ) {
-      lastRenderedRef.current = { text: currentText, color: currentColor };
-      setDisplayValue({ text: currentText, color: currentColor });
-    }
-  }, [currentText, currentColor]);
-
   return (
     <div
       className={clsx(
         "flex items-center gap-1.5 border px-2 py-0.5 rounded-md text-xsi font-semibold uppercase tracking-wide",
-        displayValue.color
+        currentColor
       )}
     >
-      {displayValue.text}
+      {currentText}
     </div>
   );
 }

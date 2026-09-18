@@ -253,6 +253,14 @@ ensure_docker_access
 
 echo "📦 Building and starting services..."
 
+# Capture source identity before stopping any running service. Node is optional
+# for a Docker-only host; such a build still embeds its package version and
+# explicitly reports unavailable source metadata.
+if command -v node >/dev/null 2>&1; then
+    CC_BUILD_INFO="$(cd "$PROJECT_ROOT" && node scripts/build-info.mjs)"
+    export CC_BUILD_INFO
+fi
+
 if [[ "$FRESH_DEPLOY" == "--fresh" ]]; then
     # Fresh deployment: remove everything including volumes (recreates postgres DB from scratch)
     echo "🛑 Stopping existing containers and removing volumes (fresh deploy)..."

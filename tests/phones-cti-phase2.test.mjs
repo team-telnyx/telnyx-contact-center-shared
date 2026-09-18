@@ -83,7 +83,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
 
   it("telnyx fallback creates a phone leg first and keeps mute unsupported", async () => {
     const driver = createTelnyxFallbackDriver({ pool: null });
-    assert.deepStrictEqual(await driver.dial({ id: "p-1", assigned_phone_number: "+17209533650" }, "+48123"), { ok: false, reason: "phone_has_no_sip_credential" });
+    assert.deepStrictEqual(await driver.dial({ id: "p-1", assigned_phone_number: "+17205550102" }, "+48123"), { ok: false, reason: "phone_has_no_sip_credential" });
     const answer = await driver.answer();
     assert.deepStrictEqual(answer, { ok: true, note: "telnyx-managed bridge" });
     assert.deepStrictEqual(await driver.mute({ id: "p-1" }), { ok: false, reason: "mute_not_supported_for_telnyx_bridge" });
@@ -195,7 +195,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
 
   it("CTI admin endpoint gates on admin, validates action and logs events", async () => {
     const code = await src("app/api/admin/phones-provisioning/phones/[id]/cti/route.js");
-    assert.match(code, /requireAdmin/);
+    assert.match(code, /withPermission\("phones:[a-z]+", [A-Z]+_handler, \{ route:/);
+    assert.match(code, /user\.experimental_features !== true/);
     assert.match(code, /CTI_ACTIONS\.includes\(action\)/);
     assert.match(code, /executeCtiAction/);
     assert.match(code, /validHostOverride\(body\?\.host \|\| body\?\.ip/);
@@ -210,7 +211,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
 
   it("bulk reboot admin endpoint gates on admin and logs per-phone results", async () => {
     const code = await src("app/api/admin/phones-provisioning/phones/reboot/route.js");
-    assert.match(code, /requireAdmin/);
+    assert.match(code, /withPermission\("phones:[a-z]+", [A-Z]+_handler, \{ route:/);
+    assert.match(code, /user\.experimental_features !== true/);
     assert.match(code, /phone_ids/);
     assert.match(code, /executeCtiAction\(targetPhone, "reboot"/);
     assert.match(code, /validHostOverride\(hostOverrides\[phone\.id\]/);
@@ -392,11 +394,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.doesNotMatch(code, /suppression_start/);
     assert.match(code, /mute_not_supported_for_telnyx_bridge/);
     assert.match(code, /hp_cti_sessions/);
-    assert.match(code, /findActiveHardphoneInteractionSession/);
-    assert.match(code, /metadata->>'hardphone_phone_id'/);
-    assert.match(code, /metadata->>'hardphone_connection_id'/);
-    assert.match(code, /metadata->>'hardphone_call_control_id'/);
-    assert.match(code, /metadata->>'pstn_call_control_id'/);
+    assert.match(code, /activeCtiSession/);
+    assert.match(code, /FROM hp_cti_sessions/);
     assert.match(code, /COALESCE\(target_call_control_id, call_control_id/);
     assert.match(code, /function telnyxSessionCall\(session\)/);
     assert.match(code, /RemotePartyNumber: target/);

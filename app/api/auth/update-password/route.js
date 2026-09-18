@@ -5,8 +5,9 @@ import { PgDb } from "@/lib/pgdb";
 import { verifyUserPassword } from "@/lib/auth";
 import { randomBytes, pbkdf2Sync } from "crypto";
 import { authErrorPayload, authUserPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     // Get session
     const session = await getServerSession(authOptions);
@@ -97,3 +98,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("authenticated", POST_handler, { route: "/api/auth/update-password" });

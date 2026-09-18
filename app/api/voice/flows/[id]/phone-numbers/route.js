@@ -7,8 +7,8 @@ import {
   unassignPhoneNumberFromApp,
 } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  * List phone numbers assigned to a flow
  * Admin users can access any flow
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -36,7 +36,7 @@ export async function GET(request, { params }) {
 
     // Admin users can access any flow (pass null username)
     // Non-admin users only see their own flows
-    const username = user && isAdmin(user) ? null : email;
+    const username = authz.permitted ? null : email;
     const { id } = await params;
 
     // Verify flow exists and belongs to user (or admin can access any)
@@ -68,7 +68,7 @@ export async function GET(request, { params }) {
  * Assign a phone number to a flow
  * Admin users can assign phone numbers to any flow
  */
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }, authz) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -87,7 +87,7 @@ export async function POST(request, { params }) {
 
     // Admin users can access any flow (pass null username)
     // Non-admin users only see their own flows
-    const username = user && isAdmin(user) ? null : email;
+    const username = authz.permitted ? null : email;
     const { id } = await params;
     const body = await request.json();
 
@@ -155,3 +155,7 @@ export async function POST(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("call_flows:read", GET_handler, { route: "/api/voice/flows/[id]/phone-numbers" });
+export const POST = withPermission("call_flows:create", POST_handler, { route: "/api/voice/flows/[id]/phone-numbers" });

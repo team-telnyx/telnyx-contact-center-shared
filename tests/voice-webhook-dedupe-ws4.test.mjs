@@ -103,6 +103,12 @@ test(
     process.env.WEBHOOK_IDEMPOTENCY_DB = "true";
     const dedupe = await import("../lib/events/webhook-dedupe.js");
     dedupe.__clearMemoryForTests();
+    const pool = getPostgresPool();
+    await pool.query(`CREATE TABLE IF NOT EXISTS voice_webhook_dedupe (
+      event_id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
 
     const key = `test-db-${randomUUID()}`;
     assert.equal(await dedupe.claimOnce(key, "voice:test"), true, "first claim wins");
@@ -130,9 +136,8 @@ test(
     );
 
     // Cleanup test rows.
-    const pool = getPostgresPool();
     await pool.query(
-      "DELETE FROM cc_processed_events WHERE event_id LIKE 'test-db-%' OR event_id LIKE 'test-race-%' OR event_id LIKE 'test-mem-%'",
+      "DELETE FROM voice_webhook_dedupe WHERE event_id LIKE 'test-db-%' OR event_id LIKE 'test-race-%' OR event_id LIKE 'test-mem-%'",
     );
     delete process.env.WEBHOOK_IDEMPOTENCY_DB;
   },

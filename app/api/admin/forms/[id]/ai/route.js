@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { applyFormOperations, validateFormOperations } from "@/lib/forms/form-operations";
 import { buildFormAiSystemPrompt, buildFormAiUserPayload, FORM_AI_OPERATION_SCHEMA } from "@/lib/forms/form-ai-instructions";
 
+import { withPermission } from "@/lib/authz/guard";
 function deterministicOperations(prompt = "") {
   const text = prompt.toLowerCase();
   if (text.includes("page") || text.includes("stron")) return [{ type: "addPage", title: prompt.match(/(?:page|strona)\s+([A-Za-z0-9 _-]+)/i)?.[1]?.trim() || "New page" }];
@@ -117,7 +118,7 @@ async function getTelnyxOperations({ prompt, currentForm, apiKey }) {
   return { operations, reason: parsed.reason || "Applied AI form edits.", model, rawContent: String(content).slice(0, 1000) };
 }
 
-export async function POST(request) {
+async function POST_handler(request) {
   const session = await getServerSession(authOptions); if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json(); const prompt = body.prompt || ""; const currentForm = body.currentForm || body.form || {};
   if (!isFormBuilderPrompt(prompt)) {
@@ -161,3 +162,6 @@ export async function POST(request) {
   const opValidation = validateFormOperations(operations); const result = opValidation.ok ? applyFormOperations(currentForm, operations) : { form: currentForm, validation: opValidation };
   return NextResponse.json({ ok: opValidation.ok && result.validation.ok, operations, form: result.form, validation: result.validation, ai });
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("forms:ai", POST_handler, { route: "/api/admin/forms/[id]/ai" });

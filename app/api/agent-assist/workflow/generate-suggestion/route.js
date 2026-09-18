@@ -8,8 +8,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, suggestionsLogger } from "@/lib/agent-assist/logging.mjs";
-import { isReadBackItem, buildReadBackSuggestion, orderedSlotsFromMap, formatSlotValue, earliestReadBackItemId } from "@/lib/agent-assist/readback.mjs";
+import { isReadBackItem, buildReadBackSuggestion, orderedSlotsFromMap, formatSlotValue, earliestReadBackItemId, isTransportIntake } from "@/lib/agent-assist/readback.mjs";
 import { resolveFastSuggestionTemplate } from "@/lib/agent-assist/suggestion-templates.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
@@ -29,7 +30,7 @@ async function getConfiguredBrandName(pool) {
 }
 
 // POST /api/agent-assist/workflow/generate-suggestion
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -77,14 +78,16 @@ export async function POST(request) {
 
     // Get workflow to get LLM model
     let llmModel = "openai/gpt-4o"; // Default
+    let reasoningEnabled = false;
     if (workflowId) {
       const { rows: [workflow] } = await pool.query(
-        `SELECT llm_model FROM aa_workflows WHERE id = $1`,
+        `SELECT llm_model, llm_reasoning_enabled FROM aa_workflows WHERE id = $1`,
         [workflowId]
       );
       if (workflow?.llm_model) {
         llmModel = workflow.llm_model;
       }
+      reasoningEnabled = workflow?.llm_reasoning_enabled === true;
     }
 
     // Resolve the brand for greetings ("Thanks for calling <brand>"). The client
@@ -125,9 +128,27 @@ export async function POST(request) {
         const orderedSlots = await buildOrderedFilledSlots(pool, workflowId, prefilledSlots || {});
         const readBack = buildReadBackSuggestion({ orderedSlots, rawSlots: prefilledSlots || {} });
         if (readBack) {
+          // The generic (non-transport) branch of buildReadBackSuggestion
+          // already appends its own "Is that all correct..." question, so
+          // only the transport branch (compact data lines, no question)
+          // needs one added here. Some transport workflows split recitation
+          // and confirmation into two adjacent items ("Read back transport
+          // details" — an agent ACTION — then "Confirm all information is
+          // correct" — a customer QUESTION); that question gets its own
+          // separate suggestion later since it won't be the "earliest"
+          // read-back item once the action has already recited everything.
+          // Other transport workflows have no separate action — the
+          // question item IS the earliest (and only) read-back item,
+          // serving both roles at once, and the data-only text alone would
+          // never prompt the customer to give the affirmative that
+          // completes this exact item.
+          const needsConfirmationAsk = isTransportIntake(prefilledSlots || {}) && itemType !== "action";
+          const suggestion = needsConfirmationAsk
+            ? `${readBack}\nIs all of that correct, or is there anything you'd like to change?`
+            : readBack;
           return NextResponse.json({
             ok: true,
-            suggestion: readBack,
+            suggestion,
             model: "template",
             isReadBack: true,
           });
@@ -140,6 +161,8 @@ export async function POST(request) {
       itemLabel,
       itemPromptHint,
       itemHints,
+      slotName,
+      suggestionTemplate,
       agentName,
       brandName: effectiveBrandName,
       targetMode,
@@ -156,7 +179,7 @@ export async function POST(request) {
       });
     }
 
-    // Fast templates for standard collect questions (GMR slot map, SAY: hints,
+    // Fast templates for standard collect questions (the slot-name map, SAY: hints,
     // or generic phrasing). Prefer this over an LLM round-trip so the right
     // panel can appear in milliseconds after the target item is selected.
     const fastTemplate = resolveFastSuggestionTemplate({
@@ -219,6 +242,7 @@ export async function POST(request) {
         model: llmModel,
         temperature: 0.4,
         max_tokens: 90,
+        enable_thinking: reasoningEnabled,
       }),
     });
 
@@ -248,6 +272,8 @@ export async function POST(request) {
         itemLabel,
         itemPromptHint,
         itemHints,
+        slotName,
+        suggestionTemplate,
         agentName,
         brandName: effectiveBrandName,
         targetMode,
@@ -541,21 +567,13 @@ function slotNounPhrase(label) {
   return `the ${phrase}`;
 }
 
-// Deterministic collection prompt for a slot. A question-label ("Other aircraft
-// currently responding?") is asked verbatim (no "provide your ...??"); otherwise
-// use the noun phrase ("Could you provide the caller's last name?").
-function phraseSlotCollection(label) {
-  const raw = String(label || "").trim();
-  if (!raw) return null;
-  if (raw.endsWith("?")) return raw.charAt(0).toUpperCase() + raw.slice(1);
-  return `Could you provide ${slotNounPhrase(label)}?`;
-}
-
 function buildDeterministicSuggestion({
   itemType,
   itemLabel,
   itemPromptHint,
   itemHints,
+  slotName,
+  suggestionTemplate,
   agentName,
   brandName,
   targetMode,
@@ -599,7 +617,24 @@ function buildDeterministicSuggestion({
   }
 
   if (conversationContext?.reason === "conversation_stage_match" && itemType === "slot") {
-    return phraseSlotCollection(label);
+    // Route through the fast-template resolver (MEDICAL_TRANSPORT_SLOT_TEMPLATES /
+    // SAY: hints) instead of the raw generic phrasing directly — this branch
+    // used to bypass the template map entirely (no slotName was even threaded
+    // through), so every slot resolved via a conversation-stage match showed
+    // "Could you provide the X?" regardless of a configured template. Falls
+    // back to the same generic phraseSlotCollection internally when nothing
+    // matches, so behavior for slots with no template is unchanged.
+    return resolveFastSuggestionTemplate({
+      itemType,
+      itemLabel,
+      slotName,
+      suggestionTemplate,
+      itemPromptHint,
+      itemHints,
+      agentName,
+      brandName,
+      prefilledSlots,
+    });
   }
 
   const introduceMatch = label.match(/introduce (?:yourself|your self)(?: as)?\s+(.+?)$/i);
@@ -641,7 +676,17 @@ function buildDeterministicSuggestion({
   }
 
   if (allowGeneric && itemType === "slot") {
-    return phraseSlotCollection(label);
+    return resolveFastSuggestionTemplate({
+      itemType,
+      itemLabel,
+      slotName,
+      suggestionTemplate,
+      itemPromptHint,
+      itemHints,
+      agentName,
+      brandName,
+      prefilledSlots,
+    });
   }
 
   return null;
@@ -735,3 +780,6 @@ function looksLikeReasoningResponse(suggestion) {
     lower.includes("the exact words the agent should say")
   );
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/agent-assist/workflow/generate-suggestion" });

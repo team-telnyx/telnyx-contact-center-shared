@@ -32,6 +32,27 @@ function toLanguageOption(code) {
   };
 }
 
+function uniqueLanguageOptions(codes) {
+  const seen = new Set();
+  return (codes || [])
+    .map(toLanguageOption)
+    .filter((option) => {
+      if (!option.value || seen.has(option.value)) return false;
+      seen.add(option.value);
+      return true;
+    });
+}
+
+export function formatTelnyxSttModelLabel(provider) {
+  const model = String(provider?.telnyxStt?.model || provider?.id || "").trim();
+  const engine = String(
+    provider?.telnyxStt?.transcription_engine || "",
+  ).trim().toLowerCase();
+
+  if (!model || model.includes("/") || !engine) return model;
+  return `${engine}/${model}`;
+}
+
 function normalizeStandaloneSttModel(model) {
   if (!model) return "";
   const value = String(model);
@@ -44,19 +65,12 @@ function normalizeStandaloneSttModel(model) {
 function standaloneSttLanguagesForModel(model) {
   const normalizedModel = normalizeStandaloneSttModel(model);
   if (["phone_call", "latest_long", "default"].includes(normalizedModel)) {
-    return GOOGLE_STANDALONE_STT_LANGUAGE_CODES.map(toLanguageOption);
+    return uniqueLanguageOptions(GOOGLE_STANDALONE_STT_LANGUAGE_CODES);
   }
   const provider = TRANSCRIPTION_PROVIDERS.find(
     (entry) => entry.model_name === normalizedModel,
   );
-  const seen = new Set();
-  return (provider?.languages || [])
-    .map(toLanguageOption)
-    .filter((option) => {
-      if (!option.value || seen.has(option.value)) return false;
-      seen.add(option.value);
-      return true;
-    });
+  return uniqueLanguageOptions(provider?.languages);
 }
 
 export const TELNYX_STT_LANGUAGE_OPTIONS_BY_MODEL = Object.fromEntries(
@@ -314,7 +328,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_tracks: "both",
       transcription_engine: "Deepgram",
       model: "deepgram/flux",
-      language: "auto",
+      language: "en",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,

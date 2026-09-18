@@ -9,7 +9,6 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "u
 test("online translation is implemented with Telnyx chat completions and workflow model", () => {
   const translationService = read("lib/agent-assist/translation-service.js");
   const router = read("lib/agent-assist-transcription-router.mjs");
-  const webhookHandler = read("lib/contact-center/webhook-handler.js");
 
   assert.match(translationService, /\/ai\/chat\/completions/);
   assert.match(translationService, /model:\s*model \|\| DEFAULT_TRANSLATION_MODEL/);
@@ -21,8 +20,6 @@ test("online translation is implemented with Telnyx chat completions and workflo
   assert.match(router, /const translationModel = await resolveAgentAssistAnalysisModel\(assistConfig\)/);
   assert.match(router, /translateText\(\{[\s\S]*model:\s*translationModel/);
   assert.doesNotMatch(router, /detectLanguage|Google Translate/);
-  assert.match(webhookHandler, /detectLanguage/);
-  assert.doesNotMatch(webhookHandler, /Google Translate/);
   assert.match(router, /const callerLanguage = normalizeLanguageCode\(interaction\.metadata\?\.caller_language, \{ fallback: null \}\)/);
 });
 
@@ -44,7 +41,7 @@ test("Azure and Microsoft streaming services are removed from runtime and node c
   const answerEditor = read("components/voice-flow/AnswerNodeEditor.jsx");
   const streamingEditor = read("components/voice-flow/StreamingStartNodeEditor.jsx");
   const nodesConfig = read("config/voice-flow-nodes.js");
-  const webhookHandler = read("lib/contact-center/webhook-handler.js");
+  const mediaEvents = read("lib/acd/media-events.mjs");
   const pkg = read("package.json");
 
   for (const [name, source] of Object.entries({
@@ -54,7 +51,7 @@ test("Azure and Microsoft streaming services are removed from runtime and node c
     answerEditor,
     streamingEditor,
     nodesConfig,
-    webhookHandler,
+    mediaEvents,
   })) {
     assert.doesNotMatch(source, /azure-transcription|\/streaming\/azure|startAzureTranscription|stopAzureTranscription|AZURE_SERVICE|AZURE_SPEECH|@azure|Microsoft|Azure/, `${name} still references Azure/Microsoft streaming services`);
   }

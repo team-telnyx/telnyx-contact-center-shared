@@ -38,10 +38,9 @@ test("describeStep renders the delay in seconds", () => {
   assert.equal(describeStep({ type: "delay", delay_ms: 2000 }), "Delay 2s");
 });
 
-test("the engine sleeps for a delay step between commands", () => {
-  const engine = read("lib/call-generator/engine.mjs");
-  assert.match(engine, /step\.type === "delay"/);
-  assert.match(engine, /setTimeout\(resolve, ms\)/);
+test("delay is a durable command, with duration preserved", async () => {
+  const { generatorCommand } = await import('../lib/call-generator/commands.mjs');
+  assert.deepEqual(generatorCommand({type:'delay',delay_ms:1250}),{action:'delay',body:{delay_ms:1250},wait:null});
 });
 
 // --- Workflow Testing reply delay ------------------------------------------

@@ -1,29 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireSupervisorOrAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return null;
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isSupervisorOrAdmin(user)) return null;
-  return user;
-}
 
 // POST /api/admin/scheduled-events/import - Import scheduled events from CSV
-export async function POST(request) {
-  const user = await requireSupervisorOrAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
 
   try {
     const apiKey = process.env.TELNYX_API_KEY;
@@ -221,3 +204,5 @@ export async function POST(request) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("scheduled_events:import", POST_handler, { route: "/api/admin/scheduled-events/import" });

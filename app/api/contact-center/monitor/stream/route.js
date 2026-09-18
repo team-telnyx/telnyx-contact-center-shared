@@ -6,15 +6,19 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
-import { addSseClient, removeSseClient, broadcastToKey } from "@/lib/sse";
+import { addSseClient, removeSseClient } from "@/lib/sse";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { restrictMonitorSnapshot } from "@/lib/authz/scope.mjs";
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
 
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
+  const params=new URL(request.url).searchParams;
+  const reportOptions={restriction:authz.scope,channel:params.get("channel")||"all",timezone:params.get("timezone")||"UTC"};
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -23,9 +27,8 @@ export async function GET(request) {
 
     // Supervisors and admins can access the monitoring stream
     const user = await PgDb.findUserById(session.user.id);
-    if (!user || !isSupervisorOrAdmin(user)) {
-      return new Response("Access denied", { status: 403 });
-    }
+    const pool = getPostgresPool();
+    if (!pool) return new Response("Database unavailable", { status: 503 });
 
     const stream = new ReadableStream({
       start(controller) {
@@ -54,12 +57,13 @@ export async function GET(request) {
         };
 
         // Send initial connection message
-        const send = (data, eventType = null) => {
+        const send = (data, eventType = null, eventId = null) => {
           if (closed) return;
           try {
+            const prefix = eventId == null ? "" : `id: ${eventId}\n`;
             const message = eventType
-              ? `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`
-              : `data: ${JSON.stringify(data)}\n\n`;
+              ? `${prefix}event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`
+              : `${prefix}data: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(encoder.encode(message));
           } catch (error) {
             // Controller might be closed, cleanup if needed
@@ -107,16 +111,17 @@ export async function GET(request) {
               getQueueStatistics,
               getAgentStatistics,
               getOverallStatistics,
-            } = await import("@/lib/contact-center/stats-aggregator");
-            const { getAllQueueStates, getAllAgentStates } = await import(
-              "@/lib/contact-center/state-manager"
-            );
-
-            const [queueStats, agentStats, overallStats] = await Promise.all([
-              getQueueStatistics(),
-              getAgentStatistics(),
-              getOverallStatistics(),
+            } = await import("@/lib/acd/stats-aggregator");
+            const [rawQueueStats, rawAgentStats, rawOverallStats, cursorResult] = await Promise.all([
+              getQueueStatistics(null,reportOptions),
+              getAgentStatistics(null,reportOptions),
+              getOverallStatistics(reportOptions),
+              pool.query("SELECT COALESCE(MAX(seq), 0)::text AS cursor FROM acd_stream_events"),
             ]);
+            // Narrow every update to the caller's data scope (Phase 3a).
+            const snapshot = restrictMonitorSnapshot({ queues: rawQueueStats, agents: rawAgentStats, overall: rawOverallStats }, authz.scope, { prefiltered: true });
+            const [queueStats, agentStats, overallStats] = [snapshot.queues, snapshot.agents, snapshot.overall];
+            const cursor = cursorResult.rows[0]?.cursor || "0";
 
             // Check again before sending (might have closed during async operations)
             if (closed) return;
@@ -129,17 +134,19 @@ export async function GET(request) {
                   stats: Array.isArray(queueStats)
                     ? queueStats
                     : [queueStats].filter(Boolean),
-                  states: getAllQueueStates(),
+                  states: {},
                 },
                 agents: {
                   stats: Array.isArray(agentStats)
                     ? agentStats
                     : [agentStats].filter(Boolean),
-                  states: getAllAgentStates(),
+                  states: {},
                 },
+                cursor,
                 timestamp: new Date().toISOString(),
               },
-              "monitor_update"
+              "monitor_update",
+              cursor,
             );
           } catch (error) {
             // If error is due to closed controller, cleanup
@@ -177,3 +184,6 @@ export async function GET(request) {
     return new Response("Internal server error", { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("monitor:read", GET_handler, { route: "/api/contact-center/monitor/stream" });

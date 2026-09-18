@@ -1,34 +1,35 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { PgDb } from "@/lib/pgdb";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { listAgentInteractionViews } from "@/lib/acd/work-item-repository.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 /**
  * GET /api/contact-center/agent/interactions
- * List active interactions assigned to agent from cc_interactions table
+ * List Core work items assigned to the authenticated agent.
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const { searchParams } = new URL(request.url);
     const state = searchParams.get("state");
     const limit = parseInt(searchParams.get("limit") || "50", 10);
     const activeOnly = searchParams.get("activeOnly") !== "false";
 
-    // Fetch interactions from database
-    const interactions = await PgDb.listAgentInteractions(user.username, {
-      state, // If state filter is provided, use it
-      activeOnly, // Only fetch non-completed interactions if activeOnly is true
+    const pool = getPostgresPool();
+    if (!pool) {
+      return NextResponse.json(
+        { ok: false, error: "Server not ready" },
+        { status: 503 },
+      );
+    }
+
+    const interactions = await listAgentInteractionViews(pool, user.id, {
+      state,
+      activeOnly,
       limit,
     });
 
-    // Only return interactions from cc_interactions table
     return NextResponse.json({ ok: true, interactions });
   } catch (err) {
     return NextResponse.json(
@@ -38,3 +39,5 @@ export async function GET(request) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agent:self", GET_handler, { route: "/api/contact-center/agent/interactions" });

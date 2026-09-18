@@ -4,6 +4,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { broadcastToKey } from "@/lib/sse";
 import { findWorkflowByInsightGroup } from "@/lib/telnyx-insights";
 import { telnyxErrorPayload, telnyxResourcePayload, telnyxWebhookLogger } from "@/lib/telnyx-ai-logging.mjs";
+import { findWorkItemByProviderIdentifiers } from "@/lib/acd/work-item-repository.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -19,39 +20,10 @@ async function findInteractionForAiHandoff({ callSessionId, callLegId, aiCallCon
   const pool = getPostgresPool();
   if (!pool) return null;
 
-  // Try multiple strategies to find the interaction
-  // 1. By call_session_id (most reliable after transfer)
-  if (callSessionId) {
-    const { rows: [interaction] } = await pool.query(
-      `SELECT * FROM cc_interactions WHERE call_session_id = $1 ORDER BY created_at DESC LIMIT 1`,
-      [callSessionId]
-    );
-    if (interaction) return interaction;
-  }
-
-  // 2. By ai_call_control_id in metadata (stored during transfer)
-  if (aiCallControlId) {
-    const { rows: [interaction] } = await pool.query(
-      `SELECT * FROM cc_interactions 
-       WHERE metadata->>'ai_call_control_id' = $1 
-       ORDER BY created_at DESC LIMIT 1`,
-      [aiCallControlId]
-    );
-    if (interaction) return interaction;
-  }
-
-  // 3. By call_leg_id in routing_metadata
-  if (callLegId) {
-    const { rows: [interaction] } = await pool.query(
-      `SELECT * FROM cc_interactions 
-       WHERE routing_metadata->>'call_leg_id' = $1 
-       ORDER BY created_at DESC LIMIT 1`,
-      [callLegId]
-    );
-    if (interaction) return interaction;
-  }
-
-  return null;
+  return findWorkItemByProviderIdentifiers(pool, {
+    callControlId: aiCallControlId || callLegId || null,
+    callSessionId,
+  });
 }
 
 /**
@@ -64,7 +36,8 @@ async function findWorkflowSessionByInteraction(interactionId) {
   if (!pool) return null;
 
   const { rows: [session] } = await pool.query(
-    `SELECT * FROM aa_workflow_sessions WHERE interaction_id = $1`,
+    `SELECT * FROM aa_workflow_sessions
+      WHERE work_item_id::text = $1`,
     [interactionId]
   );
 
@@ -77,7 +50,7 @@ async function findWorkflowSessionByInteraction(interactionId) {
  * @returns {Promise<string>} Event ID
  */
 async function storeHandoffEvent({
-  interactionId,
+  workItemId,
   workflowSessionId,
   aiCallControlId,
   insightGroupId,
@@ -91,12 +64,12 @@ async function storeHandoffEvent({
 
   const { rows: [event] } = await pool.query(
     `INSERT INTO aa_ai_handoff_events 
-     (interaction_id, workflow_session_id, ai_call_control_id, insight_group_id, 
+     (work_item_id, workflow_session_id, ai_call_control_id, insight_group_id,
       raw_payload, processed_slots, status, error_message, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
      RETURNING id`,
     [
-      interactionId || null,
+      workItemId || null,
       workflowSessionId || null,
       aiCallControlId,
       insightGroupId,
@@ -132,15 +105,15 @@ async function markEventProcessed(eventId, sessionId) {
  * @param {string} eventId - Event ID
  * @param {string} interactionId - Interaction ID
  */
-async function markEventReadyForSession(eventId, interactionId) {
+async function markEventReadyForSession(eventId, workItemId) {
   const pool = getPostgresPool();
   if (!pool) return;
 
   await pool.query(
     `UPDATE aa_ai_handoff_events 
-     SET status = 'pending_session', interaction_id = $2
+     SET status = 'pending_session', work_item_id = $2
      WHERE id = $1`,
-    [eventId, interactionId]
+    [eventId, workItemId || null]
   );
 }
 
@@ -227,42 +200,41 @@ async function updateWorkflowSession(sessionId, data, workflow) {
   const pool = getPostgresPool();
   if (!pool) return;
 
-  // 1. Update session with summary, sentiment, slots
-  const existingSession = await pool.query(
-    `SELECT slots_filled FROM aa_workflow_sessions WHERE id = $1`,
-    [sessionId]
-  );
-  
-  const currentSlots = existingSession.rows[0]?.slots_filled || {};
-  
-  // Merge AI slots with existing slots (don't overwrite agent-entered data)
-  const mergedSlots = { ...currentSlots };
-  for (const [slotName, slotData] of Object.entries(data.slots)) {
-    // Only add if not already filled by agent
-    if (!currentSlots[slotName]) {
-      mergedSlots[slotName] = slotData?.value;
-    }
+  // Build only the AI slot keys that are eligible to land. The actual merge is
+  // performed in PostgreSQL while the session row is locked so a snapshot read
+  // before a concurrent agent/MCP write can never erase that newer state.
+  const incomingSlots = {};
+  for (const [slotName, slotData] of Object.entries(data.slots || {})) {
+    const value = slotData?.value;
+    if (value !== null && value !== undefined) incomingSlots[slotName] = value;
   }
 
-  await pool.query(
-    `UPDATE aa_workflow_sessions SET
-      slots_filled = $1::jsonb,
-      ai_summary = COALESCE($2, ai_summary),
-      ai_sentiment = COALESCE($3, ai_sentiment),
-      ai_handoff_received_at = NOW(),
-      ai_handoff_source = 'webhook',
-      updated_at = NOW()
-    WHERE id = $4`,
-    [
-      JSON.stringify(mergedSlots),
-      data.summary,
-      data.sentiment,
-      sessionId,
-    ]
+  const { rows: [slotWrite] } = await pool.query(
+    `WITH previous AS MATERIALIZED (
+       SELECT id, COALESCE(slots_filled, '{}'::jsonb) AS slots_filled
+         FROM aa_workflow_sessions
+        WHERE id = $4
+        FOR UPDATE
+     )
+     UPDATE aa_workflow_sessions s SET
+       slots_filled = $1::jsonb || previous.slots_filled,
+       slots_version = COALESCE(s.slots_version, 0) +
+         CASE WHEN ($1::jsonb || previous.slots_filled) IS DISTINCT FROM previous.slots_filled THEN 1 ELSE 0 END,
+       ai_summary = COALESCE($2, s.ai_summary),
+       ai_sentiment = COALESCE($3, s.ai_sentiment),
+       ai_handoff_received_at = NOW(),
+       ai_handoff_source = 'webhook',
+       updated_at = NOW()
+     FROM previous
+     WHERE s.id = previous.id
+     RETURNING previous.slots_filled AS previous_slots, s.slots_filled`,
+    [JSON.stringify(incomingSlots), data.summary, data.sentiment, sessionId]
   );
+  const previousSlots = slotWrite?.previous_slots || {};
 
-  // 2. Update item statuses for filled slots
-  // Get workflow items with slot_name
+  // 2. Update item statuses only for AI slots that actually won the session
+  // merge. Existing agent/MCP keys are authoritative and must retain both their
+  // value and provenance.
   const { rows: items } = await pool.query(
     `SELECT i.id, i.slot_name 
      FROM aa_workflow_items i
@@ -273,7 +245,8 @@ async function updateWorkflowSession(sessionId, data, workflow) {
 
   const itemMap = new Map(items.map((i) => [i.slot_name, i.id]));
 
-  for (const [slotName, slotData] of Object.entries(data.slots)) {
+  for (const [slotName, slotData] of Object.entries(data.slots || {})) {
+    if (Object.prototype.hasOwnProperty.call(previousSlots, slotName)) continue;
     const itemId = itemMap.get(slotName);
     if (!itemId) continue;
 
@@ -282,30 +255,18 @@ async function updateWorkflowSession(sessionId, data, workflow) {
 
     // Only mark as completed if we have a value and reasonable confidence
     if (value !== null && value !== undefined && (confidence === undefined || confidence >= 0.6)) {
-      // Check if already completed by agent (don't overwrite)
-      const { rows: [existingStatus] } = await pool.query(
-        `SELECT completed_by FROM aa_workflow_item_status 
-         WHERE session_id = $1 AND item_id = $2`,
-        [sessionId, itemId]
-      );
-
-      if (existingStatus?.completed_by === "agent") {
-        // Don't overwrite agent's work
-        continue;
-      }
-
       await pool.query(
         `INSERT INTO aa_workflow_item_status (session_id, item_id, status, extracted_value, confidence_score, completed_at, completed_by, source_transcript, alternatives)
          VALUES ($1, $2, 'completed', $3, $4, NOW(), 'ai', $5, $6::jsonb)
          ON CONFLICT (session_id, item_id) 
          DO UPDATE SET
-           status = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.status ELSE 'completed' END,
-           extracted_value = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.extracted_value ELSE $3 END,
-           confidence_score = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.confidence_score ELSE $4 END,
-           completed_at = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.completed_at ELSE NOW() END,
-           completed_by = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN 'agent' ELSE 'ai' END,
-           source_transcript = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.source_transcript ELSE $5 END,
-           alternatives = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.alternatives ELSE $6::jsonb END,
+           status = CASE WHEN aa_workflow_item_status.completed_by IN ('agent', 'mcp', 'mcp_selected') THEN aa_workflow_item_status.status ELSE 'completed' END,
+           extracted_value = CASE WHEN aa_workflow_item_status.completed_by IN ('agent', 'mcp', 'mcp_selected') THEN aa_workflow_item_status.extracted_value ELSE $3 END,
+           confidence_score = CASE WHEN aa_workflow_item_status.completed_by IN ('agent', 'mcp', 'mcp_selected') THEN aa_workflow_item_status.confidence_score ELSE $4 END,
+           completed_at = CASE WHEN aa_workflow_item_status.completed_by IN ('agent', 'mcp', 'mcp_selected') THEN aa_workflow_item_status.completed_at ELSE NOW() END,
+           completed_by = CASE WHEN aa_workflow_item_status.completed_by IN ('agent', 'mcp', 'mcp_selected') THEN aa_workflow_item_status.completed_by ELSE 'ai' END,
+           source_transcript = CASE WHEN aa_workflow_item_status.completed_by IN ('agent', 'mcp', 'mcp_selected') THEN aa_workflow_item_status.source_transcript ELSE $5 END,
+           alternatives = CASE WHEN aa_workflow_item_status.completed_by IN ('agent', 'mcp', 'mcp_selected') THEN aa_workflow_item_status.alternatives ELSE $6::jsonb END,
            updated_at = NOW()`,
         [
           sessionId,
@@ -349,8 +310,15 @@ async function broadcastAiHandoffData(interaction, sessionId, data) {
   if (!interaction?.agent_username) return;
 
   try {
-    const { PgDb } = await import("@/lib/pgdb.js");
-    const agent = await PgDb.findUserByUsername(interaction.agent_username);
+    const pool = getPostgresPool();
+    const agent = pool
+      ? (
+          await pool.query(
+            `SELECT id, username FROM users WHERE username = $1 LIMIT 1`,
+            [interaction.agent_username],
+          )
+        ).rows[0]
+      : null;
     if (!agent?.id) return;
 
     // Transform slots for frontend (extract just values for simple slots_filled object)
@@ -489,10 +457,10 @@ export async function POST(request) {
       callLegId,
       aiCallControlId: callControlId,
     });
-
+    const workItemId = interaction?.work_item_id || null;
     // Store raw event
     const eventId = await storeHandoffEvent({
-      interactionId: interaction?.id,
+      workItemId,
       aiCallControlId: callControlId,
       insightGroupId,
       rawPayload: payload,
@@ -536,7 +504,7 @@ export async function POST(request) {
       });
     } else {
       // Session doesn't exist yet - data will be applied when session starts
-      await markEventReadyForSession(eventId, interaction.id);
+      await markEventReadyForSession(eventId, workItemId);
 
       // Store processed slots in the event for later application
       const pool = getPostgresPool();

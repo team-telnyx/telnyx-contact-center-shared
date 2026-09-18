@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { createDiagnosticLogger } from "@/lib/diagnostic-logger.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const qualityLogger = createDiagnosticLogger("contact-center.quality");
 
@@ -19,15 +18,9 @@ function slugify(value) {
  * GET /api/contact-center/quality/forms
  * List quality evaluation forms (newest first). ?status=published filters.
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
 
     const pool = getPostgresPool();
     if (!pool) {
@@ -75,15 +68,9 @@ export async function GET(request) {
  * POST /api/contact-center/quality/forms
  * Create a new quality evaluation form (draft).
  */
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
 
     const pool = getPostgresPool();
     if (!pool) {
@@ -142,3 +129,7 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("quality_forms:read", GET_handler, { route: "/api/contact-center/quality/forms" });
+export const POST = withPermission("quality_forms:create", POST_handler, { route: "/api/contact-center/quality/forms" });

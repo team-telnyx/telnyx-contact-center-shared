@@ -1,29 +1,13 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import {
   getSecrets,
   createSecret,
 } from "@/lib/secrets";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
 
-export async function GET(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, _context, authz) {
+  const user = authz.user;
 
   try {
     const secrets = await getSecrets();
@@ -34,9 +18,8 @@ export async function GET(request) {
   }
 }
 
-export async function POST(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
 
   try {
     const body = await request.json();
@@ -63,3 +46,7 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 400 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("secrets:read", GET_handler, { route: "/api/admin/secrets" });
+export const POST = withPermission("secrets:create", POST_handler, { route: "/api/admin/secrets" });

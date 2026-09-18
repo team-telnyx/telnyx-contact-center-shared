@@ -1,0 +1,58 @@
+---
+title: WhatsApp channel
+description: Connect the WhatsApp Business Account, map WhatsApp numbers to queues, manage templates and business profiles, and review delivery.
+audiences: [admin, owner]
+keywords: [whatsapp, waba, messaging profile, template, business profile, 24-hour window, media, pexels, copilot]
+owner: contact-center
+lastReviewed: 2026-09-15
+---
+
+Open **Admin → WhatsApp** to manage the WhatsApp channel. **WhatsApp** has its own menu card directly below **SMS**. Use the left section rail to switch between **Numbers**, **Details**, **Templates**, **Phone numbers**, **Delivery** and **AI Copilot**.
+
+## Which Telnyx account is used
+
+Customers usually run WhatsApp on the same Telnyx account as Contact Center. The server looks for a WhatsApp Business Account (WABA) on the primary API key (`TELNYX_API_KEY`) first. When that account has no WABA, the backup key `TELNYX_API_KEY_WHATSAPP` is checked and, if it owns a WABA, used for every WhatsApp operation: listing accounts and numbers, templates, business profiles, sending and the messaging profile that delivers webhooks. **Details** shows which key is in use and lets you re-check after changing the configuration.
+
+When the backup account is used, its webhooks are signed with that account's Ed25519 public key. Set it as `TELNYX_WEBHOOK_PUBLIC_KEY_WHATSAPP`; the WhatsApp webhook accepts signatures from the primary key and from this key.
+
+## How WhatsApp reaches a queue
+
+Inbound WhatsApp messages and delivery receipts follow the **messaging profile assigned to each WhatsApp number** (the *Messaging profile* field of the number's business profile). Contact Center connects or creates a **Contact Center WhatsApp** messaging profile whose webhook points at this application, and mapping a number under **Numbers** points that number at the profile. Numbers you leave unmapped keep their existing profile, so a WABA can be shared with another application such as a demo portal: some numbers serve Contact Center queues, the others keep working elsewhere.
+
+The WABA-level webhook under **Details → WABA settings** carries account events (template status, quality, account review). It is not the inbound message path and can stay pointed at another application.
+
+## Set up the channel
+
+1. Configure the public application URL (`TELNYX_WEBHOOK_BASE_URL` or `APP_BASE_URL`, HTTPS), `NEXTAUTH_SECRET` (signs outbound media links) and the Telnyx verification key(s). **Details** shows the webhook URL and the configuration status.
+2. Under **Details**, check the resolved Telnyx account, connect the WhatsApp Business Account and connect an existing messaging profile or create the **Contact Center WhatsApp** profile. Connecting sets the profile webhook URL to this application and API version 2.
+3. Enable **WhatsApp** in the queue and agent **Utilization** settings, and assign agents to the queue.
+4. Under **Numbers**, choose **Map number**, select a connected WhatsApp number, the Contact Center messaging profile, a display name and the queue. Saving assigns the number's inbound messaging profile in Telnyx; agent replies are sent through the same profile, so a number mapped without a profile cannot send. Turn on **Route incoming WhatsApp** and **Allow agent replies** when the queue is ready.
+
+Removing a mapping is possible only for numbers without conversation history; otherwise pause routing and sending instead.
+
+## Templates, phone numbers and business profiles
+
+**Templates** lists the templates registered on the connected WABA and lets you create, edit or delete them: category (utility, marketing, authentication), language, header (text or media handle), body with `{{1}}` style variables and their review examples, footer and buttons (quick reply, URL, phone number). Meta reviews every submission; only **APPROVED** templates can be sent.
+
+**Phone numbers** shows every number on the WABA with its connection status and quality rating. Select a number to edit its business profile (display name, category, about, description, email, website, address and the inbound messaging profile), upload or remove the profile photo, enable WhatsApp calling, finish verification with the code Meta sent, or add a new number.
+
+## Agent experience
+
+A WhatsApp conversation appears on the Agent Desktop as a green messaging card with the customer's WhatsApp name, the queue and the business number. Agents accept or decline, reply from the composer, transfer, mark the conversation as waiting and complete it; wrap-up follows the shared text flow. Customer media (images, video, audio, documents, stickers) is downloaded and shown inline; shared locations, contact cards, interactive replies and reactions are rendered under the message.
+
+Agents can send every WhatsApp media type: images (JPEG, PNG; up to 5 MB), video (MP4, 3GPP; 16 MB), audio (AAC, MP4, MPEG, AMR, OGG; 16 MB), documents (PDF, Office, text; 100 MB) and stickers (WebP, or any picture converted to a 512×512 sticker). Each file is delivered as its own WhatsApp message; the text goes with the first one as a caption (1,024 bytes) or as a separate text message when longer. The **Pexels** button searches royalty-free photos and attaches the chosen picture. Text is limited to 4,096 bytes.
+
+The header shows the **24-hour customer service window**. When it is closed, free-form replies are blocked and the agent sends an **approved template** instead, filling in its variables; the customer's next message reopens the window. Every agent message shows its delivery state: sending, sent, delivered, read, unconfirmed or failed with the provider error.
+
+## Delivery and AI Copilot
+
+**Delivery** lists recent outbound messages with their delivery state and provider errors, unmatched events for numbers that are not mapped, failed inbound processing with a retry action, and the administration audit. **AI Copilot** configures the WhatsApp assistant; until a WhatsApp-specific configuration is saved, it inherits the chat Copilot settings.
+
+| Setting | Purpose |
+|---|---|
+| `TELNYX_API_KEY` | Primary account, checked first for a WhatsApp Business Account. |
+| `TELNYX_API_KEY_WHATSAPP` | Backup account used when the primary has no WABA. |
+| `TELNYX_WEBHOOK_PUBLIC_KEY_WHATSAPP` | Ed25519 key of the backup account (webhook signatures). |
+| `TELNYX_WEBHOOK_BASE_URL` / `APP_BASE_URL` | Public HTTPS base for the webhook and outbound media links. |
+| `NEXTAUTH_SECRET` (or `MEDIA_URL_SIGNING_SECRET`) | Signs the expiring public links WhatsApp fetches media from. |
+| `PEXELS_API_KEY` | Enables the Pexels photo search in the composer. |

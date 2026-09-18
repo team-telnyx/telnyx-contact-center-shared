@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
-export async function POST(request) {
+import { withPermission } from "@/lib/authz/guard";
+async function POST_handler(request) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "Missing TELNYX_API_KEY" }, { status: 500 });
@@ -29,3 +30,6 @@ export async function POST(request) {
     return NextResponse.json({ error: error?.message || "Translation failed" }, { status: 500 });
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("telephony_tools:use", POST_handler, { route: "/api/translate" });

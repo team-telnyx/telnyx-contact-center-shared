@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { setUserStatus } from "@/lib/contact-center/user-status";
+import { readAgentStatusPresentation, setManualAgentStatus } from "@/lib/acd/agent-state.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const ALLOWED_THEMES = ["light", "dark", "system"];
 
@@ -25,31 +25,13 @@ async function getAllowedStatuses() {
   }
 }
 
-async function getStatusMetaByName(statusName) {
-  try {
-    const pool = getPostgresPool();
-    if (!pool) return null;
-    const result = await pool.query(
-      `SELECT name, user_selectable FROM cc_user_statuses WHERE is_active = true AND name = $1 LIMIT 1`,
-      [statusName],
-    );
-    return result.rows?.[0] || null;
-  } catch (error) {
-    return null;
-  }
-}
-
 async function getCurrentAgentStatus(userId) {
   try {
     const pool = getPostgresPool();
-    if (!pool || !userId) return "Unknown";
-    const result = await pool.query(
-      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
-      [String(userId)],
-    );
-    return result.rows?.[0]?.agent_status || "Unknown";
+    if (!pool || !userId) return { status: "Unknown", pendingStatus: null, pendingSince: null };
+    return await readAgentStatusPresentation(pool, String(userId), "Offline");
   } catch (error) {
-    return "Unknown";
+    return { status: "Unknown", pendingStatus: null, pendingSince: null };
   }
 }
 
@@ -57,15 +39,9 @@ async function getCurrentAgentStatus(userId) {
  * GET /api/user/profile
  * Get current user profile data
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const user = authz.user;
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "User not found" },
@@ -74,6 +50,8 @@ export async function GET(request) {
     }
 
     const agentStatus = await getCurrentAgentStatus(user.id);
+    const voicePolicy = (await getPostgresPool().query(
+      "SELECT enabled FROM cc_agent_channel_policies WHERE agent_id=$1 AND channel='voice'",[String(user.id)])).rows[0];
 
     // Return relevant user data (exclude sensitive fields like hash, salt)
     // Use original Next.js format - snake_case for database fields
@@ -90,7 +68,11 @@ export async function GET(request) {
       telephony_user_name: user.telephony_user_name,
       roles: user.roles || ["agent"],
       theme: user.theme,
-      status: agentStatus,
+      status: agentStatus.status,
+      // Manual status waiting to apply once the agent's current interactions end.
+      pending_status: agentStatus.pendingStatus,
+      pending_since: agentStatus.pendingSince,
+      voice_enabled: voicePolicy?.enabled !== false,
       language: user.language,
       profile_picture_uri: user.profile_picture_uri,
       setup_completed: user.setup_completed,
@@ -100,24 +82,26 @@ export async function GET(request) {
     return NextResponse.json({ ok: true, data: userData });
   } catch (err) {
     platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+    // Domain rejections carry their own status code and a message meant for the agent.
     return NextResponse.json(
-      { ok: false, error: "Server error" },
-      { status: 500 },
+      { ok: false, error: err?.status ? err.message : "Server error" },
+      { status: err?.status || 500 },
     );
   }
 }
 
-export async function PUT(request) {
+async function PUT_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const user = authz.user;
 
     const userId = String(user.id);
+    const pool = getPostgresPool();
+    if (!pool) {
+      return NextResponse.json(
+        { ok: false, error: "Server not ready" },
+        { status: 503 },
+      );
+    }
 
     let payload = {};
     try {
@@ -144,15 +128,9 @@ export async function PUT(request) {
     // Status - validate against allowed statuses from database
     if (typeof payload.status === "string" && payload.status.trim()) {
       const trimmedStatus = payload.status.trim();
-      const allowSystemStatus = payload.system === true;
       const allowedStatuses = await getAllowedStatuses();
       if (allowedStatuses.includes(trimmedStatus)) {
         requestedStatus = trimmedStatus;
-      } else if (allowSystemStatus) {
-        const meta = await getStatusMetaByName(trimmedStatus);
-        if (meta?.name) {
-          requestedStatus = trimmedStatus;
-        }
       }
     }
 
@@ -193,29 +171,29 @@ export async function PUT(request) {
       await PgDb.updateUserById(userId, update);
     }
 
-    let effectiveStatus = null;
+    let presentation = null;
     if (requestedStatus) {
-      const previousStatus = await getCurrentAgentStatus(userId);
-      effectiveStatus = await setUserStatus({
-        userId,
-        username: user.username,
+      await setManualAgentStatus(pool, {
+        agentId: userId,
         status: requestedStatus,
-        previousStatus,
+        actor: `agent:${userId}`,
       });
+      presentation = await getCurrentAgentStatus(userId);
     }
 
     return NextResponse.json({
       ok: true,
       message: "User profile updated successfully",
-      status:
-        effectiveStatus ||
-        (requestedStatus ? await getCurrentAgentStatus(userId) : undefined),
+      status: presentation?.status,
+      pendingStatus: presentation?.pendingStatus ?? null,
+      pendingSince: presentation?.pendingSince ?? null,
     });
   } catch (err) {
     platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+    // Domain rejections carry their own status code and a message meant for the agent.
     return NextResponse.json(
-      { ok: false, error: "Server error" },
-      { status: 500 },
+      { ok: false, error: err?.status ? err.message : "Server error" },
+      { status: err?.status || 500 },
     );
   }
 }
@@ -225,15 +203,9 @@ export async function PUT(request) {
  * Handle profile updates (used by sendBeacon which always sends POST)
  * Delegates to the same DB-authoritative status writer as PUT.
  */
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const user = authz.user;
 
     let payload = {};
     try {
@@ -262,15 +234,9 @@ export async function POST(request) {
     let requestedStatus = null;
     if (typeof payload.status === "string" && payload.status.trim()) {
       const trimmedStatus = payload.status.trim();
-      const allowSystemStatus = payload.system === true;
       const allowedStatuses = await getAllowedStatuses();
       if (allowedStatuses.includes(trimmedStatus)) {
         requestedStatus = trimmedStatus;
-      } else if (allowSystemStatus) {
-        const meta = await getStatusMetaByName(trimmedStatus);
-        if (meta?.name) {
-          requestedStatus = trimmedStatus;
-        }
       }
     }
 
@@ -278,20 +244,31 @@ export async function POST(request) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    const previousStatus = await getCurrentAgentStatus(user.id);
-    await setUserStatus({
-      userId: String(user.id),
-      username: user.username,
+    const pool = getPostgresPool();
+    if (!pool) {
+      return NextResponse.json(
+        { ok: false, error: "Server not ready" },
+        { status: 503 },
+      );
+    }
+    await setManualAgentStatus(pool, {
+      agentId: String(user.id),
       status: requestedStatus,
-      previousStatus,
+      actor: `agent:${user.id}`,
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+    // Domain rejections carry their own status code and a message meant for the agent.
     return NextResponse.json(
-      { ok: false, error: "Server error" },
-      { status: 500 },
+      { ok: false, error: err?.status ? err.message : "Server error" },
+      { status: err?.status || 500 },
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("authenticated", GET_handler, { route: "/api/user/profile" });
+export const PUT = withPermission("authenticated", PUT_handler, { route: "/api/user/profile" });
+export const POST = withPermission("authenticated", POST_handler, { route: "/api/user/profile" });

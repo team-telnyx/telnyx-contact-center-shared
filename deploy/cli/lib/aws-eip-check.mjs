@@ -25,7 +25,7 @@ const execFileAsync = promisify(execFileCb);
 // already has (it's a DescribeAccountAttributes call, already implied by the
 // ec2-networking action group), whereas GetServiceQuota needs a SEPARATE
 // servicequotas:GetServiceQuota grant most operator policies don't include
-// (confirmed via AccessDeniedException against our own fde-app-bot policy
+// (confirmed via AccessDeniedException against our own cc-deploy-bot policy
 // during the 2026-07-06 incident investigation) — asking users to grant yet
 // another permission just for this precheck isn't worth it when the legacy
 // attribute already gives an accurate, always-on ceiling.

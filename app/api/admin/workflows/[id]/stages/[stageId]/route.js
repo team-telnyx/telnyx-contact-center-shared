@@ -10,8 +10,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 // PUT /api/admin/workflows/[id]/stages/[stageId] - Update stage
-export async function PUT(request, { params }) {
+async function PUT_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -102,7 +103,7 @@ export async function PUT(request, { params }) {
 }
 
 // DELETE /api/admin/workflows/[id]/stages/[stageId] - Delete stage
-export async function DELETE(request, { params }) {
+async function DELETE_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -157,3 +158,7 @@ export async function DELETE(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission("workflows:update", PUT_handler, { route: "/api/admin/workflows/[id]/stages/[stageId]" });
+export const DELETE = withPermission("workflows:update", DELETE_handler, { route: "/api/admin/workflows/[id]/stages/[stageId]" });

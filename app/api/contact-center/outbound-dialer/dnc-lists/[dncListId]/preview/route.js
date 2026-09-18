@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError } from "@/lib/outbound-dialer/api";
+import { withPermission } from "@/lib/authz/guard";
 
-export async function GET(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function GET_handler(request, context, authz) {
+  const user = authz.user;
   const { dncListId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows: listRows } = await pool.query(`SELECT id, name, metadata FROM outbound_dnc_lists WHERE id=$1 AND status <> 'archived'`, [dncListId]);
@@ -19,3 +20,6 @@ export async function GET(request, context) {
   }));
   return NextResponse.json({ ok: true, readOnly: true, source: "database", columns: [...new Set(columns)], records, totalPreviewRows: records.length });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("dnc_lists:read", GET_handler, { route: "/api/contact-center/outbound-dialer/dnc-lists/[dncListId]/preview" });

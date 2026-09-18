@@ -56,6 +56,19 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.strictEqual(targets[0].action_trigger, "agent_bridge");
   });
 
+  it("normalizeTargets accepts a bounded SIP destination and rejects malformed SIP targets", () => {
+    const targets = normalizeTargets({
+      targets: [
+        { target_type: "sip", target: "agent-one@sip.telnyx.com", total_calls: 1, from_numbers: ["+48123"], action_id: "a1" },
+        { target_type: "sip", target: "sip:missing-host", total_calls: 1, from_numbers: ["+48123"], action_id: "a1" },
+        { target_type: "sip", target: "sip:bad user@sip.telnyx.com", total_calls: 1, from_numbers: ["+48123"], action_id: "a1" },
+      ],
+    });
+    assert.strictEqual(targets.length, 1);
+    assert.strictEqual(targets[0].target_type, "sip");
+    assert.strictEqual(targets[0].target, "sip:agent-one@sip.telnyx.com");
+  });
+
   it("normalizeTargets clamps total_calls and falls back to legacy config", () => {
     const clamped = normalizeTargets({ targets: [{ flow_id: "f", total_calls: 99999, from_numbers: ["+1"] }] });
     assert.strictEqual(clamped[0].total_calls, 1000);
@@ -81,12 +94,12 @@ describe("call generator actions & multi-target (T6)", () => {
 
   it("actions API supports list/create and update/delete", async () => {
     const listCode = await src("app/api/admin/call-generator/actions/route.js");
-    assert.match(listCode, /export async function GET/);
-    assert.match(listCode, /export async function POST/);
+    assert.match(listCode, /export const GET = withPermission\(/);
+    assert.match(listCode, /export const POST = withPermission\(/);
     assert.match(listCode, /normalizeSteps/);
     const itemCode = await src("app/api/admin/call-generator/actions/[id]/route.js");
-    assert.match(itemCode, /export async function PUT/);
-    assert.match(itemCode, /export async function DELETE/);
+    assert.match(itemCode, /export const PUT = withPermission\(/);
+    assert.match(itemCode, /export const DELETE = withPermission\(/);
     assert.match(itemCode, /const \{ id \} = await params/);
     assert.doesNotMatch(itemCode, /params\.id/);
   });
@@ -102,7 +115,7 @@ describe("call generator actions & multi-target (T6)", () => {
   it("runner seeds ledger rows per target with rotated from_number and action steps", async () => {
     const code = await src("lib/call-generator/runner.mjs");
     assert.match(code, /normalizeTargets/);
-    assert.match(code, /i % target\.from_numbers\.length/);
+    assert.match(code, /pickFromNumber\(target\.from_numbers, i\)/);
     assert.match(code, /action_steps/);
     assert.match(code, /action_trigger/);
     assert.match(code, /agent_bridge/);
@@ -110,16 +123,12 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(code, /no_valid_targets/);
   });
 
-  it("engine executes action step sequences on answer", async () => {
-    const code = await src("lib/call-generator/engine.mjs");
-    assert.match(code, /action_steps/);
-    assert.match(code, /shouldRunActionTrigger/);
-    assert.match(code, /case "call\.bridged"/);
-    assert.match(code, /executeSequence/);
-    assert.match(code, /action_sequence_started_at/);
-    assert.match(code, /playback_start/);
-    assert.match(code, /send_dtmf/);
-    assert.match(code, /speak/);
+  it("media command definitions use completion events as sequence barriers", async () => {
+    const { generatorCommand } = await import('../lib/call-generator/commands.mjs');
+    assert.equal(generatorCommand({type:'speak',text:'hi'}).wait,'call.speak.ended');
+    assert.equal(generatorCommand({type:'play_media',media_name:'a'}).wait,'call.playback.ended');
+    assert.equal(generatorCommand({type:'send_dtmf',digits:'12'}).action,'send_dtmf');
+    assert.equal(generatorCommand({type:'record'}).body.recording_track,'inbound');
   });
 
   it("page uses 3-panel layout with Actions section, flow select and validation gating", async () => {
@@ -268,14 +277,10 @@ describe("call generator actions & multi-target (T6)", () => {
 
   it("finalized agent transcription triggers dynamic workflow-testing caller replies", async () => {
     const router = await src("lib/agent-assist-transcription-router.mjs");
-    assert.match(router, /metadata->>'original_call_control_id' = \$1/);
-    assert.match(router, /metadata->>'agent_call_control_id' = \$1/);
+    assert.match(router, /findInteractionViewByCallControlId/);
+    assert.match(router, /findInteractionViewByCallSessionId/);
     assert.match(router, /handleWorkflowTestingFinalTranscription/);
     assert.match(router, /workflow_testing_transcription_reply_failed/);
-    const contactCenterWebhook = await src("lib/contact-center/webhook-handler.js");
-    assert.match(contactCenterWebhook, /handleWorkflowTestingFinalTranscription/);
-    assert.match(contactCenterWebhook, /routedTranscriptionData/);
-    assert.match(contactCenterWebhook, /workflow_testing_transcription_reply_failed/);
     const sttHandler = await src("lib/telnyx-stt-handler.mjs");
     assert.match(sttHandler, /this\.interactionId = this\.clientState\.interaction_id \|\| this\.clientState\.interactionId \|\| null/);
     const workflowTesting = await src("lib/call-generator/workflow-testing.mjs");

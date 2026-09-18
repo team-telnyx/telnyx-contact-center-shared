@@ -7,7 +7,7 @@ import {
 } from "../lib/agent-assist/insight-schema-generator.js";
 
 // Single slot used across assertions to keep the test focused on the
-// `alternatives` extension required by FDE-535.
+// `alternatives` extension required by an earlier fix.
 const SLOT = {
   slot_name: "caller_name",
   slot_type: "text",
@@ -125,5 +125,34 @@ test("generateSlotsInstructions falls back to 0.95 for an invalid threshold", ()
       STAGES
     );
     assert.match(out, />=\s*0\.95/, `threshold ${String(bad)} should fall back to 0.95`);
+  }
+});
+
+// "select" is the only option-bearing slot_type the admin editor
+// (app/(portal)/admin/workflows/[id]/page.jsx) actually preserves on save —
+// it only recognizes "select", and sends slot_options: null for anything
+// else, including the legacy "enum" value. Both must produce identical
+// "Must be one of" / "Valid options" enrichment here, so a workflow author
+// switching a slot from "enum" to "select" (to avoid that admin-UI bug)
+// doesn't lose anything from the Insights schema/instructions either.
+const OPTION_SLOT_BASE = {
+  slot_name: "transport_reason",
+  label: "Reason for transport",
+  slot_options: ["cardiac", "stroke", "trauma"],
+};
+
+test("generateSlotsSchema's value description includes 'Must be one of' for slot_type 'select', not just legacy 'enum'", () => {
+  for (const slot_type of ["select", "enum"]) {
+    const schema = generateSlotsSchema([{ ...OPTION_SLOT_BASE, slot_type }]);
+    const desc = schema.properties.slots.properties.transport_reason.properties.value.description;
+    assert.match(desc, /Must be one of: cardiac, stroke, trauma/, `slot_type ${slot_type} should include allowed options`);
+  }
+});
+
+test("generateSlotsInstructions lists 'Valid options' for slot_type 'select', not just legacy 'enum'", () => {
+  for (const slot_type of ["select", "enum"]) {
+    const stages = [{ name: "Transport Details", items: [{ ...OPTION_SLOT_BASE, type: "slot", slot_type }] }];
+    const out = generateSlotsInstructions(WORKFLOW, stages);
+    assert.match(out, /Valid options: cardiac, stroke, trauma/, `slot_type ${slot_type} should list valid options`);
   }
 });

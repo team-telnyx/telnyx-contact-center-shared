@@ -1,50 +1,805 @@
 ---
 title: Changelog
-description: Short release notes based on recently merged application PRs.
+description: Release notes for Telnyx Contact Center.
 audiences: [agent, supervisor, admin, owner]
-keywords: [changelog, release notes, changes]
+keywords: [changelog, release notes, changes, version]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-09-18
 ---
 
-<ChangelogEntry
-  title="AI Tools Library and Insights administration"
-  date="2026-07-11"
-  pr="https://github.com/team-telnyx/telnyx-contact-center/pull/1243"
->
-  Added Admin workspace pages for Tools Library and Insights. The tools page
-  includes filtering, pagination, create/edit sheets, per-tool editors,
-  webhook testing, assistant assignment, and delete flows. The insights page
-  adds insight cards, schema and instruction editing, group editing, and
-  assign/unassign APIs.
-</ChangelogEntry>
+{/* Generated from CHANGELOG.md by yarn release:sync. */}
 
-<ChangelogEntry
-  title="Telnyx AI Assistant administration"
-  date="2026-07-11"
-  pr="https://github.com/team-telnyx/telnyx-contact-center/pull/1242"
->
-  Added the Admin AI Assistants list, create, and editor views modeled on the
-  Telnyx demo portal. The editor now covers Dashboard, Agent, Voice, Workflow,
-  Integrations, Insights, Calling, Messaging, Widget, Privacy, and
-  Conversations, including conversation sheets, call/session details,
-  recording playback, transcript seeking, costs, version actions, traffic
-  distribution, chat, call, clone, save-as-version, and deletion.
-</ChangelogEntry>
+Official versions follow [Semantic Versioning](https://semver.org/). These notes
+are also available inside the application through **About Contact Center → Release notes**.
 
-<ChangelogEntry
-  title="Agent Assist read-back and suggestion fixes"
-  date="2026-07-10"
-  pr="https://github.com/team-telnyx/telnyx-contact-center/pull/1240"
->
-  Improved Agent Assist behavior around compact read-back, ordinals and
-  hyphen handling, and a stuck suggestion race condition.
-</ChangelogEntry>
+## [Unreleased]
 
-<ChangelogEntry
-  title="Telnyx OpenAPI spec refresh"
-  date="2026-07-10"
-  pr="https://github.com/team-telnyx/telnyx-contact-center/pull/1241"
->
-  Updated the Telnyx OpenAPI specification used by the application.
-</ChangelogEntry>
+### Added
+
+- Widget test page. **Widget Studio → Delivery → Test page** runs the published
+  revision of the widget being edited on a stand-in customer page through the
+  public loader script: the page fills the centre of the Studio and the side
+  panel holds a JSON context published to the widget like
+  `window.TelnyxWidget.setContext()` on a customer site (prefilled with sample
+  `first_name`, `last_name`, `company`, `phone_number` and `email` values),
+  **Reload widget** and **Open in a new tab**. The page reports a loader
+  failure, or a widget its targeting or decision rules kept from mounting,
+  instead of staying empty. It needs a signed-in user with the Web Widgets
+  screen. The origin of Contact Center does not have to be on the widget's
+  allowlist: the page asks for a 12-hour test grant bound to the widget and the
+  origin (`POST /api/admin/widgets/[id]/test-grant`, `widgets:read`, audited as
+  `widget.test.opened`), the loader forwards it to the bootstrap call
+  (`data-test-grant`), and the sessions are stored under a `cc-test:` origin so
+  test traffic is recognisable in the interaction attributes. Conversations
+  and calls started there are real and reach the environment's queues.
+
+- The stand-in customer page of the widget test page booted the portal's client
+  providers, whose status stream (`/api/user/status-stream`) then held one of
+  the browser's sockets for this origin for the life of the page. With the
+  Studio, the page inside it and a second tab open, the remaining sockets ran
+  out: the widget's own bootstrap never completed (the page reported that the
+  loader did not mount it), the tab kept loading, and the whole application
+  stalled until that tab was closed or its loading stopped. The page, like the
+  embedded widget frame, no longer loads those providers.
+
+### Removed
+
+- The public `/widget-demo.html` page. It was served without a sign-in, so
+  anyone could start conversations and calls from it, and it pointed at one
+  hard-coded development widget. Use the widget test page instead.
+
+### Fixed
+
+- A widget bootstrap request whose `Origin` uses a non-web scheme (for example
+  `file:` or an application scheme) answered 500 instead of 403.
+
+## [1.6.0] - 2026-09-18
+
+Video calls grow from a 1:1 conversation into a supervised, configurable
+channel: screen sharing on both sides, a scene planner for up to four tiles,
+supervisor monitor, whisper and barge, a media library for the waiting
+playlist and a Widget Studio preview of every video setting and call state.
+
+### Added
+
+- Screen sharing and scenes in video calls. The visitor and the agent can share
+  a screen as a second stream that ends with the browser's stop control. A
+  scene planner arranges one to four tiles (cameras and shared screens) as
+  agent only, side by side, picture in picture or the new **Spotlight**; a
+  shared screen becomes the main tile with compact cameras beside or below it,
+  and every frame keeps 4:3 on the widget while the agent desktop fills its
+  stage.
+- Supervision of video calls. The eye button on a video row in **Supervisor →
+  Monitor → Interactions** opens a dialog that joins the room without devices
+  in the first permitted mode: **Monitor** (silent), **Whisper** (heard by the
+  agent only) or **Barge** (a third tile for everyone). Each mode is its own
+  permission (`calls:supervise.listen|whisper|barge`) inside the supervisor's
+  data scope, one supervisor per session. The agent desktop shows a
+  "Supervisor listening / whispering / joined" badge, the visitor sees a
+  supervisor only while barging, and the interaction records
+  `video_supervision_started`, `_mode` and `_ended` events.
+- Video media library. **Widget Studio → Video → Waiting playlist** is an
+  ordered editor (move up and down, remove, **Add a link**) with a library of
+  uploaded mp4/webm files up to 64 MB, stored through the configured storage
+  driver (local disk, S3 or Azure) and served to the public widget with byte
+  ranges from `/api/video/media/[id]`. The playlist loops one item or rotates
+  through all, and plays with sound by default (`channels.video.waiting.sound`,
+  **Play with sound**), since the visitor has already pressed Start call.
+- More video settings in Widget Studio (`channels.video`): available scenes and
+  the default scene, picture-in-picture thumbnail size (10–50 % of the main
+  frame), the enlarge button with a size preset (50 %, 75 %, 90 % or full
+  screen), panel size following the widget or the video with its own width and
+  height, controls docked below, on top or floating over the video with
+  configurable opacity and size, and handoff notices with their duration
+  (`notices.enabled`, `notices.seconds`, 1–30 s). Settings of the first video
+  release (`defaultLayout`, `waitingMedia`) migrate when the configuration is
+  read.
+- Live preview of the video surface in Widget Studio with a call-state
+  selector: before the call, connected with the agent, waiting in the queue
+  with the playlist playing, the agent sharing a screen and a supervisor as a
+  third tile. The preview takes the video panel size and follows every
+  setting as it is edited.
+- Video offers ring outside the Agent Desktop: `video` joins the interaction
+  notification channels, so the portal header shows "New video call" and the
+  doorbell tone loops until the offer is answered. **Admin → System settings →
+  Interaction sounds** gets a video row; email, chat and video are on by
+  default, WhatsApp and SMS off.
+- Personal interaction sounds. **Profile → Notifications** has the same editor
+  as the system settings (volume and, per channel, enabled, tone, loop and a
+  preview) with a "Using system settings" / "Personalized" badge and a reset.
+  Only the fields a user changes are stored, so everything else keeps
+  following the system settings (`GET/PUT /api/user/notification-sounds`).
+
+### Changed
+
+- The handoff timeline no longer renders under the controls of the video
+  widget. While waiting, a card on the video shows the current handoff message
+  above the floating controls; once connected a short pill appears over the
+  frame. Both hide after the configured notice duration.
+- Floating controls are anchored to the visitor's own frame in the side-by-side
+  and spotlight scenes instead of straddling the edge between two frames; over
+  a thumbnail or with the own camera hidden they keep the bottom of the scene.
+
+### Fixed
+
+- Uploads above 10 MB failed with "Widget operation failed" because the proxy
+  body buffer truncated the request. The limit is 110 MB, which also covers
+  100 MB chat attachments, and an unreadable upload form returns a clear 400.
+- Long file names in the playlist and the media library widened the Widget
+  Studio configuration pane, and the floating-panel opacity and size fields
+  ran into each other.
+- After a participant left a video room (for example a supervisor who had
+  barged in) the agent and the visitor kept a black frame with that
+  participant's name, and a following transfer showed "No stream registered
+  with the id" in the widget. Streams of participants who left are neither
+  rendered nor re-subscribed.
+
+### Upgrade notes
+
+- Schema changes are additive and applied at startup: the `cc_video_media`
+  table and the `acd_video_sessions.supervision` and
+  `users.notification_sounds` columns.
+- The larger upload limit is part of the application configuration
+  (`next.config.mjs`), so it needs the new build and a restart.
+- Uploaded waiting videos live in the storage driver of the installation; with
+  local storage, keep that directory on a persistent volume.
+
+### Known limitations
+
+- Telnyx room compositions mix every audio source, so a supervisor's whisper
+  is audible in the call recording.
+- Video Rooms have no server-side subscription policy: who hears a whispering
+  supervisor is decided by the Contact Center clients.
+- Compositions record the two camera streams; a shared screen is not part of
+  the recording.
+
+## [1.5.0] - 2026-09-18
+
+Video becomes a Contact Center channel. A visitor starts a video call from the
+web widget, waits in a queue like any other interaction and talks to an agent
+who accepts, transfers and wraps it up from the desktop, with one recording of
+both sides in the interaction history.
+
+### Added
+
+- **Video channel** (`video`): "Voice & Video Call" in the web widget starts a
+  Telnyx Video Rooms session routed straight to a Contact Center queue. The
+  visitor picks the camera state on a pre-join screen, waits in the queue with
+  a muted waiting playlist and the handoff timeline, then talks to the agent
+  1:1 with switchable layouts (agent only, side by side, picture in picture)
+  on both sides; the camera can be turned on or off during the call. Agents
+  accept, decline, transfer (queue or agent, inside the same room) and end
+  video calls from the desktop with the usual wrap-up; the channel is
+  exclusive like voice and is enabled per queue and per agent in the channel
+  utilization settings. Telnyx records both participants and Contact Center
+  composes one mp4 with audio after the call; history shows the timeline and
+  a video player on the Recording tab. Widget Studio → Video configures the
+  queue, camera default, recording layout and the waiting playlist
+  (`channels.video`).
+- Video frames on the widget keep a top-aligned 4:3 rectangle with the
+  picture-in-picture thumbnail pinned inside the scene, the controls sit in a
+  dock under the video, and an enlarge button opens the call in a modal fitted
+  to the frames. The agent desktop fills its stage edge to edge.
+
+### Fixed
+
+- A chat, messaging or video reservation whose offer execution had already
+  finished without releasing it (for example an older node that did not know
+  the channel) kept the agent Busy with no interaction. The reconciler's
+  orphan sweep now releases such claims, and **Supervisor → Operations** lists
+  chat, messaging and video capacity with a "Release capacity" action for
+  reservations that no live offer or assignment owns (`release_native_capacity`,
+  audited like the voice recovery).
+- When the visitor and the agent left a video call at the same moment, the
+  room session was ended twice and the second attempt surfaced as an error.
+  The session ends once.
+
+### Upgrade notes
+
+- The schema is additive and applied at startup (`acd_video_sessions`).
+- Room and composition webhooks need this installation to be reachable over
+  public HTTPS (`TELNYX_WEBHOOK_BASE_URL` or `APP_BASE_URL`), like WhatsApp.
+- The channel starts switched off: choose a queue under **Widget Studio →
+  Video**, publish the widget, and enable video for the queue and its agents in
+  the channel utilization settings.
+- On a multi-node installation upgrade every node. A node that does not know
+  the channel can leave a video reservation behind; **Supervisor → Operations**
+  releases it.
+
+### Known limitations
+
+- Calls are 1:1 between a visitor and an agent. Supervision, screen sharing
+  and an uploaded waiting-video library arrive in 1.6.0.
+- The recording is available after Telnyx finishes the composition, shortly
+  after the call; it is not transcribed.
+
+## [1.4.0] - 2026-09-17
+
+The web widget voice call gets a face: real-time AI avatars from HeyGen
+LiveAvatar and Anam, configured per widget in Widget Studio and driven by the
+assistant's audio.
+
+### Added
+
+- Real-time AI avatars (HeyGen LiveAvatar and Anam) in the web widget voice
+  call, configured per widget in **Widget Studio → Avatars**: show the avatar
+  in web calls, provider, avatar (featured catalog plus a browse-all picker
+  with every look), display format (portrait / landscape), the **expanded
+  view** the expand button opens (full screen or a centered modal 25%, 50%
+  or 75% of the screen width, sized to the avatar's aspect ratio) and the
+  embedded appearance (position above or below the call controls, maximum
+  height, corner radius, padding, background, fill / fit, crop focus, expand
+  button, subtitles on the embedded avatar with their position and text size). With the live transcript turned
+  off the avatar stretches down to the message input. The settings are part of the widget
+  revision (`channels.voice.avatar`, `components.voice.avatar`), so the
+  Studio preview shows the avatar and publishing verifies the selected avatar
+  against the provider catalog. The loader grows the embedding iframe (with a
+  dimmed backdrop for the modal); the panel drives the avatar from the
+  assistant pre-playout audio and falls back to the waveform on any provider
+  error. Provider keys (`LIVEAVATAR_API_KEY`, `ANAM_API_KEY`) stay
+  server-side; the browser only receives short-lived session tokens from
+  `/api/widgets/[publicId]/avatar-session`, authorised by the voice session
+  token of the widget and limited to the avatar of its published revision.
+  Switching between the embedded and expanded views keeps the avatar session
+  and video running, and the expanded view stays open across Connect and
+  hangup.
+- TTS expression tags in assistant transcripts (`<break time="0.3s" />`,
+  `<emotion>`, `[laughter]`, …) are shown as small badges in the web widget
+  voice transcript and the assistant test phone instead of raw markup, as in
+  the Demo Portal; subtitles strip them.
+
+### Fixed
+
+- Saving an AI assistant that has a shared (Tools Library) tool attached — for
+  example the Contact Center chat handoff tool a published widget attaches —
+  failed with "Webhook tools names must be unique": Telnyx lists attached
+  shared tools inside `tools` and the editor sent them back inline, creating a
+  second tool with the same name. The save route now sends only inline tools,
+  attaches and detaches shared tools through the dedicated endpoint to match
+  the saved list, and rejects duplicate webhook names with a clear message
+  before calling Telnyx.
+- The web widget voice panel no longer shows the "Transferring the
+  conversation to the … queue" handoff step after the visitor hangs up an AI
+  call that was never handed to a queue.
+
+### Upgrade notes
+
+- Avatars need a provider key on the server: `LIVEAVATAR_API_KEY` (optionally
+  `LIVEAVATAR_SANDBOX=true` for free sandbox sessions) or `ANAM_API_KEY`; see
+  `sample.env`. Without a key the widget keeps the waveform.
+- Avatars are off until switched on per widget under **Widget Studio →
+  Avatars** and published. There is no schema change.
+
+## [1.3.0] - 2026-09-17
+
+Roles and permissions replace the fixed owner / admin / supervisor / agent
+checks. Administrators build roles from a catalogue of screens and operations,
+narrow them to queues, teams, campaigns and channels, and every API route, page
+and menu entry follows the result.
+
+### Added
+
+- Roles and permissions: a permission catalogue in code (90
+  grantable screens, every managed object with read / create / update /
+  delete and named operations, scope anchors for queues, teams, campaigns and
+  channels), a `cc_roles` table with four immutable system roles and ten
+  shipped position roles (Team Leader, Quality Manager, Workforce Analyst,
+  Reporting Analyst, Compliance Auditor, Campaign Manager, User Administrator,
+  Routing Administrator, Conversation Designer, Channel Administrator) seeded
+  once and never overwritten, and a `cc_authz_audit` trail of every role and
+  assignment change. **Admin → Configuration → Permissions** (last entry of
+  the rail) lists roles and opens a full-page editor with the screen tree,
+  the operations matrix, scope modes All / Selected / Own and the audit
+  history; system roles are read-only and can be cloned, edited shipped roles
+  can be restored. The user sheet picks roles from the roles table. Role
+  assignments are validated (unknown keys, owner protections, delegation:
+  nobody grants what they do not hold) and pushed to affected users as
+  `authz_changed` so menus and API access follow within seconds.
+  `/api/auth/me` and the mobile sign-in payload return `permissions`,
+  `screens` and `scopes`; `useAuth().can()` and `<Can>` gate UI.
+- Data scoping for roles: a role's scope
+  now narrows what its assignees see and change. Queues, teams and campaigns
+  combine with *or*, channels with *and*; **Own** resolves from the assignee's
+  queue, team and campaign memberships at request time, and a leader without a
+  team sees their own data rather than nothing or everything. The scope is
+  applied per grant (an `agent` role beside a scoped Team Leader role does not
+  widen the monitor) across the supervisor monitor (dashboard, stream, live
+  interactions), queue and agent statistics, interaction history and detail,
+  analytics and reporting, quality evaluations (list, dashboard, detail, AI;
+  evaluations can only be created for interactions in scope), recordings
+  (list, stream, proxy), campaigns (list, detail, execution, messaging) and
+  the users and queues administration. New **Admin → Configuration → Teams**
+  screen (before Permissions) creates teams, picks their members and is the
+  source of the Teams scope; the scope editor lists teams from it. Deleting a
+  queue or a team or archiving a campaign removes it from every role scope,
+  audited as a scope cascade; a selection emptied this way keeps meaning
+  "nothing" until an administrator picks a new one.
+- Menus, section rails and pages follow the permission catalogue. Sidebar items name their screen and appear when a
+  role grants it; section rails (Configuration, System, Automations, AI,
+  Monitor, Analytics, Quality, Outbound Dialer, Agent Desktop, Email, SMS,
+  WhatsApp) hide sections a role does not grant and open the first granted
+  one; the Data Sources tiles do the same. Direct navigation to a page whose
+  screen the roles do not grant is refused by the server and lands on the
+  home page with a notice naming the missing screen; a stale client renders
+  an access notice instead of the page. The home page opens the first granted
+  screen (agent → supervisor → admin). Create, import, publish, archive and
+  delete buttons, status changes, listen/whisper/barge and campaign controls
+  are shown only to users holding the matching operation.
+
+### Changed
+
+- Permissions decide. Every API route goes through the `withPermission` guard,
+  and every route, page and menu entry is decided by the permission catalogue
+  alone; the role-name checks that preceded it are gone.
+  The supervisor role keeps the assistant list, text-to-speech and the
+  call-flow monitor it had; agents keep their desktop actions (AI
+  conversation views, form submissions, wrap-up, their own recordings) through
+  `agent:self`; listen, whisper and barge are checked as separate operations.
+  A repository test refuses any route that reintroduces a role-name check or
+  names a permission the catalogue does not know.
+- Assigning the system role **Agent** no longer requires the assigner to hold
+  the agent grants: it is the base role every person needs, so a user
+  administrator without desktop access can create and manage agents (decision
+  D-23). Every other role still follows the delegation rule.
+
+### Security
+
+- Every API route now declares who may call it. Routes that previously relied on
+  implicit access go through the permission guard at the level their screens
+  need, a repository contract test fails on any new route without a guard or a
+  documented exemption, and the call-flow HTTP tester refuses loopback,
+  link-local, private and metadata targets before sending a request.
+- The remaining API routes moved from local admin checks, inline supervisor
+  checks and the owner-only dialer helper to the same permission guard, so every
+  route names the permission it needs. Routes with a self rule (own status, own queues, own
+  interactions, own recordings, own statistics) distinguish "elevated" access
+  explicitly. Channel administration and widget wrappers, contacts, tasks and
+  KB articles (with their API-key access) go through the guard too. The
+  Outbound Dialer is available to administrators as well as owners (menu, page
+  and APIs).
+- Roles and permissions were put through a code review and a follow-up security
+  audit before release, and the findings of both are fixed in this version. They
+  covered role assignment and delegation, the consistency of a role's data scope
+  across runtime checks and queries, session handling for deactivated accounts,
+  and the grants required by individual dialer and reporting resources. The
+  findings themselves are recorded internally rather than published here.
+
+### Fixed
+
+- Roles and permissions: the conversation preview and its attachments decide
+  by the permission and the data scope instead of role names, so a Team
+  Leader opens the conversations of their team; a Configuration tile links
+  to the first granted page of the group (a Routing Administrator no longer
+  lands on a refused Users page); a role with only the agent configuration
+  screen opens it as home; the role editor keeps permission keys an older
+  application version does not know; wrap-up codes no longer claim a queue
+  scope. The IAM policy for the S3 artifact retention names the workflow's
+  actual prefix.
+- Roles and permissions, found in the dev-environment acceptance: a signed-in
+  user without a voice grant (Team Leader, QA reviewer, campaign manager) was
+  sent to the sign-in page every ~35 s because the telephony provider treated a
+  refused voice token as an expired session; the campaign list failed for a
+  campaign-scoped role; status changes between agents now require the elevated
+  grant; and the role editor showed a scope list emptied by a cascade delete
+  (team or queue removed) as **All**, so saving the role untouched would have
+  widened it — stored scopes are now read leniently in the role view and in the
+  assignment check, as they already were for enforcement.
+- A supervisor whose role is narrowed to channels could not open any
+  conversation, attachment, email draft or transcription, because the scope
+  check did not know the interaction's channel. It is read from the work item,
+  and a malformed id is refused without a database lookup.
+- Assigning two roles with different scopes to one user was refused. The
+  delegation rule is checked role by role, each role's permissions against
+  that role's own scope.
+- Messaging campaigns: a variable used only in an email subject override had no
+  mapping row in the campaign editor although the server required it; contacts
+  held back by the test-mode allowlist are named in the audience summary
+  instead of "No problems found"; the unsaved-changes gate of the test send
+  and the audience validation also covers the campaign name, the DNC list and
+  the contact-list filter.
+- A DNC list could be imported under a match strategy other than the one on
+  screen when the strategy was changed and a file uploaded at once. The upload
+  waits until the changed strategy is saved.
+- The S3 artifact retention step reported success although every delete was
+  denied; it now stops on the first failed batch.
+
+### Upgrade notes
+
+- Schema changes are additive and applied at startup (`cc_roles`,
+  `cc_authz_audit`). The four system roles and the ten shipped position
+  roles are seeded once; existing users keep their owner, admin, supervisor or
+  agent role and the access it had.
+- There is no rollout switch: permissions are enforced as soon as this version
+  starts. Integrations calling API routes that used to answer without a
+  session (the AI assistant, tool, insight and integration proxies, TTS,
+  translation, the media listing, the call-flow helpers) must now
+  authenticate as a user holding the matching permission.
+- The Outbound Dialer is available to administrators as well as owners.
+- The IAM policy for S3 artifact retention ships as a document and is not
+  applied by the upgrade.
+
+## [1.2.0] - 2026-09-16
+
+Messaging campaigns reach every text channel: WhatsApp and email broadcasts
+join SMS, and the first SMS release is hardened after review — pacing across
+worker nodes, pause and stop inside a batch, reply attribution, template
+safety and the campaign editor.
+
+### Added
+
+- Broadcast campaigns run on WhatsApp and email as well as SMS. WhatsApp
+  campaigns send an approved Meta template from a mapped number, filling its
+  positional variables from contact fields; email campaigns render a Telnyx
+  email template from a sending-enabled mailbox with an optional subject
+  override, From name and Reply-to. The workspace template category, consent and
+  unsubscribe policies from Settings → Messaging campaigns are enforced at send
+  time, and delivery evidence from both channels reaches the campaign ledger.
+- SMS templates: an editable footer text per template under **Append footer**
+  (empty keeps the workspace footer), the emoji picker from the agent composer
+  inserted at the cursor, and the WhatsApp language catalogue with flags and
+  name search shared by both template builders.
+
+### Fixed
+
+- Messaging campaign pacing counted only messages the provider had already
+  accepted, so freshly claimed rows were invisible to the budget: with more than
+  one worker node a campaign could exceed its per-minute, per-hour, per-day,
+  in-flight and total limits. Every window now prices claimed rows too, and
+  claims that never reach the provider are released instead of held.
+- Pausing or stopping a campaign mid-batch did not stop the batch. The runner
+  re-reads the campaign before each message and returns the rows it had claimed,
+  so a pause takes effect on the next message rather than after up to five
+  hundred.
+- `Max attempts per contact` under Settings → Messaging campaigns was never
+  applied; the campaign retry policy alone decided, so contacts could receive
+  more messages than the workspace allowed. The tighter of the two now wins.
+- A failure reported after the provider accepted a message scheduled a resend,
+  contradicting the documented contract and duplicating messages the customer
+  may already have received. Delivery-phase failures are now terminal.
+- An inbound reply marked every campaign message ever sent to that address as
+  replied, across campaigns and sending numbers. Only the newest message from
+  the number or mailbox that received the reply is attributed, and email replies
+  are attributed at all, which they previously were not.
+- Delivery reconciliation wrote a message off as unconfirmed before its last
+  poll ran, discarding the result of that poll. Email messages joined the same
+  queue without an adapter, so they burned five attempts without a single query
+  and were written off after ten minutes. The last poll now decides, and email
+  is reconciled through its recipients resource.
+- `Pause on backlog` under Settings → Messaging campaigns did nothing. Sending
+  now waits while more inbound messages of that channel are queued than the
+  limit allows.
+- A WhatsApp marketing template could be broadcast to a whole list with the
+  consent requirement switched on but no consent field configured, and a
+  template with an image, video or document header could be started with no
+  media, which the provider rejects for every message. Both are refused at save,
+  start, preview and send.
+- An email template using Liquid beyond a plain `{{variable}}` — a filter such
+  as `{{ name | upcase }}`, an index, a tag — was treated as safe and the raw
+  expression was delivered to the customer. Every unsupported construct is now
+  detected, in the template and in the subject override.
+- A variable used only in a campaign's subject override was never mapped and
+  never reported as missing, so the campaign sent a truncated subject to the
+  whole list. Override variables are part of the mapping, the missing-value
+  check and the audience estimate.
+- A WhatsApp template could be paired with a number from another WhatsApp
+  Business Account when more than one is connected; the campaign started and the
+  provider rejected everything. The pairing is verified before the first batch.
+- Audience validation ignored the test-mode allowlist, so the estimate promised
+  the whole list while the runner suppressed nearly all of it. Gated contacts
+  are counted and explained in the preview.
+- An SMS template used by a ready, running or paused campaign could be edited,
+  changing the content of messages that campaign had not sent yet. Editing is
+  refused on the same terms as archiving and deletion.
+- The opt-out footer was matched anywhere in the message, so a short footer such
+  as `STOP` was considered present in "Stop by our store" and never appended.
+  It now counts only as its own line or on a word boundary at the end.
+- The SMS template builder allowed saving a template longer than the workspace
+  segment limit, which the campaign runner then refused to send. The limit from
+  Dialer → Settings blocks the save and is named in the warning.
+- `Default from name` and `Default reply-to` under Settings → Messaging were
+  shown as placeholders but never applied, so replies went to the sending
+  mailbox. They are used when the campaign leaves the field empty, and a test
+  send now uses the same headers as the campaign it tests.
+- The campaign editor offered **No footer** without saying that a workspace
+  policy requiring the opt-out footer overrides it.
+- Every free-text field in the messaging settings card and the campaign editor
+  swallowed spaces: **From name**, **Reply-to**, the opt-out footer, the
+  unsubscribe group, the subject override, a variable fallback and the WhatsApp
+  header URL. Both forms re-derive their values from the shared normalizers on
+  every render, and those trim, so the space just typed was removed before the
+  next keystroke and a multi-word value could not be entered at all. The fields
+  keep what is being typed and adopt the normalized value when they lose focus.
+  The same fix applies to the numeric settings, which jumped back to their
+  minimum as soon as the field was cleared to type a new value.
+- **Dialer → Settings → Messaging campaigns** still described WhatsApp and
+  email as arriving in a later phase and would not let either channel be
+  enabled, although broadcast campaigns on both shipped with the channels
+  themselves. All three channels can now be switched on.
+- The campaign editor offered a messaging channel that is switched off under
+  Settings without saying so, and the first sign of it was Start being refused.
+  The channel is still selectable, so a campaign can be prepared in advance, but
+  the option and the form now say that Start is refused and a running campaign
+  is paused until the channel is enabled.
+- **Send a test message** and **Validate audience** in a messaging campaign
+  failed with "Test messages apply to messaging campaigns only" whenever the
+  campaign on screen had not been saved. Both act on the stored campaign, and
+  **New campaign** stores a voice campaign before a channel is chosen, so
+  switching an existing campaign to SMS or WhatsApp left the stored row as a
+  voice campaign while the editor already showed the messaging form. Both
+  controls are now disabled until the campaign is saved and say so, and the
+  server, if it is ever called directly, names the control that fixes it
+  instead of describing the campaign the caller cannot see.
+- The SMS template builder previewed a hard-coded opt-out footer, so **No
+  footer** never removed it and the preview could differ from the sent message.
+  The preview now uses the workspace policy from Dialer → Settings → Messaging,
+  and a template set to **No footer** explains when a required footer is still
+  appended.
+- The messaging campaign editor rendered its preview in a phone mock-up beside
+  the form, which collapsed the message card in the campaign drawer. The
+  preview is now inline text under the rendered destination and segment counts.
+- Selecting a template in a messaging campaign crashed the Outbound Dialer with
+  a blank screen (React "Maximum update depth exceeded"). The template variable
+  list was rebuilt on every render, so the header save action re-registered in a
+  loop. It is memoized, and a browser regression covers the real campaign form.
+- The campaign configuration panel laid itself out for the browser window
+  instead of the 380px drawer it is rendered in, so it scrolled sideways and cut
+  the left edge off every label, a long template name stretched the column, and
+  the empty-catalogue hint was rendered as the selected value inside the
+  template field. The panel forms are container-queried: fields, sender lists
+  and variable mapping stack into one readable column, long option labels are
+  truncated, and the hint sits under the field. A browser regression fails if
+  any campaign form makes the panel scroll sideways.
+- Changing an agent status returned the status read before the write together
+  with the pending fields read after it, so the supervisor view could briefly
+  show Busy with no pending status while the break had already been applied.
+- A queue item that became unroutable because no agent matched its skills kept
+  showing the previous diagnostic, usually blaming agent status. The router
+  records the replacement reason and the monitor names it.
+- `GOOGLE_MAPS_KEY` was not passed to the Docker image build, so production
+  bundles shipped without the Maps Embed key and the location preview silently
+  fell back to the keyless embed.
+
+### Upgrade notes
+
+- WhatsApp and email campaign channels start disabled, like SMS in 1.1.0:
+  enable them under **Dialer → Settings → Messaging campaigns** and keep test
+  mode with an allowlist on until the first live run is accepted.
+- WhatsApp campaigns need an approved Meta template and a number mapped to a
+  Contact Center messaging profile; email campaigns need a Telnyx email
+  template and a sending-enabled mailbox.
+- Docker builds pass `GOOGLE_MAPS_KEY` as a build argument; rebuild the image
+  for the Maps Embed key to reach the bundle. There is no schema change that
+  needs a manual step.
+
+### Known limitations
+
+- Campaigns are still broadcasts sent by the worker without agents;
+  agent-assisted sending, scheduling and channel fallback sequences are not
+  available.
+- Live provisioning acceptance of the messaging campaigns has not been
+  completed in this release.
+
+## [1.1.0] - 2026-09-15
+
+Messaging becomes a first-class channel family in both directions. Customers
+reach Contact Center over SMS and WhatsApp next to chat and email, with native
+inbound routing, agent replies, delivery evidence and opt-out handling. The
+Outbound Dialer gains messaging campaigns, starting with SMS broadcasts that
+send an approved template to a contact list and hand every reply back to the
+queue that owns the sending number.
+
+### Added
+
+- Messaging campaigns in the Outbound Dialer (phase 1: SMS). Campaigns choose
+  the SMS channel and run in Broadcast mode: the ACD worker sends one template
+  per contact from the selected queue numbers, paced by workspace limits
+  (batch size and interval, per-minute/hour/day windows, per-number capacity,
+  in-flight cap), with send-time suppression (DNC, STOP opt-outs, consent
+  field, callable window, test-mode allowlist), provider outcome
+  classification (throttling backs off, transient failures retry, sender
+  problems and failure-rate spikes auto-pause), delivery evidence on the
+  attempt ledger and reply attribution. Replies reach queues through the
+  inbound rules of the sending number.
+- Admin → SMS → Templates: local SMS templates with `{{variable}}`
+  placeholders, category, language, opt-out footer mode, sample values, a
+  GSM-7/UCS-2 segment counter and a phone preview; deep link at
+  `/admin/sms/templates`.
+- Campaign editor for messaging channels: sender numbers and strategy,
+  destination fields and consent check, template with variable mapping
+  (auto-map from contact-list columns), live preview per sample contact,
+  audience validation and test sends, and per-campaign pacing that may only
+  tighten the workspace limits.
+- Dialer → Settings → Messaging campaigns: enabled channels, batch limits,
+  attempts and retries, safety breakers and test mode, callable defaults,
+  reply attribution, per-channel rate limits and SMS compliance settings.
+- WhatsApp locations, contact cards and reactions: shared locations render a
+  static map preview (OpenStreetMap tiles, no key required) that opens a larger
+  map modal with zoom and external map links, agents send a
+  location from a dialog with address search (server-side Nominatim proxy,
+  `GEOCODER_URL` for a self-hosted endpoint) and a map preview, send up to
+  five contact cards built from the Contacts directory, and react to customer
+  messages from the bubble. Customer reactions and quoted replies are pinned
+  to the message they refer to instead of appearing as separate bubbles.
+- Pending agent status: a break status chosen while an agent is Busy or in
+  Wrapup is stored as pending, blocks new offers on every channel, and applies
+  when the last interaction ends. The header selector shows a dashed clock chip
+  next to Busy with a cross that cancels the pending status, marks the pending
+  status in the dropdown, the supervisor monitor shows the pending chip and
+  marks it in the status dialog, and queue waiting reasons name the blocking status
+  (`Agent status blocks offers (Away pending)`). Profile, agent-status, agent
+  snapshot, monitor statistics and queue-agent APIs return `pendingStatus` and
+  `pendingSince`.
+- Native WhatsApp channel: WhatsApp Business Account resolved on the primary
+  Telnyx key with a backup-key fallback, signed messaging-profile webhook (both
+  account keys accepted), per-number routing through a Contact Center messaging
+  profile, durable inbound routing with media download, agent replies as durable
+  send sagas (text, image, video, audio, document, sticker, approved templates
+  when the 24-hour window is closed), delivery evidence including read receipts,
+  a Pexels photo picker in the composer, and an Admin → WhatsApp section with
+  Numbers, Details (credentials, webhook, messaging profile, WABA settings),
+  Templates, Phone numbers, Delivery and AI Copilot.
+- WhatsApp appears in every supervisor channel filter, chart series, history
+  row and KPI as well as on the agent dashboard; the WhatsApp interaction card
+  and incoming-offer icon on the Agent Desktop use the channel's green tone.
+- Native SMS channel: signed Telnyx messaging-profile webhook, durable inbound
+  routing to queues by receiving number, agent replies as a durable send saga
+  with `message_send_updated` SLA evidence, carrier delivery states on message
+  bubbles, opt-out (STOP/START) handling, and an Admin → SMS section for
+  messaging profiles, number-to-queue mapping, delivery and AI Copilot.
+- SMS composer counter with GSM-7/UCS-2 encoding, parts, characters per part and
+  remaining characters, plus the shared emoji picker.
+
+### Changed
+
+- Dialer → Settings is split into selectable section cards (Outbound settings,
+  Inbound priority, Allowed Numbers, Answered without agent, Time Zone
+  Settings, and Messaging campaigns · Shared / SMS / WhatsApp / Email). The
+  centre view previews every section's current values; the context panel
+  edits only the selected card, and Save settings persists all sections.
+  Settings fields now use short one-line labels with the explanation behind an
+  info icon so inputs stay aligned, and Allowed Numbers is edited as a
+  searchable scrolling list instead of a dropdown.
+- Text-channel predicates in ACD Core and the Agent Desktop derive from the
+  channel registry (`MESSAGING_CHANNELS`, `isMessagingChannel`) instead of
+  hard-coded chat/email lists. Agent session capabilities and the online
+  predicate are built per released messaging channel.
+
+### Fixed
+
+- WhatsApp agent replies were rejected by Telnyx with error 40305 ("'from'
+  address ... not associated with the sending messaging profile") because the
+  send payload omitted `messaging_profile_id`, which is required for
+  WhatsApp-only numbers. The number's Contact Center messaging profile is now
+  sent with every text, media and template message, and a number mapped
+  without a profile fails fast with an actionable message.
+- A break status chosen while Busy was persisted silently, so the agent kept
+  seeing Busy with free capacity while the router refused every new text
+  interaction with a generic "No agents available" reason. The pending status
+  is now visible everywhere and the router journals `no_agent_reserved`
+  diagnostics once per distinct outcome instead of once per tick.
+- Profile status updates return the domain error and status code instead of a
+  generic 500 when Core rejects the requested status.
+- Supervisor interaction history no longer shows SMS delivery receipts as
+  "Message Delivery Updated" phases and journey steps. The Core history view
+  keeps its own timeline marker ahead of event payload fields, so evidence
+  events with a `source` field stay out of the routing timeline.
+
+### Upgrade notes
+
+- Schema changes are additive and applied automatically at startup: the new
+  messaging tables and the campaign, ledger and template columns are created by
+  the usual schema bootstrap, with no manual conversion step. The bootstrap does
+  take a brief exclusive lock on `outbound_attempt_ledger` while it builds five
+  indexes and validates the widened CHECK constraints. On an installation with a
+  large attempt history, plan the first start of this release as a short
+  maintenance window, or create the indexes with `CREATE INDEX CONCURRENTLY`
+  beforehand so the bootstrap finds them already in place.
+- Messaging campaign channels start disabled. Enable SMS under **Dialer →
+  Settings → Messaging campaigns** before a campaign can be started, and keep
+  test mode with an allowlist on until the first live run is accepted.
+- The messaging channels need provisioning that is not part of the upgrade: a
+  Telnyx messaging profile whose webhook points at this installation, numbers
+  mapped to queues, 10DLC or toll-free registration where the destination
+  requires it, and a connected WhatsApp Business Account for WhatsApp.
+- `GOOGLE_MAPS_KEY` is the configured name for the Maps Embed key used by the
+  WhatsApp location preview; installations that already set
+  `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` keep working, and without any key the
+  keyless Google embed is used.
+- No documented API, webhook or environment contract was removed, so this is a
+  backward-compatible minor release under the internal documentation.
+
+### Known limitations
+
+- Outbound messaging campaigns cover SMS. WhatsApp and email broadcasts reuse
+  the same foundation and arrive in a later release.
+- Campaign messages are sent by the worker without agents. Agent-assisted
+  sending, scheduling and channel fallback sequences are not available yet.
+- `POST /v2/messages` has no idempotency key, so a lost provider response is
+  recorded as unconfirmed instead of being resent; those messages need a manual
+  decision.
+- Sending MMS and quoting an earlier WhatsApp message from the composer are not
+  supported; inbound media, locations, contact cards and reactions are.
+- Live provisioning acceptance for the messaging campaigns has not been
+  completed in this release.
+
+## [1.0.0] - 2026-09-14
+
+The first officially versioned baseline of Telnyx Contact Center brings the
+existing voice, messaging, AI, and supervision capabilities into one release.
+It establishes the compatibility policy described in the repository's
+the internal documentation.
+
+### Platform baseline
+
+- Voice agent desktop with WebRTC calling, ACD queues, skills-based routing,
+  hold, consult and transfer, recording, transcription, and wrap-up.
+- Outbound campaigns and dialer controls, with agent capacity and lifecycle management.
+- Native chat and web widgets with AI-to-agent handoff, attachments, and conversation context.
+- Email inbox administration, replies, drafts, templates, attachment previews,
+  transfer wrap-up, and shared AI Copilot assistance.
+- Supervisor monitoring, interaction history, multichannel analytics, and SLA reporting.
+- AI Assistants, Tools Library, Insights, MCP integrations, visual call flows,
+  role-based administration, and configurable interaction notifications.
+
+### Added
+
+- A version label beside the user profile and an **About Contact Center** dialog
+  available to every application role, with build details and copyable support information.
+- Build-time version, commit, release channel, and UTC build date, shared by the
+  browser, server version endpoint, and Docker artifact metadata.
+- A canonical changelog used to generate in-app release notes and GitHub Releases.
+- Release validation and a tag-driven publishing workflow. Development builds
+  are explicitly identified and do not present themselves as stable releases.
+
+### Upgrade notes
+
+- This is the first formal version boundary; earlier `0.1.0` labels did not
+  identify a particular release. Record the previous commit before upgrading.
+- The versioning change requires a new application build. It introduces no
+  database schema migration or provider configuration change.
+- Updating an older installation to the entire baseline can include earlier
+  database and routing changes. Review the intervening commits and deployment
+  documentation, back up application data, and validate the target installation.
+- Published release tags identify source code. Publishing a release does not
+  update an existing installation; operators deploy a chosen artifact separately.
+
+### Known limitations
+
+- WhatsApp and SMS notification settings are preparatory; they do not indicate
+  that these channels are delivered in this baseline.
+- Word previews run inside CC: DOCX has a simplified HTML layout and legacy DOC
+  has a text-only preview. Download the original for full formatting and page layout.
+- Browser audio permissions can require an initial user gesture for notification sounds.
+- Builds created without Git metadata or a supplied build snapshot show an
+  unavailable commit and the development channel.
+
+## Historical changes (before formal versioning)
+
+These entries preserve the previously published application changelog.
+
+### 2026-07-11 — AI Tools Library and Insights administration
+
+Added Admin workspace pages for Tools Library and Insights, including filtering,
+pagination, create/edit sheets, per-tool editors, webhook testing, assistant
+assignment, and delete flows. Insights includes cards, schema and instruction
+editing, group editing, and assign/unassign APIs.
+[PR #1243](https://github.com/team-telnyx/telnyx-contact-center/pull/1243)
+
+### 2026-07-11 — Telnyx AI Assistant administration
+
+Added the Admin AI Assistants list, create, and editor views covering Dashboard,
+Agent, Voice, Workflow, Integrations, Insights, Calling, Messaging, Widget,
+Privacy, and Conversations. Includes conversation details, recording playback,
+transcript seeking, costs, version actions, traffic distribution, chat, call,
+clone, save-as-version, and deletion.
+[PR #1242](https://github.com/team-telnyx/telnyx-contact-center/pull/1242)
+
+### 2026-07-10 — Agent Assist read-back and suggestion fixes
+
+Improved compact read-back, ordinals and hyphen handling, and a stuck suggestion race condition.
+[PR #1240](https://github.com/team-telnyx/telnyx-contact-center/pull/1240)
+
+### 2026-07-10 — Telnyx OpenAPI spec refresh
+
+Updated the Telnyx OpenAPI specification used by the application.
+[PR #1241](https://github.com/team-telnyx/telnyx-contact-center/pull/1241)

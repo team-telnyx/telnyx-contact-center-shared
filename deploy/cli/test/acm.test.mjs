@@ -325,19 +325,19 @@ describe('acm.mjs — listCertificatesForDomain', () => {
 });
 
 describe('acm.mjs — findCertificateInOtherRegions', () => {
-  it('finds a wildcard cert in a different region and reports which one (2026-07-06 case: *.demotelnyx.com in us-east-2, deployment in us-west-2)', async () => {
+  it('finds a wildcard cert in a different region and reports which one (2026-07-06 case: *.example.com in us-east-2, deployment in us-west-2)', async () => {
     const seenRegions = [];
     const execImpl = async (cmd, args) => {
       const regionIdx = args.indexOf('--region');
       const region = regionIdx !== -1 ? args[regionIdx + 1] : null;
       seenRegions.push(region);
       if (region === 'us-east-2') {
-        return { stdout: JSON.stringify({ CertificateSummaryList: [{ CertificateArn: 'arn:wild-east', DomainName: '*.demotelnyx.com' }] }) };
+        return { stdout: JSON.stringify({ CertificateSummaryList: [{ CertificateArn: 'arn:wild-east', DomainName: '*.example.com' }] }) };
       }
       return { stdout: JSON.stringify({ CertificateSummaryList: [] }) };
     };
     const result = await findCertificateInOtherRegions({
-      domain: 'cc-test3.demotelnyx.com',
+      domain: 'cc-demo.example.com',
       excludeRegion: 'us-west-2',
       regions: ['eu-central-1', 'us-east-2', 'us-west-2'],
       execImpl,
@@ -352,7 +352,7 @@ describe('acm.mjs — findCertificateInOtherRegions', () => {
   it('returns null when no other region has a matching certificate', async () => {
     const execImpl = async () => ({ stdout: JSON.stringify({ CertificateSummaryList: [] }) });
     const result = await findCertificateInOtherRegions({
-      domain: 'cc-test3.demotelnyx.com',
+      domain: 'cc-demo.example.com',
       excludeRegion: 'us-west-2',
       regions: ['eu-central-1', 'us-east-2'],
       execImpl,
@@ -367,12 +367,12 @@ describe('acm.mjs — findCertificateInOtherRegions', () => {
       const region = regionIdx !== -1 ? args[regionIdx + 1] : null;
       seenRegions.push(region);
       if (region === 'eu-central-1') {
-        return { stdout: JSON.stringify({ CertificateSummaryList: [{ CertificateArn: 'arn:eu', DomainName: '*.demotelnyx.com' }] }) };
+        return { stdout: JSON.stringify({ CertificateSummaryList: [{ CertificateArn: 'arn:eu', DomainName: '*.example.com' }] }) };
       }
       return { stdout: JSON.stringify({ CertificateSummaryList: [] }) };
     };
     const result = await findCertificateInOtherRegions({
-      domain: 'cc-test3.demotelnyx.com',
+      domain: 'cc-demo.example.com',
       excludeRegion: 'us-west-2',
       regions: ['eu-central-1', 'us-east-2'],
       execImpl,
@@ -387,12 +387,12 @@ describe('acm.mjs — findCertificateInOtherRegions', () => {
       const region = regionIdx !== -1 ? args[regionIdx + 1] : null;
       if (region === 'me-south-1') throw new Error('not opted in');
       if (region === 'us-east-2') {
-        return { stdout: JSON.stringify({ CertificateSummaryList: [{ CertificateArn: 'arn:east', DomainName: '*.demotelnyx.com' }] }) };
+        return { stdout: JSON.stringify({ CertificateSummaryList: [{ CertificateArn: 'arn:east', DomainName: '*.example.com' }] }) };
       }
       return { stdout: JSON.stringify({ CertificateSummaryList: [] }) };
     };
     const result = await findCertificateInOtherRegions({
-      domain: 'cc-test3.demotelnyx.com',
+      domain: 'cc-demo.example.com',
       excludeRegion: 'us-west-2',
       regions: ['me-south-1', 'us-east-2'],
       execImpl,

@@ -1,12 +1,11 @@
 // GET, PATCH, DELETE for single pronunciation dictionary
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
+import { withPermission } from "@/lib/authz/guard";
 
 const TELNYX_BASE = "https://api.telnyx.com/v2";
 
-export async function GET(request, context) {
-  const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+async function GET_handler(request, context, authz) {
+  const user = authz.user;
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Missing TELNYX_API_KEY" }, { status: 500 });
   const { id } = await context.params;
@@ -17,9 +16,8 @@ export async function GET(request, context) {
   return NextResponse.json(data, { status: res.status });
 }
 
-export async function PATCH(request, context) {
-  const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+async function PATCH_handler(request, context, authz) {
+  const user = authz.user;
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Missing TELNYX_API_KEY" }, { status: 500 });
   const { id } = await context.params;
@@ -36,9 +34,8 @@ export async function PATCH(request, context) {
   return NextResponse.json(data, { status: res.status });
 }
 
-export async function DELETE(request, context) {
-  const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+async function DELETE_handler(request, context, authz) {
+  const user = authz.user;
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Missing TELNYX_API_KEY" }, { status: 500 });
   const { id } = await context.params;
@@ -50,3 +47,8 @@ export async function DELETE(request, context) {
   const data = await res.json();
   return NextResponse.json(data, { status: res.status });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("pronunciation_dicts:read", GET_handler, { route: "/api/ai/pronunciation-dictionaries/[id]" });
+export const PATCH = withPermission("pronunciation_dicts:update", PATCH_handler, { route: "/api/ai/pronunciation-dictionaries/[id]" });
+export const DELETE = withPermission("pronunciation_dicts:delete", DELETE_handler, { route: "/api/ai/pronunciation-dictionaries/[id]" });

@@ -7,34 +7,20 @@ import {
   deleteVoiceApplication,
 } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { validateFlow } from "@/lib/voice-flow-validator";
+import { resolveWebhookBaseUrl } from "@/lib/webhook-base-url.mjs";
+import { rebaseFlowOwnedNodeConfig } from "@/lib/voice-flow-node-rebase.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
-
-/**
- * Get base URL for webhook generation
- */
-function getBaseUrl() {
-  // Try environment variable first
-  if (process.env.NEXT_PUBLIC_BASE_URL) {
-    return process.env.NEXT_PUBLIC_BASE_URL;
-  }
-  // Fallback for development
-  if (process.env.NODE_ENV === "development") {
-    return "http://localhost:3000";
-  }
-  // Production fallback (should be set via env var)
-  return "https://your-domain.com";
-}
 
 /**
  * GET /api/voice/flows
  * List flows for authenticated user
  * Admin users can see all flows across the organization
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -53,7 +39,7 @@ export async function GET(request) {
 
     // Admin users can see all flows (pass null username)
     // Non-admin users only see their own flows
-    const username = user && isAdmin(user) ? null : email;
+    const username = authz.permitted ? null : email;
 
     const { searchParams } = new URL(request.url);
 
@@ -161,7 +147,7 @@ export async function GET(request) {
  * POST /api/voice/flows
  * Create a new flow
  */
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -195,7 +181,7 @@ export async function POST(request) {
 
     // Generate webhook URL
     const flowId = body.id || require("crypto").randomUUID();
-    const baseUrl = getBaseUrl();
+    const baseUrl = resolveWebhookBaseUrl({ requestUrl: request.url });
     const webhookUrl = `${baseUrl}/api/voice/webhook/incoming/${flowId}`;
 
     // Create Telnyx Voice Application
@@ -224,6 +210,11 @@ export async function POST(request) {
     flowData.id = flowId;
     flowData.telnyx_voice_app_id = voiceApp.id;
     flowData.webhook_url = webhookUrl;
+    flowData.nodes = rebaseFlowOwnedNodeConfig(flowData.nodes, {
+      baseUrl,
+      flowId,
+      voiceApplicationId: voiceApp.id,
+    });
 
     const flow = await VoiceFlowDb.createFlow(username, flowData);
 
@@ -239,3 +230,7 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("call_flows:read", GET_handler, { route: "/api/voice/flows" });
+export const POST = withPermission("call_flows:create", POST_handler, { route: "/api/voice/flows" });

@@ -85,24 +85,24 @@ describe("hard phones provisioning (Phase 1)", () => {
     globalThis.fetch = async (url, options = {}) => {
       calls.push({ url: String(url), options });
       if (options.method === "PATCH") {
-        return Response.json({ data: { id: "cc-123", connection_name: "phone_0004F2CBF6D5", user_name: "phone0004F2CBF6D5" } });
+        return Response.json({ data: { id: "cc-123", connection_name: "phone_0004F2000001", user_name: "phone0004F2000001" } });
       }
-      return Response.json({ data: { id: "cc-123", connection_name: "phone_0004F2CBF6D5", user_name: "0004F2CBF6D5" } });
+      return Response.json({ data: { id: "cc-123", connection_name: "phone_0004F2000001", user_name: "0004F2000001" } });
     };
     process.env.TELNYX_API_KEY = "test-key";
     process.env.TELNYX_OUTBOUND_VOICE_PROFILE = "ovp-123";
     try {
-      const created = await createPhoneSipConnection({ mac: "00:04:F2:CB:F6:D5", vendor: "polycom", model: "VVX 310", assignedPhoneNumber: "+17209533450" });
-      assert.strictEqual(created.sip_username, "phone0004F2CBF6D5");
+      const created = await createPhoneSipConnection({ mac: "00:04:F2:00:00:01", vendor: "polycom", model: "VVX 310", assignedPhoneNumber: "+17205550102" });
+      assert.strictEqual(created.sip_username, "phone0004F2000001");
       assert.strictEqual(calls.length, 2);
       const createBody = JSON.parse(calls[0].options.body);
-      assert.strictEqual(createBody.user_name, "phone0004F2CBF6D5");
+      assert.strictEqual(createBody.user_name, "phone0004F2000001");
       assert.strictEqual(createBody.inbound.ani_number_format, "+E.164");
       assert.strictEqual(createBody.inbound.dnis_number_format, "+e164");
-      assert.strictEqual(createBody.outbound.ani_override, "+17209533450");
+      assert.strictEqual(createBody.outbound.ani_override, "+17205550102");
       assert.strictEqual(createBody.outbound.ani_override_type, "always");
       assert.strictEqual(calls[1].options.method, "PATCH");
-      assert.strictEqual(JSON.parse(calls[1].options.body).user_name, "phone0004F2CBF6D5");
+      assert.strictEqual(JSON.parse(calls[1].options.body).user_name, "phone0004F2000001");
     } finally {
       globalThis.fetch = originalFetch;
       if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
@@ -316,15 +316,15 @@ describe("hard phones provisioning (Phase 1)", () => {
 
   it("admin API supports phone CRUD with SIP connection auto-create", async () => {
     const listCode = await src("app/api/admin/phones-provisioning/phones/route.js");
-    assert.match(listCode, /export async function GET/);
-    assert.match(listCode, /export async function POST/);
+    assert.match(listCode, /export const GET = withPermission\(/);
+    assert.match(listCode, /export const POST = withPermission\(/);
     assert.match(listCode, /createPhoneSipConnection/);
     assert.match(listCode, /TELNYX_PHONE_ADMIN_PASSWORD/);
     assert.match(listCode, /TELNYX_OUTBOUND_VOICE_PROFILE/);
-    assert.match(listCode, /requireAdmin/);
+    assert.match(listCode, /withPermission\("phones:/);
     const itemCode = await src("app/api/admin/phones-provisioning/phones/[id]/route.js");
-    assert.match(itemCode, /export async function PUT/);
-    assert.match(itemCode, /export async function DELETE/);
+    assert.match(itemCode, /export const PUT = withPermission\(/);
+    assert.match(itemCode, /export const DELETE = withPermission\(/);
     assert.match(itemCode, /deletePhoneSipConnection/);
     assert.match(itemCode, /const \{ id \} = await params/);
   });
@@ -346,6 +346,7 @@ describe("hard phones provisioning (Phase 1)", () => {
 
   it("phone event sink logs vendor events with MAC correlation", async () => {
     const code = await src("app/api/provisioning/events/[vendor]/route.js");
+    // Vendor event sink stays public (device identity, listed in lib/authz/route-exemptions.mjs).
     assert.match(code, /export async function GET/);
     assert.match(code, /export async function POST/);
     assert.match(code, /phone_event_/);
@@ -406,7 +407,7 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(page, /fetch\(`\$\{API\}\/logs\?/);
 
     const route = await src("app/api/admin/phones-provisioning/logs/route.js");
-    assert.match(route, /export async function GET/);
+    assert.match(route, /export const GET = withPermission\(/);
     assert.match(route, /hp_provisioning_events/);
     assert.match(route, /hp_phones/);
     assert.match(route, /phone_name/);

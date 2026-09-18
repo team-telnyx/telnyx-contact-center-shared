@@ -6,10 +6,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isAdmin } from "@/lib/role-utils";
 import { platformApiLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 import { assertPublicHostname } from "@/lib/security/outbound-url.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 function configuredWebhookUrls() {
   return String(process.env.DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_URLS || "")
@@ -33,12 +32,9 @@ function configuredWebhookUrls() {
     });
 }
 
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user || !isAdmin(user)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
 
     const { url, payload } = await request.json();
 
@@ -154,3 +150,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("ai_assistants:test", POST_handler, { route: "/api/assistants/test-dynamic-variables" });

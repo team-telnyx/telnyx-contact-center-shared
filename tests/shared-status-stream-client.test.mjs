@@ -32,6 +32,35 @@ test("shared status-stream client exists and exposes a ref-counted singleton API
   assert.match(src, /if \(refCount === 0\)\s*\{\s*closeConnection\(\)/);
   // Centralized reconnect with backoff.
   assert.match(src, /scheduleReconnect\(/);
+  assert.match(
+    src,
+    /["']incoming_call_info["']/,
+    "the shared stream must deliver WebRTC-to-interaction correlation events",
+  );
+});
+
+test("Core offer events and incoming call info reach Agent Desktop", async () => {
+  const connectSource = await read("lib/acd/sagas/connect.mjs");
+  const providerSource = await read(
+    "components/contact-center/ContactCenterStreamProvider.jsx",
+  );
+  const callsStoreSource = await read("lib/stores/calls-store.js");
+
+  assert.match(
+    connectSource,
+    /broadcastToKey\([\s\S]*"incoming_call_info"\)/,
+    "core ACD must emit incoming_call_info as a named status-stream event",
+  );
+  assert.match(
+    providerSource,
+    /subscribeStatusStream\("incoming_call_info"[\s\S]*storeIncomingCallData[\s\S]*addCall[\s\S]*contact-center:refresh-interactions/,
+    "the browser must correlate the ringing WebRTC leg and refresh Agent Desktop",
+  );
+  assert.match(
+    callsStoreSource,
+    /existingCall\?\.metadata[\s\S]*\.\.\.\(metadata\s*\|\|\s*\{\}\)/,
+    "calls store must retain and merge Agent Assist metadata delivered with the offer",
+  );
 });
 
 test("no component opens its own EventSource to /api/user/status-stream", async () => {

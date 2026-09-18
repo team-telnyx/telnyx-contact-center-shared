@@ -27,7 +27,10 @@ import {
 } from "@tabler/icons-react";
 import { VariableInput } from "./VariableInput";
 import TranscriptionNodeEditor from "./TranscriptionNodeEditor";
-import { AI_STREAMING_PROVIDERS } from "@/config/ai-streaming-providers";
+import {
+  AI_STREAMING_PROVIDERS,
+  formatTelnyxSttModelLabel,
+} from "@/config/ai-streaming-providers";
 
 const SIP_HEADER_NAMES = ["User-to-User", "Diversion"];
 const TELNYX_STT_PROVIDER_OPTION = { value: "telnyx-stt", label: "Telnyx Standalone STT" };
@@ -36,8 +39,7 @@ const EXPERIMENTAL_PROVIDERS = [];
 const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
   .filter((provider) => provider.type === "telnyx-stt")
   .map((provider) => {
-    const model = provider.telnyxStt?.model || provider.id;
-    const modelLabel = model;
+    const modelLabel = formatTelnyxSttModelLabel(provider);
     return { value: provider.id, label: modelLabel, provider };
   });
 
@@ -59,9 +61,9 @@ function getStreamingProviderPath(provider) {
 }
 
 const TELNYX_STT_TRACK_OPTIONS = [
-  { value: "inbound", label: "Inbound — customer leg only" },
-  { value: "outbound", label: "Outbound — agent leg only" },
-  { value: "both", label: "Both — customer + agent legs" },
+  { value: "inbound", label: "Inbound — customer audio" },
+  { value: "outbound", label: "Outbound — agent audio" },
+  { value: "both", label: "Both — customer + agent audio" },
 ];
 
 function getTelnyxSttLanguageOptions(provider) {
@@ -1331,7 +1333,7 @@ export default function AnswerNodeEditor({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Both starts one media stream per call leg after the agent answers.
+                  Both uses the inbound and outbound tracks of the customer media stream.
                 </p>
               </div>
 

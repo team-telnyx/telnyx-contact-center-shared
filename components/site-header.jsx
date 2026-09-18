@@ -6,6 +6,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import SoftphoneMini from "@/components/softphone-mini";
+import IncomingInteractionAlert from "@/components/contact-center/IncomingInteractionAlert";
 import { StatusSelector } from "@/components/contact-center/StatusSelector";
 import { QueueActivationPanel } from "@/components/contact-center/QueueActivationPanel";
 import { CampaignActivationSelector } from "@/components/contact-center/CampaignActivationSelector";
@@ -19,6 +20,9 @@ import { IconBook2 } from "@tabler/icons-react";
 
 export function SiteHeader() {
   const [status, setStatus] = useState(DEFAULT_USER_STATUS);
+  // Manual status chosen while busy; applies once the current interactions end.
+  const [pendingStatus, setPendingStatus] = useState(null);
+  const [pendingSince, setPendingSince] = useState(null);
   const [queues, setQueues] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [userRoles, setUserRoles] = useState([]);
@@ -59,8 +63,12 @@ export function SiteHeader() {
         const data = await res.json();
         if (data.ok && data.data?.status) {
           setStatus(data.data.status);
+          setPendingStatus(data.data.pending_status || null);
+          setPendingSince(data.data.pending_since || null);
         } else {
           setStatus(DEFAULT_USER_STATUS);
+          setPendingStatus(null);
+          setPendingSince(null);
         }
       } catch (err) {
         console.error("Failed to load status:", err);
@@ -146,6 +154,12 @@ export function SiteHeader() {
         subscribeStatusStream("status_changed", (data) => {
           if (data?.status) {
             setStatus(data.status);
+            // Core snapshots carry the pending status; legacy payloads do not
+            // mention it and must not clear it.
+            if (data.pendingStatus !== undefined) {
+              setPendingStatus(data.pendingStatus || null);
+              setPendingSince(data.pendingSince || null);
+            }
           }
         }),
       );
@@ -209,8 +223,17 @@ export function SiteHeader() {
         // Available after the DB has already moved the agent back to Busy.
         if (data.status) {
           setStatus(data.status);
+          setPendingStatus(data.pendingStatus || null);
+          setPendingSince(data.pendingSince || null);
         } else if (loadStatusRef.current) {
           await loadStatusRef.current();
+        }
+        if (data.pendingStatus) {
+          notify({
+            title: "Status change pending",
+            description: `${data.pendingStatus} applies after your current interactions end. No new interactions will be offered meanwhile.`,
+            variant: "info",
+          });
         }
       } else {
         notify({ title: "Status update failed", description: data.error || "Failed to update status", variant: "error" });
@@ -221,7 +244,7 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
+    <header className="cc-app-header flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />
         <Button asChild variant="ghost" size="sm" title="Open documentation">
@@ -238,7 +261,13 @@ export function SiteHeader() {
           {/* Contact Center Controls - Show for users with agent role */}
           {hasAgentRole && (
             <>
-              <StatusSelector value={status} onChange={handleStatusChange} />
+              <IncomingInteractionAlert />
+              <StatusSelector
+                value={status}
+                pendingStatus={pendingStatus}
+                pendingSince={pendingSince}
+                onChange={handleStatusChange}
+              />
               <CampaignActivationSelector
                 campaigns={campaigns}
                 onUpdate={async () => {

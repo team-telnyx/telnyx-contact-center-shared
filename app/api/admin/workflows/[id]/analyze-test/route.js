@@ -14,6 +14,7 @@ import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/lo
 import { isReadBackItem } from "@/lib/agent-assist/readback.mjs";
 import { isAccumulatingSlot, accumulateSlotValue } from "@/lib/agent-assist/slot-accumulate.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 function normalizeConfidenceThreshold(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1) {
@@ -35,7 +36,7 @@ function hasMeaningfulExtractedValue(value) {
 }
 
 // POST /api/admin/workflows/[id]/analyze-test
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -63,7 +64,7 @@ export async function POST(request, { params }) {
 
     // Fetch workflow (includes LLM model and confidence threshold for analysis)
     const { rows: [workflow] } = await pool.query(
-      `SELECT id, llm_model, llm_confidence_threshold FROM aa_workflows WHERE id = $1`,
+      `SELECT id, llm_model, llm_fallback_model, llm_confidence_threshold, llm_reasoning_enabled, llm_max_output_tokens FROM aa_workflows WHERE id = $1`,
       [workflowId]
     );
 
@@ -75,6 +76,11 @@ export async function POST(request, { params }) {
     }
 
     const llmModel = workflow.llm_model || "openai/gpt-4o";
+    const fallbackModel = workflow.llm_fallback_model || "openai/gpt-5.6-luna";
+    const reasoningEnabled = workflow.llm_reasoning_enabled === true;
+    const maxOutputTokens = Number.isInteger(workflow.llm_max_output_tokens)
+      ? workflow.llm_max_output_tokens
+      : 1200;
     const confidenceThreshold = normalizeConfidenceThreshold(workflow.llm_confidence_threshold);
 
     const { rows: stages } = await pool.query(
@@ -157,6 +163,9 @@ export async function POST(request, { params }) {
       pendingItems: analyzerItems,
       slotsFilled: { ...slotsFilled },
       model: llmModel,
+      fallbackModel,
+      reasoningEnabled,
+      maxOutputTokens,
       confidenceThreshold,
       currentTarget,
       recentContext: Array.isArray(recentContext) ? recentContext.slice(-6) : [],
@@ -245,9 +254,6 @@ export async function POST(request, { params }) {
       ok: true,
       updates,
       slotsFilled: newSlotsFilled,
-      intent: analysisResult.detected_intent,
-      sentiment: analysisResult.sentiment,
-      sentimentScore: analysisResult.sentiment_score,
     });
   } catch (error) {
     workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
@@ -257,3 +263,6 @@ export async function POST(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("workflows:ai", POST_handler, { route: "/api/admin/workflows/[id]/analyze-test" });

@@ -4,18 +4,27 @@ description: Navigate operational testing, observability, hardphone provisioning
 audiences: [admin, owner]
 keywords: [system, tiles, call generator, logging, phones, theme]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-09-14
 ---
 
 Open **Admin → System**. The System landing page is a tile overview and a persistent rail for platform-level modules.
 
 | Tile and rail item | Purpose |
 | --- | --- |
+| **Settings** | Configure SLA response targets, hold behavior, interaction notification sounds, agent lifecycle, and the chat AI Copilot model and retrieval sources. |
 | **Call Generator** | Create controlled scenarios, action sequences, and test runs. |
 | **Logging** | Inspect live runtime events, JSONL files, and logging policies. |
 | **Phones Provisioning** | Manage hardphone inventory, LAN bridges, provisioning events, and vendor settings. |
 | **Theme Settings** | Configure branding, authentication images, and light/dark application colors. |
 
 Select either a tile or the matching rail item. Call Generator, Logging, and Phones Provisioning then show their own nested rails. Use their **Exit** item to return to the System tile overview.
+
+In **Settings**, the center cards are read-only summaries. Select a card to edit its configuration in the right panel. Unsaved values remain in the draft when switching cards, and the summaries reflect the current draft. Use **Save settings** in the header to apply hold, notification sound, lifecycle, and Copilot settings. For **Service level agreements**, the header shows **Save SLA** because SLA policies are saved separately.
+
+In **Settings → AI Copilot**, choose a Telnyx Chat Completions model and up to five embedded Object Storage buckets. Save them with the page's **Save settings** button. The bucket picker lists sources already available through Telnyx's embeddings service; upload and embed documents in Telnyx before selecting them here. With no sources selected, Copilot uses the selected chat's conversation context. These settings apply to future generations, while existing suggestions remain unchanged.
+
+In **Settings → Interaction sounds**, below **Hold experiences**, select one of ten original ringtones for each messaging channel. The tones last 3.2–4 seconds. Use **Play** to hear the current selection and **Stop** to stop the preview. **Loop** repeats the tone with a one-second pause after each playback; without Loop, each new offer rings once. The volume control and channel enable switches apply globally when you click **Save settings**. Email and Chat are enabled by default with different tones. WhatsApp and SMS settings can be prepared in advance; they do not activate those channels. Voice keeps its WebRTC ringtone.
+
+Agent Desktop plays the configured sound while an interaction is offered to the agent. Playback stops when the offer is accepted, declined, withdrawn, or expires. Several simultaneous offers play in turn instead of overlapping. Saved settings refresh automatically with the agent's interaction list. Keep Agent Desktop open for messaging notifications; if the browser blocks playback, click **Enable notification sounds** or interact with the page to enable audio. Muting the browser tab or system audio still silences notifications.
 
 System modules can affect production traffic, credentials, external calls, logging volume, or all users' UI. Apply changes during a controlled window and verify the result before broad rollout.

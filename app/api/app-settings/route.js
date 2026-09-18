@@ -4,7 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { seedDefaultAppSettings } from "@/lib/seed-app-settings.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
-
+import { withPermission } from "@/lib/authz/guard";
 // GET app settings
 export async function GET() {
   try {
@@ -94,7 +94,7 @@ export async function GET() {
 }
 
 // PUT app settings (admin/owner only)
-export async function PUT(request) {
+async function PUT_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -107,13 +107,6 @@ export async function PUT(request) {
     const dbUser = await PgDb.findUserById(session.user.id);
     if (!dbUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-    const { isAdmin } = await import("@/lib/role-utils");
-    if (!isAdmin(dbUser)) {
-      return NextResponse.json(
-        { error: "Forbidden: Admin access required" },
-        { status: 403 }
-      );
     }
 
     const body = await request.json();
@@ -244,3 +237,6 @@ export async function PUT(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission("system_settings:update", PUT_handler, { route: "/api/app-settings" });

@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
-export async function POST(req) {
+import { withPermission } from "@/lib/authz/guard";
+async function POST_handler(req) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -58,3 +59,6 @@ export async function POST(req) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("numbers:update", POST_handler, { route: "/api/admin/numbers/features" });

@@ -1,0 +1,4 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import{matchInboundAgents,normalizeBlending}from'../lib/acd/outbound-blending.mjs';
+test('matching preserves scarce skills rather than greedily taking the specialist',()=>{const m=matchInboundAgents([{id:'general',agents:['specialist','generalist']},{id:'special',agents:['specialist']}]);assert.equal(m.size,2);assert.equal(m.get('specialist').id,'special');});
+test('higher priority work keeps protection when capacity is exhausted',()=>{const m=matchInboundAgents([{id:'first',agents:['A']},{id:'second',agents:['A']}]);assert.equal(m.get('A').id,'first');});
+test('blending bounds optional buffer and defaults to dynamic',()=>{assert.deepEqual(normalizeBlending(),{mode:'dynamic',reserve_agents:0,reserve_percent:0});assert.deepEqual(normalizeBlending({reserve_agents:-1,reserve_percent:200}),{mode:'dynamic',reserve_agents:0,reserve_percent:100});});

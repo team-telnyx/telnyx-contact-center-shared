@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
+import { useAuth } from "@/components/auth-provider";
+
 export const SECTION_RAIL_WIDTH = "100px";
 export const SECTION_RAIL_PAGE_GRID_CLASS = "grid flex-1 min-h-0 gap-3 p-3";
 export const SECTION_RAIL_FILL_GRID_CLASS = "grid h-full min-h-0 w-full gap-3 p-3 overflow-hidden";
@@ -40,7 +43,36 @@ function RailItem({ item, activeId, onSelect }) {
   );
 }
 
-export function SectionRail({ items = [], fixedItems = [], activeId, onSelect, ariaLabel = "Sections", className = "" }) {
+/**
+ * Screen id of a rail item: an explicit `item.screen`, otherwise
+ * `<screenGroup>.<item.id>` when the rail declares its catalogue group.
+ */
+export function railItemScreen(item, screenGroup) {
+  if (item?.screen) return item.screen;
+  return screenGroup && item?.id ? `${screenGroup}.${item.id}` : null;
+}
+
+/**
+ * Section rail. With `screenGroup` (or per-item `screen`) the items follow
+ * the user's screen grants (RBAC Phase 3): sections a role does not grant are
+ * hidden, and when the active section is hidden the first visible one is
+ * selected so the page never shows a section the user may not open.
+ */
+export function SectionRail({ items = [], fixedItems = [], activeId, onSelect, ariaLabel = "Sections", className = "", screenGroup = null }) {
+  const { canScreen, loaded } = useAuth();
+  const gated = Boolean(screenGroup) || items.some((item) => item?.screen);
+  const visibleItems = useMemo(() => {
+    if (!gated || !loaded) return items;
+    return items.filter((item) => {
+      const screen = railItemScreen(item, screenGroup);
+      return !screen || canScreen(screen);
+    });
+  }, [items, gated, loaded, screenGroup, canScreen]);
+  const activeHidden = gated && loaded && activeId && !visibleItems.some((item) => item.id === activeId) && items.some((item) => item.id === activeId);
+  const firstVisibleId = visibleItems[0]?.id || null;
+  useEffect(() => {
+    if (activeHidden && firstVisibleId) onSelect?.(firstVisibleId);
+  }, [activeHidden, firstVisibleId, onSelect]);
   return (
     <aside
       className={`min-h-0 overflow-hidden rounded-[1.25rem] border bg-card/95 p-2 shadow-sm backdrop-blur ${className}`}
@@ -52,7 +84,7 @@ export function SectionRail({ items = [], fixedItems = [], activeId, onSelect, a
           </div>
         ) : null}
         <div className={`flex min-h-0 flex-1 flex-col items-center gap-2.5 overflow-y-auto ${fixedItems.length ? "pt-2.5" : ""}`}>
-          {items.map((item) => <RailItem key={item.id} item={item} activeId={activeId} onSelect={onSelect} />)}
+          {visibleItems.map((item) => <RailItem key={item.id} item={item} activeId={activeId} onSelect={onSelect} />)}
         </div>
       </nav>
     </aside>

@@ -12,13 +12,17 @@ const row = (overrides = {}) => ({
   call_session_id: "cs1",
   generator_status: "completed",
   started_at: "2026-06-11T10:00:00Z",
-  answered_at: "2026-06-11T10:00:05Z",
+  interaction_answered_at: "2026-06-11T10:00:05Z",
   ended_at: "2026-06-11T10:01:00Z",
   duration_ms: 55000,
+  correlation: "linked",
+  work_item_id: "i1",
   interaction_id: "i1",
   queue_name: "support",
   interaction_state: "completed",
   wait_time_seconds: 4,
+  core_enqueued_at: "2026-06-11T10:00:00Z",
+  agent_answered_at: "2026-06-11T10:00:05Z",
   ...overrides,
 });
 
@@ -48,8 +52,8 @@ describe("call generator correlation (T5)", () => {
     const rows = [
       row(),
       row({ ledger_id: "l2", queue_name: "support", wait_time_seconds: 6 }),
-      row({ ledger_id: "l3", generator_status: "abandoned", answered_at: null, interaction_id: null, queue_name: null, wait_time_seconds: null }),
-      row({ ledger_id: "l4", generator_status: "failed", answered_at: null, interaction_id: null, queue_name: null, wait_time_seconds: null }),
+      row({ ledger_id: "l3", generator_status: "abandoned", correlation: "missing", work_item_id: null, agent_answered_at: null, interaction_answered_at: null, interaction_id: null, queue_name: null, wait_time_seconds: null }),
+      row({ ledger_id: "l4", generator_status: "failed", correlation: "missing", work_item_id: null, agent_answered_at: null, interaction_answered_at: null, interaction_id: null, queue_name: null, wait_time_seconds: null }),
     ];
     const summary = summarizeCorrelation(rows);
     assert.strictEqual(summary.total, 4);
@@ -76,14 +80,14 @@ describe("call generator correlation (T5)", () => {
     const fast = evaluateAssertions([row()], [{ type: "answer_within_secs", seconds: 10 }]);
     assert.strictEqual(fast.assertions[0].passed, true);
     const slow = evaluateAssertions(
-      [row({ answered_at: "2026-06-11T10:00:45Z" })],
+      [row({ agent_answered_at: "2026-06-11T10:00:45Z" })],
       [{ type: "answer_within_secs", seconds: 10 }],
     );
     assert.strictEqual(slow.assertions[0].passed, false);
   });
 
   it("abandon and answer rate assertions evaluate percentages", () => {
-    const rows = [row(), row({ ledger_id: "l2" }), row({ ledger_id: "l3", generator_status: "abandoned", answered_at: null })];
+    const rows = [row(), row({ ledger_id: "l2" }), row({ ledger_id: "l3", generator_status: "abandoned", agent_answered_at: null, interaction_answered_at: null })];
     const result = evaluateAssertions(rows, [
       { type: "max_abandon_rate", percent: 50 },
       { type: "min_answer_rate", percent: 50 },
@@ -105,12 +109,12 @@ describe("call generator correlation (T5)", () => {
   it("report API route builds and persists the report", async () => {
     const code = await readFile(new URL("../app/api/admin/call-generator/runs/[id]/report/route.js", import.meta.url), "utf8");
     assert.match(code, /buildRunReport/);
-    assert.match(code, /requireAdmin/);
+    assert.match(code, /withPermission\("call_generator:/);
   });
 
-  it("correlation module persists report on cg_runs.stats and joins cc_interactions", async () => {
+  it("correlation module persists its report and joins Core work items", async () => {
     const code = await readFile(new URL("../lib/call-generator/correlation.mjs", import.meta.url), "utf8");
-    assert.match(code, /LEFT JOIN cc_interactions i ON i\.call_session_id = l\.call_session_id/);
+    assert.match(code, /JOIN acd_history_interactions/);
     assert.match(code, /jsonb_build_object\('report'/);
   });
 

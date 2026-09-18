@@ -28,7 +28,10 @@ import {
   IconSettings,
   IconMicrophone,
 } from "@tabler/icons-react";
-import { AI_STREAMING_PROVIDERS } from "@/config/ai-streaming-providers";
+import {
+  AI_STREAMING_PROVIDERS,
+  formatTelnyxSttModelLabel,
+} from "@/config/ai-streaming-providers";
 
 // Validate WebSocket URL format (ws:// or wss://)
 function validateWebSocketUrl(url) {
@@ -55,8 +58,7 @@ const TELNYX_STT_PROVIDER_OPTION = { value: "telnyx-stt", label: "Telnyx Standal
 const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
   .filter((provider) => provider.type === "telnyx-stt")
   .map((provider) => {
-    const model = provider.telnyxStt?.model || provider.id;
-    const modelLabel = model;
+    const modelLabel = formatTelnyxSttModelLabel(provider);
     return { value: provider.id, label: modelLabel, provider };
   });
 
@@ -77,9 +79,9 @@ const STREAM_TRACK_OPTIONS = [
 ];
 
 const TELNYX_STT_TRACK_OPTIONS = [
-  { value: "inbound", label: "Inbound — customer leg only" },
-  { value: "outbound", label: "Outbound — agent leg only" },
-  { value: "both", label: "Both — customer + agent legs" },
+  { value: "inbound", label: "Inbound — customer audio" },
+  { value: "outbound", label: "Outbound — agent audio" },
+  { value: "both", label: "Both — customer + agent audio" },
 ];
 
 function getTelnyxSttLanguageOptions(provider) {

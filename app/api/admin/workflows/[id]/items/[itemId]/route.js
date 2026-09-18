@@ -10,8 +10,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 // PUT /api/admin/workflows/[id]/items/[itemId] - Update item
-export async function PUT(request, { params }) {
+async function PUT_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -57,6 +58,7 @@ export async function PUT(request, { params }) {
       slot_options,
       slot_validation,
       completion_trigger,
+      mcp_binding,
     } = body;
 
     // Build dynamic update query
@@ -125,6 +127,13 @@ export async function PUT(request, { params }) {
       values.push(completion_trigger);
     }
 
+    if (mcp_binding !== undefined) {
+      // null clears the binding; anything else is stored as-is and validated at
+      // run time by lib/agent-assist/slot-mcp-runner.mjs.
+      updates.push(`mcp_binding = $${paramIndex++}`);
+      values.push(mcp_binding ? JSON.stringify(mcp_binding) : null);
+    }
+
     if (updates.length === 0) {
       return NextResponse.json(
         { error: "No fields to update" },
@@ -154,7 +163,7 @@ export async function PUT(request, { params }) {
 }
 
 // DELETE /api/admin/workflows/[id]/items/[itemId] - Delete item
-export async function DELETE(request, { params }) {
+async function DELETE_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -211,3 +220,7 @@ export async function DELETE(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission("workflows:update", PUT_handler, { route: "/api/admin/workflows/[id]/items/[itemId]" });
+export const DELETE = withPermission("workflows:update", DELETE_handler, { route: "/api/admin/workflows/[id]/items/[itemId]" });

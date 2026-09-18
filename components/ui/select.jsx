@@ -100,7 +100,9 @@ function SelectItem({ className, children, ...props }) {
           <CheckIcon className="size-4 text-telnyx-green" />
         </SelectPrimitive.ItemIndicator>
       </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {/* min-w-0 lets a long label shrink instead of widening the trigger and
+          its grid column; the same span is portalled into the trigger. */}
+      <SelectPrimitive.ItemText className="min-w-0">{children}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
 }

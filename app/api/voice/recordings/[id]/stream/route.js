@@ -1,17 +1,13 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { recordingInScope, selfOnlyScope } from "@/lib/authz/scope.mjs";
 
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
-    const user = await getAuthenticatedUser(request.url);
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const telnyxApiKey = process.env.TELNYX_API_KEY;
     if (!telnyxApiKey) {
@@ -27,6 +23,12 @@ export async function GET(request, { params }) {
         { ok: false, error: "recording_id is required" },
         { status: 400 }
       );
+    }
+    // Scoped callers stream only recordings of interactions within their scope (Phase 3a).
+    // Callers admitted by agent:self alone (no recordings:read) only reach recordings of interactions they handled.
+    const recordingScope = authz.can("recordings:read") ? authz.scope : selfOnlyScope(authz.user);
+    if (!(await recordingInScope(getPostgresPool(), recordingScope, { recordingId: id }))) {
+      return NextResponse.json({ ok: false, error: "Recording outside your data scope" }, { status: 403 });
     }
 
     const telnyxUrl = buildTelnyxV2Url(`/recordings/${id}`);
@@ -135,3 +137,5 @@ export async function OPTIONS() {
   });
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["recordings:read", "agent:self"], GET_handler, { route: "/api/voice/recordings/[id]/stream" });

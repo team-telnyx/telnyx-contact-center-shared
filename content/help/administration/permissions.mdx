@@ -1,0 +1,52 @@
+---
+title: Permissions
+description: Define roles from a catalogue of screens and operations, limit them to selected queues, teams, campaigns or channels, and assign several roles to a user.
+audiences: [admin, owner]
+keywords: [permissions, roles, access, RBAC, scope, team leader, quality manager, audit, system role, shipped role]
+owner: contact-center
+lastReviewed: 2026-09-16
+---
+
+Permissions defines who may open which screens and perform which operations. Open **Admin → Configuration**, then select **Permissions**, the last entry in the rail.
+
+A role is a named set of permissions. Users receive one or more roles, and the permissions add up: a person holds the union of everything their roles grant. There are no deny rules; a user who needs "admin without X" gets a copied role without X.
+
+## Role types
+
+| Type | Meaning |
+| --- | --- |
+| **System** | `Agent`, `Supervisor`, `Admin` and `Owner`. Defined by the product, read-only, always meaning the same thing. Use **Clone** to start an editable copy. `Owner` grants everything and only an owner can grant or revoke it. |
+| **Shipped** | Ten roles for common positions, installed once: Team Leader, Quality Manager, Workforce Analyst, Reporting Analyst, Compliance Auditor, Campaign Manager, User Administrator, Routing Administrator, Conversation Designer, Channel Administrator. They are editable; an **edited** marker shows a role that differs from its shipped definition, and **Restore** brings the shipped definition back. A deleted shipped role does not return on upgrade. |
+| **Custom** | Roles you create or clone. |
+
+Shipped roles contain no agent desktop access. Assign **Agent** as well when the person also handles interactions.
+
+## The role list
+
+The table shows the role name and key, its type, how many screens and operations it grants, its scope, how many users hold it, and when it last changed. Filter by name, type, or whether the scope is narrowed. Actions per row: **View** or **Edit**, **Clone**, **Restore** (edited shipped roles only) and **Delete**. Deleting a role that is still assigned asks whether to remove it from those users first; system roles cannot be deleted.
+
+## The role editor
+
+**Screens** lists the navigation tree: workspace, menu entry, section. Tick a group to grant every screen below it, including screens added in later releases. A menu group becomes visible to the user automatically when anything under it is granted, so the menu never shows an empty group.
+
+**Operations** lists every managed object with read, create, update and delete plus named operations such as `invite`, `import`, `publish`, `execute` or `supervise.listen`. **Grant all in area** ticks a whole area at once. The **Scope** column names the dimension that limits the grant.
+
+**Scope** sets, for queues, teams, campaigns and channels, whether the role covers **All** objects, a **Selected** list, or **Own** — resolved from the assignee's own queue, team or campaign membership when the request is made, so one Team Leader role serves every team leader. Queues, teams and campaigns combine with OR; channels always narrow with AND. An empty selection grants nothing.
+
+**Audit** shows who changed the role and what changed, with added and removed permissions.
+
+The summary panel shows the counts, a preview of the menu the user will see, the scope, and the checks that must pass before saving. Saving is refused while a check is blocking, for example a missing name, an empty selection, or a grant outside your own access.
+
+## Rules that always apply
+
+- Changing a user's roles needs **Users → Assign roles** (`users:roles.assign`); editing the profile alone needs **Users → Update**. Queue membership needs **Queues → Assign agents**, team membership **Teams → Assign members**.
+- A role that is somebody's only role cannot be deleted: assign them another role first.
+- You can grant only permissions and scopes you hold yourself, both when editing a role and when assigning roles to a user. The one exception is the system role **Agent**: it is the base role every person needs, so anyone allowed to edit users can assign it without holding the agent desktop themselves. Supervisor, Admin, Owner, the shipped roles and custom roles follow the rule.
+- Only an owner can grant or revoke the **Owner** role, and the last owner cannot lose it.
+- Every role and assignment change is recorded with the actor, the time, and the before and after state.
+- A change reaches affected users within seconds: their menus refresh and API access follows without signing in again.
+- Permissions are the only thing that decides. A role's name grants nothing by itself: the system roles work because of the permissions they carry, and a copied role behaves exactly like its permission set. Every API request, page and menu entry checks the permission catalogue, so a user without the right operation receives *Forbidden* even when a screen is reachable by URL.
+
+## Assigning roles
+
+Open **Configuration → Users**, edit the user, and pick roles in the **Roles** control. Roles are grouped as System, Shipped and Custom, each with its description. The Users list shows role names and lets you filter by any role.

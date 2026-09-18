@@ -62,14 +62,14 @@ describe("hardphone bridge product integration", () => {
 
   it("exposes admin bridge enrollment, update, delete and live-status APIs", async () => {
     const route = await file("app/api/admin/phones-provisioning/bridges/route.js");
-    assert.match(route, /requireAdmin/);
+    assert.match(route, /withPermission\("phones:/);
     assert.match(route, /hp_local_bridges/);
     assert.match(route, /crypto\.randomBytes\(32\)/);
     assert.match(route, /HARDPHONE_BRIDGE_RELAY_URL/);
     assert.match(route, /\/api\/hardphone-bridge\/bridges/);
-    assert.match(route, /export async function PATCH/);
+    assert.match(route, /export const PATCH = withPermission\(/);
     assert.match(route, /UPDATE hp_local_bridges/);
-    assert.match(route, /export async function DELETE/);
+    assert.match(route, /export const DELETE = withPermission\(/);
     assert.match(route, /DELETE FROM hp_local_bridges/);
     assert.match(route, /Remove all phones from this bridge before deleting it/);
     assert.match(route, /settings->>'local_bridge_id' = \$1/);
@@ -385,18 +385,14 @@ describe("hardphone bridge product integration", () => {
     }
   });
 
-  it("handles parked outbound hardphone calls separately from WebRTC softphone calls", async () => {
-    const route = await file("app/api/voice/webhook/route.js");
-    assert.match(route, /async function findHardphoneByConnectionId/);
-    assert.match(route, /FROM hp_phones hp[\s\S]*LEFT JOIN users u/);
-    assert.match(route, /metadata:\s*\{[\s\S]*is_hardphone_outbound_call:\s*true/);
-    assert.match(route, /hardphoneCallControlId:\s*callControlId/);
-    assert.match(route, /linkTo:\s*callControlId/);
-    assert.match(route, /pstnCallControlId:\s*pstnCallControlId/);
-    assert.match(route, /metadata->>'is_hardphone_outbound_call' = 'true'/);
-    assert.match(route, /hardphone_call_control_id: hardphoneCallControlId \|\| null/);
-    assert.match(route, /source:\s*"hardphone"/);
-    assert.match(route, /direction === "outgoing" &&\s*rtcCallId/);
+  it("keeps the suspended hardphone lifecycle isolated from the Core voice webhook", async () => {
+    const voiceRoute = await file("app/api/voice/webhook/route.js");
+    const ctiRoute = await file("app/api/provisioning/cti-webhook/route.js");
+    assert.doesNotMatch(voiceRoute, /hp_cti_sessions|hardphoneCti/);
+    assert.match(ctiRoute, /parseCtiClientState/);
+    assert.match(ctiRoute, /FROM hp_cti_sessions/);
+    assert.match(ctiRoute, /phone_call_control_id/);
+    assert.match(ctiRoute, /target_call_control_id/);
   });
 
   it("hides advanced provisioning URL/syslog fields and uses env-managed admin password", async () => {

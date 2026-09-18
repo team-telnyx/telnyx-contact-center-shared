@@ -1,22 +1,17 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { effectiveAgentStatusSql } from "@/lib/acd/agent-state.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 /**
  * GET /api/user/contacts
  * Get contacts, users, and assistants for the logged-in user
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const username = user.username || user.email;
     if (!username) {
@@ -54,13 +49,16 @@ export async function GET(request) {
     const patients = []; // Empty for now, can be populated if category field is added
 
     // Fetch registered users with phone numbers
+    const effectiveStatus = effectiveAgentStatusSql("ast");
     const usersRes = await pool.query(
-      `SELECT id, username, first_name, last_name, nick, mobile, voice_number, telephony_user_name, profile_picture_uri
-       FROM users 
-       WHERE (mobile IS NOT NULL AND mobile != '') 
-          OR (voice_number IS NOT NULL AND voice_number != '')
-          OR (telephony_user_name IS NOT NULL AND telephony_user_name != '')
-       ORDER BY first_name, last_name, username`
+      `SELECT u.id, u.username, u.first_name, u.last_name, u.nick, u.mobile, u.voice_number,
+              u.telephony_user_name, u.profile_picture_uri, ${effectiveStatus} AS agent_status
+       FROM users u
+       LEFT JOIN acd_agent_state ast ON ast.agent_id = u.id
+       WHERE (u.mobile IS NOT NULL AND u.mobile != '')
+          OR (u.voice_number IS NOT NULL AND u.voice_number != '')
+          OR (u.telephony_user_name IS NOT NULL AND u.telephony_user_name != '')
+       ORDER BY u.first_name, u.last_name, u.username`
     );
 
     // Fetch assistants from Telnyx API
@@ -102,3 +100,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("authenticated", GET_handler, { route: "/api/user/contacts" });

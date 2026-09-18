@@ -16,7 +16,7 @@ The left menu exposes four entry points. Selecting one opens a page with a secti
 | Left-menu entry | Rail sections |
 | --- | --- |
 | **AI Assistants** | AI Assistants, Tools Library, Insights, Scheduled Events, Pronunciation Dictionaries, MCP Servers |
-| **Configuration** | Users, Queues, Skills, Statuses, Wrapup Codes, Numbers, Data Sources, Web Pages, Media Library, Domains, Secrets |
+| **Configuration** | Users, Teams, Queues, Skills, Statuses, Wrapup Codes, Numbers, Data Sources, Web Pages, Media Library, Domains, Secrets, Permissions |
 | **System** | Dashboard, Call Generator, Logging, Phones Provisioning, Theme Settings |
 | **Automations** | Call & App Flows, Workflows, Forms |
 
@@ -33,7 +33,7 @@ Use **Exit** in these nested rails to return to the parent list or System overvi
 
 ## Recommended setup order
 
-1. In **Configuration**, create Domains, Users, Skills, Statuses, and Wrapup Codes.
+1. In **Configuration**, create Domains, Users, Teams, Skills, Statuses, and Wrapup Codes.
 2. Configure Queues, Numbers, Data Sources, Web Pages, Media Library, and Secrets.
 3. In **AI Assistants**, configure assistants, reusable tools, insights, scheduled events, pronunciation dictionaries, and MCP Servers.
 4. In **Automations**, create Call & App Flows, Agent Assist Workflows, and Forms.
@@ -53,10 +53,11 @@ Use **Exit** in these nested rails to return to the parent list or System overvi
 
 ### Configuration
 
-- [Users](/help/administration/users), [Queues](/help/administration/queues), [Skills](/help/administration/skills)
+- [Users](/help/administration/users), [Teams](/help/administration/teams), [Queues](/help/administration/queues), [Skills](/help/administration/skills)
+- [Web Widgets](/help/administration/chat-widgets)
 - [Statuses](/help/administration/statuses), [Wrapup Codes](/help/administration/wrapup-codes)
 - [Numbers](/help/administration/numbers), [Data Sources](/help/administration/data-sources), [Web Pages](/help/administration/web-pages)
-- [Media Library](/help/administration/media-library), [Domains](/help/administration/domains), [Secrets](/help/administration/secrets)
+- [Media Library](/help/administration/media-library), [Domains](/help/administration/domains), [Secrets](/help/administration/secrets), [Permissions](/help/administration/permissions)
 
 ### System
 
@@ -72,3 +73,9 @@ Use **Exit** in these nested rails to return to the parent list or System overvi
 - [Call & App Flows](/help/administration/call-flows)
 - [Workflows](/help/administration/workflows)
 - [Forms](/help/administration/forms)
+
+## Web Widgets
+
+Open **Admin → Web Widgets** to create, clone, rename, disable, preview, and publish website chat widgets. Enable Chat and set concurrency and workload weights in both the queue and agent **Channels & Utilization** settings first. The lower channel maximum applies across all queues; pending offers, active chats, and required wrap-up occupy capacity. Agents use **Agent Desktop** to accept, decline, reply, end, and wrap up chats. Voice credentials are not required when Voice is disabled for that agent.
+
+Widget Studio includes appearance, placement, responsive previews, attachments, targeting, triggers, rules, localization, accessibility, embed code, and publication history. Published revisions are immutable; restore creates a draft for review and publication. Disabling a widget pauses new conversations while existing sessions continue. WebRTC, callbacks, email, WhatsApp, and SMS transport are not enabled by this chat delivery.

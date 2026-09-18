@@ -1,55 +1,31 @@
-import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
-import { test } from "node:test";
-
-const dashboard = readFileSync("components/contact-center/AgentDashboard.jsx", "utf8");
-const statsRoute = readFileSync("app/api/dashboard/stats/route.js", "utf8");
-
-test("agent dashboard uses the analytics workspace design language", () => {
-  assert.match(dashboard, /OverviewMetricCard/);
-  assert.match(dashboard, /MiniSignalTile/);
-  assert.match(dashboard, /GraphCard/);
-  assert.match(dashboard, /function ChartTooltip/);
-  assert.match(dashboard, /dark:bg-zinc-950\/70/);
-  assert.match(dashboard, /My performance/);
-  assert.match(dashboard, /agent-dashboard-controls/);
-  // Old design artifacts must be gone
-  assert.doesNotMatch(dashboard, /MutationObserver/);
-  assert.doesNotMatch(dashboard, /vs yesterday/);
-  assert.doesNotMatch(dashboard, /text-3xl font-bold tracking-tight">Dashboard/);
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+const read=path=>readFileSync(path,'utf8');
+const dashboard=read('components/contact-center/MultichannelDashboard.jsx');
+const route=read('app/api/dashboard/stats/route.js');
+test('both personal dashboard entry points use the shared channel reporting view',()=>{
+  assert.match(read('components/contact-center/AgentDashboard.jsx'),/MultichannelDashboard personal/);
+  assert.match(dashboard,/My performance/);assert.match(dashboard,/AnalyticsReportFilters/);
+  assert.doesNotMatch(dashboard,/Calls handled|vs yesterday|label="Occupancy"/);
 });
-
-test("agent dashboard shows personal work summary tiles", () => {
-  assert.match(dashboard, /Calls handled/);
-  assert.match(dashboard, /Completion rate/);
-  assert.match(dashboard, /Avg handle time/);
-  assert.match(dashboard, /Talk time/);
-  assert.match(dashboard, /label="Occupancy"/);
-  assert.match(dashboard, /label="Holds"/);
-  assert.match(dashboard, /label="Transfers"/);
-  assert.match(dashboard, /label="Break time"/);
-  assert.match(dashboard, /My wrap-up codes/);
-  assert.match(dashboard, /statusBadgeClass\(metrics\.status\)/);
+test('personal metrics distinguish customer response, agent response and global capacity',()=>{
+  for(const text of ['Customer first response','My first response','Handling elapsed','My workforce time'])assert.ok(dashboard.includes(text),text);
+  assert.match(dashboard,/Capacity remains global/);
+  assert.match(dashboard,/onOpenInteraction/);
+  assert.match(dashboard,/InteractionRecordPreview/);
 });
-
-test("agent dashboard keeps period switching and refresh", () => {
-  for (const id of ["today", "7days", "30days"]) {
-    assert.match(dashboard, new RegExp(`id: ["']${id}["']`));
-  }
-  assert.match(dashboard, /\/api\/dashboard\/stats\?period=/);
-  assert.match(dashboard, /IconRefresh/);
+test('dashboard refresh cancels obsolete requests and retains scope in the URL',()=>{
+  for(const value of ['1d','7d','30d'])assert.ok(read('components/contact-center/AnalyticsReportFilters.jsx').includes(`["${value}",`));
+  assert.match(dashboard,/AbortController/);assert.match(dashboard,/controller.signal.aborted/);
+  assert.match(dashboard,/history.replaceState/);assert.match(dashboard,/visibilityState/);
+  assert.match(dashboard,/Skeleton/);assert.match(dashboard,/Showing the last successful snapshot/);
 });
-
-test("dashboard stats API returns extended personal metrics", () => {
-  assert.match(statsRoute, /hold_count/);
-  assert.match(statsRoute, /hold_duration_seconds/);
-  assert.match(statsRoute, /transfer_count/);
-  assert.match(statsRoute, /longest_handle_seconds/);
-  assert.match(statsRoute, /cc_user_time_tracking/);
-  assert.match(statsRoute, /occupancyPct/);
-  assert.match(statsRoute, /wrapupDistribution/);
-  assert.match(statsRoute, /jsonb_array_elements_text\(COALESCE\(i\.wrapup_codes/);
-  // Personal endpoint stays scoped to the authenticated agent
-  assert.match(statsRoute, /agent_username = \$1/);
-  assert.match(statsRoute, /getServerSession/);
+test('personal endpoint forces stable authenticated agent scope for metrics and evidence',()=>{
+  assert.match(route,/scope.agentId\s*=\s*String\(user.id\)/);
+  assert.match(route,/readInteractionReport\(db,\s*scope\)/);
+  assert.match(route,/readLiveWorkload\(db,\s*scope.agentId\)/);
+  assert.match(route,/agentAdherenceReport\(db,\s*scope\)/);
+  assert.match(route,/REPEATABLE READ READ ONLY/);
+  assert.doesNotMatch(route,/agent_username\s*=|agentId\s*=\s*.*params.get/);
 });

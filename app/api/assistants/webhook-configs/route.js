@@ -10,12 +10,13 @@ import {
   getContactCenterDataSourceActions,
 } from "@/config/contact-center-data-sources";
 
+import { withPermission } from "@/lib/authz/guard";
 /**
  * Server-side API endpoint to generate webhook configurations
  * This allows us to use server-side environment variables (without NEXT_PUBLIC_ prefix)
  * which don't get embedded in the client bundle at build time
  */
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const { entityId, actionId, baseUrl } = await request.json();
 
@@ -266,7 +267,7 @@ function generateTelnyxApiWebhookConfig(actionId) {
   // Get messaging profile ID from environment variable
   const messagingProfileId =
     process.env.TELNYX_MESSAGING_PROFILE_ID ||
-    "400184c8-76a2-499f-b506-a18c0bea9a87"; // Fallback value if not set
+    "00000000-0000-0000-0000-000000000000"; // Fallback value if not set
 
   const configs = {
     send_sms: {
@@ -292,9 +293,9 @@ function generateTelnyxApiWebhookConfig(actionId) {
             type: "string",
             format: "address",
             description:
-              "Destination phone number in E.164 format (e.g., '+351961621005'). Must be a string, not a number. Use {{telnyx_end_user_target}}",
+              "Destination phone number in E.164 format (e.g., '+351961000001'). Must be a string, not a number. Use {{telnyx_end_user_target}}",
             pattern: "^\\+[1-9]\\d{1,14}$",
-            examples: ["+351961621005", "+15551234567"],
+            examples: ["+351961000001", "+15551234567"],
           },
           from: {
             type: "string",
@@ -521,3 +522,6 @@ function generateThirdPartyApiWebhookConfig(actionId, baseUrl) {
     },
   };
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("ai_assistants:update", POST_handler, { route: "/api/assistants/webhook-configs" });

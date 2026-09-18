@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { resolveSecretReferences } from "@/lib/secrets.js";
+import { assertPublicHostname } from "@/lib/security/outbound-url.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 function parseResponseBody(responseText, contentType = "") {
   if (!responseText.trim()) {
     return null;
@@ -22,7 +24,7 @@ function parseResponseBody(responseText, contentType = "") {
   }
 }
 
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const config = await request.json();
     const {
@@ -52,6 +54,16 @@ export async function POST(request) {
     }
 
     const urlObject = new URL(requestUrl);
+    // The test request is made from the server: only public http(s) targets
+    // are allowed, never loopback, link-local, private ranges or metadata hosts.
+    if (!/^https?:$/.test(urlObject.protocol)) {
+      return NextResponse.json({ success: false, error: "Only http and https URLs can be tested" }, { status: 400 });
+    }
+    try {
+      await assertPublicHostname(urlObject.hostname);
+    } catch (policyError) {
+      return NextResponse.json({ success: false, error: policyError?.message || "The URL is not allowed" }, { status: 400 });
+    }
     for (const [key, value] of Object.entries(queryParams || {})) {
       if (value !== undefined && value !== null && value !== "") {
         const resolvedValue = await resolveSecretReferences(String(value));
@@ -116,3 +128,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("call_flows:test", POST_handler, { route: "/api/voice/flows/test-http-request" });

@@ -10,6 +10,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 function normalizeWorkflowDataActionButtons(buttons) {
   if (!Array.isArray(buttons)) return [];
   return buttons
@@ -25,7 +26,7 @@ function normalizeWorkflowDataActionButtons(buttons) {
 }
 
 // GET /api/admin/workflows - List all workflows
-export async function GET(request) {
+async function GET_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -120,7 +121,7 @@ export async function GET(request) {
 }
 
 // POST /api/admin/workflows - Create a new workflow
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -243,3 +244,7 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("workflows:read", GET_handler, { route: "/api/admin/workflows" });
+export const POST = withPermission("workflows:create", POST_handler, { route: "/api/admin/workflows" });

@@ -22,8 +22,7 @@ import {
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
 
-const DEFAULT_COUNTDOWN_SECONDS = 30;
-const END_STATUSES = ["hangup", "ended", "destroy", "idle", "terminated"];
+import { wrapupClock, wrapupSeconds } from "@/lib/acd/wrapup-clock.mjs";
 
 function normalizeText(value) {
   return String(value || "")
@@ -63,8 +62,8 @@ export default function WrapupCodesSheet({
   open,
   onOpenChange,
   interactionId,
+  segmentId = null,
   transcriptions,
-  callStatus,
 }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,14 +74,14 @@ export default function WrapupCodesSheet({
   const [selectedCodes, setSelectedCodes] = useState([]);
   const [defaultCodeId, setDefaultCodeId] = useState(null);
   const [queueName, setQueueName] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(DEFAULT_COUNTDOWN_SECONDS);
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [clock, setClock] = useState(null);
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef(null);
+  const autoSubmitRef = useRef(null);
   const prevOpenRef = useRef(false);
-  const wrapupStartSentRef = useRef(false);
   const wrapupEndSentRef = useRef(false);
   const lastInteractionIdRef = useRef(null);
-  const wrapupStartRetryRef = useRef(0);
   const [interactionMetadata, setInteractionMetadata] = useState(null);
 
   const intents = useMemo(() => {
@@ -107,7 +106,7 @@ export default function WrapupCodesSheet({
         try {
           // First check: Try to get interaction from wrapup-codes endpoint (faster, includes metadata)
           const wrapupRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/wrapup-codes`,
+            `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`,
             { cache: "no-store" },
           );
 
@@ -180,7 +179,7 @@ export default function WrapupCodesSheet({
         cancelled = true;
       };
     }
-  }, [open, interactionId, onOpenChange]);
+  }, [open, interactionId, segmentId, onOpenChange]);
 
   useEffect(() => {
     if (open && interactionMetadata?.timeout_re_enqueued === true) {
@@ -206,9 +205,7 @@ export default function WrapupCodesSheet({
   useEffect(() => {
     if (interactionId && lastInteractionIdRef.current !== interactionId) {
       lastInteractionIdRef.current = interactionId;
-      wrapupStartSentRef.current = false;
       wrapupEndSentRef.current = false;
-      wrapupStartRetryRef.current = 0;
     }
   }, [interactionId]);
 
@@ -223,54 +220,23 @@ export default function WrapupCodesSheet({
     }
   }, [open]);
 
-  async function sendWrapupEvent(action) {
+  async function sendWrapupEnd(nextStatus = null) {
     if (!interactionId) return;
-    try {
-      const res = await fetch(
-        `/api/contact-center/interactions/${encodeURIComponent(
-          interactionId,
-        )}/wrapup`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
-      if (action === "start" && !res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 409 && data?.retry) {
-          if (wrapupStartRetryRef.current < 15) {
-            wrapupStartRetryRef.current += 1;
-            // Exponential backoff: 500ms, 1000ms, 2000ms, etc., max 5000ms
-            const delay = Math.min(500 * Math.pow(2, wrapupStartRetryRef.current - 1), 5000);
-            setTimeout(() => {
-              sendWrapupEvent("start");
-            }, delay);
-          } else {
-            console.warn(
-              `[WrapupCodesSheet] Max retries reached for wrapup start on interaction ${interactionId}`,
-            );
-          }
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn(`[WrapupCodesSheet] Failed to ${action} wrapup:`, err);
+    const response = await fetch(
+      `/api/contact-center/interactions/${encodeURIComponent(
+        interactionId,
+      )}/wrapup`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "end", nextStatus, segmentId }),
+      },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      throw new Error(data?.error || "Failed to end wrapup");
     }
   }
-
-  useEffect(() => {
-    if (!interactionId) return;
-    if (open && !wrapupStartSentRef.current) {
-      wrapupStartSentRef.current = true;
-      sendWrapupEvent("start");
-      return;
-    }
-    if (!open && wrapupStartSentRef.current && !wrapupEndSentRef.current) {
-      wrapupEndSentRef.current = true;
-      sendWrapupEvent("end");
-    }
-  }, [open, interactionId]);
 
   // Store intents in a ref to prevent unnecessary effect re-runs
   const intentsRef = useRef(intents);
@@ -297,7 +263,8 @@ export default function WrapupCodesSheet({
 
     async function loadWrapupCodes() {
       setLoading(true);
-      setTimeLeft(DEFAULT_COUNTDOWN_SECONDS);
+      setTimeLeft(null);
+      setClock(null);
       hasSubmittedRef.current = false;
       // Clear any failure state from a previous interaction — this component
       // stays mounted between calls (GlobalWrapupSheet), so a stale saveFailed
@@ -307,13 +274,18 @@ export default function WrapupCodesSheet({
         const res = await fetch(
           `/api/contact-center/interactions/${encodeURIComponent(
             interactionId,
-          )}/wrapup-codes`,
+          )}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`,
           { cache: "no-store" },
         );
         const data = await res.json();
         if (!res.ok) {
           throw new Error(data?.error || "Failed to load wrapup codes");
         }
+
+        const timing = wrapupClock(data);
+        if (!timing.pending) { onOpenChange?.(false); setLoading(false); return; }
+        setClock({ ...timing, interactionId });
+        setTimeLeft(wrapupSeconds(timing));
 
         // Check if this is a timeout re-enqueue scenario
         const wasTimeoutReEnqueued =
@@ -365,37 +337,43 @@ export default function WrapupCodesSheet({
     }
 
     loadWrapupCodes();
-  }, [open, interactionId, onOpenChange]);
+  }, [open, interactionId, segmentId, onOpenChange]);
+
+  useEffect(() => { autoSubmitRef.current = handleAutoSubmit; });
 
   useEffect(() => {
-    if (!open) return;
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
+    if (!open || !clock || clock.interactionId !== interactionId) return;
+    let cancelled = false, polling = false;
+    timerRef.current = setInterval(async () => {
+      const remaining = wrapupSeconds(clock);
+      setTimeLeft(remaining);
+      if (remaining !== null && remaining > 0) return;
+      if (!clock.core) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+        autoSubmitRef.current?.();
+        return;
+      }
+      // The reconciler records auto_timeout. Do not submit a manual/default
+      // disposition or close the sheet before the server confirms completion.
+      if (polling) return;
+      polling = true;
+      try {
+        const res = await fetch(`/api/contact-center/interactions/${encodeURIComponent(interactionId)}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!cancelled && res.ok && data.acdOwned && data.wrapupPending === false) onOpenChange?.(false);
+      } catch { /* Keep the pending sheet visible until server confirmation. */ }
+      finally { polling = false; }
     }, 1000);
 
     return () => {
+      cancelled = true;
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
     };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (callStatus && !END_STATUSES.includes(callStatus)) {
-      onOpenChange?.(false);
-    }
-  }, [callStatus, open, onOpenChange]);
+  }, [open, clock, interactionId, segmentId, onOpenChange]);
 
   function toggleCode(codeId) {
     setSelectedCodes((prev) => {
@@ -406,7 +384,7 @@ export default function WrapupCodesSheet({
     });
   }
 
-  async function handleSubmit(codesToSave) {
+  async function handleSubmit(codesToSave, { nextStatus = null } = {}) {
     if (!interactionId || saving || hasSubmittedRef.current) return;
     setSaving(true);
     setSaveFailed(false);
@@ -414,12 +392,13 @@ export default function WrapupCodesSheet({
       const res = await fetch(
         `/api/contact-center/interactions/${encodeURIComponent(
           interactionId,
-        )}/wrapup-codes`,
+        )}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             wrapupCodes: codesToSave,
+            segmentId,
           }),
         },
       );
@@ -427,11 +406,11 @@ export default function WrapupCodesSheet({
       if (!res.ok) {
         throw new Error(data?.error || "Failed to save wrapup codes");
       }
-      hasSubmittedRef.current = true;
       if (!wrapupEndSentRef.current) {
+        await sendWrapupEnd(nextStatus);
         wrapupEndSentRef.current = true;
-        await sendWrapupEvent("end");
       }
+      hasSubmittedRef.current = true;
       onOpenChange?.(false);
     } catch (err) {
       setSaveFailed(true);
@@ -445,7 +424,7 @@ export default function WrapupCodesSheet({
     }
   }
 
-  async function handleManualSubmit() {
+  async function handleManualSubmit(options = {}) {
     if (selectedCodes.length === 0) {
       notify({
         title: "Please select a wrapup code",
@@ -454,7 +433,7 @@ export default function WrapupCodesSheet({
       });
       return;
     }
-    await handleSubmit(selectedCodes);
+    await handleSubmit(selectedCodes, options);
   }
 
   async function handleAutoSubmit() {
@@ -465,7 +444,7 @@ export default function WrapupCodesSheet({
     await handleSubmit(finalCodes);
   }
 
-  const timerLabel = `${String(Math.floor(timeLeft / 60)).padStart(
+  const timerLabel = timeLeft === null ? "--:--" : `${String(Math.floor(timeLeft / 60)).padStart(
     2,
     "0",
   )}:${String(timeLeft % 60).padStart(2, "0")}`;
@@ -507,7 +486,9 @@ export default function WrapupCodesSheet({
           </SheetTitle>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="outline" className="text-base font-semibold">
-              Auto-save in {timerLabel}
+              <span data-testid="wrapup-countdown" data-deadline={Number.isFinite(clock?.deadline) ? new Date(clock.deadline).toISOString() : ""}>
+                {clock?.core ? "Wrap-up ends in" : "Auto-save in"} {timerLabel}
+              </span>
             </Badge>
             {queueName ? (
               <span className="text-xs text-muted-foreground">
@@ -545,6 +526,7 @@ export default function WrapupCodesSheet({
                           className="flex items-start gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded-md p-2 -m-2 transition-colors"
                         >
                           <Checkbox
+                            data-testid="wrapup-code" data-code-id={code.id}
                             checked={selectedCodes.includes(code.id)}
                             onCheckedChange={() => toggleCode(code.id)}
                             className="mt-0.5 shrink-0"
@@ -597,7 +579,15 @@ export default function WrapupCodesSheet({
               Close without saving
             </Button>
           ) : null}
-          <Button onClick={() => handleManualSubmit()} disabled={saving}>
+          <Button
+            data-testid="wrapup-submit-break"
+            variant="outline"
+            onClick={() => handleManualSubmit({ nextStatus: "Break" })}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save & Go on Break"}
+          </Button>
+          <Button data-testid="wrapup-submit" onClick={() => handleManualSubmit()} disabled={saving}>
             {saving ? "Saving..." : saveFailed ? "Retry save" : "Save & Close"}
           </Button>
         </SheetFooter>

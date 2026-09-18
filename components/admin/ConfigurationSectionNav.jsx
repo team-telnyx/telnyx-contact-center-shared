@@ -9,14 +9,17 @@ import {
   IconKey,
   IconList,
   IconPhone,
+  IconShieldLock,
   IconTag,
   IconUsers,
+  IconUsersGroup,
   IconWorld,
 } from "@tabler/icons-react";
 import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 
 const CONFIGURATION_ITEMS = [
   { id: "users", label: "Users", icon: IconUsers, href: "/admin/users" },
+  { id: "teams", label: "Teams", icon: IconUsersGroup, href: "/admin/teams" },
   { id: "queues", label: "Queues", icon: IconList, href: "/admin/queues" },
   { id: "skills", label: "Skills", icon: IconAward, href: "/admin/skills" },
   { id: "statuses", label: "Statuses", icon: IconTag, href: "/admin/statuses" },
@@ -27,7 +30,11 @@ const CONFIGURATION_ITEMS = [
   { id: "media-library", label: "Media Library", icon: IconFileMusic, href: "/admin/media-library" },
   { id: "domains", label: "Domains", icon: IconWorld, href: "/admin/domains" },
   { id: "secrets", label: "Secrets", icon: IconKey, href: "/admin/secrets" },
+  // Permissions stays the last entry of the rail (product decision, 2026-09-16).
+  { id: "permissions", label: "Permissions", icon: IconShieldLock, href: "/admin/permissions" },
 ];
+
+export { CONFIGURATION_ITEMS };
 
 export function ConfigurationSectionPage({ activeId, children }) {
   const router = useRouter();
@@ -42,7 +49,7 @@ export function ConfigurationSectionPage({ activeId, children }) {
       className="grid min-h-0 flex-1 gap-3 overflow-hidden p-3"
       style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}
     >
-      <SectionRail items={CONFIGURATION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel="Configuration sections" />
+      <SectionRail items={CONFIGURATION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel="Configuration sections" screenGroup="admin.configuration" />
       <section className="min-h-0 min-w-0 overflow-y-auto pr-1">{children}</section>
     </main>
   );

@@ -1,4 +1,6 @@
 "use client";
+import SlaSettings from "@/components/contact-center/SlaSettings";
+import ChannelUtilization, { useChannelUtilization } from "@/components/admin/ChannelUtilization";
 
 import React, { useMemo } from "react";
 import {
@@ -203,7 +205,7 @@ export default function EditSheet({
   const [maxSize, setMaxSize] = React.useState(100);
   const [timeoutSecs, setTimeoutSecs] = React.useState(300);
   const [agentAnswerTimeoutSecs, setAgentAnswerTimeoutSecs] =
-    React.useState(30);
+    React.useState("");
   const [overflowQueueId, setOverflowQueueId] = React.useState("");
   const [overflowAction, setOverflowAction] = React.useState("transfer");
   const [enabled, setEnabled] = React.useState(true);
@@ -366,7 +368,7 @@ export default function EditSheet({
           setMaxWaitTimeSecs(600);
           setMaxSize(100);
           setTimeoutSecs(300);
-          setAgentAnswerTimeoutSecs(30);
+          setAgentAnswerTimeoutSecs("");
           setOverflowQueueId("");
           setOverflowAction("transfer");
           setEnabled(true);
@@ -413,7 +415,7 @@ export default function EditSheet({
           setMaxWaitTimeSecs(d.max_wait_time_secs || 600);
           setMaxSize(d.max_size || 100);
           setTimeoutSecs(d.timeout_secs || 300);
-          setAgentAnswerTimeoutSecs(d.agent_answer_timeout_secs || 30);
+          setAgentAnswerTimeoutSecs(d.agent_answer_timeout_secs ?? "");
           setOverflowQueueId(d.overflow_queue_id || "");
           setOverflowAction(d.overflow_action || "transfer");
           setEnabled(d.enabled !== undefined ? d.enabled : true);
@@ -706,7 +708,10 @@ export default function EditSheet({
     }
   }
 
+  const utilization = useChannelUtilization("queue", queueId, open);
+
   async function onSave() {
+    if (!utilization.ready) return;
     if (!name.trim()) {
       notify({
         title: "Queue name is required",
@@ -718,6 +723,7 @@ export default function EditSheet({
     setSaving(true);
     try {
       const payload = {
+        utilization: utilization.payload,
         name: name.trim(),
         displayName: displayName.trim() || null,
         description: description.trim() || null,
@@ -725,7 +731,8 @@ export default function EditSheet({
         maxWaitTimeSecs: Number(maxWaitTimeSecs),
         maxSize: Number(maxSize),
         timeoutSecs: Number(timeoutSecs),
-        agentAnswerTimeoutSecs: Number(agentAnswerTimeoutSecs),
+        agentAnswerTimeoutSecs:
+          agentAnswerTimeoutSecs === "" ? null : Number(agentAnswerTimeoutSecs),
         overflowQueueId: overflowQueueId || null,
         overflowAction,
         enabled,
@@ -834,8 +841,7 @@ export default function EditSheet({
 
         {/* Scrollable Content Section */}
         <div className="flex-1 overflow-y-auto">
-          <Card className="mx-5 my-4">
-            <CardContent className="p-6 space-y-4">
+          <div className="space-y-4">
               {loading ? (
                 <>
                   <Skeleton className="h-4 w-40 mb-3" />
@@ -845,6 +851,7 @@ export default function EditSheet({
                 </>
               ) : (
                 <>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Settings */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -908,8 +915,9 @@ export default function EditSheet({
                     </div>
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <ChannelUtilization scope="queue" form={utilization} disabled={saving} />
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Routing Settings */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -978,13 +986,14 @@ export default function EditSheet({
                           type="number"
                           min="1"
                           value={agentAnswerTimeoutSecs}
-                          onChange={(e) =>
-                            setAgentAnswerTimeoutSecs(Number(e.target.value))
-                          }
+                          placeholder="Inherit global setting"
+                          onChange={(e) => setAgentAnswerTimeoutSecs(
+                            e.target.value === "" ? "" : Number(e.target.value),
+                          )}
                         />
                         <p className="text-xs text-muted-foreground">
-                          Time agent has to answer a call transferred from the
-                          queue. If not answered in time, call will be
+                          Leave blank to inherit the global Agent lifecycle
+                          setting. If not answered in time, the call will be
                           re-enqueued and agent status will be set to &quot;Agent
                           Not Answering&quot;.
                         </p>
@@ -992,8 +1001,8 @@ export default function EditSheet({
                     </div>
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Priority Settings */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -1031,8 +1040,8 @@ export default function EditSheet({
                     </div>
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Call Priority Settings */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -1063,8 +1072,8 @@ export default function EditSheet({
                     </div>
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Skill Relaxation Settings (only for Skill-based routing) */}
                   {routingStrategy === "Skill-based" && (
                     <>
@@ -1153,52 +1162,10 @@ export default function EditSheet({
                     </>
                   )}
 
-                  {/* SLA Settings */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Service Level Agreement (SLA)
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="grid gap-2">
-                        <Label className="text-sm">
-                          Answer Threshold (seconds)
-                        </Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={slaAnswerThresholdSeconds}
-                          onChange={(e) =>
-                            setSlaAnswerThresholdSeconds(Number(e.target.value))
-                          }
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Target time to answer calls (e.g., 20 seconds)
-                        </p>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label className="text-sm">Target Percentage</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={slaTargetPercentage}
-                          onChange={(e) =>
-                            setSlaTargetPercentage(Number(e.target.value))
-                          }
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Target percentage of calls answered within threshold
-                          (e.g., 80%)
-                        </p>
-                      </div>
-                      <p className="text-xs text-muted-foreground italic">
-                        Example: Answer 80% of calls within 20 seconds
-                      </p>
-                    </div>
-                  </div>
+                  {queueId ? <SlaSettings queueId={queueId} /> : <p className="text-xs text-muted-foreground">Save the queue to configure channel SLA policies.</p>}
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Overflow Settings */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -1234,8 +1201,8 @@ export default function EditSheet({
                     </div>
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Wrapup Codes */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -1298,8 +1265,8 @@ export default function EditSheet({
                     )}
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Audio Settings */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -1882,8 +1849,8 @@ export default function EditSheet({
                     </div>
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* User Assignments */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -2016,10 +1983,10 @@ export default function EditSheet({
                       </div>
                     )}
                   </div>
+                  </CardContent></Card>
                 </>
               )}
-            </CardContent>
-          </Card>
+          </div>
         </div>
 
         {/* Fixed Footer */}
@@ -2031,7 +1998,7 @@ export default function EditSheet({
           >
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={saving || loading}>
+          <Button onClick={onSave} disabled={saving || loading || !utilization.ready}>
             {saving ? "Saving..." : "Save Changes"}
           </Button>
         </SheetFooter>

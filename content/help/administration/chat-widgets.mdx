@@ -1,0 +1,77 @@
+---
+title: Web Widgets
+description: Configure native website chat, routing, publication, and agent capacity.
+audiences: [admin, owner]
+keywords: [chat, messaging, widget, utilization, capacity, publication]
+owner: contact-center
+lastReviewed: 2026-09-12
+---
+
+# Web Widgets
+
+Open **Admin → Web Widgets**. Widget Studio provides the configuration sections and responsive preview from the reference widget project, using native Contact Center authentication, queues, and messaging.
+
+## Prepare the queue and agents
+
+1. Save the queue and agent accounts first.
+2. In the queue editor, open **Channels & Utilization**, enable **Chat**, set its maximum and workload percentage, and save the queue with **Save Changes**.
+3. Do the same in each eligible agent's user editor. Disable **Voice** for an agent who will work without a phone.
+4. Assign agents to the queue and activate their queue membership. Agents open **Agent Desktop** and set their status to **Available**.
+
+Both the agent and queue must enable Chat. The smaller maximum wins. An agent with a maximum of 2 receives at most 2 chat offers/assignments across all queues and browser sessions, even if a queue permits 5. Pending offers, active work, and wrap-up each occupy one slot. The larger queue/agent workload percentage applies, and all occupied work must fit the agent's workload budget. Voice is exclusive.
+
+The footer saves channel settings together with the other user or queue settings. Changing a limit revalidates unaccepted offers; accepted conversations continue to completion.
+
+## Create and publish
+
+1. Click **New widget** or **New**, enter a unique name, and create the draft.
+2. Under **Channels → Available channels**, enable Messaging and/or Voice and select **Widget AI assistant**. Configure the queue and routing allowlist under **Handoff → AI chat handoff routing**. Widgets without an assistant use **Handoff → Direct chat routing**.
+3. Under **Targeting**, enter the allowed embedding origins, including the scheme and port where applicable. Use an exact origin such as `https://shop.example.com` or an HTTPS wildcard such as `https://*.example.com`.
+4. Configure dimensions, appearance, launcher, messages, handoff timeline, attachments, triggers, heads-up messages, rules, language, and accessibility. Use the device preview to check placement and sizing.
+5. Click **Publish**. Publication validates the current draft and queue configuration, creates or reuses the installation's shared chat handoff tool, and attaches it to the widget assistant. Copy the installation script from **Embed** into the customer website.
+
+Drafts autosave valid changes. **Save draft** retries a failed save. A conflicting editor must reload and review the latest revision before saving. Publication makes an immutable revision and opens a new draft; existing conversations retain the configuration with which they started.
+
+**Clone** copies the complete draft and uploaded preview backgrounds. **Edit** changes the administrative name. **History** shows publications and audit events; **Restore to draft** restores a prior publication for review before publishing it again.
+
+Disabling the widget stops new bootstrap/session admission. An already connected visitor can continue the current conversation until it ends or the inactivity timeout is reached. An origin removed from the publication can no longer use its old session.
+
+## Agent controls
+
+Agents accept or decline offers in **Agent Desktop**. Each chat has its own message history, reply draft, typing indicator, emoji picker, and attachment controls. **End chat** closes the conversation and starts its wrap-up. Select a wrap-up code and click **Complete** to release the slot. A configured wrap-up deadline also releases it automatically. Customer inactivity abandons waiting work or starts wrap-up on an accepted chat.
+
+Attachment types and sizes come from the widget publication. Files are stored with the conversation and require authorized access. Delivery status confirms storage by Contact Center; it does not claim the other participant has read the message.
+
+## AI chat handoff
+
+When a visitor requests a human, the assistant calls the managed **Contact Center Chat Handoff** webhook tool. Contact Center queues the same conversation, copies the AI transcript, and provides the agent with the assistant's summary, reason, intent, and sentiment. Subsequent visitor messages go to Contact Center, and late AI replies are suppressed after transfer.
+
+The first widget publication creates one shared tool per Contact Center installation. Later publications reuse that tool and attach it to every associated assistant without replacing their other tools or instructions. A failed tool setup prevents publication; retry **Publish** after resolving the provider error. The tool is also available in **AI Assistants → Tools Library** for manual assignment. It operates only on Contact Center web chat sessions with private integration context; attaching it does not enable handoff from arbitrary voice or external conversations.
+
+In **Handoff**, select a default Chat queue and the allowed queues. **Use all Chat-enabled queues** clears the restriction. With no explicit selection, all enabled Contact Center queues with Chat enabled are eligible. The assistant can choose an eligible queue by name. Otherwise, `routing.queue` in the host-page context selects a queue, followed by the widget default or the sole eligible queue. An invalid or ambiguous destination produces a failure notification and leaves the AI conversation active so the assistant can clarify and retry. Host-page context cannot bypass the allowlist. Eligibility also respects the current publication if its allowlist has changed.
+
+The configured timeline shows waiting, an offer assigned to an agent, acceptance, and disconnection. A failed transfer shows its failure message without claiming the visitor is waiting in a queue. Queueing does not require an available agent; the visitor waits until a qualified agent with free capacity is available. Disabling a widget prevents new AI handoffs while existing human conversations can drain.
+
+Start a new chat after this feature is first enabled so the provider conversation receives the private handoff context. The widget generates this context on the server; no additional public embed snippet or secret is required.
+
+## Current delivery boundary
+
+This delivery supports native human chat, AI assistant messaging, AI-to-queue chat handoff, and AI assistant voice widgets. Callbacks, email, WhatsApp, SMS, and agent-to-agent chat transfer are subsequent work. The shared chat handoff tool does not transfer voice calls.
+
+## AI channels
+
+In **Channels → Available channels**, the Messaging and Voice switches share one **Widget AI assistant** picker. Search by name or ID. The selection belongs to the widget revision, is saved for both channels, and remains assigned when either channel is disabled and re-enabled. Draft saving and publication reject conflicting assistant IDs. Voice uses the AI Agent Library and the selected assistant must have unauthenticated web calls enabled in its Widget settings. **Voice → Web Calls** contains the media region setting.
+
+The preview device selector fills the right panel width. Its orientation control is on the following row.
+
+## Agent and queue settings
+
+The user editor separates **Account Settings**, **Channels & Utilization**, **Queue Assignments**, and **Skills & Proficiency** into cards. The queue editor places **Channels & Utilization** between **Queue Settings** and **Routing Settings**. The footer button saves all cards in one database transaction; there is no separate utilization save button.
+
+File attachments remain available in native Contact Center chat. The AI Assistant Chat adapter currently exchanges text. A message with an uncertain provider result remains pending and is not automatically sent again.
+
+## Anonymous session admission
+
+New sessions are limited to 10 per minute per widget and client address, with a separate 600-per-minute widget safety cap. Successful retries and session resumption do not consume additional slots. The database stores a keyed hash of the address, not the raw address.
+
+The ingress must append verified peer addresses to `X-Forwarded-For` and prevent direct public access to Next.js. Set `WIDGET_TRUSTED_PROXY_HOPS` to the number of trusted ingress hops (default 1). Client-supplied leading entries are ignored. Missing or invalid addresses share a restricted fallback bucket. Use the same widget signing secret across application nodes.

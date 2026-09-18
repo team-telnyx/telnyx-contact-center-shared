@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +14,10 @@ const TELNYX_BASE = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
  * The conversation `id` is used as event_id with record_type=call-session
  * (fallback: try multiple record types if first one returns 404)
  */
-export async function GET(request, context) {
+async function GET_handler(request, context, authz) {
   try {
     // Auth check — required before proxying any Telnyx data
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401, headers: { "Cache-Control": "no-store" } }
-      );
-    }
+    const user = authz.user;
 
     const { searchParams: sp } = new URL(request.url);
     const useDemoApiKey = sp.get("useDemoApiKey") === "true";
@@ -98,3 +92,6 @@ export async function GET(request, context) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["ai_insights:read", "agent:self"], GET_handler, { route: "/api/ai/conversations/[id]/session-analysis" });

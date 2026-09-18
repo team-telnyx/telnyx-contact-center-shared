@@ -26,6 +26,7 @@ import {
   voiceExpressiveKind,
 } from "@/lib/call-generator/workflow-testing.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
 
@@ -160,7 +161,7 @@ function buildResponsePrompt(params) {
 }
 
 // POST /api/admin/workflows/[id]/generate-response
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -205,7 +206,7 @@ export async function POST(request, { params }) {
 
     // Fetch workflow
     const { rows: [workflow] } = await pool.query(
-      `SELECT id, name, description, category, llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT id, name, description, category, llm_model, llm_reasoning_enabled FROM aa_workflows WHERE id = $1`,
       [workflowId]
     );
 
@@ -292,6 +293,7 @@ export async function POST(request, { params }) {
         messages,
         temperature: 0.7,
         max_tokens: 160,
+        enable_thinking: workflow.llm_reasoning_enabled === true,
       }),
     });
 
@@ -330,7 +332,7 @@ export async function POST(request, { params }) {
 // GET /api/admin/workflows/[id]/generate-response - Get available personas.
 // Returns the same persona vocabulary as the Call Generator workflow tester so
 // the Test AI Agent page offers an identical persona list.
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -353,3 +355,7 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("workflows:ai", GET_handler, { route: "/api/admin/workflows/[id]/generate-response" });
+export const POST = withPermission("workflows:ai", POST_handler, { route: "/api/admin/workflows/[id]/generate-response" });

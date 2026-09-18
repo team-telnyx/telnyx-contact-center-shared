@@ -1,39 +1,18 @@
+import { submitOutboundDisposition } from "@/lib/acd/outbound-disposition.mjs";
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { applyCampaignDispositionToLedger } from "@/lib/outbound-dialer/campaign-dispositions";
-import { setUserStatus } from "@/lib/contact-center/user-status";
+import { readEffectiveAgentStatus } from "@/lib/acd/agent-state.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 function usernameFor(user) {
   return user?.username || user?.email || null;
 }
 
-async function restoreAgentAfterCampaignDisposition(pool, agentUsername, ledgerMetadata = {}) {
-  const previous = ledgerMetadata.previous_agent_status;
-  const nextStatus = previous && !["On Outbound Call", "On Campaign Call", "Agent Not Answering"].includes(previous) ? previous : "Available";
-  const { rows } = await pool.query(
-    `SELECT u.id, s.agent_status AS current_agent_status
-       FROM users u
-       LEFT JOIN cc_agent_state s ON s.user_id = u.id
-      WHERE u.email = $1 OR u.username = $1
-      LIMIT 1`,
-    [agentUsername],
-  );
-  const user = rows[0];
-  if (!user?.id) return nextStatus;
-  await setUserStatus({
-    userId: String(user.id),
-    username: agentUsername,
-    status: nextStatus,
-    previousStatus: user.current_agent_status || "Unknown",
-  });
-  return nextStatus;
-}
-
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
+    const user = authz.user;
     const agentUsername = usernameFor(user);
     if (!agentUsername) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const pool = getPostgresPool();
@@ -47,16 +26,18 @@ export async function GET(request) {
        ORDER BY CASE WHEN m.campaign_id = $1::uuid THEN 0 ELSE 1 END, w.display_order ASC, w.name ASC`,
       [campaignId || null],
     );
-    return NextResponse.json({ ok: true, dispositionCodes: rows });
+    const seen=new Set();
+    const dispositionCodes=rows.filter(row=>{if(seen.has(row.wrapup_code_id)) return false;seen.add(row.wrapup_code_id);return true;});
+    return NextResponse.json({ ok: true, dispositionCodes });
   } catch (err) {
     contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: err.status || 400 });
   }
 }
 
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
+    const user = authz.user;
     const agentUsername = usernameFor(user);
     if (!agentUsername) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const pool = getPostgresPool();
@@ -69,6 +50,9 @@ export async function POST(request) {
     if (!attemptId) return NextResponse.json({ ok: false, error: "Attempt ID is required" }, { status: 400 });
     if (!dispositionCodeId) return NextResponse.json({ ok: false, error: "Disposition code is required" }, { status: 400 });
 
+    const coreResult = await submitOutboundDisposition(pool, { attemptId, agentId: String(user.id), dispositionCodeId, callbackAt, notes });
+    if (coreResult) return NextResponse.json(coreResult);
+
     const attemptResult = await pool.query(
       `SELECT l.*, c.id AS campaign_id
        FROM outbound_attempt_ledger l
@@ -80,6 +64,7 @@ export async function POST(request) {
     const attempt = attemptResult.rows[0];
     if (!attempt) return NextResponse.json({ ok: false, error: "Assigned campaign record not found" }, { status: 404 });
 
+    if (["claimed", "dialing", "answered"].includes(attempt.status)) return NextResponse.json({ ok: false, error: "Wait for confirmed call completion" }, { status: 409 });
     const mappingResult = await pool.query(
       `SELECT * FROM outbound_disposition_code_mappings
        WHERE wrapup_code_id = $1 AND status = 'active' AND (campaign_id = $2 OR campaign_id IS NULL)
@@ -104,10 +89,14 @@ export async function POST(request) {
         [attempt.contact_record_id, update.contact_validation_status],
       );
     }
-    const agent_status = await restoreAgentAfterCampaignDisposition(pool, agentUsername, attempt.metadata || {});
+    const agent_status = await readEffectiveAgentStatus(pool, String(user.id), "Offline");
     return NextResponse.json({ ok: true, attemptId, status: update.status, agent_status });
   } catch (err) {
     contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: err.status || 400 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agent:self", GET_handler, { route: "/api/contact-center/agent/campaigns/disposition" });
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/contact-center/agent/campaigns/disposition" });

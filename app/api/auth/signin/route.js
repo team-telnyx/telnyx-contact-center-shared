@@ -4,6 +4,7 @@ import { PgDb } from "@/lib/pgdb";
 import { signAccessToken, signRefreshToken, hashToken } from "@/lib/jwt";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
 import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
+import { loadUserAccess } from "@/lib/authz/effective.mjs";
 
 export async function POST(request) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request) {
     }
 
     const user = await authenticateUser(username, password);
-    if (!user) {
+    if (!user || user.active === false) {
       logAuthEvent("warn", "signin_failed", { method: "credentials", email: username, source: "api", reason: "invalid_credentials" });
       return NextResponse.json(
         { error: "Invalid email or password!" },
@@ -104,12 +105,12 @@ export async function POST(request) {
       [refreshTokensJson, new Date().toISOString(), String(user.id || user._id)]
     );
 
-    const agentStatusResult = await pool.query(
-      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
-      [String(user.id || user._id)],
+    const { readEffectiveAgentStatus } = await import("@/lib/acd/agent-state.mjs");
+    const currentAgentStatus = await readEffectiveAgentStatus(
+      pool,
+      String(user.id || user._id),
+      "Offline",
     );
-    const currentAgentStatus =
-      agentStatusResult.rows?.[0]?.agent_status || "Available";
 
     // Prepare user data for response
     const nameParts = [
@@ -120,6 +121,13 @@ export async function POST(request) {
       ? nameParts.join(" ")
       : user.username || user.email || "User";
     const email = user.username || user.email || "";
+
+    let accessSummary = null;
+    try {
+      accessSummary = (await loadUserAccess(user)).summary;
+    } catch (accessErr) {
+      logAuthEvent("warn", "signin_access_summary_failed", { ...authUserPayload(user, username), source: "signin_api", ...authErrorPayload(accessErr) });
+    }
 
     const userData = {
       id: String(user.id || user._id),
@@ -132,6 +140,9 @@ export async function POST(request) {
       mobile: user.mobile || "",
       verified: user.verified || false,
       roles: user.roles || ["agent"],
+      permissions: accessSummary?.permissions || [],
+      screens: accessSummary?.screens || [],
+      scopes: accessSummary?.scopes || null,
       theme: user.theme || "system",
       language: user.language || null,
       profilePictureUri:

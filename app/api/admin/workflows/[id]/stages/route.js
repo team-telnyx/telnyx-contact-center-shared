@@ -9,8 +9,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 // POST /api/admin/workflows/[id]/stages - Add a stage
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -126,3 +127,6 @@ export async function POST(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("workflows:update", POST_handler, { route: "/api/admin/workflows/[id]/stages" });

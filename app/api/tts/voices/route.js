@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
-export async function GET(request) {
+async function GET_handler(request) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -113,3 +114,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("telephony_tools:use", GET_handler, { route: "/api/tts/voices" });

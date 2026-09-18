@@ -1,0 +1,63 @@
+---
+title: Teams
+description: Group agents into teams for supervision and for the Teams scope of roles.
+audiences: [admin, owner]
+keywords: [teams, agent groups, members, team leader, scope, permissions]
+owner: contact-center
+lastReviewed: 2026-09-16
+---
+
+A team groups agents who are supervised together — a site, a shift, or a line of business. Teams have two uses:
+
+- **Supervision.** Roles whose **Teams** scope is *Own* or a selected list (for example the shipped **Team Leader** role) see only the agents of those teams in the monitor, in agent reports, in the users list and when changing another agent's status or queues. Interactions handled by team members stay visible to the team's leaders wherever those interactions were queued.
+- **Reporting.** Adherence and agent performance rows follow the same team membership.
+
+A team does not route work. Queue membership and skills still decide who receives an interaction.
+
+## Open the Teams menu
+
+Open **Admin → Configuration**, then select **Teams** in the section rail. The page needs the **Teams: read** operation; creating, editing and deleting need the matching **create**, **update** (or **members.assign**) and **delete** operations — the **Admin** and **Owner** roles hold all of them.
+
+The badge beside the title shows the number of teams matching the current filters.
+
+## Find and review teams
+
+| Control | What it does |
+| --- | --- |
+| **Name** | Searches team name and description. The match is not case-sensitive. |
+| **Active** | Shows all, active, or inactive teams. |
+| **Clear** | Resets both filters. |
+| **Refresh** | Reloads the list. |
+| **New Team** | Opens a blank create-team sheet. |
+
+| Column | Meaning |
+| --- | --- |
+| **Name** | Unique team name. |
+| **Members** | Number of users assigned to the team. |
+| **Active** | Whether the team is active. Inactive teams keep their members and still count for scopes; use the flag to park a team that is being reorganised. |
+| **Description** | Optional explanation of what the team is. |
+| **Actions** | Edit or delete the team. |
+
+Use **Rows per page** to display 10, 25, 50, or 100 rows and the page buttons to navigate.
+
+## Create or edit a team
+
+1. Select **New Team**, or the pencil icon of an existing team.
+2. Enter a **Name** (required, unique) and an optional **Description**.
+3. Under **Members**, the users already in the team are listed with a ticked box; untick one to remove it. Type in **Search users to add…** to find other users and tick them.
+4. Select **Save Changes**.
+
+Membership is saved with the team. A user can belong to several teams. Changes reach the affected users within seconds: their sidebar and API access are refreshed automatically.
+
+## Delete a team
+
+Select the trash icon and confirm. Members are unassigned, and the team is removed from every role whose **Teams** scope listed it. A role whose selection becomes empty as a result narrows to *nothing* on that anchor until an administrator picks a new selection in **Permissions**; the change is recorded in the role's audit history.
+
+## How teams narrow what a role sees
+
+The **Teams** anchor of a role combines with the **Queues** anchor using *or* (see [Permissions](/help/administration/permissions)): an agent is in scope when they belong to a team in scope **or** are assigned to a queue in scope; an interaction is in scope when one of its queues is in scope **or** one of its agents belongs to a team in scope. A leader who has no team yet sees only their own data, never nothing at all and never everything.
+
+## Related
+
+- [Users](/help/administration/users) — profiles, roles and queue assignments.
+- [Permissions](/help/administration/permissions) — roles, scopes and audit history.

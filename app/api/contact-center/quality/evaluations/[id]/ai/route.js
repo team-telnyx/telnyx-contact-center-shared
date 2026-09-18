@@ -1,9 +1,8 @@
+import { channelDefinition } from "@/lib/acd/channel-registry.mjs";
+import { readMessageTranscript } from "@/lib/acd/message-transcript.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { createDiagnosticLogger } from "@/lib/diagnostic-logger.mjs";
-import { PgDb } from "@/lib/pgdb";
 import { evaluateTranscriptWithAi } from "@/lib/quality/ai-evaluator.mjs";
 import {
   getExistingTranscript,
@@ -11,8 +10,19 @@ import {
   transcribeInteractionRecording,
 } from "@/lib/quality/transcription.mjs";
 import { DEFAULT_TRANSCRIPTION_MODEL } from "@/config/transcription-models";
+import { findWorkItemWithArtifacts } from "@/lib/acd/work-item-repository.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { workItemInScope } from "@/lib/authz/scope.mjs";
 
 const qualityLogger = createDiagnosticLogger("contact-center.quality");
+
+// An evaluation is reachable only when its interaction is within the caller's data scope (Phase 3a).
+async function evaluationInScope(pool, scope, evaluation) {
+  if (!scope?.restricted) return true;
+  if (!evaluation?.work_item_id) return false;
+  const row = (await pool.query("SELECT queue_id, channel FROM acd_work_items WHERE id = $1", [evaluation.work_item_id])).rows[0];
+  return workItemInScope(pool, scope, evaluation.work_item_id, { queueId: row?.queue_id, channel: row?.channel });
+}
 
 async function setJobStatus(pool, jobId, status, extra = {}) {
   const sets = ["status = $2", "updated_at = NOW()"];
@@ -43,17 +53,11 @@ async function setJobStatus(pool, jobId, status, extra = {}) {
  * The request is synchronous: the UI shows phase via the job record if it polls,
  * and receives the full draft in this response when done.
  */
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }, authz) {
   let pool = null;
   let jobId = null;
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
     pool = getPostgresPool();
     if (!pool) {
       return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
@@ -70,7 +74,7 @@ export async function POST(request, { params }) {
       [id],
     );
     const evaluation = evaluationRes.rows[0];
-    if (!evaluation) {
+    if (!evaluation || !(await evaluationInScope(pool, authz.scope, evaluation))) {
       return NextResponse.json({ ok: false, error: "Evaluation not found" }, { status: 404 });
     }
     if (evaluation.status === "final") {
@@ -93,13 +97,16 @@ export async function POST(request, { params }) {
       );
     }
 
-    const interaction = await PgDb.findInteractionById(evaluation.interaction_id);
+    const interaction = evaluation.work_item_id
+      ? await findWorkItemWithArtifacts(pool, evaluation.work_item_id)
+      : null;
     if (!interaction) {
       return NextResponse.json({ ok: false, error: "Interaction not found" }, { status: 404 });
     }
 
     const recordingId = resolveRecordingId(interaction);
-    let transcript = getExistingTranscript(interaction);
+    let transcript = channelDefinition(interaction.channel||interaction.interaction_type).capabilities.conversation
+      ? await readMessageTranscript(pool,interaction.work_item_id||interaction.id) : getExistingTranscript(interaction);
     if (!transcript && !recordingId) {
       return NextResponse.json(
         { ok: false, error: "Interaction has no transcript and no recording to transcribe" },
@@ -109,10 +116,10 @@ export async function POST(request, { params }) {
 
     const transcriptionModel = body.transcription_model || DEFAULT_TRANSCRIPTION_MODEL;
     const jobRes = await pool.query(
-      `INSERT INTO quality_ai_jobs (evaluation_id, interaction_id, recording_id, status, transcription_model)
+      `INSERT INTO quality_ai_jobs (evaluation_id, work_item_id, recording_id, status, transcription_model)
        VALUES ($1, $2, $3, 'queued', $4)
        RETURNING id`,
-      [id, evaluation.interaction_id, recordingId, transcriptionModel],
+      [id, evaluation.work_item_id, recordingId, transcriptionModel],
     );
     jobId = jobRes.rows[0].id;
 
@@ -142,6 +149,7 @@ export async function POST(request, { params }) {
         agentName: interaction.agent_username,
         queueName: interaction.queue_name,
         direction: interaction.direction,
+        channel: interaction.channel||interaction.interaction_type,
       },
       model: body.model,
     });
@@ -214,7 +222,7 @@ export async function POST(request, { params }) {
     }
     return NextResponse.json(
       { ok: false, error: String(error?.message || "AI evaluation failed") },
-      { status: 500 },
+      { status: error.status || 500 },
     );
   }
 }
@@ -223,21 +231,21 @@ export async function POST(request, { params }) {
  * GET /api/contact-center/quality/evaluations/[id]/ai
  * Returns the latest AI job for the evaluation (status polling).
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
     const pool = getPostgresPool();
     if (!pool) {
       return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
     }
 
     const { id } = (await params) || {};
+    if (authz.scope.restricted) {
+      const evaluation = (await pool.query("SELECT work_item_id FROM quality_evaluations WHERE id = $1", [id])).rows[0];
+      if (!evaluation || !(await evaluationInScope(pool, authz.scope, evaluation))) {
+        return NextResponse.json({ ok: false, error: "Evaluation not found" }, { status: 404 });
+      }
+    }
     const result = await pool.query(
       `SELECT * FROM quality_ai_jobs WHERE evaluation_id = $1 ORDER BY created_at DESC LIMIT 1`,
       [id],
@@ -248,3 +256,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({ ok: false, error: "Failed to load AI job" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("quality_evaluations:ai", POST_handler, { route: "/api/contact-center/quality/evaluations/[id]/ai" });
+export const GET = withPermission("quality_evaluations:ai", GET_handler, { route: "/api/contact-center/quality/evaluations/[id]/ai" });

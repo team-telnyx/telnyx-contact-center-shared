@@ -66,8 +66,10 @@ test("Workflow start applies call-flow workflow_data to matching slots", async (
   assert.match(startRouteSource, /'call_flow'/);
 });
 
-test("contact-center enqueue preserves workflow_data from client_state in interaction metadata", async () => {
-  const handlerSource = await readFile(new URL("../lib/contact-center/webhook-handler.js", import.meta.url), "utf8");
-  assert.match(handlerSource, /workflow_data/);
-  assert.match(handlerSource, /routingMetadata\.workflow_data/);
+test("Core voice intake preserves workflow_data from client_state in work-item attributes", async () => {
+  const intakeSource = await readFile(new URL("../lib/acd/intake-source.mjs", import.meta.url), "utf8");
+  const liveIntake = await readFile(new URL("../lib/acd/live-intake.mjs", import.meta.url), "utf8");
+  assert.match(intakeSource, /workflowData:\s*plainObject\(state\.workflow_data\)/);
+  assert.match(liveIntake, /workflow_data:\s*intake\.workflowData/);
+  assert.match(liveIntake, /\["workflow_data", attributes\.workflow_data\]/);
 });

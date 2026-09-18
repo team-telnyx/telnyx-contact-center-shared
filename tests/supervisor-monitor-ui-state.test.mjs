@@ -17,3 +17,29 @@ test("supervisor monitor restores and persists the last selected section", async
   assert.match(pageSource, /MONITOR_RAIL_ITEMS\.some\(\(item\) => item\.id === savedActiveTab\)/, "Restored monitor section should be validated against known rail items");
   assert.match(pageSource, /localStorage\.setItem\(MONITOR_UI_STATE_STORAGE_KEYS\.activeSection, activeTab\)/, "Monitor should save section changes to localStorage");
 });
+
+test("expanded agent interactions show queue routing requirements and priority", async () => {
+  const source = await readFile(
+    new URL("../app/(portal)/supervisor/monitor/page.jsx", import.meta.url),
+    "utf8",
+  );
+  const agentPanelStart = source.indexOf("{activeCalls.map((call) => {");
+  const agentTableStart = source.lastIndexOf("<TableHeader>", agentPanelStart);
+  const agentPanelEnd = source.indexOf("</TableBody>", agentPanelStart);
+  assert.ok(
+    agentTableStart > -1 &&
+      agentPanelStart > agentTableStart &&
+      agentPanelEnd > agentPanelStart,
+  );
+  const agentPanel = source.slice(agentTableStart, agentPanelEnd);
+
+  assert.match(agentPanel, /<TableHead>Queue<\/TableHead>/);
+  assert.match(agentPanel, /Required Skills/);
+  assert.match(agentPanel, /<TableHead>Priority<\/TableHead>/);
+  assert.match(agentPanel, /\{call\.queueName \|\| "—"\}/);
+  assert.match(agentPanel, /<RelaxationIndicator/);
+  assert.match(agentPanel, /requiredSkills=\{[\s\S]*?call\.requiredSkills/);
+  assert.match(agentPanel, /relaxedSkills=\{[\s\S]*?call\.relaxedSkills/);
+  assert.match(agentPanel, /isRelaxed=\{[\s\S]*?call\.isRelaxed/);
+  assert.match(agentPanel, /<CallPriorityIndicator[\s\S]*?priority=\{call\.priority\}/);
+});

@@ -5,11 +5,12 @@ import { randomUUID } from "crypto";
 import { resolveSimpleSecretReferences } from "@/lib/secrets";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 /**
  * GET /api/admin/web-pages
  * List all web pages
  */
-export async function GET(request) {
+async function GET_handler(request) {
   try {
     const user = await getAuthenticatedUser(request.url);
     if (!user) {
@@ -79,7 +80,7 @@ export async function GET(request) {
  * POST /api/admin/web-pages
  * Create a new web page
  */
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const user = await getAuthenticatedUser(request.url);
     if (!user) {
@@ -149,3 +150,7 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("web_pages:read", GET_handler, { route: "/api/admin/web-pages" });
+export const POST = withPermission("web_pages:create", POST_handler, { route: "/api/admin/web-pages" });

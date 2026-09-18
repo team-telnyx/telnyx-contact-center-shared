@@ -10,7 +10,7 @@ import chalk from 'chalk';
 export const chalkGreen = (s) => chalk.green(s);
 export const chalkGray = (s) => chalk.gray(s);
 
-// Ported from ~/Documents/dev/fde-infra-cli/src/lib/ui.mjs — same color palette and
+// Ported from infra-cli/src/lib/ui.mjs — same color palette and
 // prompt wrapper conventions so the CC deploy wizard feels like FDE CLI.
 
 export const color = {

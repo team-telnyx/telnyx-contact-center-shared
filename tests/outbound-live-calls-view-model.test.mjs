@@ -7,6 +7,10 @@ import {
   shouldShowOutboundLiveCall,
   shouldShowOutboundLiveCallInUi,
 } from "../lib/outbound-dialer/live-calls.js";
+import {
+  notifyOutboundLiveCallsChanged,
+  OUTBOUND_LIVE_CALLS_CHANGED_TOPIC,
+} from "../lib/outbound-dialer/live-calls-events.mjs";
 
 test("normalizeOutboundLiveCallStatus maps active attempt states to live call states", () => {
   assert.equal(normalizeOutboundLiveCallStatus("dialing"), "ringing");
@@ -14,6 +18,26 @@ test("normalizeOutboundLiveCallStatus maps active attempt states to live call st
   assert.equal(normalizeOutboundLiveCallStatus("answered"), "connected");
   assert.equal(normalizeOutboundLiveCallStatus("completed"), "hangup");
   assert.equal(normalizeOutboundLiveCallStatus("failed"), "failed");
+});
+
+test("live call wake-up publishes only a compact database lookup hint", async () => {
+  const queries = [];
+  const pool = { query: async (sql, params) => { queries.push({ sql, params }); return { rows: [] }; } };
+  assert.equal(await notifyOutboundLiveCallsChanged(pool, {
+    event_type: "call.hangup",
+    call_control_id: "v3:call",
+    work_item_id: "work-1",
+  }), true);
+  assert.equal(queries.length, 1);
+  assert.match(queries[0].sql, /pg_notify\('cc_events'/);
+  assert.deepEqual(JSON.parse(queries[0].params[0]), {
+    topic: OUTBOUND_LIVE_CALLS_CHANGED_TOPIC,
+    payload: {
+      event_type: "call.hangup",
+      call_control_id: "v3:call",
+      work_item_id: "work-1",
+    },
+  });
 });
 
 test("shouldShowOutboundLiveCall keeps hangup calls for 60 seconds only", () => {
@@ -98,6 +122,28 @@ test("buildOutboundLiveCallsPayload returns totals, filters, timers, numbers and
   assert.equal(payload.calls[0].to_number, "+48222222222");
   assert.equal(payload.calls[0].sessionDetails.call_control_id, "call-a");
   assert.equal(payload.calls[0].supervisionCall.callControlId, "call-a");
+});
+
+test("live call timer uses the real dial window instead of the earlier record claim", () => {
+  const payload = buildOutboundLiveCallsPayload([{
+    id: "attempt-timing",
+    campaign_id: "campaign-1",
+    campaign_name: "Progressive",
+    status: "failed",
+    call_control_id: "call-timing",
+    created_at: "2026-05-17T17:58:00.000Z",
+    updated_at: "2026-05-17T17:59:50.000Z",
+    metadata: {
+      dial_started_at: "2026-05-17T17:59:20.000Z",
+      completed_at: "2026-05-17T17:59:44.000Z",
+      hangup_cause: "user_busy",
+    },
+  }], { now: new Date("2026-05-17T18:00:00.000Z") });
+
+  assert.equal(payload.calls[0].started_at, "2026-05-17T17:59:20.000Z");
+  assert.equal(payload.calls[0].ended_at, "2026-05-17T17:59:44.000Z");
+  assert.equal(payload.calls[0].duration_seconds, 24);
+  assert.equal(payload.calls[0].hangup_visible_until, "2026-05-17T18:00:44.000Z");
 });
 
 test("failed live calls expose a human-readable failure reason from ledger columns and metadata", () => {

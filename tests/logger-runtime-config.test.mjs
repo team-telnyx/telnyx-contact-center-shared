@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// normalizeRuntimeLoggingConfig falls back to these when a field is absent, so a
+// developer .env with either turned on changes the defaults this file asserts.
+delete process.env.LOG_CONSOLE_PRETTY;
+delete process.env.LOG_CONSOLE_FRIENDLY;
+
 const moduleUrl = new URL("../lib/logger/runtime-config.mjs", import.meta.url).href;
 
 async function freshModule() {

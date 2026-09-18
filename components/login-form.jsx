@@ -4,14 +4,19 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { notify } from "@/components/ToastNotify";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
 import { IconBrandGoogleFilled } from "@tabler/icons-react";
 
+const subscribeToHydration = () => () => {};
+const clientReadySnapshot = () => true;
+const serverReadySnapshot = () => false;
+
 export function LoginForm({ className, ...props }) {
+  const clientReady = useSyncExternalStore(subscribeToHydration, clientReadySnapshot, serverReadySnapshot);
   const [submitting, setSubmitting] = useState(false);
   const [oauthSubmitting, setOauthSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -97,6 +102,8 @@ export function LoginForm({ className, ...props }) {
 
   return (
     <form
+      data-testid="signin-form"
+      data-client-ready={clientReady}
       className={cn("flex flex-col gap-6", className)}
       method="post"
       onSubmit={onSubmit}
@@ -139,7 +146,7 @@ export function LoginForm({ className, ...props }) {
             required
           />
         </div>
-        <Button type="submit" className="w-full" disabled={submitting}>
+        <Button type="submit" className="w-full" disabled={!clientReady || submitting}>
           {submitting ? "Logging in..." : "Login"}
         </Button>
         <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">

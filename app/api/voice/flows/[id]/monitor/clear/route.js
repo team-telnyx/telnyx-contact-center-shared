@@ -13,9 +13,10 @@ import {
 } from "@/lib/call-monitor-store";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -55,3 +56,6 @@ export async function POST(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("call_flows:monitor", POST_handler, { route: "/api/voice/flows/[id]/monitor/clear" });

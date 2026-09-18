@@ -1,21 +1,17 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { PgDb } from "@/lib/pgdb";
-import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { findInteractionViewByCallSessionId } from "@/lib/acd/work-item-repository.mjs";
+import { contactCenterRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { workItemInScope } from "@/lib/authz/scope.mjs";
 
 /**
  * GET /api/contact-center/interactions/by-call-session-id?callSessionId=...
  * Find interaction by call_session_id
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const user = authz.user;
 
     const { searchParams } = new URL(request.url);
     const callSessionId = searchParams.get("callSessionId");
@@ -27,9 +23,20 @@ export async function GET(request) {
       );
     }
 
-    const interaction = await PgDb.findInteractionByCallSessionId(callSessionId);
+    const pool = getPostgresPool();
+    if (!pool) {
+      return NextResponse.json(
+        { ok: false, error: "Server not ready" },
+        { status: 503 },
+      );
+    }
 
-    if (!interaction) {
+    const interaction = await findInteractionViewByCallSessionId(
+      pool,
+      callSessionId,
+    );
+
+    if (!interaction || !(await workItemInScope(pool, authz.scope, interaction.work_item_id || interaction.id, { queueId: interaction.queue_id, agentId: interaction.agent_id, channel: interaction.interaction_type }))) {
       return NextResponse.json(
         { ok: false, error: "Interaction not found" },
         { status: 404 },
@@ -40,11 +47,16 @@ export async function GET(request) {
       ok: true,
       interaction,
     });
-  } catch (err) {
-    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+  } catch (error) {
+    contactCenterRuntimeLogger.error("runtime_error", {
+      ...runtimePayload({ error }),
+    });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 },
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("interactions:read", GET_handler, { route: "/api/contact-center/interactions/by-call-session-id" });

@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapOutboundTimeSet, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, mapOutboundTimeSet, optionalString, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const STATUSES = ["draft", "active", "paused"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
 
-export async function GET() {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows } = await pool.query(`SELECT * FROM outbound_time_sets WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 200`);
   return NextResponse.json({ ok: true, timeSets: rows.map(mapOutboundTimeSet) });
 }
 
-export async function POST(request) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
     const body = await request.json();
@@ -24,3 +25,7 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, timeSet: mapOutboundTimeSet(rows[0]) });
   } catch (err) { campaignsLogger.error("time_set_create_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to create time set", 400); }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("dialer_time_sets:read", GET_handler, { route: "/api/contact-center/outbound-dialer/time-sets" });
+export const POST = withPermission("dialer_time_sets:create", POST_handler, { route: "/api/contact-center/outbound-dialer/time-sets" });

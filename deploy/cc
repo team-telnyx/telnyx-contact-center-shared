@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Thin POSIX shim for the Contact Center deployment wizard CLI.
 # Real logic lives in deploy/cli/cc.mjs (Node.js, @inquirer/prompts + chalk —
-# same UX conventions as ~/Documents/dev/fde-infra-cli).
+# same UX conventions as infra-cli).
 #
 # On first use, installs the CLI's isolated dependency tree (deploy/cli/node_modules)
 # so this never touches the main app's package.json/yarn.lock.

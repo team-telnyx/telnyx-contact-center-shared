@@ -1,93 +1,13 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { hasRole } from "@/lib/role-utils";
-import { interactionsLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
+import { interactionsLogger, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
+import { persistAgentAssistTranscriptionsInTransaction } from "@/lib/agent-assist/transcription-persistence.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { workItemInScope } from "@/lib/authz/scope.mjs";
 
-function calculateSummary(transcriptions) {
-  if (!Array.isArray(transcriptions) || transcriptions.length === 0) {
-    return {
-      topIntent: null,
-      intentCount: 0,
-      topTags: [],
-      currentSentiment: "neutral",
-      currentScore: 50,
-      averageSentiment: "neutral",
-      averageScore: 50,
-    };
-  }
-
-  const latest = transcriptions[transcriptions.length - 1];
-  const currentSentiment = latest.sentiment || "neutral";
-  const currentScore =
-    typeof latest.sentimentScore === "number" ? latest.sentimentScore : 50;
-
-  const scores = transcriptions
-    .map((t) => t.sentimentScore)
-    .filter((v) => typeof v === "number");
-  const averageScore =
-    scores.length > 0
-      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-      : 50;
-  let averageSentiment = "neutral";
-  if (averageScore > 60) averageSentiment = "positive";
-  if (averageScore < 40) averageSentiment = "negative";
-
-  const intentCounts = new Map();
-  const tagCounts = new Map();
-  for (const item of transcriptions) {
-    if (item.intent) {
-      intentCounts.set(item.intent, (intentCounts.get(item.intent) || 0) + 1);
-    }
-    if (Array.isArray(item.tags)) {
-      for (const tag of item.tags) {
-        if (!tag) continue;
-        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-      }
-    }
-  }
-
-  let topIntent = null;
-  let intentCount = 0;
-  for (const [intent, count] of intentCounts.entries()) {
-    if (count > intentCount) {
-      intentCount = count;
-      topIntent = intent;
-    }
-  }
-
-  const topTags = Array.from(tagCounts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([tag]) => tag);
-
-  return {
-    topIntent,
-    intentCount,
-    topTags,
-    currentSentiment,
-    currentScore,
-    averageSentiment,
-    averageScore,
-  };
-}
-
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    if (!hasRole(user, ["agent", "supervisor", "admin", "owner"])) {
-      return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 }
-      );
-    }
+    const user = authz.user;
 
     const resolvedParams = (await params) || {};
     const { id } = resolvedParams;
@@ -102,7 +22,6 @@ export async function POST(request, { params }) {
     const transcriptions = Array.isArray(body.transcriptions)
       ? body.transcriptions
       : [];
-    const summary = body.summary || calculateSummary(transcriptions);
 
     const pool = getPostgresPool();
     if (!pool) {
@@ -112,40 +31,65 @@ export async function POST(request, { params }) {
       );
     }
 
-    const interactionRes = await pool.query(
-      "SELECT metadata FROM cc_interactions WHERE id = $1 LIMIT 1",
-      [id]
-    );
-    if (!interactionRes.rows?.[0]) {
-      return NextResponse.json(
-        { ok: false, error: "Interaction not found" },
-        { status: 404 }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const workItemRes = await client.query(
+        `SELECT w.id, owner.username AS agent_username
+           FROM acd_work_items w
+           LEFT JOIN LATERAL (
+             SELECT u.username
+               FROM acd_segments s
+               JOIN users u ON u.id = s.agent_id
+              WHERE s.work_item_id = w.id AND s.kind = 'agent'
+              ORDER BY (s.ended_at IS NULL) DESC, s.seq DESC
+              LIMIT 1
+           ) owner ON true
+          WHERE w.id::text = $1
+          FOR UPDATE OF w`,
+        [String(id)],
       );
-    }
-
-    let metadata = interactionRes.rows[0].metadata;
-    if (typeof metadata === "string") {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch {
-        metadata = {};
+      const workItem = workItemRes.rows?.[0];
+      if (!workItem) {
+        await client.query("ROLLBACK");
+        return NextResponse.json(
+          { ok: false, error: "Interaction not found" },
+          { status: 404 }
+        );
       }
+      if (
+        !authz.elevated &&
+        (!user.username || workItem.agent_username !== user.username)
+      ) {
+        await client.query("ROLLBACK");
+        return NextResponse.json(
+          { ok: false, error: "This interaction belongs to another agent" },
+          { status: 403 },
+        );
+      }
+      if (authz.elevated && !(await workItemInScope(client, authz.scope, workItem.id))) {
+        await client.query("ROLLBACK");
+        return NextResponse.json(
+          { ok: false, error: "Interaction is outside your data scope" },
+          { status: 403 },
+        );
+      }
+
+      // Queue transfers keep one durable interaction while each agent has a
+      // fresh browser call store. Merge the browser transcript into the typed
+      // workflow session and a Core transcript artifact atomically. The same
+      // writer is also used directly by the server-side live STT router.
+      await persistAgentAssistTranscriptionsInTransaction(client, {
+        workItemId: workItem.id,
+        transcriptions,
+      });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
     }
-    if (!metadata || typeof metadata !== "object") metadata = {};
-
-    // Merge with existing agent_assist data (preserve suggestions from workflow mode)
-    const existingAgentAssist = metadata.agent_assist || {};
-    metadata.agent_assist = {
-      ...existingAgentAssist,
-      transcriptions,
-      summary,
-      updated_at: new Date().toISOString(),
-    };
-
-    await pool.query(
-      "UPDATE cc_interactions SET metadata = $1, updated_at = NOW() WHERE id = $2",
-      [JSON.stringify(metadata), id]
-    );
 
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -157,3 +101,6 @@ export async function POST(request, { params }) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+// Agents may transcribe their own interactions; supervisors (monitor:read) any interaction.
+export const POST = withPermission(["interactions:transcribe", "agent:self"], POST_handler, { elevated: "monitor:read", route: "/api/contact-center/interactions/[id]/transcription" });

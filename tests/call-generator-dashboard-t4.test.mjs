@@ -9,7 +9,7 @@ async function src(path) {
 describe("call generator live dashboard (T4)", () => {
   it("SSE stream route is admin-gated with periodic snapshots", async () => {
     const code = await src("app/api/admin/call-generator/stream/route.js");
-    assert.match(code, /isAdmin/);
+    assert.match(code, /withPermission\("call_generator:/);
     assert.match(code, /text\/event-stream/);
     assert.match(code, /setInterval\(sendUpdate, 2000\)/);
     assert.match(code, /cg_update/);
@@ -102,15 +102,15 @@ describe("call generator live dashboard (T4)", () => {
 
   it("calls API exposes single disconnect and disconnect_all endpoints", async () => {
     const itemCode = await src("app/api/admin/call-generator/calls/[id]/route.js");
-    assert.match(itemCode, /export async function PATCH/);
+    assert.match(itemCode, /export const PATCH = withPermission\(/);
     assert.match(itemCode, /disconnectGeneratedCall/);
     assert.match(itemCode, /const \{ id \} = await params/);
-    assert.match(itemCode, /requireAdmin/);
+    assert.match(itemCode, /withPermission\("call_generator:/);
     const listCode = await src("app/api/admin/call-generator/calls/route.js");
-    assert.match(listCode, /export async function POST/);
+    assert.match(listCode, /export const POST = withPermission\(/);
     assert.match(listCode, /disconnect_all/);
     assert.match(listCode, /disconnectActiveCalls/);
-    assert.match(listCode, /requireAdmin/);
+    assert.match(listCode, /withPermission\("call_generator:/);
   });
 
   it("engine disconnect helpers hang up gracefully without force-failing ledger rows", async () => {

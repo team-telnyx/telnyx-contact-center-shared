@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapContactList, normalizeFieldSchema, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, mapContactList, normalizeFieldSchema, optionalString, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeContactListStatus } from "@/lib/outbound-dialer/contact-list-validation";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-export async function PUT(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function PUT_handler(request, context, authz) {
+  const user = authz.user;
   const { contactListId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
@@ -20,11 +21,15 @@ export async function PUT(request, context) {
   } catch (err) { campaignsLogger.error("contact_list_update_failed", { contactListId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update contact list", 400); }
 }
 
-export async function DELETE(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function DELETE_handler(request, context, authz) {
+  const user = authz.user;
   const { contactListId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows } = await pool.query(`UPDATE outbound_contact_lists SET status='archived', updated_by=$1, updated_at=NOW() WHERE id=$2 RETURNING *`, [usernameFor(user), contactListId]);
   if (!rows[0]) return jsonError("Contact list not found", 404);
   return NextResponse.json({ ok: true, contactList: mapContactList(rows[0]) });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission("contact_lists:update", PUT_handler, { route: "/api/contact-center/outbound-dialer/contact-lists/[contactListId]" });
+export const DELETE = withPermission("contact_lists:delete", DELETE_handler, { route: "/api/contact-center/outbound-dialer/contact-lists/[contactListId]" });

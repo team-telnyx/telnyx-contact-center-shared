@@ -6,7 +6,8 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
-export async function GET() {
+import { withPermission } from "@/lib/authz/guard";
+async function GET_handler() {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) return NextResponse.json({ ok: false, error: "Missing TELNYX_API_KEY" }, { status: 500 });
@@ -47,3 +48,6 @@ export async function GET() {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("ai_models:read", GET_handler, { route: "/api/ai/models" });

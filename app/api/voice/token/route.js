@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-import { getAuthenticatedUser } from "@/lib/auth-server";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 import { credentialsLogger, credentialPayload, securityErrorPayload, securityUserPayload } from "@/lib/security-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 async function fetchCredentialIdByUsername(apiKey, username, expectedConnectionId) {
   const url = `${buildTelnyxV2Url(
@@ -106,7 +107,7 @@ async function createAccessToken(apiKey, credentialId) {
   return token;
 }
 
-export async function POST() {
+async function POST_handler(_request, _context, authz) {
   try {
     const telnyxApiKey = process.env.TELNYX_API_KEY;
     if (!telnyxApiKey) {
@@ -116,10 +117,10 @@ export async function POST() {
       );
     }
 
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = authz.user;
+    const policy = (await getPostgresPool().query(
+      "SELECT enabled FROM cc_agent_channel_policies WHERE agent_id=$1 AND channel='voice'",[String(user.id)])).rows[0];
+    if (policy?.enabled === false) return NextResponse.json({error:"Voice is disabled for this agent",code:"VOICE_DISABLED"},{status:409});
 
     // Support both snake_case (DB rows) and camelCase (mapped objects)
     const usernameCandidate =
@@ -186,3 +187,7 @@ export async function POST() {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+// A WebRTC token comes with agent work or with call supervision (listen / whisper / barge).
+export const POST = withPermission(["agent:self", "calls:supervise.listen", "calls:supervise.whisper", "calls:supervise.barge"], POST_handler, { route: "/api/voice/token" });

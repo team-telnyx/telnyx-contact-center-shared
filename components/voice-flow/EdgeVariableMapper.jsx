@@ -41,6 +41,7 @@ import {
 } from "@/lib/variable-utils";
 import { getEntitySchema } from "@/lib/data-sources-schema.js";
 import { getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
+import { unwrapMcpResultEnvelope } from "@/lib/agent-assist/slot-mcp-runner.mjs";
 
 /**
  * Edge Variable Mapper Modal
@@ -161,9 +162,21 @@ export function EdgeVariableMapper({
       const testResponse = sourceNode?.data?.config?.testResponse;
       const responseVariable =
         sourceNode?.data?.config?.responseVariable || "mcp_response";
-      const responsePayload = testResponse?.body !== undefined
+      // Codex review (0cbf7ffc, P2): executeMcpToolNode now unwraps the reference workflow's
+      // {result, error} envelope before storing mcp_response at runtime
+      // (mcp-tool-runner.js), but a saved testResponse.body written by
+      // McpToolNodeEditor still carries the raw envelope. Without this
+      // unwrap, edge-mapping paths offered here (e.g.
+      // mcp_response.result.contract_id) don't match what a live call
+      // actually produces (mcp_response.contract_id), so a mapping built
+      // from one of these paths resolves to nothing at runtime.
+      // unwrapMcpResultEnvelope requires BOTH a `result` and `error` key to treat
+      // something as an envelope, so it safely no-ops on an already-flat
+      // payload (a freshly re-tested node) instead of double-unwrapping it.
+      const rawResponsePayload = testResponse?.body !== undefined
         ? testResponse.body
         : getMcpResponseVariablePayload(testResponse);
+      const { payload: responsePayload } = unwrapMcpResultEnvelope(rawResponsePayload);
 
       if (responsePayload && typeof responsePayload === "object") {
         return {

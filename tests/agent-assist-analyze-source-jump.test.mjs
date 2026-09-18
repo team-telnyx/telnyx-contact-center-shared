@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("FDE-534: analyze route returns source_text on both completed and suggested updates", async () => {
+test("an earlier fix: analyze route returns source_text on both completed and suggested updates", async () => {
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
   // Both updates.push(...) blocks must carry source_text so the client can jump.
   const matches = route.match(/source_text:\s*completed\.source_text/g) || [];
@@ -14,7 +14,7 @@ test("FDE-534: analyze route returns source_text on both completed and suggested
   );
 });
 
-test("FDE-534: workflow-store analyzeTranscript copies update.source_text into source_transcript", async () => {
+test("an earlier fix: workflow-store analyzeTranscript copies update.source_text into source_transcript", async () => {
   const store = await read("../lib/stores/workflow-store.js");
   // The live analyzer apply path must populate source_transcript so
   // status.source_transcript is set (enabling click-to-jump) without a refetch.

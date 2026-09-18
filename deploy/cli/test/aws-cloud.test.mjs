@@ -102,7 +102,7 @@ describe('aws-cloud.mjs — checkAwsCloudPreflight', () => {
   it('includes an aws-eip-quota result and fails the whole preflight when EIP headroom is insufficient (2026-07-06 incident regression)', async () => {
     const execImpl = async (cmd, args) => {
       if (cmd === 'terraform') return { stdout: JSON.stringify({ terraform_version: '1.9.8' }) };
-      if (cmd === 'aws' && args[0] === 'sts') return { stdout: JSON.stringify({ Account: '260957529682' }) };
+      if (cmd === 'aws' && args[0] === 'sts') return { stdout: JSON.stringify({ Account: '123456789012' }) };
       if (cmd === 'aws' && args[0] === 'iam') return { stdout: JSON.stringify({ EvaluationResults: [] }) };
       if (cmd === 'aws' && args[0] === 'ec2' && args[1] === 'describe-account-attributes') {
         return { stdout: JSON.stringify({ AccountAttributes: [{ AttributeName: 'vpc-max-elastic-ips', AttributeValues: [{ AttributeValue: '5' }] }] }) };

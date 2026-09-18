@@ -26,9 +26,14 @@ test("analyze route persists slots_filled as an atomic jsonb MERGE of a delta, n
 
 test("workflow store merges slotsFilled from analyze responses instead of replacing", async () => {
   const store = await read("../lib/stores/workflow-store.js");
+  // Still a merge over existing state — but through `incoming`, a copy of
+  // data.slotsFilled with agent-edited-since-request-start keys dropped
+  // (an earlier fix: a stale in-flight response must not revert a manual edit).
+  assert.match(store, /const incoming = \{ \.\.\.data\.slotsFilled \};/);
   assert.match(
     store,
-    /slotsFilled: \{ \.\.\.state\.slotsFilled, \.\.\.data\.slotsFilled \}/
+    /return \{ slotsFilled: \{ \.\.\.state\.slotsFilled, \.\.\.incoming \} \};/
   );
+  assert.match(store, /editedAt > requestStartedAt && slot in incoming/);
   assert.doesNotMatch(store, /set\(\{ slotsFilled: data\.slotsFilled \}/);
 });

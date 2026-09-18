@@ -1,8 +1,16 @@
 # Telnyx Contact Center
 
-**Version:** 0.1.0
+<!-- app-version:start -->
+[![Version 1.6.0](https://img.shields.io/badge/version-1.6.0-00C389)](https://github.com/team-telnyx/telnyx-contact-center/releases)
+<!-- app-version:end -->
 
-A Next.js 15 application providing a complete contact center solution built on Telnyx Voice APIs. This application features a visual voice flow designer, skills-based call routing, real-time agent monitoring, and AI assistant integration.
+[Release history](https://github.com/team-telnyx/telnyx-contact-center/releases) · [Changelog](CHANGELOG.md) · Versioning and release process
+
+Find the version of your running installation beside your user profile, or open
+**About Contact Center** for the exact build and release notes. The badge above
+identifies this checkout's source version; an installed instance may run an older release.
+
+A Next.js 16 application providing a contact center solution built on Telnyx APIs. This application features voice, native chat and email, a visual voice flow designer, skills-based routing, real-time agent monitoring, and AI assistant integration.
 
 ## Features
 
@@ -34,7 +42,7 @@ A Next.js 15 application providing a complete contact center solution built on T
 
 ## Tech Stack
 
-- Next.js 15 (App Router)
+- Next.js 16 (App Router)
 - React 19
 - PostgreSQL
 - Tailwind CSS
@@ -45,7 +53,7 @@ A Next.js 15 application providing a complete contact center solution built on T
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22.3+
 - PostgreSQL
 - Yarn package manager
 
@@ -80,6 +88,11 @@ This will create the necessary tables including:
 - `users` table with contact center configuration (skills, proficiency levels, etc.)
 - `skills` table for managing available skills
 - `agent_groups` table for agent group management
+
+Word attachment previews are included in the application: DOCX uses a simplified
+HTML layout and legacy DOC uses a text-only preview. They require no additional
+service or environment setting. Original files remain available for download.
+See document preview limits.
 
 4. Run the development server:
 
@@ -218,9 +231,9 @@ On first deployment or when running `yarn ensure:pg`, the following are automati
 
 - **cc_queues**: Queue definitions with routing configuration
 - **cc_queue_user_assignments**: Agent-to-queue assignments with priorities
-- **cc_interactions**: Call interactions with state tracking
-- **cc_agent_state**: Real-time agent availability state
-- **cc_queue_state**: Real-time queue metrics
+- **acd_work_items / acd_segments / acd_legs**: Authoritative voice lifecycle and media legs
+- **acd_agent_state / acd_agent_sessions / acd_reservations**: Agent readiness, presence, and capacity
+- **acd_events / acd_webhook_events / acd_stream_events**: Durable event intake, history, and realtime replay
 
 ### Voice Flow Tables
 
@@ -311,6 +324,36 @@ The bottom menu provides access to:
 - User Profile
 - Theme switching (Light/Dark/System)
 
+## Role-Based Access
+
+Access is decided by permissions, never by a role's name. A permission
+catalogue in code (`lib/authz/permissions.mjs`) lists every screen
+(`screen:<workspace>.<menu>.<section>`) and every operation on a managed object
+(`users:create`, `campaigns:execute`, `calls:supervise.whisper`, …). A role is a
+named set of permissions with an optional scope (queues, teams, campaigns,
+channels: all, a selection, or the assignee's own memberships); users hold one
+or more roles and the grants add up.
+
+- **System roles** `agent`, `supervisor`, `admin`, `owner` are defined in code,
+  re-seeded on every start and read-only. `owner` holds `*`.
+- **Shipped roles** (Team Leader, Quality Manager, Workforce Analyst, Reporting
+  Analyst, Compliance Auditor, Campaign Manager, User Administrator, Routing
+  Administrator, Conversation Designer, Channel Administrator) are installed
+  once and stay editable.
+- **Custom roles** are created in **Admin → Configuration → Permissions**;
+  teams for the team scope in **Admin → Configuration → Teams**. Every change
+  is audited in `cc_authz_audit` and pushed to affected users within seconds.
+
+Enforcement points: every `app/api/**/route.js` exports its handlers through
+`withPermission(permission, handler)` (`lib/authz/guard.js`; 401 without a
+session, 403 without the permission; a repository test fails on any unguarded
+route), `proxy.js` refuses portal pages whose screen the roles do not grant, the
+sidebar and section rails render only granted screens, and in-page actions are
+wrapped in `<Can permission>`. Data scoping (`authz.scope`) narrows reports,
+monitors, history, quality, recordings and campaigns to the queues, teams,
+campaigns and channels of the granting roles. The living reference is
+the internal documentation.
+
 ## Development
 
 ### Local Development Commands
@@ -367,9 +410,6 @@ The bottom menu provides access to:
 - Real-time call state synchronization
 - Queue metrics and agent status tracking
 
-For detailed architecture documentation, see the `docs/` directory.
-
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for
-details.
+Private project

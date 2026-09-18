@@ -40,6 +40,12 @@ test("inventory tables present Active instead of status labels for outbound reus
   assert.match(source, /columns=\{\["Name", "Active", "Reset", "Caps", "Recall", "Actions"\]\}/);
 });
 
+test("contact list inventory gives the Name column most of the available width", () => {
+  assert.match(source, /gridTemplateColumns="minmax\(260px, 2\.4fr\) minmax\(90px, 0\.8fr\) minmax\(72px, 0\.65fr\) minmax\(96px, 0\.8fr\) minmax\(64px, 0\.55fr\) 76px"/);
+  assert.match(source, /function CrudTable\(\{ title: tableTitle, description, columns, rows, emptyTitle, emptyDescription, gridTemplateColumns \}\)/);
+  assert.match(source, /const columnLayout = gridTemplateColumns \|\| `repeat\(\$\{columns\.length - 1\}, minmax\(0, 1fr\)\) 76px`;/);
+});
+
 test("inventory activation badges are green or red and campaign state stays separate from visibility", () => {
   assert.match(source, /const activationBadgeClass = \(active\) => active \? "border-emerald-500\/35 bg-emerald-500\/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500\/35 bg-rose-500\/10 text-rose-700 dark:text-rose-300";/);
   assert.match(source, /<Badge key="state" variant="outline" className=\{statusClass\(displayState\)\}>\{title\(displayState\)\}<\/Badge>/);

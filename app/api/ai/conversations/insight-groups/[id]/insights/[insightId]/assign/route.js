@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
-export async function POST(_request, context) {
+async function POST_handler(_request, context) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -48,3 +49,6 @@ export async function POST(_request, context) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("ai_insights:update", POST_handler, { route: "/api/ai/conversations/insight-groups/[id]/insights/[insightId]/assign" });

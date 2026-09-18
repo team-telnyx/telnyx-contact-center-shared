@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
+import ChatInteractionDetail from "./ChatInteractionDetail";
+import { createChatComposerStore } from "./chat-composer-store";
+import EmailInteractionDetail from "./EmailInteractionDetail";
+import VideoInteractionDetail from "./VideoInteractionDetail";
+import { useChatInteractions } from "./useChatInteractions";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -19,10 +24,18 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import {
+  forgetDisconnectedInteraction,
+  isRecentlyDisconnectedInteraction,
+  rememberDisconnectedInteraction,
+} from "@/lib/contact-center/disconnected-interaction-suppression";
 import useCallsStore from "@/lib/stores/calls-store";
 import { subscribeStatusStream } from "@/lib/status-stream-client";
+import CampaignDispositionSheet from "./CampaignDispositionSheet";
 import { AgentDashboard } from "./AgentDashboard";
 import { AgentDataSources } from "./AgentDataSources";
+import { isOwnedQueueTransferContinuation } from "@/lib/contact-center/queue-transfer-continuation";
+import { channelDefinition, usesNativeLifecycle } from "@/lib/acd/channel-registry.mjs";
 
 const AGENT_RAIL_ITEMS = [
   { id: "desktop", label: "Desktop", icon: IconDeviceDesktop, description: "Live interaction workspace" },
@@ -64,7 +77,7 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
   const previewFields = Object.entries(record).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").slice(0, 12);
   const isProgressive = assignment.campaign_mode === "progressive";
   return (
-    <details className="group rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:border-zinc-800 dark:bg-black dark:text-zinc-100" open={false}>
+    <details data-testid="campaign-record" data-attempt-id={assignment.id} className="group rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:border-zinc-800 dark:bg-black dark:text-zinc-100" open={false}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:bg-muted/60 dark:hover:bg-zinc-900 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-zinc-400">Outbound Campaign Record</p>
@@ -78,6 +91,7 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
         <button
           type="button"
           className="shrink-0 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid="campaign-dial"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -102,66 +116,15 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
   );
 }
 
-function CampaignDispositionSheet({ assignment, open, onClose, onSubmitted }) {
-  const [codes, setCodes] = useState([]);
-  const [selectedCode, setSelectedCode] = useState("");
-  const [callbackAt, setCallbackAt] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  useEffect(() => {
-    if (!open || !assignment?.campaign_id) return;
-    fetch(`/api/contact-center/agent/campaigns/disposition?campaignId=${encodeURIComponent(assignment.campaign_id)}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        const nextCodes = data.dispositionCodes || [];
-        setCodes(nextCodes);
-        setSelectedCode(nextCodes[0]?.wrapup_code_id || "");
-      })
-      .catch(() => setCodes([]));
-  }, [open, assignment?.campaign_id]);
-  if (!open || !assignment) return null;
-  const selected = codes.find((code) => code.wrapup_code_id === selectedCode);
-  const requiresCallback = selected?.requires_callback === true;
-  const submit = async () => {
-    if (!selectedCode) { notify({ title: "Disposition required", description: "Select a disposition code", variant: "warning" }); return; }
-    if (requiresCallback && !callbackAt) { notify({ title: "Callback required", description: "Callback date/time is required", variant: "warning" }); return; }
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/contact-center/agent/campaigns/disposition", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attemptId: assignment.id, dispositionCodeId: selectedCode, callback_at: callbackAt ? new Date(callbackAt).toISOString() : null, notes }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to save campaign disposition");
-      onSubmitted?.(data);
-      onClose?.();
-    } catch (err) {
-      notify({ title: "Disposition save failed", description: err.message || "Failed to save campaign disposition", variant: "error" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  return <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
-    <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0">
-      <SheetHeader className="px-6 py-4 border-b">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campaign Disposition</p>
-        <SheetTitle className="text-xl font-bold text-telnyx-green">Wrap up campaign record</SheetTitle>
-        <p className="text-sm text-muted-foreground">Select the campaign outcome for {assignment.to_number}. This updates retry, completion, or suppression state.</p>
-      </SheetHeader>
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 p-5">
-        <div className="space-y-2"><label className="text-sm font-medium">Disposition code</label><Select value={selectedCode || undefined} onValueChange={setSelectedCode}><SelectTrigger><SelectValue placeholder="Select code" /></SelectTrigger><SelectContent>{codes.map((code) => <SelectItem key={code.wrapup_code_id} value={code.wrapup_code_id}>{code.wrapup_code_name || code.wrapup_code_id}</SelectItem>)}</SelectContent></Select>{selected ? <p className="text-xs text-muted-foreground">{selected.classification?.replace(/_/g, " ")} {selected.business_category && selected.business_category !== "none" ? `· ${selected.business_category}` : ""}</p> : null}</div>
-        {requiresCallback ? <div className="space-y-2"><label className="text-sm font-medium">Callback date/time</label><input type="datetime-local" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={callbackAt} onChange={(event) => setCallbackAt(event.target.value)} /></div> : null}
-        <div className="space-y-2"><label className="text-sm font-medium">Notes</label><textarea className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes for supervisor/reporting" /></div>
-      </div>
-      <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2"><button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60" onClick={submit} disabled={submitting}>{submitting ? "Saving..." : "Submit disposition"}</button></SheetFooter>
-    </SheetContent>
-  </Sheet>;
-}
-
 export function AgentDesktop() {
+  const [chatComposerStore]=useState(createChatComposerStore);
   const [selectedInteraction, setSelectedInteraction] = useState(null);
-  const [interactions, setInteractions] = useState([]);
+  const [voiceInteractions, setInteractions] = useState([]);
+  const chat = useChatInteractions();
+  useEffect(()=>{
+    chatComposerStore.retain(chat.interactions.filter(item=>channelDefinition(item.channel).viewer==="messages").map(item=>item.id));
+  },[chat.interactions,chatComposerStore]);
+  const interactions = useMemo(() => [...voiceInteractions, ...chat.interactions], [voiceInteractions, chat.interactions]);
   const [dbInteractions, setDbInteractions] = useState([]);
   const [currentUsername, setCurrentUsername] = useState(null);
   const [agentStatus, setAgentStatus] = useState(null); // Track agent's current status
@@ -175,20 +138,33 @@ export function AgentDesktop() {
   const pendingCampaignDispositionRef = useRef(null);
   const campaignCallStartedRef = useRef(false);
   const lastRefreshAttemptRef = useRef(new Map()); // Track refresh attempts to avoid infinite loops
-  const lastWrapupInteractionRef = useRef(null);
-  const lastInteractionSnapshotRef = useRef(null);
   const lastStatusRef = useRef(null);
-  const lastTranscriptionsRef = useRef([]);
   const lastDisconnectedTimeRef = useRef(null);
+  const disconnectedInteractionKeysRef = useRef(new Map());
+  const queueTransferContinuationsRef = useRef(new Map());
+  const latestDbInteractionsRef = useRef([]);
+  useEffect(() => { latestDbInteractionsRef.current = dbInteractions; }, [dbInteractions]);
+
+  const isQueueTransferContinuation = useCallback((interaction = {}) => {
+    const interactionId =
+      interaction.id || interaction.interactionId || interaction.interaction_id;
+    if (!interactionId) return false;
+    const key = String(interactionId);
+    const marker = queueTransferContinuationsRef.current.get(key);
+    if (!marker || marker.expiresAt <= Date.now()) {
+      queueTransferContinuationsRef.current.delete(key);
+      return false;
+    }
+    const owned = isOwnedQueueTransferContinuation(interaction, currentUsername, marker);
+    if (owned) forgetDisconnectedInteraction(disconnectedInteractionKeysRef.current, interaction);
+    return owned;
+  }, [currentUsername]);
 
   // Get WebRTC call state for real-time updates (hold, mute, status)
   // Use selectors to ensure re-renders when these specific values change
   const callStatus = useActiveCallStore((state) => state.status);
   const callInteractionId = useActiveCallStore(
     (state) => state?.contactCenter?.interactionId || null,
-  );
-  const callTranscriptions = useActiveCallStore(
-    (state) => state?.transcriptions || [],
   );
   const disconnectedTime = useActiveCallStore(
     (state) => state.disconnectedTime,
@@ -234,10 +210,22 @@ export function AgentDesktop() {
         if (call.originalCallSessionId) {
           storeCallMap.set(call.originalCallSessionId, call);
         }
+        (call.callControlIds || []).forEach((id) => {
+          if (id) storeCallMap.set(id, call);
+        });
       });
 
       // Filter out timeout re-enqueued interactions from database interactions
       const filteredDbInteractions = dbInteractions.filter((interaction) => {
+        if (
+          !isQueueTransferContinuation(interaction) &&
+          isRecentlyDisconnectedInteraction(
+            disconnectedInteractionKeysRef.current,
+            interaction,
+          )
+        ) {
+          return false;
+        }
         const metadata = interaction.metadata || {};
         const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
         const isReEnqueued =
@@ -280,6 +268,7 @@ export function AgentDesktop() {
               null,
             metadata: {
               ...(interaction.metadata || {}),
+              ...(storeCall.metadata || {}),
               ...(storeCall.aiCallControlId
                 ? { ai_call_control_id: storeCall.aiCallControlId }
                 : {}),
@@ -296,11 +285,11 @@ export function AgentDesktop() {
             from_number:
               interaction.from_number ||
               interaction.from ||
-              (storeCall.callerNumber && storeCall.callerNumber.trim() !== "")
+              (storeCall.callerNumber && storeCall.callerNumber.trim() !== ""
                 ? storeCall.callerNumber
                 : storeCall.fromNumber && storeCall.fromNumber.trim() !== ""
-                ? storeCall.fromNumber
-                : null,
+                  ? storeCall.fromNumber
+                  : null),
             queue_name: storeCall.queueName || interaction.queue_name,
             state: storeCall.status || interaction.state,
           };
@@ -310,12 +299,22 @@ export function AgentDesktop() {
 
       const storeOnlyInteractions = activeCalls
         .filter((call) => {
+          if (
+            !isQueueTransferContinuation(call) &&
+            isRecentlyDisconnectedInteraction(
+              disconnectedInteractionKeysRef.current,
+              call,
+            )
+          ) {
+            return false;
+          }
           const matchKeys = new Set([
             call.interactionId,
             call.callControlId,
             call.originalCallControlId,
             call.callSessionId,
             call.originalCallSessionId,
+            ...(call.callControlIds || []),
           ]);
           matchKeys.delete(undefined);
           matchKeys.delete(null);
@@ -338,29 +337,23 @@ export function AgentDesktop() {
 
           if (hasDbMatch) return false;
 
-          // Guard against client-side orphan calls: if the DB has no active
-          // interaction for this call and the authoritative agent status is not
-          // call-engaged, do not synthesize a store-only interaction forever.
-          // This covers missed WebRTC hangup/disconnect events after the DB has
-          // already completed the call and returned the agent to Available.
-          const nonCallStatuses = new Set([
-            "Available",
-            "Away",
-            "Offline",
-            "Agent Not Answering",
-          ]);
+          // Store-only calls are allowed only during the short SSE -> DB race or
+          // when they are the exact currently active WebRTC interaction. A Busy
+          // status belongs to one call and must never resurrect every orphan
+          // retained from earlier calls.
           const startedAt = call.callStartTime || call.createdAt || call.startedAt;
           const startedMs = startedAt ? new Date(startedAt).getTime() : 0;
           const isRecentlyCreated = startedMs && Date.now() - startedMs < 5000;
-          if (
-            currentAgentStatus &&
-            nonCallStatuses.has(currentAgentStatus) &&
-            !isRecentlyCreated
-          ) {
+          const isCurrentWebRtcInteraction = Boolean(
+            callInteractionId &&
+              call.interactionId &&
+              String(callInteractionId) === String(call.interactionId),
+          );
+          if (!isRecentlyCreated && !isCurrentWebRtcInteraction) {
             console.log(
               `[AgentDesktop] Suppressing stale store-only call ${
                 call.callControlId || call.interactionId || call.callSessionId
-              } because agent status is ${currentAgentStatus} and DB has no active interaction`,
+              } because it has no active DB or WebRTC interaction`,
             );
             return false;
           }
@@ -399,7 +392,7 @@ export function AgentDesktop() {
         return true;
       });
     },
-    [activeCalls],
+    [activeCalls, callInteractionId, isQueueTransferContinuation],
   );
 
   // Initialize calls store on mount (ensures it's visible in dev tools)
@@ -412,6 +405,7 @@ export function AgentDesktop() {
     (mergedInteractions) => {
       // Filter out timeout re-enqueued interactions - these should not be shown to the agent
       const filteredInteractions = mergedInteractions.filter((interaction) => {
+        if (usesNativeLifecycle(interaction.channel) || usesNativeLifecycle(interaction.interaction_type)) return false;
         const metadata = interaction.metadata || {};
         const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
 
@@ -436,6 +430,7 @@ export function AgentDesktop() {
 
       // Auto-select first active if none selected
       setSelectedInteraction((current) => {
+        if (usesNativeLifecycle(current?.channel)) return current;
         if (!current) {
           return filteredInteractions.length > 0
             ? filteredInteractions[0]
@@ -527,6 +522,16 @@ export function AgentDesktop() {
         if (data.ok && Array.isArray(data.interactions)) {
           // Filter out timeout re-enqueued interactions on the client side as well
           const filtered = data.interactions.filter((interaction) => {
+            if (usesNativeLifecycle(interaction.channel) || usesNativeLifecycle(interaction.interaction_type)) return false;
+            if (
+              !isQueueTransferContinuation(interaction) &&
+              isRecentlyDisconnectedInteraction(
+                disconnectedInteractionKeysRef.current,
+                interaction,
+              )
+            ) {
+              return false;
+            }
             const metadata = interaction.metadata || {};
             const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
             const isReEnqueued =
@@ -564,6 +569,22 @@ export function AgentDesktop() {
       loadInteractions();
     };
 
+    const handleQueueTransferAccepted = (event) => {
+      const { interactionId } = event.detail || {};
+      if (!interactionId) return;
+
+      // A queue transfer keeps the durable work item and interaction ID. The
+      // source WebRTC leg disconnects, but the same interaction can be offered
+      // back to this browser immediately from the target queue. Mark it as a
+      // continuation so the normal stale-disconnect tombstone cannot hide the
+      // new ringing card and Agent Assist view.
+      queueTransferContinuationsRef.current.set(
+        String(interactionId),
+        { expiresAt: Date.now() + 60_000, assignedAt: latestDbInteractionsRef.current.find(item => String(item.id) === String(interactionId))?.assigned_at || null },
+      );
+      loadInteractions();
+    };
+
     // Listen for custom events from ContactCenterStreamProvider
     window.addEventListener(
       "contact-center:refresh-interactions",
@@ -572,7 +593,27 @@ export function AgentDesktop() {
 
     // Also listen for call disconnect events to IMMEDIATELY remove the interaction
     const handleCallDisconnected = (event) => {
-      const { interactionId, callControlId } = event.detail || {};
+      const {
+        interactionId,
+        callControlId,
+        rejectedBeforeAnswer,
+        wasAnswered,
+      } = event.detail || {};
+
+      // A delayed activeOnly read can still contain the just-ended call. Keep
+      // a short client-side tombstone so that stale response cannot reinsert
+      // and auto-select it between WebRTC disconnect and the Core wrap-up
+      // snapshot. A pre-answer rejection may be immediately re-offered and
+      // must not be suppressed this way.
+      if (
+        !rejectedBeforeAnswer &&
+        wasAnswered !== false
+      ) {
+        rememberDisconnectedInteraction(
+          disconnectedInteractionKeysRef.current,
+          { interactionId, callControlId },
+        );
+      }
 
       // IMMEDIATELY remove the interaction from local state
       // This ensures the UI clears instantly, even before database refresh
@@ -581,7 +622,7 @@ export function AgentDesktop() {
           const filtered = current.filter((interaction) => {
             const matchesId = interaction.id === interactionId;
             const matchesCallControlId =
-              interaction.call_control_id === callControlId;
+              Boolean(callControlId && interaction.call_control_id === callControlId);
             if (matchesId || matchesCallControlId) {
               console.log(
                 `[AgentDesktop] Immediately removing disconnected interaction: ${
@@ -608,7 +649,7 @@ export function AgentDesktop() {
           if (
             current &&
             (current.id === interactionId ||
-              current.call_control_id === callControlId)
+              Boolean(callControlId && current.call_control_id === callControlId))
           ) {
             return null;
           }
@@ -626,6 +667,10 @@ export function AgentDesktop() {
       "contact-center:call-disconnected",
       handleCallDisconnected,
     );
+    window.addEventListener(
+      "contact-center:queue-transfer-accepted",
+      handleQueueTransferAccepted,
+    );
 
     return () => {
       window.removeEventListener(
@@ -636,8 +681,12 @@ export function AgentDesktop() {
         "contact-center:call-disconnected",
         handleCallDisconnected,
       );
+      window.removeEventListener(
+        "contact-center:queue-transfer-accepted",
+        handleQueueTransferAccepted,
+      );
     };
-  }, []);
+  }, [isQueueTransferContinuation]);
 
   // Rebuild interactions from store updates without polling
   useEffect(() => {
@@ -818,7 +867,7 @@ export function AgentDesktop() {
     const updatedInteraction = interactions.find(
       (interaction) =>
         interaction.id === selectedInteraction.id ||
-        interaction.call_control_id === selectedInteraction.call_control_id,
+        Boolean(interaction.call_control_id && interaction.call_control_id === selectedInteraction.call_control_id),
     );
     if (!updatedInteraction) {
       // Interaction no longer exists, clear selection
@@ -828,15 +877,6 @@ export function AgentDesktop() {
       setSelectedInteraction(updatedInteraction);
     }
   }, [interactions, selectedInteraction]);
-
-  useEffect(() => {
-    if (callInteractionId) {
-      lastInteractionSnapshotRef.current = callInteractionId;
-    }
-    if (Array.isArray(callTranscriptions)) {
-      lastTranscriptionsRef.current = callTranscriptions;
-    }
-  }, [callInteractionId, callTranscriptions]);
 
   useEffect(() => {
     const isEnded = END_STATUSES.has(callStatus);
@@ -871,316 +911,9 @@ export function AgentDesktop() {
       campaignCallStartedRef.current = false;
     }
 
-    const interactionId =
-      callInteractionId || lastInteractionSnapshotRef.current;
-    if (!interactionId) {
-      return;
-    }
-    if (lastWrapupInteractionRef.current === interactionId) {
-      return;
-    }
-
-    // Check if call was answered and not abandoned before opening wrapup sheet
-    const checkAndOpenWrapup = async (retryCount = 0) => {
-      try {
-        // CRITICAL: Check timeout status FIRST via API before doing anything else
-        // This prevents wrapup sheet from opening even for a moment
-        try {
-          const timeoutCheckRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(
-              interactionId,
-            )}/timeout-check`,
-            { cache: "no-store" },
-          );
-          if (timeoutCheckRes.ok) {
-            const timeoutData = await timeoutCheckRes.json();
-            if (timeoutData.timeoutReEnqueued === true) {
-              console.log(
-                `[AgentDesktop] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued`,
-              );
-              return; // Don't open wrapup sheet at all
-            }
-          }
-        } catch (timeoutCheckErr) {
-          // If timeout check fails, continue with normal check
-          console.warn("[AgentDesktop] Timeout check failed:", timeoutCheckErr);
-        }
-
-        // Add a small delay on retry to allow database to update
-        if (retryCount > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-
-        // First, try to find interaction in local state
-        let interaction = interactions.find((i) => i.id === interactionId);
-
-        // If not found locally, try to fetch from API
-        if (!interaction && callInteractionId) {
-          try {
-            const res = await fetch(
-              `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                callInteractionId,
-              )}`,
-            );
-            const data = await res.json();
-            if (data.ok && data.interaction) {
-              interaction = data.interaction;
-            }
-          } catch (apiErr) {
-            // Could not fetch interaction for wrapup check
-          }
-        }
-
-        // If still no interaction found and we haven't retried, try once more
-        if (!interaction && retryCount === 0) {
-          return checkAndOpenWrapup(1);
-        }
-
-        // If still no interaction found after retry, skip wrapup. Wrapup requires
-        // positive evidence that the interaction was answered/connected.
-        if (!interaction) {
-          console.log(
-            `[AgentDesktop] No interaction evidence; not opening wrapup for ${interactionId}`,
-          );
-          return;
-        }
-
-        // Check metadata for hangup cause and timeline events
-        const metadata = interaction.metadata || {};
-        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
-        const routingMetadata = metadata.routing_metadata || {};
-        const timeline = routingMetadata.timeline || [];
-
-        // Double-check timeout flag from interaction
-        if (wasTimeoutReEnqueued) {
-          console.log(
-            `[AgentDesktop] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued (from interaction metadata)`,
-          );
-          return;
-        }
-
-        // Check if call was answered - look for answered_at or answered event in timeline
-        const hasAnsweredEvent = timeline.some(
-          (e) =>
-            e.type === "answered" ||
-            e.type === "connected" ||
-            e.type === "bridged",
-        );
-        const wasAnswered =
-          Boolean(interaction.answered_at) || hasAnsweredEvent;
-
-        // Check if call was abandoned or rejected
-        const isAbandoned = interaction.state === "abandoned";
-        const disconnectedEvent = timeline.find(
-          (e) => e.type === "disconnected",
-        );
-        const hangupCause =
-          disconnectedEvent?.hangupCause || metadata.hangup_cause;
-        const wasRejected =
-          hangupCause === "CALL_REJECTED" ||
-          hangupCause === "NO_ANSWER" ||
-          hangupCause === "user_busy" ||
-          hangupCause === "timeout";
-
-        // Check if call was in "queued" state when it ended (abandoned before answer)
-        const wasQueuedWhenEnded = interaction.state === "queued";
-
-        // Skip wrapup if:
-        // 1. Timeout re-enqueued (agent didn't answer - status already set to "Agent Not Answering")
-        // 2. Call was still in queued state when it ended (abandoned before answer), OR
-        // 3. Call was explicitly marked as abandoned AND was never answered
-        // This ensures agent disconnects (which are answered calls) always show wrapup
-        // but timeout scenarios don't show wrapup (status is already "Agent Not Answering")
-        //
-        // Note: If call was answered (has answered_at or answered event), always show wrapup
-        // even if state is "abandoned" (might be a timing issue or incorrect state update)
-        const shouldSkip =
-          wasTimeoutReEnqueued ||
-          wasQueuedWhenEnded ||
-          (isAbandoned && !wasAnswered);
-
-        if (!shouldSkip) {
-          // Open wrapup sheet - call was connected and ended (including agent disconnects)
-          lastWrapupInteractionRef.current = interactionId;
-          // Use global wrapup sheet store
-          import("@/lib/stores/wrapup-sheet-store").then((module) => {
-            module.default
-              .getState()
-              .openWrapup(interactionId, lastTranscriptionsRef.current || []);
-          });
-        }
-      } catch (err) {
-        // Error checking interaction for wrapup
-        console.error("[AgentDesktop] Error in checkAndOpenWrapup:", err);
-      }
-    };
-
-    checkAndOpenWrapup();
-  }, [callStatus, callInteractionId, interactions, disconnectedTime]);
-
-  // Also watch for interactions changing to "completed" state
-  // This catches cases where callStatus doesn't update but interaction state does
-  // Track which completed interactions we've already processed
-  const processedCompletedInteractionsRef = useRef(new Set());
-
-  useEffect(() => {
-    // Find interactions that just became completed and haven't been processed
-    const completedInteractions = interactions.filter(
-      (interaction) =>
-        interaction.state === "completed" &&
-        interaction.id !== lastWrapupInteractionRef.current &&
-        !processedCompletedInteractionsRef.current.has(interaction.id),
-    );
-
-    // Process completed interactions asynchronously
-    (async () => {
-      for (const interaction of completedInteractions) {
-        // Mark as processed immediately to avoid duplicate processing
-        processedCompletedInteractionsRef.current.add(interaction.id);
-
-        // CRITICAL: Check timeout status FIRST via API before doing anything else
-        try {
-          const timeoutCheckRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(
-              interaction.id,
-            )}/timeout-check`,
-            { cache: "no-store" },
-          );
-          if (timeoutCheckRes.ok) {
-            const timeoutData = await timeoutCheckRes.json();
-            if (timeoutData.timeoutReEnqueued === true) {
-              console.log(
-                `[AgentDesktop] Skipping wrapup for interaction ${interaction.id} - timeout re-enqueued (completed interaction)`,
-              );
-              continue; // Skip this interaction, check next one
-            }
-          }
-        } catch (timeoutCheckErr) {
-          // If timeout check fails, continue with normal check
-          console.warn(
-            "[AgentDesktop] Timeout check failed for completed interaction:",
-            timeoutCheckErr,
-          );
-        }
-
-        // Check if this interaction was answered
-        const wasAnswered = Boolean(interaction.answered_at);
-        const metadata = interaction.metadata || {};
-        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
-        const routingMetadata = metadata.routing_metadata || {};
-        const timeline = routingMetadata.timeline || [];
-        const hasAnsweredEvent = timeline.some(
-          (e) =>
-            e.type === "answered" ||
-            e.type === "connected" ||
-            e.type === "bridged",
-        );
-        const wasActuallyAnswered = wasAnswered || hasAnsweredEvent;
-
-        const isAbandoned = interaction.state === "abandoned";
-        const wasQueuedWhenEnded = interaction.state === "queued";
-
-        // Skip wrapup if:
-        // - Timeout re-enqueued (agent didn't answer - status already set to "Agent Not Answering")
-        // - Abandoned and never answered
-        // - Still queued when ended
-        const shouldSkip =
-          wasTimeoutReEnqueued ||
-          wasQueuedWhenEnded ||
-          (isAbandoned && !wasActuallyAnswered);
-
-        if (!shouldSkip && wasActuallyAnswered) {
-          lastWrapupInteractionRef.current = interaction.id;
-          // Use global wrapup sheet store
-          import("@/lib/stores/wrapup-sheet-store").then((module) => {
-            module.default
-              .getState()
-              .openWrapup(interaction.id, lastTranscriptionsRef.current || []);
-          });
-          break; // Only open for the first completed interaction
-        }
-      }
-    })();
-  }, [interactions]);
-
-  // Listen for manual disconnect events and open global wrapup sheet
-  useEffect(() => {
-    const handleCallDisconnected = async (event) => {
-      const {
-        interactionId,
-        transcriptions,
-        rejectedBeforeAnswer = false,
-        wasAnswered,
-      } = event.detail || {};
-      if (!interactionId) return;
-
-      if (rejectedBeforeAnswer || wasAnswered === false) {
-        return;
-      }
-
-      // Check if we've already shown wrapup for this interaction
-      if (lastWrapupInteractionRef.current === interactionId) {
-        return;
-      }
-
-      // Find the interaction to check if it was answered
-      const interaction = interactions.find((i) => i.id === interactionId);
-      if (interaction) {
-        const metadata = interaction.metadata || {};
-        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
-        const isConsultCall = metadata.is_consult_call === true;
-        const wasAnswered = Boolean(interaction.answered_at);
-        const isAbandoned = interaction.state === "abandoned";
-        const wasQueuedWhenEnded = interaction.state === "queued";
-
-        // Skip wrapup if:
-        // - Timeout re-enqueued (agent didn't answer)
-        // - Abandoned and never answered
-        // - Still queued when ended
-        // - Consult call (consultant call leg, not the parked call)
-        const shouldSkip =
-          wasTimeoutReEnqueued ||
-          wasQueuedWhenEnded ||
-          isConsultCall ||
-          (isAbandoned && !wasAnswered);
-
-        if (!shouldSkip) {
-          lastWrapupInteractionRef.current = interactionId;
-          // Use global wrapup sheet store
-          const { default: useWrapupSheetStore } = await import(
-            "@/lib/stores/wrapup-sheet-store"
-          );
-          useWrapupSheetStore
-            .getState()
-            .openWrapup(interactionId, transcriptions || []);
-        }
-      } else {
-        // If interaction has not hydrated locally yet, preserve the normal
-        // answered-call fallback. Explicit pre-answer disconnects are filtered
-        // above by rejectedBeforeAnswer/wasAnswered === false.
-        lastWrapupInteractionRef.current = interactionId;
-        // Use global wrapup sheet store
-        const { default: useWrapupSheetStore } = await import(
-          "@/lib/stores/wrapup-sheet-store"
-        );
-        useWrapupSheetStore
-          .getState()
-          .openWrapup(interactionId, transcriptions || []);
-      }
-    };
-
-    window.addEventListener(
-      "contact-center:call-disconnected",
-      handleCallDisconnected,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "contact-center:call-disconnected",
-        handleCallDisconnected,
-      );
-    };
-  }, [interactions]);
+    // GlobalWrapupSheet is the sole owner of wrap-up presentation. AgentDesktop
+    // only reacts to the disconnect for campaign disposition and list refresh.
+  }, [callStatus, disconnectedTime]);
 
   const [activeView, setActiveView] = useState("desktop");
   const [isHydrated, setIsHydrated] = useState(false);
@@ -1250,6 +983,23 @@ export function AgentDesktop() {
     hasRestoredStateRef.current = true;
   }, [interactions]);
 
+  const {setDesktopVisible, requestedInteractionId, loading: interactionsLoading, clearRequestedInteraction} = chat;
+
+  // The persistent portal provider owns notifications; report the actual rail view.
+  useEffect(() => {
+    setDesktopVisible(activeView === "desktop");
+    return () => setDesktopVisible(false);
+  }, [activeView, setDesktopVisible]);
+
+  // Header navigation opens a specific offer without accepting it automatically.
+  useEffect(() => {
+    if (!isHydrated || !requestedInteractionId) return;
+    setActiveView("desktop");
+    const requested = interactions.find(item => String(item.id) === requestedInteractionId);
+    if (requested) setSelectedInteraction(requested);
+    if (requested || !interactionsLoading) clearRequestedInteraction();
+  }, [isHydrated, interactions, requestedInteractionId, interactionsLoading, clearRequestedInteraction]);
+
   // Reset to interaction details when a call is selected, but only if it's a new incoming call
   // Don't override restored state for existing calls
   useEffect(() => {
@@ -1294,7 +1044,7 @@ export function AgentDesktop() {
       const wasInPreviousList = previousInteractionsRef.current.some(
         (prev) =>
           prev.id === interaction.id ||
-          prev.call_control_id === interaction.call_control_id,
+          Boolean(prev.call_control_id && prev.call_control_id === interaction.call_control_id),
       );
 
       return isIncomingState && !wasInPreviousList;
@@ -1314,6 +1064,7 @@ export function AgentDesktop() {
         if (!current) {
           return newCall;
         }
+        if (usesNativeLifecycle(current.channel)) return current;
         // If current selection is not an incoming call, switch to the new one
         const currentIsIncoming =
           current.state === "ringing" ||
@@ -1358,28 +1109,11 @@ export function AgentDesktop() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || data.execution?.reason || "Failed to prepare outbound call");
       campaignDialedAttemptRef.current = assignment.id;
-      pendingCampaignDispositionRef.current = assignment;
-      campaignCallStartedRef.current = true;
-      await updateAgentStatus("On Outbound Call");
-      setAgentStatus("On Outbound Call");
-      window.dispatchEvent(new CustomEvent("softphone:start-call", {
-        detail: {
-          toNumber: data.execution?.to_number || assignment.to_number,
-          fromNumber: assignment.from_number || assignment.caller_id || null,
-          callerName: assignment.campaign_name || "Campaign",
-          customHeaders: [
-            { name: "X-Outbound-Attempt-Id", value: assignment.id },
-            { name: "X-Outbound-Campaign-Id", value: assignment.campaign_id },
-            { name: "X-Outbound-Campaign-Mode", value: assignment.campaign_mode },
-          ].filter((header) => header.value),
-          metadata: {
-            outbound_attempt_id: assignment.id,
-            outbound_campaign_id: assignment.campaign_id,
-            outbound_campaign_name: assignment.campaign_name,
-            agent_assist_config: assignment.agent_assist_config,
-          },
-        },
-      }));
+      pendingCampaignDispositionRef.current = null;
+      campaignCallStartedRef.current = false;
+      // Core originates on the server and then delivers the agent leg through
+      // the normal incoming-call UI. The browser never dials a second leg.
+      notify({ title: "Outbound call scheduled", description: "The agent call will ring here when the contact answers." });
       setCampaignAssignment(null);
       setCampaignCountdownSeconds(null);
       setActiveView("desktop");
@@ -1406,15 +1140,13 @@ export function AgentDesktop() {
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((new Date(campaignAssignment.auto_dial_at).getTime() - Date.now()) / 1000));
       setCampaignCountdownSeconds(remaining);
-      if (remaining <= 0 && campaignAssignment.campaign_mode === "progressive" && campaignDialedAttemptRef.current !== campaignAssignment.id) {
-        campaignDialedAttemptRef.current = campaignAssignment.id;
-        dialCampaignAssignment(campaignAssignment);
-      }
+      // Display only: the durable worker enforces the progressive deadline.
+
     };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [campaignAssignment, dialCampaignAssignment]);
+  }, [campaignAssignment]);
 
   const campaignPreviewInteraction = campaignAssignment ? {
     id: `campaign-preview-${campaignAssignment.id}`,
@@ -1455,10 +1187,13 @@ export function AgentDesktop() {
         activeId={activeView}
         onSelect={setActiveView}
         ariaLabel="Agent workspace sections"
+        screenGroup="agent.desktop"
       />
 
       <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+        {chat.error && <p role="alert" className="px-3 py-2 text-xs text-destructive">{chat.error}</p>}
         <InteractionsList
+          onChanged={chat.refresh}
           interactions={Array.isArray(interactions) ? interactions.filter(Boolean) : []}
           selectedId={selectedInteraction?.id}
           onSelect={(interaction) => {
@@ -1471,7 +1206,7 @@ export function AgentDesktop() {
         />
       </Card>
 
-      <Card className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <Card className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${activeView === "dashboard" ? "bg-background" : ""}`}>
         <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
@@ -1503,11 +1238,17 @@ export function AgentDesktop() {
 
         {activeView === "dashboard" ? (
           <div className="flex-1 overflow-y-auto">
-            <AgentDashboard className="p-4 lg:p-5" />
+            <AgentDashboard className="p-4 lg:p-5" refreshKey={interactions.map(item=>`${item.id}:${item.state}:${item.version||0}`).join("|")} onOpenInteraction={item=>{ const existing=interactions.find(row=>String(row.id)===String(item.id)); if(existing){setSelectedInteraction(existing);setActiveView("desktop");} }} />
           </div>
         ) : activeView === "desktop" ? (
           selectedInteraction ? (
-            <InteractionDetail interaction={selectedInteraction} />
+            channelDefinition(selectedInteraction.channel).viewer === "messages"
+              ? <ChatInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} composeStore={chatComposerStore} />
+              : channelDefinition(selectedInteraction.channel).viewer === "email"
+                ? <EmailInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} />
+                : channelDefinition(selectedInteraction.channel).viewer === "video"
+                  ? <VideoInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} />
+                  : <InteractionDetail interaction={selectedInteraction} />
           ) : campaignAssignment ? (
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <OutboundCampaignRecord
@@ -1521,7 +1262,7 @@ export function AgentDesktop() {
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
               <PhoneCall className="h-10 w-10 text-gray-500" />
-              <p>Waiting for a call...</p>
+              <p>Waiting for an interaction...</p>
             </div>
           )
         ) : (

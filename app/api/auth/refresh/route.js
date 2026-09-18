@@ -34,7 +34,7 @@ export async function POST(request) {
     const hashed = await hashToken(provided);
     const user = await PgDb.findUserById(String(payload.sub));
 
-    if (!user) {
+    if (!user || user.active === false) {
       logAuthEvent("warn", "refresh_failed", { source: "api", userId: String(payload.sub), reason: "user_not_found" });
       return NextResponse.json({ error: "User not found" }, { status: 401 });
     }

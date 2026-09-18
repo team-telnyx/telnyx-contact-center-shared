@@ -14,6 +14,7 @@ import { syncWorkflowInsights } from "@/lib/telnyx-insights";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
 
+import { withPermission } from "@/lib/authz/guard";
 /**
  * Get webhook URL for insights from environment
  * @returns {string} Webhook URL
@@ -32,7 +33,7 @@ function getInsightsWebhookUrl() {
  * Sync insights for a workflow with Telnyx.
  * Creates Insight Group and 3 Insight Templates (slots, summary, sentiment).
  */
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   let workflowId;
 
   try {
@@ -235,3 +236,6 @@ async function updateAssistantInsightSettings(assistantId, insightGroupId) {
 
   return response.json();
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("workflows:update", POST_handler, { route: "/api/admin/workflows/[id]/sync-insights" });

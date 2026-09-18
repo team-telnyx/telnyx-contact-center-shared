@@ -71,8 +71,8 @@ test("generates an LLM caller reply and speaks it on the active generated leg", 
   }, async () => {
     const res = await handleWorkflowTestingFinalTranscription({
       pool,
-      interaction: { id: "int-1", from_number: "+48221811540", call_session_id: "FLOW-LEG-SESSION" },
-      payload: { call_session_id: "FLOW-LEG-SESSION", from: "+48221811540" },
+      interaction: { id: "int-1", from_number: "+48220000540", call_session_id: "FLOW-LEG-SESSION" },
+      payload: { call_session_id: "FLOW-LEG-SESSION", from: "+48220000540" },
       transcriptionData: { transcript: "Hello, can I get your name please?", is_final: true },
       assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },
     });
@@ -95,7 +95,7 @@ test("returns no_active_workflow_testing_call when no live generated leg matches
   const pool = makePool({ ledgerRow: null, captureUpdates: [] });
   const res = await handleWorkflowTestingFinalTranscription({
     pool,
-    interaction: { id: "int-2", from_number: "+48221811540" },
+    interaction: { id: "int-2", from_number: "+48220000540" },
     payload: { call_session_id: "FLOW-LEG" },
     transcriptionData: { transcript: "Any update?", is_final: true },
     assistConfig: { assist_type: "workflows", workflow_id: "wf-2" },
@@ -107,7 +107,7 @@ test("returns no_active_workflow_testing_call when no live generated leg matches
 test("skips customer-side workflow testing transcripts", async () => {
   const res = await handleWorkflowTestingFinalTranscription({
     pool: makeThrowingPool(),
-    interaction: { id: "int-customer", from_number: "+48221811540" },
+    interaction: { id: "int-customer", from_number: "+48220000540" },
     payload: { call_session_id: "FLOW-LEG" },
     transcriptionData: { transcript: "My name is John", transcription_track: "inbound", is_final: true },
     assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },
@@ -134,7 +134,7 @@ test("does not pick an arbitrary generated leg when workflow testing correlation
 
   const res = await handleWorkflowTestingFinalTranscription({
     pool,
-    interaction: { id: "int-ambiguous", from_number: "+48221811540" },
+    interaction: { id: "int-ambiguous", from_number: "+48220000540" },
     payload: { call_session_id: "FLOW-LEG" },
     transcriptionData: { transcript: "Can I get your name?", transcription_track: "outbound", is_final: true },
     assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },

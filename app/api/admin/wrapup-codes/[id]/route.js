@@ -1,27 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
 
-export async function GET(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, { params }, authz) {
+  const user = authz.user;
 
   const pool = getPostgresPool();
   if (!pool)
@@ -51,9 +35,8 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, { params }, authz) {
+  const user = authz.user;
 
   const pool = getPostgresPool();
   if (!pool)
@@ -110,9 +93,8 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, { params }, authz) {
+  const user = authz.user;
 
   const pool = getPostgresPool();
   if (!pool)
@@ -153,7 +135,9 @@ export async function DELETE(request, { params }) {
     }
 
     const interactionUsageRes = await pool.query(
-      `SELECT COUNT(*) as count FROM cc_interactions WHERE wrapup_codes ? $1`,
+      `SELECT COUNT(*) as count
+         FROM acd_segments
+        WHERE wrapup_code_id = $1`,
       [id]
     );
     const interactionUsageCount = parseInt(
@@ -181,3 +165,7 @@ export async function DELETE(request, { params }) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("wrapup_codes:read", GET_handler, { route: "/api/admin/wrapup-codes/[id]" });
+export const PUT = withPermission("wrapup_codes:update", PUT_handler, { route: "/api/admin/wrapup-codes/[id]" });
+export const DELETE = withPermission("wrapup_codes:delete", DELETE_handler, { route: "/api/admin/wrapup-codes/[id]" });

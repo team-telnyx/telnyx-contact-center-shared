@@ -65,8 +65,7 @@ test("dynamic variables webhook tester requires admin auth and a server allowlis
     "utf8"
   );
 
-  assert.match(source, /getAuthenticatedUser/);
-  assert.match(source, /isAdmin\(user\)/);
+  assert.match(source, /withPermission\("ai_assistants:test", POST_handler, \{ route:/);
   assert.match(source, /DYNAMIC_VARIABLE_WEBHOOK_TEST_ALLOWED_URLS/);
   assert.match(source, /allowedUrl === targetUrl\.toString\(\)/);
   assert.match(source, /fetch\(configuredTarget,/);

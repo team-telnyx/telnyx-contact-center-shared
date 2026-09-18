@@ -1,0 +1,56 @@
+---
+title: SMS channel
+description: Connect a Telnyx messaging profile, map SMS numbers to queues and review delivery.
+audiences: [admin, owner]
+keywords: [sms, messaging profile, phone number, webhook, delivery, opt-out, copilot, templates, campaigns]
+owner: contact-center
+lastReviewed: 2026-09-15
+---
+
+Open **Admin → SMS** to manage the SMS channel. **SMS** has its own menu card directly below **Email**. Use the left section rail to switch between **Numbers**, **Messaging profile**, **Templates**, **Delivery** and **AI Copilot**.
+
+## How SMS reaches a queue
+
+Telnyx delivers inbound text messages to the webhook configured on the **messaging profile** that owns the receiving number. Contact Center resolves the queue from the receiving number, so one messaging profile can carry every number in the installation. Each number maps to exactly one queue; a customer texting that number always lands in that queue.
+
+The recommended setup is one Contact Center messaging profile with all managed numbers. Create separate profiles only when queues need different Telnyx-level settings, for example separate spend limits, alphanumeric sender IDs or country keyword auto-responses. Keep **Number Pool** disabled on connected profiles: agent replies must leave from the number the customer texted.
+
+## Connect the messaging profile
+
+1. Configure the public application URL (`TELNYX_WEBHOOK_BASE_URL` or `APP_BASE_URL`, HTTPS) and the Telnyx Ed25519 verification key on the server. The **Messaging profile** section shows the webhook URL and whether the API key and signature key are configured.
+2. Under **Messaging profile**, connect an existing Telnyx profile or create a new **Contact Center** profile. Connecting sets the profile webhook URL to this application and API version 2. Other profile settings and other webhook destinations are not changed.
+3. Use **Verify webhook** after changing the application URL. The card shows when the webhook was last verified and whether it still matches the application.
+
+## Map numbers to queues
+
+1. Enable **SMS** in the queue and agent **Utilization** settings, and assign agents to the queue.
+2. Under **Numbers**, choose **Map number**, select an SMS-capable number from the Telnyx inventory, the connected messaging profile, a display name and the queue. Saving assigns the number to the selected profile in Telnyx when it belongs to another profile.
+3. Turn on **Route incoming SMS** and **Allow agent replies** when the queue is ready. Inbound messages received while routing is paused wait in the number backlog and route once routing is enabled.
+
+Removing a mapping is possible only for numbers without conversation history; otherwise pause routing and sending instead.
+
+## Agent experience
+
+An SMS conversation appears on the Agent Desktop as a messaging card with the customer number, the queue and the business number. Agents accept or decline the offer, reply from the composer, transfer to another SMS queue or agent, mark the conversation as waiting for the customer, and complete it. Completion ends the episode and starts wrap-up; a later message from the same customer to the same number opens a new episode on the same conversation, so history stays together.
+
+The composer shows the encoding (GSM-7 or UCS-2), the number of characters, message parts, characters per part and the characters remaining in the current part. Emoji and most non-Latin characters switch the message to UCS-2, which reduces a part to 70 characters. Messages that need more than 10 parts cannot be sent. Every agent message shows its delivery state: sending, sent (accepted by Telnyx), delivered (confirmed by the carrier), unconfirmed, or failed with the provider error. Delivered means the handset received the message, not that the customer read it.
+
+If the customer texts STOP, the conversation is marked as opted out and agent replies are blocked until the customer texts START. Telnyx applies its own keyword auto-responses; Contact Center mirrors the state so agents see why replies are blocked.
+
+## Templates for outbound campaigns
+
+**Templates** (also available at `/admin/sms/templates`) stores the SMS templates that outbound campaigns send. A template has a name, a category (marketing, utility or service), a language, plain message text with `{{variable}}` placeholders, an opt-out footer and sample values for the preview. Variables are extracted automatically; the campaign editor maps each one to a contact-list column, a contact-method slot, static text or a system value such as the sender number. The counter shows the encoding, the number of parts and the remaining characters, including the opt-out footer. Templates used by a ready, running or paused campaign cannot be archived or deleted.
+
+Pick the language from the same catalogue the WhatsApp templates use: search by name and the list shows each language with its flag and code. The language identifies the template for the campaign editor; it is not sent to the carrier. **Emoji** opens the picker used by the agent composer and inserts the emoji at the cursor. Emoji and other non-GSM characters switch the message to UCS-2, which reduces a part from 160 to 70 characters, so watch the counter.
+
+### Opt-out footer
+
+**Append footer** adds an opt-out line after the message. Leave **Footer text** empty to use the workspace footer from **Dialer → Settings → Messaging**, or enter text to override it for this template only. **No footer** sends the message without one.
+
+When **Require opt-out footer** is enabled in Dialer → Settings → Messaging, a template set to **No footer** still gets the footer, because the setting is a compliance guard for the whole workspace. The builder says so under the selector and the phone preview shows exactly the message that will be sent. To send without a footer, turn that setting off first.
+
+## Delivery and AI Copilot
+
+**Delivery** lists recent outbound messages with their delivery state and provider errors, opted-out customers, unmatched events for numbers that are not mapped, and failed inbound processing with a retry action. **AI Copilot** configures the SMS assistant; until an SMS-specific configuration is saved, it inherits the chat Copilot settings.
+
+The server uses `TELNYX_MESSAGING_API_KEY`, falling back to `TELNYX_API_KEY`. Credentials are never exposed to the browser. MMS media received from customers is shown as a note in the conversation; sending MMS is not part of this channel.

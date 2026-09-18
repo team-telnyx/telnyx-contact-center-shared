@@ -28,6 +28,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import WebPageEditSheet from "@/components/web-pages/EditSheet";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminWebPagesPage() {
   const [items, setItems] = useState([]);
@@ -90,10 +91,10 @@ export default function AdminWebPagesPage() {
     >
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={handleNewPage}>
+    <Can permission="web_pages:create"><Button onClick={handleNewPage}>
       <IconPlus className="size-4 mr-2" />
       New Web Page
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -172,13 +173,13 @@ export default function AdminWebPagesPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="web_pages:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete web page"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

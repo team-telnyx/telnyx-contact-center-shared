@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
-export async function DELETE(_request, { params }) {
+async function DELETE_handler(_request, { params }) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -52,3 +53,6 @@ export async function DELETE(_request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const DELETE = withPermission("ai_integrations:delete", DELETE_handler, { route: "/api/ai/integrations/connections/[id]" });

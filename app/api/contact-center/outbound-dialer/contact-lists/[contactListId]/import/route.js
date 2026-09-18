@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, isLikelyPhone, jsonError, normalizeFieldSchema, parseCsv, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, isLikelyPhone, jsonError, normalizeFieldSchema, parseCsv, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CONTACT_FIELD_TYPES } from "@/lib/outbound-dialer/schema";
 import { applyCsvImportRules, normalizeCsvImportRules } from "@/lib/outbound-dialer/csv-import-rules";
 const CONTACT_MAPPING_PREFIXES = ["number:", "email:", "whatsapp:"];
 import { importsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 const CALLABLE_MAPPING_PREFIXES = ["number:", "whatsapp:"];
 
 function isValidContactMapping(value) {
@@ -60,8 +61,8 @@ function buildContactMethods(record, selectedColumns, columnMappings) {
   return Object.fromEntries(Object.entries(methods).filter(([, values]) => Object.keys(values).length));
 }
 
-export async function POST(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function POST_handler(request, context, authz) {
+  const user = authz.user;
   const { contactListId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
@@ -128,3 +129,6 @@ export async function POST(request, context) {
     finally { client.release(); }
   } catch (err) { importsLogger.error("contact_list_import_failed", { contactListId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to import CSV", 400); }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("contact_lists:import", POST_handler, { route: "/api/contact-center/outbound-dialer/contact-lists/[contactListId]/import" });

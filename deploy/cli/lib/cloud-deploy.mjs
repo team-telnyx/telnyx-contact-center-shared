@@ -2,6 +2,9 @@ import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { createBuildInfo, dockerBuildMetadata } from '../../../scripts/lib/build-info.mjs';
 
 const execFileAsync = promisify(execFileCb);
 
@@ -13,9 +16,9 @@ const execFileAsync = promisify(execFileCb);
 // trying to build the Next.js production image itself, so the image is
 // always built on the OPERATOR's own machine and shipped as a tarball).
 //
-// Ported from the internal FDE pattern (fde-internals/S3_IMAGE_ARTIFACT_DEPLOYMENT.md,
+// Ported from the internal pattern (internal-tooling/S3_IMAGE_ARTIFACT_DEPLOYMENT.md,
 // build-s3-image-artifact.yml, scripts/deploy-from-s3.sh, deploy-artifact-ssm.sh),
-// stripped of every GitHub-Actions/FDE-specific piece and driven directly by
+// stripped of every GitHub-Actions/deployment-specific piece and driven directly by
 // this CLI instead of a workflow_dispatch.
 
 const REMOTE_DEPLOY_SCRIPT_SINGLE = `#!/usr/bin/env bash
@@ -185,11 +188,15 @@ export async function buildAndPackageImage({
   if (!imageTag) throw new Error('buildAndPackageImage requires { imageTag }');
   if (!outDir) throw new Error('buildAndPackageImage requires { outDir }');
 
-  const buildArgArgs = Object.entries(buildArgs).flatMap(([k, v]) => ['--build-arg', `${k}=${v ?? ''}`]);
+  const buildInfo = existsSync(resolve(repoRoot, 'package.json'))
+    ? createBuildInfo({ root: repoRoot, env: {} }) : null;
+  const metadata = buildInfo ? dockerBuildMetadata(buildInfo) : { args: {}, labels: {} };
+  const buildArgArgs = Object.entries({ ...buildArgs, ...metadata.args }).flatMap(([k, v]) => ['--build-arg', `${k}=${v ?? ''}`]);
   const dockerBuildArgs = [
     'build', '--platform', 'linux/amd64',
     '--file', dockerfilePath,
     ...buildArgArgs,
+    ...Object.entries(metadata.labels).flatMap(([key, value]) => ['--label', `${key}=${value}`]),
     '--tag', imageTag,
     '.',
   ];
@@ -278,7 +285,8 @@ export async function buildAndPackageImage({
     app: 'telnyx-contact-center',
     image: imageTag,
     archive: archiveName,
-    built_at: new Date().toISOString(),
+    built_at: buildInfo?.builtAt || new Date().toISOString(),
+    ...(buildInfo ? { version: buildInfo.version, git_sha: buildInfo.commit, build: buildInfo } : {}),
   };
   await writeFile(checksumPath, checksumLine, 'utf8');
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
@@ -545,7 +553,7 @@ export async function deploySingleNode({
 /**
  * HA rolling deploy: one node at a time — deregister from both target
  * groups, deploy, wait for local + ALB health, re-register, move to the
- * next node. Ported from fde-internals/scripts/deploy-artifact-ssm.sh's HA
+ * next node. Ported from internal-tooling/scripts/deploy-artifact-ssm.sh's HA
  * path. A failure on any node stops the rollout (does not proceed to the
  * next node) so a bad image can't be rolled out fleet-wide unattended.
  */

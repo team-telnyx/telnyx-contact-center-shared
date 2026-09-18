@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx.js";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 const ELEVENLABS_API_KEY_REF = process.env.ELEVENLABS_API_KEY_REF;
 
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -143,3 +144,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("telephony_tools:use", POST_handler, { route: "/api/tts/speech" });

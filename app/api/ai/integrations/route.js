@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 function noStore(body, init = {}) {
@@ -41,7 +42,7 @@ async function telnyxFetch(path, init = {}) {
   return data;
 }
 
-export async function GET() {
+async function GET_handler() {
   try {
     const integrationsPromise = telnyxFetch("/ai/integrations");
     const connectionsPromise = telnyxFetch("/ai/integrations/connections").catch(
@@ -67,3 +68,6 @@ export async function GET() {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("ai_integrations:read", GET_handler, { route: "/api/ai/integrations" });

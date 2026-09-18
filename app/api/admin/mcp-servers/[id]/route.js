@@ -1,21 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { getMcpServer, updateMcpServer, deleteMcpServer } from "@/lib/mcp/mcp-server-registry";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user || !isAdmin(user)) return null;
-  return user;
-}
 
 async function getId(context) {
   const { params } = await context;
@@ -23,9 +9,8 @@ async function getId(context) {
   return id;
 }
 
-export async function GET(request, context) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, context, authz) {
+  const user = authz.user;
   const id = await getId(context);
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -38,9 +23,8 @@ export async function GET(request, context) {
   }
 }
 
-export async function PUT(request, context) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, context, authz) {
+  const user = authz.user;
   const id = await getId(context);
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -58,9 +42,8 @@ export async function PUT(request, context) {
   }
 }
 
-export async function DELETE(request, context) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, context, authz) {
+  const user = authz.user;
   const id = await getId(context);
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -71,3 +54,8 @@ export async function DELETE(request, context) {
     return NextResponse.json({ error: error?.message || "Failed to delete MCP server" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("mcp_servers:read", GET_handler, { route: "/api/admin/mcp-servers/[id]" });
+export const PUT = withPermission("mcp_servers:update", PUT_handler, { route: "/api/admin/mcp-servers/[id]" });
+export const DELETE = withPermission("mcp_servers:delete", DELETE_handler, { route: "/api/admin/mcp-servers/[id]" });

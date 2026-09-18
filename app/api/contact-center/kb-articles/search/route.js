@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 /**
  * Search KB articles for contact center agents
  * This endpoint uses session authentication instead of API key
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
     // Authenticate user with session
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const pool = getPostgresPool();
     if (!pool) {
@@ -114,3 +108,5 @@ export async function GET(request) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("kb_articles:read", GET_handler, { route: "/api/contact-center/kb-articles/search" });

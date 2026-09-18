@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { extractBundleMediaAssets, normalizeImportedForm } from "@/lib/forms/form-bundles";
 import { slugifyFormName } from "@/lib/forms/form-schema";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;
-  let user = id ? await PgDb.findUserById(id) : null; if (!user && email) user = await PgDb.findUserByUsername(email); return user && isAdmin(user) ? user : null;
-}
 function mapRow(row) { return row ? { ...row, queue_ids: row.queue_ids || [], queue_names: row.queue_names || [] } : null; }
 function filenameFromUrl(url = "") {
   try { return (/^https?:\/\//i.test(url) ? new URL(url).pathname : String(url).split("?")[0]).split("/").pop() || "image"; }
@@ -56,8 +49,8 @@ async function upsertImportedMedia(pool, mediaAssets = []) {
   return imported;
 }
 
-export async function POST(request) {
-  const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const pool = getPostgresPool(); if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
     const body = await request.json();
@@ -89,3 +82,6 @@ export async function POST(request) {
     return NextResponse.json({ error: err?.message || "Import failed" }, { status: 400 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("forms:import", POST_handler, { route: "/api/admin/forms/import" });

@@ -1,33 +1,26 @@
+import { publicUser } from "@/lib/users/public-user.mjs";
+import { saveAdminSettings } from "@/lib/acd/utilization.mjs";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { effectiveAccess, publishAuthzChanged } from "@/lib/authz/effective.mjs";
+import { validateRoleAssignment, recordRoleAssignment } from "@/lib/authz/roles-store.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { agentInScope, queueInScope, resolveScopeForKeys } from "@/lib/authz/scope.mjs";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
+const sameRoleSet = (a = [], b = []) => a.length === b.length && a.every((key) => b.includes(key));
 
-export async function GET(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+async function GET_handler(request, { params }, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool)
     return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   const resolvedParams = await params;
   const id = resolvedParams?.id;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (!agentInScope(authz.scope, id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const r = await pool.query(`SELECT * FROM users WHERE id=$1`, [id]);
   if (!r.rows?.[0])
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -38,18 +31,18 @@ export async function GET(request, { params }) {
     [id]
   );
 
-  const userData = r.rows[0];
+  const userData = publicUser(r.rows[0]);
   userData.queue_assignments = queueAssignmentsRes.rows || [];
 
   return NextResponse.json(userData);
 }
 
-export async function PUT(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, { params }, authz) {
+  const user = authz.user;
   const resolvedParams = await params;
   const id = resolvedParams?.id;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (!agentInScope(authz.scope, id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await request.json();
 
   const set = {};
@@ -85,8 +78,35 @@ export async function PUT(request, { params }) {
     "voiceNumber",
     body.voiceNumber != null ? String(body.voiceNumber) : undefined
   );
+  // Role changes are validated against the roles table and the model's rules
+  // (owner protections, delegation) and audited; see lib/authz/roles-store.mjs.
+  let rolesBefore = null;
+  let rolesChanged = false;
   if (body.roles !== undefined) {
-    set.roles = Array.isArray(body.roles) ? body.roles : [body.roles];
+    const rolePool = getPostgresPool();
+    if (!rolePool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
+    const currentRes = await rolePool.query(`SELECT roles FROM users WHERE id=$1`, [id]);
+    if (!currentRes.rows?.[0]) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    rolesBefore = Array.isArray(currentRes.rows[0].roles) && currentRes.rows[0].roles.length ? currentRes.rows[0].roles : ["agent"];
+    try {
+      const actorAccess = await effectiveAccess(user);
+      set.roles = await validateRoleAssignment(rolePool, { actor: user, actorAccess, targetUserId: id, currentRoles: rolesBefore, nextRoles: body.roles });
+    } catch (roleErr) {
+      return NextResponse.json({ error: roleErr.message, details: roleErr.details }, { status: roleErr.status || 400 });
+    }
+    // Changing the role list is a role assignment, a separate grant from editing the profile.
+    if (!sameRoleSet(rolesBefore, set.roles) && (!authz.can("users:roles.assign") || !agentInScope(await resolveScopeForKeys(rolePool, user, authz.access, ["users:roles.assign"]), id))) {
+      return NextResponse.json({ error: "Forbidden", permission: "users:roles.assign" }, { status: 403 });
+    }
+  }
+  let queueScope = null;
+  if (body.queueIds !== undefined) {
+    // Queue membership is routing: it needs queues:agents.assign and stays within that grant's scope.
+    if (!authz.can("queues:agents.assign")) {
+      return NextResponse.json({ error: "Forbidden", permission: "queues:agents.assign" }, { status: 403 });
+    }
+    const scopePool = getPostgresPool();
+    queueScope = scopePool ? await resolveScopeForKeys(scopePool, user, authz.access, ["queues:agents.assign"]) : null;
   }
   maybeSet(
     "verified",
@@ -124,18 +144,26 @@ export async function PUT(request, { params }) {
   }
 
   try {
+    await saveAdminSettings(getPostgresPool(), { scope: "agent", id, utilization: body.utilization, actor: String(user.id) }, async (pool) => {
+    if (set.roles && rolesBefore?.includes("owner") && !set.roles.includes("owner")) {
+      // Re-checked under the transaction lock: two concurrent demotions cannot leave the system without an owner.
+      const owners = await pool.query(`SELECT COUNT(*)::int AS c FROM users WHERE 'owner' = ANY(roles) AND id <> $1`, [id]);
+      if (Number(owners.rows?.[0]?.c || 0) === 0) throw Object.assign(new Error("The last owner cannot lose the Owner role."), { status: 409 });
+    }
     const skillsChanged = body.skills !== undefined;
     const queueIdsChanged = body.queueIds !== undefined;
 
-    await PgDb.updateUserById(id, set);
+    await PgDb.updateUserById(id, set, pool);
+    if (rolesBefore && set.roles) {
+      rolesChanged = await recordRoleAssignment(pool, { actor: user, targetUserId: id, before: rolesBefore, after: set.roles });
+    }
 
     // Handle queue assignments
     if (queueIdsChanged && Array.isArray(body.queueIds)) {
-      const pool = getPostgresPool();
       if (pool) {
         // Get current assignments
         const currentAssignmentsRes = await pool.query(
-          `SELECT queue_id FROM cc_queue_user_assignments WHERE user_id = $1`,
+          `SELECT queue_id FROM cc_queue_user_assignments WHERE user_id = $1 AND enabled=true AND deactivated_at IS NULL`,
           [id]
         );
         const currentQueueIds = new Set(
@@ -151,6 +179,8 @@ export async function PUT(request, { params }) {
         const queuesToRemove = Array.from(currentQueueIds).filter(
           (queueId) => !newQueueIds.has(queueId)
         );
+        const outsideScope = [...queuesToAdd, ...queuesToRemove].filter((queueId) => queueScope && !queueInScope(queueScope, String(queueId)));
+        if (outsideScope.length) throw Object.assign(new Error("Queue outside your data scope"), { status: 403, queueIds: outsideScope });
 
         // Add new queue assignments
         const { randomUUID } = await import("crypto");
@@ -179,82 +209,36 @@ export async function PUT(request, { params }) {
       }
     }
 
-    // If skills were changed, re-evaluate waiting interactions
-    if (skillsChanged) {
-      try {
-        const { reEvaluateWaitingInteractionsForUser } = await import(
-          "@/lib/contact-center/skills-re-evaluator.js"
-        );
-        // Run asynchronously - don't wait for it to complete
-        reEvaluateWaitingInteractionsForUser(id).catch((error) => {
-          adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-        });
-      } catch (reEvalError) {
-        // Log but don't fail the user update
-        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-      }
-
-      // Also re-evaluate waiting reasons for queued calls
-      try {
-        const { reEvaluateWaitingReasonsForUserQueues } = await import(
-          "@/lib/contact-center/waiting-reason-re-evaluator.js"
-        );
-        // Run asynchronously - don't wait for it to complete
-        reEvaluateWaitingReasonsForUserQueues(id).catch((error) => {
-          adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-        });
-      } catch (reEvalError) {
-        // Log but don't fail the user update
-        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-      }
+    // Skills and assignments are read directly by the Core router. Wake every
+    // worker after a routing-profile change so queued work is reconsidered
+    // without maintaining a second interaction projection.
+    if (skillsChanged || queueIdsChanged) {
+      if (pool) await pool.query("SELECT pg_notify('acd_work_ready', $1)", [String(id)]);
     }
 
-    // If queue assignments changed, re-evaluate waiting reasons for affected queues
-    if (queueIdsChanged) {
-      try {
-        const { reEvaluateWaitingReasonsForQueues } = await import(
-          "@/lib/contact-center/waiting-reason-re-evaluator.js"
-        );
-        // Get all affected queue IDs (both added and removed)
-        const pool = getPostgresPool();
-        if (pool) {
-          const affectedQueuesRes = await pool.query(
-            `SELECT DISTINCT queue_id FROM cc_queue_user_assignments WHERE user_id = $1`,
-            [id]
-          );
-          const affectedQueueIds =
-            affectedQueuesRes.rows?.map((row) => row.queue_id) || [];
-          if (affectedQueueIds.length > 0) {
-            // Run asynchronously - don't wait for it to complete
-            reEvaluateWaitingReasonsForQueues(affectedQueueIds).catch(
-              (error) => {
-                adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-              }
-            );
-          }
-        }
-      } catch (reEvalError) {
-        // Log but don't fail the user update
-        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-      }
+    return { id };
+    });
+    if (rolesChanged || body.active !== undefined) {
+      // Drops role caches and pushes `authz_changed` so the user's menus and
+      // API access follow within seconds (decision D-16).
+      await publishAuthzChanged({ userIds: [String(id)], reason: "user.roles.update" });
     }
-
     return NextResponse.json({ ok: true });
   } catch (err) {
     const msg = err?.message || String(err);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: msg }, { status: err.status || 400 });
   }
 }
 
-export async function DELETE(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(request, { params }, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool)
     return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   const resolvedParams = await params;
   const id = resolvedParams?.id;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (!agentInScope(authz.scope, id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const targetRes = await pool.query(`SELECT roles FROM users WHERE id=$1`, [
     id,
@@ -272,3 +256,8 @@ export async function DELETE(request, { params }) {
   await pool.query(`DELETE FROM users WHERE id=$1`, [id]);
   return NextResponse.json({ ok: true });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("users:read", GET_handler, { route: "/api/admin/users/[id]" });
+export const PUT = withPermission("users:update", PUT_handler, { route: "/api/admin/users/[id]" });
+export const DELETE = withPermission("users:delete", DELETE_handler, { route: "/api/admin/users/[id]" });

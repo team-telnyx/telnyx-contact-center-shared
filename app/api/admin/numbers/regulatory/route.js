@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
-export async function GET(request) {
+import { withPermission } from "@/lib/authz/guard";
+async function GET_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -59,3 +60,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("numbers:read", GET_handler, { route: "/api/admin/numbers/regulatory" });
