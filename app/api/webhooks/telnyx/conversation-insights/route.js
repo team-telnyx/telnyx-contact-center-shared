@@ -384,7 +384,7 @@ function verifyApiKeyHeader(request) {
  */
 export async function POST(request) {
   const startTime = Date.now();
-  const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const requestId = `req-${crypto.randomUUID()}`;
   
   try {
     // Read raw body for signature verification

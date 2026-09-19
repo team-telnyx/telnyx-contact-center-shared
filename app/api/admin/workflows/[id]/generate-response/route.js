@@ -13,6 +13,7 @@
  * test results consistent with what a real customer conversation will produce.
  */
 
+import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -43,20 +44,20 @@ function generateCustomerData() {
   const facilities = ["Mercy General Hospital", "St. Luke's Medical Center", "Cedar Valley Regional", "Riverside Community Hospital", "Mountain View Clinic"];
   const cities = ["Austin", "Denver", "Portland", "Seattle", "Phoenix", "Chicago", "Boston", "Atlanta", "Miami", "Dallas"];
 
-  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-  const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+  const firstName = firstNames[randomInt(firstNames.length)];
+  const lastName = lastNames[randomInt(lastNames.length)];
 
   return {
     caller_name: `${firstName} ${lastName}`,
     first_name: firstName,
     last_name: lastName,
-    callback_number: `555-${String(Math.floor(Math.random() * 900) + 100)}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-    facility_name: facilities[Math.floor(Math.random() * facilities.length)],
-    city: cities[Math.floor(Math.random() * cities.length)],
-    date_of_birth: `${Math.floor(Math.random() * 12) + 1}/${Math.floor(Math.random() * 28) + 1}/${Math.floor(Math.random() * 40) + 1960}`,
-    account_number: `AC${String(Math.floor(Math.random() * 900000) + 100000)}`,
+    callback_number: `555-${String(randomInt(900) + 100)}-${String(randomInt(9000) + 1000)}`,
+    facility_name: facilities[randomInt(facilities.length)],
+    city: cities[randomInt(cities.length)],
+    date_of_birth: `${randomInt(12) + 1}/${randomInt(28) + 1}/${randomInt(40) + 1960}`,
+    account_number: `AC${String(randomInt(900000) + 100000)}`,
     email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@email.com`,
-    patient_name: `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`,
+    patient_name: `${firstNames[randomInt(firstNames.length)]} ${lastNames[randomInt(lastNames.length)]}`,
   };
 }
 

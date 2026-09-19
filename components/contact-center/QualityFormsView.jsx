@@ -38,7 +38,7 @@ import { Can } from "@/components/auth-provider";
 
 function emptyCriterion() {
   return {
-    id: `criterion-${Math.random().toString(36).slice(2, 9)}`,
+    id: `criterion-${crypto.randomUUID()}`,
     label: "",
     description: "",
     type: "score",
