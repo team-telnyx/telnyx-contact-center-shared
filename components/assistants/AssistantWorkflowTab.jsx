@@ -50,6 +50,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Combobox } from "@/components/ui/combobox";
 import AIModels from "@/components/assistants/AIModels";
 import WorkflowVoicePicker from "@/components/assistants/WorkflowVoicePicker";
+import WorkflowTranscriptionPicker from "@/components/assistants/WorkflowTranscriptionPicker";
 import AssistantCapabilityGraph from "@/components/assistants/AssistantCapabilityGraph";
 import { VariableTextarea } from "@/components/voice-flow/VariableTextarea";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,7 @@ import {
   ASSISTANT_TOOL_LIBRARY_SOURCE_KEY,
   ASSISTANT_TOOL_LIBRARY_SOURCE_VALUE,
 } from "@/lib/ai/tool-library";
+import { cloneAssistantTranscriptionOverride } from "@/lib/ai/assistant-transcription.mjs";
 import {
   buildComparisonExpression,
   createDefaultConversationFlow,
@@ -810,9 +812,10 @@ function NodeProperties({
     <div className="p-4">
       <PanelHeader title={`Prompt node · ${node.name || "Prompt node"}`} />
       <Tabs defaultValue="agent" className="mt-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="agent">Agent</TabsTrigger>
-          <TabsTrigger value="voice">Voice</TabsTrigger>
+          <TabsTrigger value="voice">TTS</TabsTrigger>
+          <TabsTrigger value="transcription">STT</TabsTrigger>
           <TabsTrigger value="tools">Tools</TabsTrigger>
         </TabsList>
         <TabsContent value="agent" className="space-y-4 pt-4">
@@ -852,25 +855,15 @@ function NodeProperties({
           />
         </TabsContent>
         <TabsContent value="voice" className="space-y-4 pt-4">
-          <p className="text-xs text-muted-foreground">
-            Override the assistant voice for this step. Leave blank to use the assistant default
-            {values?.voice ? ` (${values.voice})` : ""}.
-          </p>
-          <WorkflowVoicePicker
-            value={{
-              voice: node.voice_settings?.voice || "",
-              voice_speed: node.voice_settings?.voice_speed ?? 1,
-              expressive_mode: node.voice_settings?.expressive_mode,
-            }}
-            onChange={(next) =>
-              onUpdateNode(node.id, {
-                voice_settings: cleanObject({ ...(node.voice_settings || {}), ...next }),
-              })
-            }
+          <NodeTtsOverride node={node} values={values} onUpdateNode={onUpdateNode} />
+        </TabsContent>
+        <TabsContent value="transcription" className="space-y-4 pt-4">
+          <NodeSttOverride
+            node={node}
+            values={values}
+            variableNames={variableNames}
+            onUpdateNode={onUpdateNode}
           />
-          <Button variant="outline" className="w-full" onClick={() => onUpdateNode(node.id, { voice_settings: undefined })}>
-            Use Assistant Default
-          </Button>
         </TabsContent>
         <TabsContent value="tools" className="space-y-4 pt-4">
           <ToolsPanel
@@ -888,9 +881,10 @@ function NodeProperties({
 }
 
 function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefreshLibraryTools, onUpdateNode }) {
+  const configuredTools = values?.tools;
   const assistantTools = useMemo(
-    () => (Array.isArray(values?.tools) ? values.tools.filter((tool) => getSharedToolId(tool)) : []),
-    [values]
+    () => (Array.isArray(configuredTools) ? configuredTools.filter((tool) => getSharedToolId(tool)) : []),
+    [configuredTools]
   );
 
   // Two independent concepts:
@@ -1020,7 +1014,7 @@ function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefresh
     <div className="space-y-4">
       <div className="rounded-md border p-3">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-medium">Override assistant tools</div>
+          <div className="text-sm font-medium">Override assistant defaults</div>
           <Switch checked={override} onCheckedChange={toggleOverride} />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
@@ -1328,6 +1322,118 @@ function SecretsCombobox({ value, onChange, className }) {
   );
 }
 
+function OverrideAssistantDefaultsToggle({ checked, onCheckedChange, description }) {
+  return (
+    <div className="rounded-md border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-medium">Override assistant defaults</div>
+        <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      </div>
+      {description && <p className="mt-2 text-xs text-muted-foreground">{description}</p>}
+    </div>
+  );
+}
+
+function NodeTtsOverride({ node, values, onUpdateNode }) {
+  const isOverride = Boolean(
+    node.voice_settings &&
+    typeof node.voice_settings === "object" &&
+    Object.keys(node.voice_settings).length > 0
+  );
+
+  return (
+    <div className="space-y-4">
+      <OverrideAssistantDefaultsToggle
+        checked={isOverride}
+        onCheckedChange={(checked) => {
+          if (!checked) {
+            onUpdateNode(node.id, { voice_settings: undefined });
+          } else if (!isOverride) {
+            onUpdateNode(node.id, {
+              voice_settings: cleanObject({
+                voice: values?.voice || undefined,
+                voice_speed: Number(values?.voice_speed ?? 1),
+                expressive_mode: values?.expressive_mode,
+              }),
+            });
+          }
+        }}
+        description={
+          isOverride
+            ? "This node uses its own text-to-speech voice settings."
+            : "This node inherits the assistant text-to-speech voice settings."
+        }
+      />
+      {!isOverride ? (
+        <p className="text-xs text-muted-foreground">
+          Uses the assistant voice{values?.voice ? ` (${values.voice})` : ""}.
+        </p>
+      ) : (
+        <WorkflowVoicePicker
+          value={{
+            voice: node.voice_settings?.voice || "",
+            voice_speed: node.voice_settings?.voice_speed ?? 1,
+            expressive_mode: node.voice_settings?.expressive_mode,
+          }}
+          onChange={(next) =>
+            onUpdateNode(node.id, {
+              voice_settings: cleanObject({ ...(node.voice_settings || {}), ...next }),
+            })
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function NodeSttOverride({ node, values, variableNames, onUpdateNode }) {
+  const isOverride = Boolean(
+    node.transcription &&
+    typeof node.transcription === "object" &&
+    Object.keys(node.transcription).length > 0
+  );
+
+  return (
+    <div className="space-y-4">
+      <OverrideAssistantDefaultsToggle
+        checked={isOverride}
+        onCheckedChange={(checked) => {
+          if (!checked) {
+            onUpdateNode(node.id, { transcription: undefined });
+          } else if (!isOverride) {
+            onUpdateNode(node.id, {
+              transcription: cloneAssistantTranscriptionOverride(values?.transcription),
+            });
+          }
+        }}
+        description={
+          isOverride
+            ? "This node uses its own speech-to-text transcription settings."
+            : "This node inherits the assistant speech-to-text transcription settings."
+        }
+      />
+      {!isOverride ? (
+        <p className="text-xs text-muted-foreground">
+          Uses the assistant transcription
+          {values?.transcription?.model ? ` (${values.transcription.model})` : ""}.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Changing the model resets provider-specific settings to Telnyx defaults.
+          </p>
+          <WorkflowTranscriptionPicker
+            nodeId={node.id}
+            value={node.transcription}
+            availableVariables={variableNames}
+            onChange={(transcription) => onUpdateNode(node.id, { transcription })}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NodeLlmOverride({ node, values, models, onUpdateNode }) {
   const isOverride = Boolean(node.model);
   const recommendedModels = useMemo(
@@ -1343,45 +1449,48 @@ function NodeLlmOverride({ node, values, models, onUpdateNode }) {
 
   return (
     <Field label="LLM">
-      <Tabs
-        value={isOverride ? "override" : "default"}
-        onValueChange={(value) => {
-          if (value === "default") {
-            onUpdateNode(node.id, { model: undefined, llm_api_key_ref: undefined });
-          } else if (!node.model) {
-            const fallback = recommendedModels[0]?.id || (Array.isArray(models) ? models[0]?.id : "") || "";
-            onUpdateNode(node.id, { model: fallback || undefined });
+      <div className="space-y-3">
+        <OverrideAssistantDefaultsToggle
+          checked={isOverride}
+          onCheckedChange={(checked) => {
+            if (!checked) {
+              onUpdateNode(node.id, { model: undefined, llm_api_key_ref: undefined });
+            } else if (!node.model) {
+              const fallback = recommendedModels[0]?.id || (Array.isArray(models) ? models[0]?.id : "") || "";
+              onUpdateNode(node.id, { model: fallback || undefined });
+            }
+          }}
+          description={
+            isOverride
+              ? "This node uses its own LLM model settings."
+              : "This node inherits the assistant LLM model settings."
           }
-        }}
-      >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="default">Assistant default</TabsTrigger>
-          <TabsTrigger value="override">Override</TabsTrigger>
-        </TabsList>
-        <TabsContent value="default" className="pt-2">
+        />
+        {!isOverride ? (
           <p className="text-xs text-muted-foreground">
             Uses the assistant model{values?.model ? ` (${values.model})` : ""}.
           </p>
-        </TabsContent>
-        <TabsContent value="override" className="space-y-3 pt-2">
-          <AIModels
-            value={node.model || ""}
-            onValueChange={(value) => onUpdateNode(node.id, { model: value || undefined })}
-            models={recommendedModels}
-            triggerClassName="w-full max-w-full"
-            contentClassName="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)]"
-          />
-          {requiresSecret && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">LLM API Key Reference</Label>
-              <SecretsCombobox
-                value={node.llm_api_key_ref || ""}
-                onChange={(value) => onUpdateNode(node.id, { llm_api_key_ref: value || undefined })}
-              />
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+        ) : (
+          <div className="space-y-3">
+            <AIModels
+              value={node.model || ""}
+              onValueChange={(value) => onUpdateNode(node.id, { model: value || undefined })}
+              models={recommendedModels}
+              triggerClassName="w-full max-w-full"
+              contentClassName="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)]"
+            />
+            {requiresSecret && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">LLM API Key Reference</Label>
+                <SecretsCombobox
+                  value={node.llm_api_key_ref || ""}
+                  onChange={(value) => onUpdateNode(node.id, { llm_api_key_ref: value || undefined })}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </Field>
   );
 }

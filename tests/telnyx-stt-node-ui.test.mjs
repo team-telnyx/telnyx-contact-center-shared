@@ -14,8 +14,8 @@ function assertTelnyxSttUi(editorSource, editorName) {
   );
   assert.match(
     editorSource,
-    /TELNYX_STT_MODEL_OPTIONS[\s\S]*const modelLabel = model/,
-    `${editorName} should derive model labels from the exact model only, e.g. deepgram/flux`,
+    /TELNYX_STT_MODEL_OPTIONS[\s\S]*const modelLabel = formatTelnyxSttModelLabel\(provider\)/,
+    `${editorName} should display every model in provider/model format`,
   );
   assert.match(
     editorSource,
@@ -88,6 +88,7 @@ test("voice-flow engine resolves virtual Telnyx STT provider model for answer an
   assert.match(engineSource, /case "answer":[\s\S]*applyStreamingProviderConfiguration\([\s\S]*action[\s\S]*\)[\s\S]*break;/);
   assert.match(engineSource, /case "streaming_start":[\s\S]*applyStreamingProviderConfiguration\([\s\S]*action[\s\S]*\)[\s\S]*break;/);
   assert.match(engineSource, /interim_results:\s*body\.telnyx_stt_interim_results !== false/);
+  assert.match(engineSource, /body\.stream_track = telnyxSttMediaStreamTrack\(transcriptionTracks\)/);
   assert.match(engineSource, /delete body\.telnyx_stt_interim_results/);
   assert.match(engineSource, /delete body\.telnyx_stt_model/);
 });

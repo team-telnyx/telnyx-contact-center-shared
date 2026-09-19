@@ -4,8 +4,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { authLogger, securityErrorPayload, securityUserPayload } from "@/lib/security-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-export async function GET() {
+async function GET_handler() {
   try {
     // Get session
     const session = await getServerSession(authOptions);
@@ -61,3 +62,6 @@ export async function GET() {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("authenticated", GET_handler, { route: "/api/user/auth-methods" });

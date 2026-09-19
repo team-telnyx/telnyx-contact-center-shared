@@ -1,34 +1,18 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { requireAiApiKey, jsonOk, jsonError } from "@/app/api/_utils/ai-auth";
 import { randomUUID } from "crypto";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
+import { withPermission } from "@/lib/authz/guard";
 
 // Support both admin session and API key authentication
-async function requireAuth(request) {
-  // Try API key authentication first
-  const apiAuth = requireAiApiKey(request);
-  if (apiAuth.ok) return { type: "api_key", user: null };
-
-  // Fall back to admin session authentication
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return { type: "session", user };
+// Machine access (telnyx-ai-api-key) or an administrator session; the guard decides.
+function requireAuth(authz) {
+  return authz.apiKey ? { type: "api_key", user: null } : { type: "session", user: authz.user };
 }
 
-export async function GET(request) {
-  const auth = await requireAuth(request);
+async function GET_handler(request, _context, authz) {
+  const auth = requireAuth(authz);
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const pool = getPostgresPool();
@@ -101,8 +85,8 @@ export async function GET(request) {
   return NextResponse.json(result);
 }
 
-export async function POST(request) {
-  const auth = await requireAuth(request);
+async function POST_handler(request, _context, authz) {
+  const auth = requireAuth(authz);
   if (!auth) {
     if (auth === null) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -232,3 +216,7 @@ export async function POST(request) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard; API-key callers keep their access.
+export const GET = withPermission("contacts:read", GET_handler, { apiKey: requireAiApiKey, route: "/api/contacts" });
+export const POST = withPermission("contacts:create", POST_handler, { apiKey: requireAiApiKey, route: "/api/contacts" });

@@ -1,32 +1,24 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { createDiagnosticLogger } from "@/lib/diagnostic-logger.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const qualityLogger = createDiagnosticLogger("contact-center.quality");
 
-async function guard() {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return { error: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }) };
-  }
-  if (!isSupervisorOrAdmin(user)) {
-    return { error: NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 }) };
-  }
+function guard(authz) {
   const pool = getPostgresPool();
   if (!pool) {
     return { error: NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 }) };
   }
-  return { user, pool };
+  return { user: authz.user, pool };
 }
 
 /**
  * GET /api/contact-center/quality/forms/[id]
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
-    const { error, pool } = await guard();
+    const { error, pool } = guard(authz);
     if (error) return error;
 
     const { id } = (await params) || {};
@@ -46,9 +38,9 @@ export async function GET(request, { params }) {
  * Update name/description/schema/configs. Editing the schema of a published
  * form bumps the version and snapshots the previous version.
  */
-export async function PATCH(request, { params }) {
+async function PATCH_handler(request, { params }, authz) {
   try {
-    const { error, user, pool } = await guard();
+    const { error, user, pool } = guard(authz);
     if (error) return error;
 
     const { id } = (await params) || {};
@@ -142,9 +134,9 @@ export async function PATCH(request, { params }) {
  * DELETE /api/contact-center/quality/forms/[id]
  * Archives the form (soft delete) so historical evaluations keep their reference.
  */
-export async function DELETE(request, { params }) {
+async function DELETE_handler(request, { params }, authz) {
   try {
-    const { error, user, pool } = await guard();
+    const { error, user, pool } = guard(authz);
     if (error) return error;
 
     const { id } = (await params) || {};
@@ -164,3 +156,8 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ ok: false, error: "Failed to archive form" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("quality_forms:read", GET_handler, { route: "/api/contact-center/quality/forms/[id]" });
+export const PATCH = withPermission("quality_forms:update", PATCH_handler, { route: "/api/contact-center/quality/forms/[id]" });
+export const DELETE = withPermission("quality_forms:delete", DELETE_handler, { route: "/api/contact-center/quality/forms/[id]" });

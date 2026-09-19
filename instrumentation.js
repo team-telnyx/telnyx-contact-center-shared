@@ -88,20 +88,6 @@ export async function register() {
         });
       }
 
-      // Clean up ghost calls after schema is ensured
-      try {
-        const { cleanupGhostCalls } = await import(
-          "./lib/contact-center/ghost-call-cleanup.mjs"
-        );
-        appLogger.info("ghost_call_cleanup_start", {});
-        const cleanupResult = await cleanupGhostCalls();
-        appLogger.info("ghost_call_cleanup_completed", cleanupResult);
-      } catch (cleanupError) {
-        // Don't fail startup if cleanup fails
-        appLogger.warn("ghost_call_cleanup_failed", {
-          error: cleanupError?.message || String(cleanupError),
-        });
-      }
     } catch (error) {
       // Don't fail startup if schema initialization fails
       // It might fail if PostgreSQL is not available yet
@@ -113,14 +99,85 @@ export async function register() {
     }
 
     if (allowsWorkerRole(processRole)) {
+      if (process.env.CALL_GENERATOR_EXTERNAL_WORKER !== "true") {
+        try {
+          const { getPostgresPool } = await import("./lib/postgres.mjs");
+          const { startGeneratorWorker } = await import("./lib/call-generator/runtime.mjs");
+          const pool = getPostgresPool();
+          if (pool && !globalThis.__cgWorker) globalThis.__cgWorker = startGeneratorWorker(pool, {
+            onError: error => appLogger.warn("call_generator_worker_error", { error: error.message }),
+          });
+        } catch (error) { appLogger.warn("call_generator_worker_start_failed", { error: error.message }); }
+      }
+      // ACD Core reconciler — ALWAYS ON, leader-elected, no enabling flag
+      // (the internal documentation §5.5). No-ops on empty acd_ tables until the
+      // core owns traffic; every correction it ever makes emits acd_events.
       try {
-        const { startCoordinator } = await import("./lib/contact-center/coordinator.js");
-        const started = await startCoordinator();
-        appLogger.info("coordinator_start_requested", { processRole, started });
-      } catch (coordinatorError) {
-        appLogger.warn("coordinator_start_failed", {
-          processRole,
-          error: coordinatorError?.message || String(coordinatorError),
+        const { getPostgresPool } = await import("./lib/postgres.mjs");
+        const { startReconciler } = await import("./lib/acd/reconciler.mjs");
+        const { createTelnyxProvider } = await import("./lib/acd/provider.mjs");
+        const pool = getPostgresPool();
+        if (pool) {
+          startReconciler(pool, {
+            provider: createTelnyxProvider(),
+            node: process.env.NODE_ID || process.env.HOSTNAME || "node",
+            onTick: (results) => {
+              const corrections =
+                (results?.sagaDeadlines || 0) +
+                (results?.orphanedClaims || 0) +
+                (results?.wrapupsClosed || 0) +
+                (results?.invariantAlarms || 0);
+              if (corrections > 0 || results?.error) {
+                appLogger.warn("acd_reconciler_tick", results);
+              }
+            },
+          });
+          appLogger.info("acd_reconciler_started", { processRole });
+        }
+      } catch (reconcilerError) {
+        appLogger.warn("acd_reconciler_start_failed", {
+          error: reconcilerError?.message || String(reconcilerError),
+        });
+      }
+
+      // ACD Core router worker: NOTIFY-driven + tick fallback.
+      try {
+        const { getPostgresPool } = await import("./lib/postgres.mjs");
+        const { startAcdWorker } = await import("./lib/acd/worker.mjs");
+        const { createTelnyxProvider } = await import("./lib/acd/provider.mjs");
+        const { readPostgresSslConfig } = await import("./lib/postgres-ssl.mjs");
+        const pool = getPostgresPool();
+        if (pool) {
+          startAcdWorker(pool, {
+            provider: createTelnyxProvider(),
+            node: process.env.NODE_ID || process.env.HOSTNAME || "node",
+            connectionConfig: {
+              host: process.env.POSTGRES_HOST,
+              port: Number(process.env.POSTGRES_PORT || 5432),
+              user: process.env.POSTGRES_USER,
+              password: process.env.POSTGRES_PASSWORD,
+              database: process.env.POSTGRES_DB,
+              ssl: readPostgresSslConfig(),
+              application_name: `${process.env.POSTGRES_APPLICATION_NAME || "telnyx-contact-center"}:acd-listener`,
+            },
+            onDrain: (results) => {
+              const failures = (results || []).filter((result) => result?.error);
+              if (failures.length > 0) {
+                appLogger.warn("acd_worker_drain_failed", { failures });
+              }
+            },
+            onListener: (state) => {
+              appLogger[state?.status === "error" ? "warn" : "info"](
+                `acd_worker_listener_${state?.status || "unknown"}`,
+                state,
+              );
+            },
+          });
+          appLogger.info("acd_worker_started", { processRole });
+        }
+      } catch (workerError) {
+        appLogger.warn("acd_worker_start_failed", {
+          error: workerError?.message || String(workerError),
         });
       }
     }

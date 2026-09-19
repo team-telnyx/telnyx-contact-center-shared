@@ -308,24 +308,10 @@ export const TRANSCRIPTION_PROVIDERS = [
   },
   {
     model_name: "deepgram/flux",
-    // Per Telnyx OpenAPI TranscriptionSettings.language for deepgram/flux:
-    // auto = Telnyx language detection controls the language hint
-    // multi = no audio hint / multilingual
+    // Deepgram Flux is English-only. Multilingual/code-switching support uses
+    // the separate flux-multi model on the Telnyx STT WebSocket.
     voiceApiSupported: false,
-    languages: [
-      "auto",
-      "multi",
-      "en",
-      "es",
-      "fr",
-      "de",
-      "hi",
-      "ru",
-      "pt",
-      "ja",
-      "it",
-      "nl",
-    ],
+    languages: ["en"],
   },
   {
     model_name: "speechmatics/standard",
@@ -357,8 +343,8 @@ export const TRANSCRIPTION_PROVIDERS = [
     model_name: "soniox/stt-rt-v4",
     // Soniox STT supports automatic language detection by default and 60+ ISO
     // language codes for hints, per:
-    // https://soniox.com/docs/stt/concepts/supported-languages
-    // https://soniox.com/docs/stt/concepts/language-hints
+    // https://soniox.com/the internal documentation
+    // https://soniox.com/the internal documentation
     languages: [
       "auto",
       "af",
@@ -459,6 +445,17 @@ export const TRANSCRIPTION_PROVIDERS = [
       "vi",
     ],
   },
+  {
+    // NVIDIA Parakeet V3 uses automatic multilingual language detection.
+    model_name: "nvidia/parakeet-v3",
+    languages: ["auto"],
+  },
+  {
+    // Humain Realtime supports Arabic, English, and Arabic/English
+    // code-switching. `auto` resolves server-side to code-switching.
+    model_name: "humain/realtime",
+    languages: ["auto", "codeswitch", "ar", "en"],
+  },
 ];
 
 
@@ -491,6 +488,11 @@ const TRANSCRIPTION_PROVIDER_META = {
     provider: "assemblyai",
   },
   "xai/grok-stt": { label: "xAI Grok STT", provider: "xai" },
+  "nvidia/parakeet-v3": {
+    label: "NVIDIA Parakeet V3",
+    provider: "nvidia",
+  },
+  "humain/realtime": { label: "Humain Realtime", provider: "humain" },
 };
 
 for (const provider of TRANSCRIPTION_PROVIDERS) {

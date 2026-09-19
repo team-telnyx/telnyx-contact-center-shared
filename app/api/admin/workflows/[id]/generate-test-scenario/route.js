@@ -10,8 +10,9 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { generateTestScenario, SCENARIO_TYPES } from "@/lib/agent-assist/generate-test-scenario";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 // POST /api/admin/workflows/[id]/generate-test-scenario
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -38,7 +39,7 @@ export async function POST(request, { params }) {
     }
 
     const { rows: [workflow] } = await pool.query(
-      `SELECT id, name, llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT id, name, llm_model, llm_reasoning_enabled FROM aa_workflows WHERE id = $1`,
       [workflowId]
     );
 
@@ -76,6 +77,7 @@ export async function POST(request, { params }) {
       workflow,
       scenarioType,
       model: workflow.llm_model || "openai/gpt-4o",
+      reasoningEnabled: workflow.llm_reasoning_enabled === true,
     });
 
     if (!scenario) {
@@ -96,3 +98,6 @@ export async function POST(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("workflows:ai", POST_handler, { route: "/api/admin/workflows/[id]/generate-test-scenario" });

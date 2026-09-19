@@ -3,12 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { contactCenterErrorPayload, queuesLogger } from "@/lib/contact-center/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 /**
  * GET /api/contact-center/queues/list
  * Returns a list of enabled and active queues for use in call flows
  */
-export async function GET(request) {
+async function GET_handler(request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,3 +40,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agent:self", GET_handler, { route: "/api/contact-center/queues/list" });

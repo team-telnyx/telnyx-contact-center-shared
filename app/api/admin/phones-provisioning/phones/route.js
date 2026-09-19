@@ -1,27 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { normalizeMac, SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
 import { assignPhoneNumberToConnection, createPhoneSipConnection, deletePhoneSipConnection, listUnassignedPhoneNumbers, updatePhoneSipConnectionCallerId } from "@/lib/hardphones/credentials.mjs";
 import { syncHardphonePhoneNumbersFromTelnyx } from "@/lib/hardphones/number-sync.mjs";
 import { syncHardphoneRegistrationStatusesFromTelnyx } from "@/lib/hardphones/registration-sync.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user) || user.experimental_features !== true) return null;
-  return user;
-}
 
 const PHONE_COLUMNS = `id, phone_name, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
   assigned_phone_number_id, assigned_phone_number, sip_username, admin_password, settings, provisioning_state, ip_address, last_ip,
@@ -60,9 +45,10 @@ function resolveSipRegistrationStatus(phone, registrationEvent) {
   };
 }
 
-export async function GET(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, _context, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -111,9 +97,10 @@ export async function GET(request) {
   }
 }
 
-export async function POST(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   if (!process.env.TELNYX_PHONE_ADMIN_PASSWORD) {
@@ -234,3 +221,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Failed to create phone" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("phones:read", GET_handler, { route: "/api/admin/phones-provisioning/phones" });
+export const POST = withPermission("phones:create", POST_handler, { route: "/api/admin/phones-provisioning/phones" });

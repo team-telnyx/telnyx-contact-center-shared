@@ -60,23 +60,23 @@ describe("call generator code completeness", () => {
 
   it("API route for scenarios supports GET list and POST create", async () => {
     const code = await srcFile("app/api/admin/call-generator/scenarios/route.js");
-    assert.match(code, /export async function GET/);
-    assert.match(code, /export async function POST/);
+    assert.match(code, /export const GET = withPermission\(/);
+    assert.match(code, /export const POST = withPermission\(/);
     assert.match(code, /cg_scenarios/);
-    assert.match(code, /requireAdmin/);
+    assert.match(code, /withPermission\("call_generator:/);
   });
 
   it("API route for scenario detail supports GET, PUT, DELETE", async () => {
     const code = await srcFile("app/api/admin/call-generator/scenarios/[id]/route.js");
-    assert.match(code, /export async function GET/);
-    assert.match(code, /export async function PUT/);
-    assert.match(code, /export async function DELETE/);
+    assert.match(code, /export const GET = withPermission\(/);
+    assert.match(code, /export const PUT = withPermission\(/);
+    assert.match(code, /export const DELETE = withPermission\(/);
   });
 
   it("API route for runs supports GET list and POST start", async () => {
     const code = await srcFile("app/api/admin/call-generator/runs/route.js");
-    assert.match(code, /export async function GET/);
-    assert.match(code, /export async function POST/);
+    assert.match(code, /export const GET = withPermission\(/);
+    assert.match(code, /export const POST = withPermission\(/);
     assert.match(code, /cg_runs/);
   });
 });

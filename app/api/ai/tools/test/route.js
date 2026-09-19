@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 async function telnyxJson(path, { apiKey, method = "GET", body } = {}) {
@@ -141,7 +142,7 @@ async function findAssistantToolContext({ apiKey, tool, requestedAssistantId }) 
   return null;
 }
 
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -218,3 +219,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("ai_tools:test", POST_handler, { route: "/api/ai/tools/test" });

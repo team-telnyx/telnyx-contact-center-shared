@@ -899,6 +899,34 @@ export default function CallingTab({ values, setValues }) {
           <CardTitle className="text-base">Call Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6 pt-0">
+          <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <Label
+                htmlFor="send-conversation-message-events"
+                className="text-sm font-medium cursor-pointer"
+              >
+                Send conversation message events
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Send conversation message events during assistant calls.
+              </p>
+            </div>
+            <Switch
+              id="send-conversation-message-events"
+              checked={
+                values?.telephony?.send_conversation_message_events === true
+              }
+              onCheckedChange={(checked) =>
+                setValues((v) => ({
+                  ...v,
+                  telephony: {
+                    ...(v.telephony || {}),
+                    send_conversation_message_events: checked,
+                  },
+                }))
+              }
+            />
+          </div>
 
           {/* Durations row */}
           <div className="grid grid-cols-2 gap-4">

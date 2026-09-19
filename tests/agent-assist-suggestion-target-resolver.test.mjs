@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveSuggestedResponseTarget } from "../lib/agent-assist/suggestion-target-resolver.mjs";
+import { resolveSuggestedResponseTarget, isItemStillRelevantInStage } from "../lib/agent-assist/suggestion-target-resolver.mjs";
 
 const stages = [
   {
@@ -102,6 +102,86 @@ test("non-slot items in an earlier stage do NOT block leading (clamp keys on ope
 
   assert.equal(result.stage.id, "stage-2");
   assert.equal(result.reason, "conversation_stage_match");
+});
+
+test("a stuck opening question is skipped once a LATER item in the SAME stage already progressed (Call Intent bug)", () => {
+  // Reported live (the reference workflow healthcare intake): agent's one combined opening
+  // utterance ("Thanks for calling... how can I help you today?") only
+  // completed "Greet caller", leaving "Ask how to assist today" stuck
+  // pending — an unreliable non-slot completion detection, same class of
+  // issue the other tests in this file already cover for CROSS-stage
+  // staleness. Unlike those, here the stuck item and the slot that
+  // progressed past it (Call Intent) are in the SAME stage, so the
+  // stage-level clamp (leadStageOrder/progressStageOrder) never applies —
+  // this needs the item-level fix (isEffectivelyOpen). Once the caller
+  // states their intent, the suggestion must advance to "Confirm intent
+  // understood", not keep re-suggesting "How can I help you?" verbatim.
+  const callerIdStages = [
+    {
+      id: "caller-id",
+      name: "Caller Identification",
+      order_index: 0,
+      items: [
+        { id: "greet", type: "action", label: "Greet caller with brand name", prompt_hint: "hello, this is Acme Air Medical, thank you for calling", order_index: 0 },
+        { id: "ask-help", type: "question", label: "Ask how to assist today", prompt_hint: "how can I help, what can I do, assist you with", order_index: 1 },
+        { id: "intent", type: "slot", label: "Call intent", slot_name: "intent", prompt_hint: "new transport, request flight, check status", order_index: 2 },
+        { id: "confirm-intent", type: "topic", label: "Confirm intent understood", prompt_hint: "so you need, requesting, want to check, let me confirm", order_index: 3 },
+        { id: "caller-first-name", type: "slot", label: "Caller First Name", slot_name: "caller_first_name", prompt_hint: "my name is, first name", order_index: 4 },
+      ],
+    },
+  ];
+  const itemStatuses = {
+    greet: { status: "completed" },
+    // "ask-help" deliberately has NO status entry — stuck pending, exactly
+    // as when the LLM only flagged one of the two adjacent opening items.
+  };
+  const slotsFilled = { intent: "request_new_transport" };
+
+  const result = resolveSuggestedResponseTarget({
+    stages: callerIdStages,
+    itemStatuses,
+    slotsFilled,
+    transcriptions: finalConversation("I want to request transfer patient to another hospital"),
+  });
+
+  assert.equal(result?.item.id, "confirm-intent");
+  assert.notEqual(result?.item.id, "ask-help");
+});
+
+test("isItemStillRelevantInStage: a stale non-slot suggestion card is dropped once a LATER item in the stage has a value, EVEN if only 'suggested' (not confirmed)", () => {
+  // Matches the exact live report: Call Intent was captured at 85% LLM
+  // confidence — still status "suggested" pending explicit confirmation,
+  // not "completed" — yet the stuck "Ask how to assist today" card (no
+  // status at all) must still be dropped from the panel. This is what the
+  // UI's Fix-5b cleanup filter calls per suggestion card; unlike the
+  // resolver's own leadSlot logic, a "suggested" (unconfirmed) slot value
+  // is enough evidence of progress for a NON-slot item, since itemHasCapturedValue
+  // already treats a "suggested" slot's extracted_value as captured.
+  const stage = {
+    id: "caller-id",
+    name: "Caller Identification",
+    order_index: 0,
+    items: [
+      { id: "greet", type: "action", label: "Greet caller with brand name", order_index: 0 },
+      { id: "ask-help", type: "question", label: "Ask how to assist today", order_index: 1 },
+      { id: "intent", type: "slot", label: "Call intent", slot_name: "intent", order_index: 2 },
+    ],
+  };
+  const itemStatuses = {
+    greet: { status: "completed" },
+    intent: { status: "suggested", extracted_value: "transfer" },
+    // "ask-help" has NO status entry at all — matches the live report where
+    // it never got marked completed OR suggested by the analyzer.
+  };
+
+  const askHelpItem = stage.items.find((i) => i.id === "ask-help");
+  assert.equal(isItemStillRelevantInStage(askHelpItem, stage, itemStatuses, {}), false);
+
+  // Sanity check: a SLOT suggestion is untouched by this — it stays
+  // "relevant" (still shown) until explicitly confirmed, regardless of
+  // whether anything later has progressed.
+  const intentItem = stage.items.find((i) => i.id === "intent");
+  assert.equal(isItemStillRelevantInStage(intentItem, stage, itemStatuses, {}), true);
 });
 
 test("a stale earlier-stage match does not preempt the lead slot once the caller jumped ahead", () => {
@@ -415,7 +495,7 @@ test("correction-targeting stops once the read-back item has already been given 
       name: "Confirmation",
       order_index: 1,
       items: [
-        { id: "confirm-all", type: "question", label: "Confirm all information is correct", order_index: 0 },
+        { id: "confirm-all", type: "question", label: "Confirm all information is correct", completion_trigger: "customer", order_index: 0 },
         { id: "provide-ref", type: "action", label: "Provide confirmation/reference number", order_index: 1 },
       ],
     },
@@ -424,7 +504,7 @@ test("correction-targeting stops once the read-back item has already been given 
     stages: readBackStages,
     itemStatuses: {
       dob: { status: "completed", extracted_value: "1965-03-20" },
-      "confirm-all": { status: "completed", extracted_value: true },
+      "confirm-all": { status: "completed", extracted_value: true, completed_by: "customer" },
     },
     slotsFilled: { patient_dob: "1965-03-20" },
     transcriptions: finalConversation(
@@ -435,6 +515,115 @@ test("correction-targeting stops once the read-back item has already been given 
   assert.notEqual(result?.mode, "collect_correction");
   assert.equal(result.stage.id, "s2");
   assert.equal(result.item.id, "provide-ref");
+});
+
+test("an agent-completed read-back RECITATION item does NOT gate off corrections before the customer's own confirmation", () => {
+  // Split-item workflow: the agent completes "Read back transport details"
+  // (completion_trigger: agent) themselves while reciting, BEFORE the
+  // customer has said anything. Both this item and "Confirm all information
+  // is correct" match isReadBackItem (it keys off "read back" phrasing too),
+  // but only the customer's own item is the actual sign-off. Gating on any
+  // read-back-matching item completing — instead of specifically the
+  // customer's — would freeze correction-targeting the instant the agent
+  // starts reciting, even though the customer hasn't confirmed anything yet.
+  const readBackStages = [
+    {
+      id: "s1",
+      name: "Patient Information",
+      order_index: 0,
+      items: [
+        { id: "dob", type: "slot", label: "Patient date of birth", slot_name: "patient_dob", prompt_hint: "date of birth, DOB, born", order_index: 0 },
+      ],
+    },
+    {
+      id: "s2",
+      name: "Confirmation",
+      order_index: 1,
+      items: [
+        { id: "read-back", type: "action", label: "Read back transport details", completion_trigger: "agent", order_index: 0 },
+        { id: "confirm-all", type: "question", label: "Confirm all information is correct", completion_trigger: "customer", order_index: 1 },
+      ],
+    },
+  ];
+  const result = resolveSuggestedResponseTarget({
+    stages: readBackStages,
+    itemStatuses: {
+      dob: { status: "completed", extracted_value: "1965-03-20" },
+      "read-back": { status: "completed" },
+    },
+    slotsFilled: { patient_dob: "1965-03-20" },
+    transcriptions: finalConversation(
+      "Wait, that's not correct, the date of birth should be March twentieth nineteen seventy."
+    ),
+  });
+
+  assert.equal(result.mode, "collect_correction");
+  assert.equal(result.item.id, "dob");
+});
+
+function readBackEitherStages() {
+  return [
+    {
+      id: "s1",
+      name: "Patient Information",
+      order_index: 0,
+      items: [
+        { id: "dob", type: "slot", label: "Patient date of birth", slot_name: "patient_dob", prompt_hint: "date of birth, DOB, born", order_index: 0 },
+      ],
+    },
+    {
+      id: "s2",
+      name: "Confirmation",
+      order_index: 1,
+      items: [
+        { id: "confirm-all", type: "question", label: "Confirm all information is correct", completion_trigger: "either", order_index: 0 },
+        { id: "provide-ref", type: "action", label: "Provide confirmation/reference number", order_index: 1 },
+      ],
+    },
+  ];
+}
+
+test("a completion_trigger 'either' confirmation item gates corrections off when the CUSTOMER completed it", () => {
+  // Some workflows let either party complete the final confirmation item.
+  // The gate must key on who actually completed it (completed_by), not just
+  // that the trigger admits the customer — a customer completion should
+  // still gate corrections off.
+  const result = resolveSuggestedResponseTarget({
+    stages: readBackEitherStages(),
+    itemStatuses: {
+      dob: { status: "completed", extracted_value: "1965-03-20" },
+      "confirm-all": { status: "completed", extracted_value: true, completed_by: "customer" },
+    },
+    slotsFilled: { patient_dob: "1965-03-20" },
+    transcriptions: finalConversation(
+      "No, something is not correct. Date of birth is March twentieth nineteen sixty five. Yes, all information is correct."
+    ),
+  });
+
+  assert.notEqual(result?.mode, "collect_correction");
+  assert.equal(result.stage.id, "s2");
+  assert.equal(result.item.id, "provide-ref");
+});
+
+test("a completion_trigger 'either' confirmation item does NOT gate corrections off when the AGENT completed it", () => {
+  // The reported gap: an "either" item can complete from the AGENT's own
+  // utterance, not just the customer's. That must not be read as the
+  // customer's sign-off — the caller's own correction request right after
+  // must still be collectible.
+  const result = resolveSuggestedResponseTarget({
+    stages: readBackEitherStages(),
+    itemStatuses: {
+      dob: { status: "completed", extracted_value: "1965-03-20" },
+      "confirm-all": { status: "completed", extracted_value: true, completed_by: "agent" },
+    },
+    slotsFilled: { patient_dob: "1965-03-20" },
+    transcriptions: finalConversation(
+      "Wait, that's not correct, the date of birth should be March twentieth nineteen seventy."
+    ),
+  });
+
+  assert.equal(result.mode, "collect_correction");
+  assert.equal(result.item.id, "dob");
 });
 
 test("a stuck opening item does NOT win a conversation-stage match MID-CALL either, once real progress has been made", () => {

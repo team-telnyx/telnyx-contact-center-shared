@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { normalizeImportedWorkflowBundle } from "@/lib/agent-assist/workflow-bundles.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 async function loadWorkflowWithStages(client, id) {
@@ -37,7 +38,7 @@ async function loadWorkflowWithStages(client, id) {
   return workflow;
 }
 
-export async function POST(request) {
+async function POST_handler(request) {
   let client;
   let committed = false;
   try {
@@ -99,8 +100,8 @@ export async function POST(request) {
         await client.query(
           `INSERT INTO aa_workflow_items
            (stage_id, type, label, description, prompt_hint, hints, order_index, is_required,
-            slot_name, slot_type, slot_options, slot_validation, completion_trigger)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            slot_name, slot_type, slot_options, slot_validation, completion_trigger, mcp_binding)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
             createdStage.id,
             item.type || "action",
@@ -115,6 +116,7 @@ export async function POST(request) {
             item.slot_options ? JSON.stringify(item.slot_options) : null,
             item.slot_validation || null,
             item.completion_trigger || (item.type === "slot" ? "customer" : "agent"),
+            item.mcp_binding ? JSON.stringify(item.mcp_binding) : null,
           ],
         );
       }
@@ -139,3 +141,6 @@ export async function POST(request) {
     if (client) client.release();
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("workflows:import", POST_handler, { route: "/api/admin/workflows/import" });

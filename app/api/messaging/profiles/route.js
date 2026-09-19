@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
+    const user = authz.user;
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -51,3 +53,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("messaging_admin:read", GET_handler, { route: "/api/messaging/profiles" });

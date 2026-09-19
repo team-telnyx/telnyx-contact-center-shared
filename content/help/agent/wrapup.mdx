@@ -4,13 +4,15 @@ description: Select wrap-up codes, understand auto-save, and finish after-call w
 audiences: [agent, supervisor, admin, owner]
 keywords: [wrapup, disposition, after call work, codes]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-09-12
 ---
 
-After an answered call ends, the global **Wrapup Codes** sheet opens and status changes to **Wrapup**. Calls that were never answered, timeout/re-enqueued calls, customer abandonment before answer, and consult-only legs do not create normal wrap-up.
+After an answered call or accepted chat ends, the global **Wrapup Codes** sheet opens and status changes to **Wrapup**. For chat, this happens whether the agent or the customer disconnects. Calls that were never answered, timeout/re-enqueued calls, customer abandonment before acceptance, and consult-only legs do not create normal wrap-up.
 
-The sheet shows the queue, countdown to auto-save, and codes assigned to that queue. Select all codes that accurately describe the outcome. A code can show a description, icon/color, and **Default** badge.
+The shared sheet shows the queue, the server's wrap-up deadline, and codes assigned to that queue. Choose the code that accurately describes the outcome. A code can show a description, icon/color, and **Default** badge.
 
-Choose **Save & Close** before the timer expires. If time expires or the sheet is dismissed during normal operation, the selected/default codes are auto-submitted. When saving fails, use **Retry save**; **Close without saving** is exposed only as recovery from a failed save.
+Choose **Save & Close** before the timer expires, or **Save & Go on Break** to finish and request Break. Core completes expired wrap-up on the server, preserving a previously saved disposition or recording `auto_timeout`. Refreshing the page does not restart the timer. When saving fails, use **Retry save**; **Close without saving** is exposed only as recovery from a failed save and does not complete wrap-up or release its capacity.
 
-Successful completion records the disposition and returns status to Available. Do not start unrelated work while wrap-up is open. Campaign calls can additionally open **Campaign Disposition**, where the selected mapping may require callback date/time and allows supervisor/reporting notes.
+While in Wrapup, the agent receives no new offers and cannot accept an outstanding chat offer. Each ended chat retains its utilization slot until its disposition is completed. If several chats end, the sheet handles them one at a time and status stays Wrapup until all pending wrap-ups finish. Completion restores Busy when another chat is still active; otherwise it restores the underlying manual status, normally Available or the requested Break. A reconnect or page reload restores the pending sheet and its original deadline.
+
+Campaign calls can additionally open **Campaign Disposition**, where the selected mapping may require callback date/time and allows supervisor/reporting notes.

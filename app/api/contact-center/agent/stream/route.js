@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { replaceSseClient, removeSseClient } from "@/lib/sse";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { readAgentStream } from "@/lib/acd/stream.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
@@ -9,20 +11,23 @@ export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effecti
  * GET /api/contact-center/agent/stream
  * SSE endpoint for real-time agent updates
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = authz.user;
 
     const sseKey = `contact-center:agent:${user.username}`;
+    const pool = getPostgresPool();
+    if (!pool) return NextResponse.json({ error: "State unavailable" }, { status: 503 });
+    const requestedCursor = request.headers.get("last-event-id") || new URL(request.url).searchParams.get("after") || "0";
+    let cursor = /^\d{1,18}$/.test(requestedCursor) ? requestedCursor : "0";
 
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();
         let closed = false;
         let timer = null;
+        let pollTimer = null;
+        let polling = false;
         let disconnectHandled = false;
 
         const cleanup = async () => {
@@ -34,6 +39,7 @@ export async function GET(request) {
 
           try {
             if (timer) clearInterval(timer);
+            if (pollTimer) clearTimeout(pollTimer);
           } catch (_) {}
           try {
             removeSseClient(sseKey, proxyWriter);
@@ -42,9 +48,8 @@ export async function GET(request) {
             controller.close?.();
           } catch (_) {}
 
-          // Agent SSE is a read/presence transport only. Do not persist routing
-          // status from connect/disconnect lifecycle; DB-authoritative call
-          // lifecycle status is owned by agent-call-lifecycle-status.js.
+          // The stream is read-only. WebRTC session heartbeats and Core
+          // lifecycle transitions are the only presence/workflow writers.
         };
 
         let writeFailures = 0;
@@ -72,6 +77,32 @@ export async function GET(request) {
         // 15s (until the ping-failure cleanup), causing the same event to be
         // delivered twice and rendered as a duplicate transcription bubble.
         replaceSseClient(sseKey, proxyWriter);
+
+        const poll = async (snapshot = false) => {
+          if (closed || polling) return;
+          polling = true;
+          let more = false;
+          try {
+            const batch = await readAgentStream(pool, { agentId: user.id, after: cursor, snapshot });
+            cursor = batch.cursor;
+            more = batch.more;
+            await write(
+              `id: ${cursor}\nevent: acd_sync\ndata: ${JSON.stringify({
+                cursor,
+                snapshot: batch.snapshot,
+                recovery: batch.recovery,
+              })}\n\n`,
+            );
+          } catch {
+            // Reconnect obtains a fresh authorized snapshot; never skip a
+            // cursor on database failure or expose another agent's events.
+            await cleanup();
+          } finally {
+            polling = false;
+            if (!closed) pollTimer = setTimeout(() => poll(), more ? 10 : 1000);
+          }
+        };
+        poll(true);
 
         // Send initial connection event
         write(
@@ -103,3 +134,6 @@ export async function GET(request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agent:self", GET_handler, { route: "/api/contact-center/agent/stream" });

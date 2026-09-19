@@ -16,6 +16,7 @@ import {
 } from "@tabler/icons-react";
 import WaveSurfer from "wavesurfer.js";
 import { notify } from "@/components/ToastNotify";
+import VideoRecordingPlayer from "./VideoRecordingPlayer";
 
 function formatDuration(seconds) {
   if (seconds == null || Number.isNaN(Number(seconds))) return "00:00";
@@ -66,7 +67,7 @@ function barOptionsFor(style) {
     : { barWidth: 2, barGap: 1, barRadius: 3 };
 }
 
-const RecordingPlayer = forwardRef(function RecordingPlayer({
+const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
   src,
   recordingId,
   format,
@@ -453,6 +454,15 @@ const RecordingPlayer = forwardRef(function RecordingPlayer({
       </CardContent>
     </Card>
   );
+});
+
+// Composed web video calls (mp4) play in a video element with the same
+// imperative seek contract; everything else keeps the waveform player.
+const RecordingPlayer = forwardRef(function RecordingPlayer({ video = false, format, ...props }, ref) {
+  if (video || format === "mp4") {
+    return <VideoRecordingPlayer ref={ref} src={props.src} onTimeUpdate={props.onTimeUpdate} onPlayingChange={props.onPlayingChange} />;
+  }
+  return <AudioRecordingPlayer ref={ref} format={format} {...props} />;
 });
 
 export default RecordingPlayer;

@@ -6,6 +6,7 @@ import { validateFlow } from "@/lib/voice-flow-validator";
 import { randomUUID } from "crypto";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 function getBaseUrl(request) {
@@ -96,7 +97,7 @@ function findOldFlowId(nodes) {
  * POST /api/voice/flows/import
  * Import a call flow JSON bundle as a new flow.
  */
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -168,3 +169,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("call_flows:import", POST_handler, { route: "/api/voice/flows/import" });

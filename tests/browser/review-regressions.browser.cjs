@@ -1,0 +1,55 @@
+const path=require('node:path'),fs=require('node:fs'),os=require('node:os'),http=require('node:http'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'../..'),req=require('node:module').createRequire(path.join(root,'package.json'));
+const output=fs.mkdtempSync(path.join(os.tmpdir(),'cc-review-regressions-'));
+(async()=>{
+  await req('esbuild').build({entryPoints:[path.join(__dirname,'review-regressions.fixture.jsx')],bundle:true,outfile:path.join(output,'app.js'),platform:'browser',jsx:'automatic',alias:{'@':root,react:req.resolve('react'),'react-dom':path.join(root,'node_modules/react-dom')},define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'workspace-node-resolution',setup(build){build.onResolve({filter:/^[^./]/},args=>{if(args.path.startsWith('@/'))return;return {path:req.resolve(args.path)};});}}]});
+  const server=http.createServer((request,response)=>{response.setHeader('Content-Type',request.url==='/app.js'?'text/javascript':'text/html');response.end(request.url==='/app.js'?fs.readFileSync(path.join(output,'app.js')):'<!doctype html><div id="root"></div><script src="/app.js"></script>');});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  let browser;
+  try {
+    const mac='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    browser=await req('puppeteer').launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:fs.existsSync(mac)?{executablePath:mac}:{}),args:process.env.CI?['--no-sandbox']:[]});
+    const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.evaluateOnNewDocument(()=>{
+      const schedule=window.setInterval,cancel=window.clearInterval;window.activeIntervals=new Map();
+      window.setInterval=(fn,ms,...args)=>{const id=schedule(fn,ms,...args);window.activeIntervals.set(id,ms);return id;};
+      window.clearInterval=id=>{window.activeIntervals.delete(id);return cancel(id);};
+    });
+    await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.waitForFunction(()=>document.querySelector('#options')?.textContent.includes('Yesterday'));
+    const request=new URL(await page.evaluate(()=>fixture.requests[0]),'http://localhost');
+    assert.equal(request.pathname,'/api/contact-center/analytics/queues');
+    assert.equal(request.search,'');
+    for(const queue of ['Yesterday','Skills only','Active handoff']) assert((await page.$eval('#options',e=>e.textContent)).includes(queue));
+    assert.equal(await page.evaluate(()=>activeIntervals.size),0,'missing SLA must not start timers');
+    await page.evaluate(()=>fixture.setKind('external'));
+    await page.waitForFunction(()=>document.querySelector('#badges').textContent.includes('At risk'));
+    assert.equal(await page.evaluate(()=>activeIntervals.size),0,'parent time must not start child timers');
+    await page.evaluate(()=>{fixture.setDeadline(Date.now()+3500);fixture.setKind('live');});
+    await page.waitForFunction(()=>document.querySelector('#badges').textContent.includes('Pending'));
+    assert.equal(await page.evaluate(()=>activeIntervals.size),1,'1000 mounted standalone SLAs share one interval');
+    await page.waitForFunction(()=>document.querySelector('#badges').textContent.includes('At risk'));
+    await page.waitForFunction(()=>document.querySelector('#badges').textContent.includes('SLA breached'));
+    await page.evaluate(()=>fixture.setKind('none'));
+    await page.waitForFunction(()=>activeIntervals.size===0);
+    const count=await page.evaluate(()=>fixture.requests.length);
+    await page.evaluate(()=>fixture.setQuery(fixture.scope.replace('queue=Yesterday','queue=Sales')));
+    await new Promise(resolve=>setTimeout(resolve,100));assert.equal(await page.evaluate(()=>fixture.requests.length),count,'queue selection cannot narrow its own options');
+    await page.evaluate(()=>{fixture.setQuery('from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z&timezone=UTC&channel=chat&report=skills-gap');});
+    await new Promise(resolve=>setTimeout(resolve,100));assert.equal(await page.evaluate(()=>fixture.requests.length),count,'date/channel/report changes cannot narrow inventory');
+    await page.evaluate(()=>{fixture.mode='defer';fixture.refresh();});
+    await page.waitForFunction(()=>document.querySelector('#options').textContent.includes('"loading":true'));
+    await page.evaluate(()=>{fixture.mode='error';fixture.refresh();});
+    await page.waitForFunction(()=>document.querySelector('#options').textContent.includes('Unable to load queue options'));
+    await page.evaluate(()=>fixture.pending[0]({ok:true,json:async()=>({queues:['STALE']})}));
+    await new Promise(resolve=>setTimeout(resolve,100));assert(!(await page.$eval('#options',e=>e.textContent)).includes('STALE'));
+    await page.evaluate(()=>{fixture.mode='empty';fixture.refresh();});
+    await page.waitForFunction(()=>document.querySelector('#options').textContent==='{"queues":[],"loading":false,"error":null}');
+    await page.evaluate(()=>{fixture.mode='success';fixture.refresh();});
+    await page.waitForFunction(()=>document.querySelector('#options').textContent.includes('Yesterday'));
+    assert.equal(await page.evaluate(()=>fixture.requests.at(-1)),'/api/contact-center/analytics/queues');
+    assert.deepEqual(errors,[]);
+    const result={passed:9,checks:['inventory includes historical, skills-only and active-handoff queues','missing SLA has no clock','parent clock shared','1000 standalone badges share a clock','risk and breach transitions','last unmount stops clock','queue selection does not narrow options','scope changes preserve inventory and refresh rejects stale responses','loading error empty and refresh recovery']};
+    fs.writeFileSync(path.join(output,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,output},null,2));
+  } finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}
+})().catch(error=>{console.error(error);process.exitCode=1;});

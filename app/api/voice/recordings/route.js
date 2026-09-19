@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { findInteractionViewByCallControlId, findInteractionViewByCallSessionId } from "@/lib/acd/work-item-repository.mjs";
+import { workItemInScope } from "@/lib/authz/scope.mjs";
 
 /**
  * GET /api/voice/recordings
@@ -16,15 +19,9 @@ import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, plat
  * 1. Fetch call information from /v2/calls/{call_control_id} to get call_session_id
  * 2. Use call_session_id to filter recordings
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const user = authz.user;
 
     const token = process.env.TELNYX_API_KEY;
     if (!token) {
@@ -37,6 +34,18 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     let callSessionId = searchParams.get("call_session_id");
     const callControlId = searchParams.get("call_control_id");
+
+    // A scoped caller may only list the recordings of one interaction within their scope (Phase 3a).
+    if (authz.scope.restricted) {
+      const pool = getPostgresPool();
+      const reference = callControlId || callSessionId;
+      const interaction = pool && reference
+        ? (callControlId ? await findInteractionViewByCallControlId(pool, callControlId) : await findInteractionViewByCallSessionId(pool, callSessionId))
+        : null;
+      if (!interaction || !(await workItemInScope(pool, authz.scope, interaction.work_item_id, { queueId: interaction.queue_id, agentId: interaction.agent_id, channel: interaction.interaction_type }))) {
+        return NextResponse.json({ ok: false, error: "Recordings outside your data scope" }, { status: 403 });
+      }
+    }
 
     // If call_control_id is provided, fetch call_session_id first
     if (callControlId && !callSessionId) {
@@ -135,3 +144,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("recordings:read", GET_handler, { route: "/api/voice/recordings" });

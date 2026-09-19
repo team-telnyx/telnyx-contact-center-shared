@@ -1,26 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import {
   getLoggingUserPreferences,
   saveLoggingUserPreferences,
 } from "@/lib/logger/user-preferences.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user || !isAdmin(user)) return null;
-  return user;
-}
 
 function noStore(payload, init = {}) {
   return NextResponse.json(payload, {
@@ -33,9 +19,8 @@ function preferenceUserId(user) {
   return user.id || user.email || user.username;
 }
 
-export async function GET() {
-  const user = await requireAdmin();
-  if (!user) return noStore({ ok: false, error: "Forbidden" }, { status: 403 });
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
 
   try {
     const preferences = await getLoggingUserPreferences({ userId: preferenceUserId(user) });
@@ -48,9 +33,8 @@ export async function GET() {
   }
 }
 
-export async function PUT(request) {
-  const user = await requireAdmin();
-  if (!user) return noStore({ ok: false, error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, _context, authz) {
+  const user = authz.user;
 
   try {
     const body = await request.json().catch(() => ({}));
@@ -66,3 +50,7 @@ export async function PUT(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("logging:read", GET_handler, { route: "/api/admin/logging/preferences" });
+export const PUT = withPermission("logging:update", PUT_handler, { route: "/api/admin/logging/preferences" });

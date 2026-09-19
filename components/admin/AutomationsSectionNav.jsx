@@ -28,7 +28,7 @@ export function AutomationsSectionPage({ activeId, children, onNavigate }) {
       className="grid min-h-0 flex-1 gap-3 overflow-hidden p-3"
       style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}
     >
-      <SectionRail items={AUTOMATION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel="Automations sections" />
+      <SectionRail items={AUTOMATION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel="Automations sections" screenGroup="admin.automations" />
       <section className="min-h-0 min-w-0 overflow-y-auto pr-1">{children}</section>
     </main>
   );

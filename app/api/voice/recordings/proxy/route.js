@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { recordingInScope, selfOnlyScope } from "@/lib/authz/scope.mjs";
+import { assertPublicHostname } from "@/lib/security/outbound-url.mjs";
 
 /**
  * Proxy endpoint for recording URLs to avoid CORS issues
  * GET /api/voice/recordings/proxy?url=<encoded-url>
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser(request.url);
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const { searchParams } = new URL(request.url);
     const audioUrl = searchParams.get("url");
@@ -26,29 +23,55 @@ export async function GET(request) {
       );
     }
 
-    // Validate that the URL is from a trusted source (S3 or Telnyx)
+    // Validate that the URL is from a trusted source.
+    //
+    // The host is matched exactly or as a subdomain, never as a substring: a
+    // `hostname.includes("s3.amazonaws.com")` test accepts
+    // `s3.amazonaws.com.attacker.example`, which an attacker can register and
+    // point at anything — including the instance metadata service. The scheme
+    // is pinned to https, and the resolved address is checked against the same
+    // outbound guard the call-flow HTTP tester uses, so a hostname that passes
+    // the allowlist but resolves to a private or link-local address is refused
+    // before any request is made.
+    let parsedUrl;
     try {
-      const url = new URL(audioUrl);
-      const hostname = url.hostname.toLowerCase();
-      
-      // Only allow S3 URLs (telephony-recorder-prod) or Telnyx domains
-      const allowedHosts = [
-        "s3.amazonaws.com",
-        "telephony-recorder-prod.s3.amazonaws.com",
-        "telephony-recorder-prod.s3.us-east-1.amazonaws.com",
-      ];
-      
-      if (!allowedHosts.some(host => hostname.includes(host))) {
-        return NextResponse.json(
-          { ok: false, error: "URL is not from an allowed source" },
-          { status: 403 }
-        );
-      }
-    } catch (urlError) {
+      parsedUrl = new URL(audioUrl);
+    } catch {
       return NextResponse.json(
         { ok: false, error: "Invalid URL format" },
         { status: 400 }
       );
+    }
+
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const allowedHosts = [
+      "s3.amazonaws.com",
+      "telephony-recorder-prod.s3.amazonaws.com",
+      "telephony-recorder-prod.s3.us-east-1.amazonaws.com",
+    ];
+    const hostAllowed = allowedHosts.some(
+      (host) => hostname === host || hostname.endsWith(`.${host}`)
+    );
+    if (parsedUrl.protocol !== "https:" || !hostAllowed) {
+      return NextResponse.json(
+        { ok: false, error: "URL is not from an allowed source" },
+        { status: 403 }
+      );
+    }
+    try {
+      await assertPublicHostname(hostname);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "URL is not from an allowed source" },
+        { status: 403 }
+      );
+    }
+
+    // Scoped callers may only proxy the recording URL of an interaction within their scope (Phase 3a).
+    // Callers admitted by agent:self alone (no recordings:read) only reach recordings of interactions they handled.
+    const recordingScope = authz.can("recordings:read") ? authz.scope : selfOnlyScope(authz.user);
+    if (!(await recordingInScope(getPostgresPool(), recordingScope, { recordingUrl: audioUrl }))) {
+      return NextResponse.json({ ok: false, error: "Recording outside your data scope" }, { status: 403 });
     }
 
     // Support range requests for audio streaming
@@ -131,3 +154,5 @@ export async function OPTIONS() {
   });
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["recordings:read", "agent:self"], GET_handler, { route: "/api/voice/recordings/proxy" });

@@ -16,7 +16,14 @@ async function getFreePort() {
   });
 }
 
-async function waitForHealth(port, timeoutMs = 1000) {
+// Binding a socket and answering the first health poll are both fast, but not
+// bounded by anything the test controls: on a loaded machine a one-second
+// budget measures CPU contention rather than the server's behaviour. These
+// waits poll for the real condition, so a generous ceiling only affects how
+// long a genuine failure takes to report.
+const READY_TIMEOUT_MS = 30000;
+
+async function waitForHealth(port, timeoutMs = READY_TIMEOUT_MS) {
   const startedAt = Date.now();
   let lastError;
   while (Date.now() - startedAt < timeoutMs) {
@@ -64,7 +71,7 @@ test("streaming websocket server can shutdown and rebind the same port", async (
   // A second init while the first listener is still binding should be ignored,
   // not orphan a server that shutdown cannot see later.
   initStreamingWSServer({ port, registerProcessHandlers: false });
-  await waitForStreamingWSServerReady();
+  await waitForStreamingWSServerReady(READY_TIMEOUT_MS);
   const firstHealth = await waitForHealth(port);
   assert.equal(firstHealth.status, "healthy");
   assert.equal(firstHealth.port, port);
@@ -75,7 +82,7 @@ test("streaming websocket server can shutdown and rebind the same port", async (
   await assertHealthUnavailable(port);
 
   initStreamingWSServer({ port, registerProcessHandlers: false });
-  await waitForStreamingWSServerReady();
+  await waitForStreamingWSServerReady(READY_TIMEOUT_MS);
   const secondHealth = await waitForHealth(port);
   assert.equal(secondHealth.status, "healthy");
   assert.equal(secondHealth.port, port);
@@ -93,7 +100,7 @@ test("streaming websocket shutdown has a deadline for connected clients", async 
   } = await import(moduleUrl);
 
   const state = initStreamingWSServer({ port, registerProcessHandlers: false });
-  await waitForStreamingWSServerReady();
+  await waitForStreamingWSServerReady(READY_TIMEOUT_MS);
 
   const fakeClient = new EventEmitter();
   fakeClient.readyState = 1;
@@ -126,7 +133,7 @@ test("streaming websocket init is ignored while shutdown is in progress", async 
   } = await import(moduleUrl);
 
   const state = initStreamingWSServer({ port, registerProcessHandlers: false });
-  await waitForStreamingWSServerReady();
+  await waitForStreamingWSServerReady(READY_TIMEOUT_MS);
 
   const fakeClient = new EventEmitter();
   fakeClient.readyState = 1;
@@ -151,7 +158,7 @@ test("streaming websocket init is ignored while shutdown is in progress", async 
   await assertHealthUnavailable(port);
 
   initStreamingWSServer({ port, registerProcessHandlers: false });
-  await waitForStreamingWSServerReady();
+  await waitForStreamingWSServerReady(READY_TIMEOUT_MS);
   const health = await waitForHealth(port);
   assert.equal(health.status, "healthy");
   await shutdownStreamingWSServer({ reason: "test_cleanup" });
@@ -187,7 +194,7 @@ test("streaming websocket server releases its port on SIGTERM", async () => {
       `
         import { initStreamingWSServer, waitForStreamingWSServerReady } from './lib/streaming-ws-handler.mjs';
         initStreamingWSServer({ port: ${port} });
-        await waitForStreamingWSServerReady();
+        await waitForStreamingWSServerReady(${READY_TIMEOUT_MS});
         console.log('READY:${port}');
         await new Promise(() => {});
       `,
@@ -208,7 +215,7 @@ test("streaming websocket server releases its port on SIGTERM", async () => {
   });
 
   try {
-    await waitForHealth(port, 2000);
+    await waitForHealth(port, READY_TIMEOUT_MS);
 
     child.kill("SIGTERM");
     const exit = await new Promise((resolve) => {

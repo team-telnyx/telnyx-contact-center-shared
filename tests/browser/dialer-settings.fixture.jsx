@@ -1,0 +1,29 @@
+import './process-shim.js';
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import OutboundDialerPage from '../../app/(portal)/supervisor/outbound-dialer/page';
+import {normalizeMessagingSettings} from '../../lib/outbound-dialer/messaging/settings.mjs';
+
+// The dialer page opens on the Settings section; the rest of the workspace
+// stays empty so only the settings layout is exercised.
+try{localStorage.setItem('supervisor.outbound-dialer.activeSection','settings');localStorage.removeItem('supervisor.outbound-dialer.settingsSection');}catch{}
+const fixture=window.fixture={requests:[]};
+const settings={id:'default',max_calls_per_agent:1,max_lines:12,max_line_utilization_percent:85,max_cps:40,compliance_abandon_threshold_seconds:2,global_max_attempts:5,dial_timeout_secs:30,callable_days:['mon','tue','wed','thu','fri'],
+  callable_window:{earliest:'09:00',latest:'20:00',timezone:'Europe/Warsaw'},allowed_numbers:['+14155551000','+14155551001'],blending:{mode:'dynamic',reserve_agents:1,reserve_percent:10},
+  answered_without_agent_policy:{mode:'announce_and_hangup',max_agent_connect_seconds:2,announcement_start_deadline_ms:500,max_announcement_seconds:10,max_abandon_rate_percent:3,abandon_rate_window_hours:24,retry_suppression_hours:72,announcement_message:'Hello',announcement_voice:'',announcement_language:'en-US'},
+  messaging:normalizeMessagingSettings({enabled_channels:{sms:true},sms:{opt_out_footer_text:'Reply STOP to opt out'}})};
+const overview={ok:true,schema:{channels:['voice','sms','whatsapp','email'],messagingChannels:['sms','whatsapp','email'],messagingChannelsAvailable:['sms'],messagingModes:['broadcast'],campaignModes:['preview','progressive','power','predictive','agentless_ai','agentless_flow','broadcast'],campaignStatuses:['draft','ready','paused','running','stopped','completed'],handlerTypes:['queue','ai_assistant','call_flow'],contactListStatuses:['draft','validating','validated'],dncListStatuses:['draft','active','paused'],attemptControlStatuses:['draft','active','paused'],dispositionClassifications:[],dispositionBusinessCategories:[],attemptResetPeriods:['daily'],contactFieldTypes:['text','phone','email'],standardContactColumns:[]},
+  campaigns:[],contactLists:[],dncLists:[],forms:[],filters:[],timeSets:[],attemptControls:[],settings,handlerReferences:{queue:[],call_flow:[],workflow:[],ai_assistant:[]},
+  inventoryNumbers:[...Array.from({length:14},(_,i)=>({id:`pn-${i+1}`,phone_number:`+1415555${String(1000+i).slice(0,4)}`,status:'active',connection_name:i%2?'Contact Center':'Marketing trunk',country_code:'US'})),{id:'pn-pl',phone_number:'+48600000001',status:'active',connection_name:'Warsaw trunk',country_code:'PL'}],
+  messagingSenders:{sms:[{id:'n1',phone_number:'+14155550100',name:'Sales line',queue_name:'Sales',sending_enabled:true,routing_enabled:true}]},messagingTemplates:{sms:[]},executionDebugByCampaign:{}};
+const json=(body,ok=true)=>({ok,status:ok?200:400,json:async()=>body});
+window.EventSource=class{constructor(){this.readyState=0;}addEventListener(){}removeEventListener(){}close(){}};
+window.fetch=async(url,options={})=>{
+  fixture.requests.push({url,method:options.method||'GET',body:options.body||null});
+  if(url.startsWith('/api/auth/me'))return json({isAuth:true,user:{id:'u1',username:'owner',roles:['owner']}});
+  if(url==='/api/contact-center/outbound-dialer')return json(overview);
+  if(url==='/api/contact-center/outbound-dialer/disposition-codes')return json({ok:true,dispositionCodes:[],wrapupCodes:[]});
+  if(url==='/api/contact-center/outbound-dialer/settings'&&options.method==='PUT'){fixture.saved=JSON.parse(options.body);return json({ok:true,settings:{...settings,...fixture.saved}});}
+  return json({ok:true});
+};
+createRoot(document.getElementById('root')).render(<div className="flex h-screen min-h-0 flex-col bg-background text-foreground"><OutboundDialerPage/></div>);

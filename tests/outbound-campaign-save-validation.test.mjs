@@ -12,7 +12,7 @@ const baseCampaign = {
   metadata: {
     contact_list_numbers: ["Number"],
     rotate_numbers: false,
-    from_numbers: ["+48602410402"],
+    from_numbers: ["+48600000001"],
   },
   retry_policy: { maxAttempts: 4 },
 };
@@ -45,7 +45,7 @@ test("new campaign save requires default FROM slot when rotation is off", () => 
 test("new campaign save requires default and every retry FROM slot when rotation is on", () => {
   const draft = {
     ...baseCampaign,
-    metadata: { ...baseCampaign.metadata, rotate_numbers: true, from_numbers: ["+48602410402", "+48602410403"] },
+    metadata: { ...baseCampaign.metadata, rotate_numbers: true, from_numbers: ["+48600000001", "+4860000003"] },
     retry_policy: { maxAttempts: 4 },
   };
 
@@ -56,7 +56,7 @@ test("new campaign save requires default and every retry FROM slot when rotation
 
   const complete = campaignSaveRequirements({
     ...draft,
-    metadata: { ...draft.metadata, from_numbers: ["+48602410402", "+48602410403", "+48602410404", "+48602410405"] },
+    metadata: { ...draft.metadata, from_numbers: ["+48600000001", "+4860000003", "+4860000004", "+4860000005"] },
   }, { maxAttempts: 4 });
   assert.equal(complete.canSave, true);
   assert.deepEqual(complete.missing, []);
@@ -68,7 +68,7 @@ test("new campaign save caps required rotating FROM slots to runtime rotation li
     metadata: {
       ...baseCampaign.metadata,
       rotate_numbers: true,
-      from_numbers: ["+48602410402", "+48602410403", "+48602410404", "+48602410405", "+48602410406"],
+      from_numbers: ["+48600000001", "+4860000003", "+4860000004", "+4860000005", "+4860000006"],
     },
     retry_policy: { maxAttempts: 8 },
   };

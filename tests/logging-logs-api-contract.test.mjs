@@ -14,6 +14,7 @@ test("logging logs Admin API uses backend-owned logDir and no-store admin guard"
   assert.doesNotMatch(source, /return noStore\(\{ ok: true,[^}]*logDir/);
   assert.match(source, /Invalid \.\* timestamp/);
   assert.match(source, /isClientError \? message : "Failed to read logs"/);
-  assert.match(source, /if \(!user\) return noStore\(\{ ok: false, error: "Forbidden" \}, \{ status: 403 \}\)/);
+  // Admin access is enforced by the permission guard, whose 401/403 responses carry Cache-Control: no-store.
+  assert.match(source, /export const GET = withPermission\("logging:read", GET_handler, \{ route:/);
   assert.match(source, /Cache-Control": "no-store"/);
 });

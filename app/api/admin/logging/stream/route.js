@@ -1,27 +1,13 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { getRuntimeLoggingConfig } from "@/lib/logger/runtime-config.mjs";
 import { listLogFiles, queryLogEntries } from "@/lib/logger/log-reader.mjs";
 import { queryLiveLogEvents } from "@/lib/logger/live-store.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
 const POLL_MS = 1000;
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user || !isAdmin(user)) return null;
-  return user;
-}
 
 function queryParam(request, key) {
   return new URL(request.url).searchParams.get(key) || undefined;
@@ -46,9 +32,8 @@ function sseFrame(event, data) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export async function GET(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403, headers: { "Cache-Control": "no-store" } });
+async function GET_handler(request, _context, authz) {
+  const user = authz.user;
 
   const config = await getRuntimeLoggingConfig({ forceRefresh: true });
   const logDir = config.logDir;
@@ -184,3 +169,6 @@ export async function GET(request) {
     },
   });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("logging:read", GET_handler, { route: "/api/admin/logging/stream" });

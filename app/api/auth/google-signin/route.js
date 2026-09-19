@@ -53,6 +53,8 @@ export async function POST(request) {
       );
     }
 
+    if (existing.active === false) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     // Update profile picture if available and not set
     const googleImage = payload.picture || "";
     if (!existing.profile_picture_uri && googleImage) {

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { executeFormDataAction } from "@/lib/forms/form-data-actions";
+import { withPermission } from "@/lib/authz/guard";
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -80,7 +81,7 @@ function buildSyntheticWorkflowForm({ workflow, values }) {
   };
 }
 
-export async function POST(request) {
+async function POST_handler(request) {
   const sessionUser = await getServerSession(authOptions);
   if (!sessionUser?.user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
@@ -114,13 +115,13 @@ export async function POST(request) {
   if (!flowId) return NextResponse.json({ ok: false, status: "error", message: "Workflow data action button has no call flow assigned." }, { status: 400 });
 
   let interaction = null;
-  if (workflowSession.interaction_id) {
-    const { rows } = await pool.query(`SELECT * FROM cc_interactions WHERE id = $1`, [workflowSession.interaction_id]);
+  if (workflowSession.work_item_id) {
+    const { rows } = await pool.query(`SELECT * FROM acd_history_interactions WHERE id = $1`, [workflowSession.work_item_id]);
     interaction = rows[0] || null;
   }
 
   const slots = await loadWorkflowSlotValues(pool, workflowSession.id, workflow.id);
-  const call = basicCallPayload(interaction || { id: workflowSession.interaction_id });
+  const call = basicCallPayload(interaction || { id: workflowSession.work_item_id });
   const workflowInfo = basicWorkflowPayload({ session: workflowSession, workflow });
   const values = buildWorkflowValues({ call, workflow: workflowInfo, slots });
   const form = buildSyntheticWorkflowForm({ workflow, values });
@@ -148,7 +149,7 @@ export async function POST(request) {
     form,
     values,
     contextObj,
-    interaction: interaction || { id: workflowSession.interaction_id },
+    interaction: interaction || { id: workflowSession.work_item_id },
     button,
     formSubmitPayloadOverride: compactPayload,
   });
@@ -156,3 +157,6 @@ export async function POST(request) {
   const ok = dataAction ? dataAction.ok !== false : true;
   return NextResponse.json({ ok, dataAction }, { status: ok ? 200 : 400 });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/agent-assist/workflow/data-action" });

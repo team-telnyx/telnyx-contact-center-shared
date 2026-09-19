@@ -48,6 +48,8 @@ import {
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/users/EditSheet";
 import { sortUserRoles } from "@/config/user";
+import { roleBadgeClass } from "@/components/permissions/role-badges";
+import { Can } from "@/components/auth-provider";
 
 function SkillsInfoCell({ user }) {
   const skills = user.skills || {};
@@ -235,24 +237,43 @@ export default function AdminUsersPage() {
     }
   }
 
+  // Role names and types come from the roles table so shipped and custom roles
+  // render with their display names; unknown keys fall back to the key itself.
+  const [roleCatalog, setRoleCatalog] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/roles", { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok || cancelled) return;
+        const next = {};
+        for (const role of data.roles || []) next[role.key] = { name: role.name, origin: role.origin };
+        setRoleCatalog(next);
+      } catch (_) {
+        // the list still works with raw role keys
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function roleBadgeColor(role) {
-    switch (String(role || "user").toLowerCase()) {
-      case "owner":
-        return "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
-      case "admin":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
-      case "supervisor":
-        return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
-      default:
-        return "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
-    }
+    const key = String(role || "user").toLowerCase();
+    return roleBadgeClass({ key, origin: roleCatalog[key]?.origin });
+  }
+
+  function roleLabel(role) {
+    const key = String(role || "user").toLowerCase();
+    return roleCatalog[key]?.name || key.toUpperCase();
   }
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  // Extract unique roles from current items
+  // Roles known to the roles table plus any key present on the current page
   const availableRoles = useMemo(() => {
-    const roleSet = new Set();
+    const roleSet = new Set(Object.keys(roleCatalog));
     items.forEach((u) => {
       const userRoles =
         u.roles && Array.isArray(u.roles) && u.roles.length > 0
@@ -261,13 +282,13 @@ export default function AdminUsersPage() {
       userRoles.forEach((r) => roleSet.add(String(r).toLowerCase()));
     });
     return sortUserRoles(Array.from(roleSet));
-  }, [items]);
+  }, [items, roleCatalog]);
 
   const headerActions = <>
-    <Button size="sm" className="gap-2" onClick={() => setAddUserOpen(true)}>
+    <Can permission="users:create"><Button size="sm" className="gap-2" onClick={() => setAddUserOpen(true)}>
       <IconUserPlus className="size-4" />
       Add User
-    </Button>
+    </Button></Can>
     <Button
       variant="secondary"
       onClick={() => setFilters({ role: "all", q: "" })}
@@ -313,7 +334,7 @@ export default function AdminUsersPage() {
                   <SelectItem value="all">All</SelectItem>
                   {availableRoles.map((role) => (
                     <SelectItem key={role} value={role}>
-                      {role}
+                      {roleLabel(role)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -388,7 +409,7 @@ export default function AdminUsersPage() {
                                   }
                                   variant="outline"
                                 >
-                                  {String(r || "user").toUpperCase()}
+                                  {roleLabel(r)}
                                 </Badge>
                               ))}
                             </div>
@@ -431,13 +452,13 @@ export default function AdminUsersPage() {
                               ) ? (
                                 <Dialog>
                                   <DialogTrigger asChild>
-                                    <button
+                                    <Can permission="users:delete"><button
                                       type="button"
                                       className="inline-flex items-center text-red-500"
                                       title="Delete user"
                                     >
                                       <IconTrash className="size-4" />
-                                    </button>
+                                    </button></Can>
                                   </DialogTrigger>
                                   <DialogContent>
                                     <DialogHeader>

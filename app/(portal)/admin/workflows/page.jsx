@@ -47,6 +47,7 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminWorkflowsPage() {
   const router = useRouter();
@@ -249,10 +250,10 @@ export default function AdminWorkflowsPage() {
   }
 
   const headerActions = <>
-    <Button variant="outline" onClick={handleImport}>
+    <Can permission="workflows:import"><Button variant="outline" onClick={handleImport}>
       <IconUpload className="size-4 mr-1" />
       Import
-    </Button>
+    </Button></Can>
     <Button
       variant="secondary"
       onClick={() =>
@@ -268,13 +269,13 @@ export default function AdminWorkflowsPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button
+    <Can permission="workflows:create"><Button
       onClick={() => router.push("/admin/workflows/new")}
       variant="default"
     >
       <IconPlus className="size-4 mr-1" />
       New Workflow
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -427,13 +428,13 @@ export default function AdminWorkflowsPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="workflows:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete workflow"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import MediaUploadSheet from "@/components/media-library/MediaUploadSheet";
 import MediaPlayer from "@/components/media-library/MediaPlayer";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminMediaLibraryPage() {
   const [items, setItems] = useState([]);
@@ -185,10 +186,10 @@ export default function AdminMediaLibraryPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={handleNewMedia} variant="default">
+    <Can permission="media:create"><Button onClick={handleNewMedia} variant="default">
       <IconPlus className="size-4 mr-2" />
       Upload Media
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -294,13 +295,13 @@ export default function AdminMediaLibraryPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="media:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete media"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

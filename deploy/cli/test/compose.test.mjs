@@ -90,7 +90,7 @@ describe('docker/production/compose.yaml parametrization', () => {
     assert.doesNotMatch(rendered, /\/home\/ubuntu\/apps\/media/);
   });
 
-  it('regression: existing GMR/EC2 deployments setting CC_MEDIA_PATH/CC_LOGS_PATH keep their exact old bind-mount paths', async (t) => {
+  it('regression: existing the reference workflow/EC2 deployments setting CC_MEDIA_PATH/CC_LOGS_PATH keep their exact old bind-mount paths', async (t) => {
     if (!dockerComposeAvailable) return t.skip('docker compose not available in this environment');
     const rendered = await composeConfig({
       POSTGRES_DB: 'x', POSTGRES_USER: 'x', POSTGRES_PASSWORD: 'x',

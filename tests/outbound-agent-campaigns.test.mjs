@@ -84,7 +84,7 @@ test("agent campaign helpers only expose preview/progressive modes and resolve p
 
 test("site header renders campaign selector next to agent status selector", async () => {
   const source = await readFile(new URL("../components/site-header.jsx", import.meta.url), "utf8");
-  const agentControlsStart = source.indexOf("<StatusSelector value={status} onChange={handleStatusChange} />");
+  const agentControlsStart = source.indexOf("<StatusSelector");
   const queueControlsStart = source.indexOf("<QueueActivationPanel", agentControlsStart);
   const controlsSource = source.slice(agentControlsStart, queueControlsStart);
 
@@ -93,7 +93,7 @@ test("site header renders campaign selector next to agent status selector", asyn
   assert.match(controlsSource, /<CampaignActivationSelector/);
 });
 
-test("agent desktop polls assigned campaign records and dials progressive records after countdown", async () => {
+test("agent desktop displays the server progressive deadline and submits explicit dial intents", async () => {
   const source = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
 
   assert.match(source, /\/api\/contact-center\/agent\/campaigns\/next/);
@@ -138,12 +138,12 @@ test("agent campaign claiming only applies active reusable campaign resources", 
   assert.match(source, /outbound_dnc_lists l ON l\.id = e\.dnc_list_id AND l\.status = 'active'/);
 });
 
-test("agent campaign preview uses WebRTC softphone dialing, preserves assist content and waits for hangup before disposition", async () => {
+test("agent campaign preview submits a server dial intent and preserves assist content", async () => {
   const agentDesktopSource = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
   const softphoneSource = await readFile(new URL("../components/softphone-mini.jsx", import.meta.url), "utf8");
   const dialRouteSource = await readFile(new URL("../app/api/contact-center/agent/campaigns/dial/route.js", import.meta.url), "utf8");
   const componentStart = agentDesktopSource.indexOf("function OutboundCampaignRecord");
-  const componentEnd = agentDesktopSource.indexOf("function CampaignDispositionSheet", componentStart);
+  const componentEnd = agentDesktopSource.indexOf("export function AgentDesktop", componentStart);
   const recordSource = agentDesktopSource.slice(componentStart, componentEnd);
 
   assert.match(recordSource, /<details/);
@@ -154,7 +154,9 @@ test("agent campaign preview uses WebRTC softphone dialing, preserves assist con
   assert.doesNotMatch(recordSource, /bg-neutral-900\/80|text-neutral-100/);
   assert.doesNotMatch(recordSource, /bg-orange-50|orange-950|text-orange|bg-orange/);
 
-  assert.match(agentDesktopSource, /softphone:start-call/);
+  assert.match(agentDesktopSource, /\/api\/contact-center\/agent\/campaigns\/dial/);
+  assert.doesNotMatch(agentDesktopSource, /softphone:start-call/);
+  assert.match(dialRouteSource, /requestOutboundDial/);
   assert.match(softphoneSource, /softphone:start-call/);
   assert.match(softphoneSource, /client\.newCall/);
   assert.match(softphoneSource, /customHeaders/);
@@ -165,7 +167,7 @@ test("agent campaign preview uses WebRTC softphone dialing, preserves assist con
   assert.match(agentDesktopSource, /setCampaignDispositionAssignment\(pendingCampaignDispositionRef\.current\)/);
   assert.doesNotMatch(agentDesktopSource, /setCampaignDispositionAssignment\(assignment\);\s*\n\s*setCampaignAssignment\(null\)/);
 
-  assert.match(agentDesktopSource, /updateAgentStatus\("On Outbound Call"\)/);
+  assert.doesNotMatch(agentDesktopSource, /updateAgentStatus\("On Outbound Call"\)/);
   assert.match(agentDesktopSource, /campaignPreviewInteraction/);
   assert.match(agentDesktopSource, /agent_assist_config: campaignAssignment\.agent_assist_config/);
   assert.match(agentDesktopSource, /<InteractionDetail interaction=\{campaignPreviewInteraction\}/);

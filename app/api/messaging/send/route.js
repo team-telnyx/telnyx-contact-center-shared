@@ -1,24 +1,21 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { platformApiLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { findInteractionViewByReference } from "@/lib/acd/work-item-repository.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 /**
  * POST /api/messaging/send
  * Send SMS message via Telnyx
  */
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const body = await request.json();
     const { to, body: messageBody, type = "SMS" } = body;
+
 
     if (!to || !messageBody) {
       return NextResponse.json(
@@ -105,3 +102,5 @@ export async function POST(request) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("messaging:send", POST_handler, { route: "/api/messaging/send" });

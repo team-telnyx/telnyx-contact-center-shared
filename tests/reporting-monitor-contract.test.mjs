@@ -2,16 +2,18 @@ import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
+const dashboard=readFileSync("components/contact-center/MultichannelDashboard.jsx","utf8");
 const monitorPage = readFileSync("app/(portal)/supervisor/monitor/page.jsx", "utf8");
 const menuConfig = readFileSync("config/menu.jsx", "utf8");
 const historyRoute = readFileSync("app/api/contact-center/interactions/history/route.js", "utf8");
 const callHistoryView = readFileSync("components/contact-center/SupervisorCallHistoryView.jsx", "utf8");
 const monitorSectionNav = readFileSync("components/contact-center/MonitorSectionNav.jsx", "utf8");
+const operationsPanel = readFileSync("components/contact-center/AcdOperationsPanel.jsx", "utf8");
 const analyticsSectionNav = readFileSync("components/contact-center/AnalyticsSectionNav.jsx", "utf8");
 const callHistoryDetailPage = readFileSync("app/(portal)/supervisor/call-history/[id]/page.jsx", "utf8");
 
-test("supervisor monitor rail exposes dashboard, agents, and queues only", () => {
-  const expectedLabels = ["Dashboard", "Agents", "Queues"];
+test("supervisor monitor rail exposes operational views including recovery", () => {
+  const expectedLabels = ["Dashboard", "Agents", "Queues", "Interactions", "Operations"];
   for (const label of expectedLabels) {
     assert.match(monitorSectionNav, new RegExp(`label: [\\"']${label}[\\"']`));
   }
@@ -24,6 +26,17 @@ test("supervisor monitor rail exposes dashboard, agents, and queues only", () =>
   assert.match(monitorPage, /from ["']@\/components\/contact-center\/MonitorSectionNav["']/);
   assert.doesNotMatch(monitorPage, /SupervisorCallHistoryView/);
   assert.doesNotMatch(monitorPage, /MonitorGraphsView/);
+  assert.match(monitorPage, /activeTab === ["']operations["']/);
+  assert.match(monitorPage, /<AcdOperationsPanel \/>/);
+  assert.match(operationsPanel, /MonitoringFilters/);
+  assert.match(operationsPanel, /action: ["']recover_voice_capacity["']/);
+  assert.match(operationsPanel, /recover\(item\.reservation_id\)/);
+  assert.match(operationsPanel, /Check & recover/);
+  assert.match(operationsPanel, /Recovery audit note/);
+  assert.doesNotMatch(operationsPanel, /Operator reason/);
+  assert.doesNotMatch(operationsPanel, /Executions awaiting attention/);
+  assert.doesNotMatch(operationsPanel, /Webhook events awaiting attention/);
+  assert.doesNotMatch(operationsPanel, /Recent alarms/);
 });
 
 test("call history sub-pages keep the analytics section rail visible", () => {
@@ -56,41 +69,22 @@ test("scheduled events moved from SUPERVISOR to ADMIN group", () => {
   const adminGroup = menuConfig.slice(menuConfig.indexOf('label: "ADMIN"'));
   assert.doesNotMatch(supervisorGroup, /Scheduled Events/);
   assert.match(adminGroup, /activeUrls: \[[^\]]*["']\/supervisor\/scheduled-events["']/);
-  assert.match(adminGroup, /role_access: \["admin", "owner"\]/);
+  // RBAC Phase 3: the AI Assistants entry is shown to roles granting the AI screens or Scheduled Events.
+  assert.match(adminGroup, /screens: \["admin\.ai", "supervisor\.scheduled-events"\]/);
 });
 
-test("dashboard consolidates today statistics tiles and live signals", () => {
-  assert.match(monitorPage, /Today realtime command center/);
-  assert.match(monitorPage, /Contact center today at a glance/);
-  // Consolidated Statistics tiles
-  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconPhoneIncoming\} label="Total calls"/);
-  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconCheck\} label="Answered"/);
-  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconAlertCircle\} label="Abandoned"/);
-  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconClock\} label="Avg wait"/);
-  // Live signal tiles
-  assert.match(monitorPage, /Today SLA/);
-  assert.match(monitorPage, /Live queue pressure/);
-  assert.match(monitorPage, /Today answer rate/);
-  assert.match(monitorPage, /function MonitorDashboardView\(\{ overall, agents, queues, timestamp \}\)/);
-  assert.match(monitorPage, /<MonitorDashboardView overall=\{overall\} agents=\{allAgents\} queues=\{queues\} timestamp=\{data\?\.timestamp\} \/>/);
-  assert.match(monitorPage, /function MiniSignalTile\(\{ label, value, detail \}\)[\s\S]*rounded-2xl border bg-card\/70 p-4/);
-  assert.doesNotMatch(monitorPage, /function MiniSignalTile[\s\S]*const tones = \{/);
-  assert.doesNotMatch(monitorPage, /<MiniSignalTile[^\n]+tone=/);
-  assert.doesNotMatch(monitorPage, /bg-gradient-to-br from-slate-950 to-zinc-900 text-white/);
+test("dashboard shares multichannel statistics and separates live capacity", () => {
+  assert.match(monitorPage, /OverviewDashboardView/);
+  for (const text of ["Received in range","Closed in range","Waiting now","Handling now","Service level","Workforce capacity"]) assert.ok(dashboard.includes(text));
+  assert.doesNotMatch(monitorPage, /function MonitorDashboardView/);
 });
 
-test("dashboard renders today widgets: hourly chart, top performers, wrap-up codes, queues", () => {
-  // Today data is fetched from the analytics dashboard-today report
-  assert.match(monitorPage, /report["'],?\s*["']dashboard-today["']|dashboard-today/);
-  assert.match(monitorPage, /Today call volume by hour/);
-  assert.match(monitorPage, /Top performers today/);
-  assert.match(monitorPage, /top-performer-row/);
-  assert.match(monitorPage, /Top wrap-up codes today/);
-  assert.match(monitorPage, /top-wrapup-row/);
-  assert.match(monitorPage, /Queues today/);
-  // Charts keep the dark tooltip content
-  assert.match(monitorPage, /function ChartTooltip/);
-  assert.doesNotMatch(monitorPage, /<Tooltip\s*\/>/);
+test("dashboard renders channel series, queue participation and appropriate evidence", () => {
+  assert.match(dashboard, /data.channels.map/);
+  assert.match(dashboard, /Closed interactions by channel/);
+  assert.match(dashboard, /Queue participation/);
+  assert.match(dashboard, /ConversationPreview/);
+  assert.match(dashboard, /InteractionRecordPreview/);
 });
 
 test("statistics tab was removed from the monitor", () => {
@@ -100,26 +94,23 @@ test("statistics tab was removed from the monitor", () => {
   assert.doesNotMatch(monitorPage, /activeTab === ["']graphs["']/);
   assert.doesNotMatch(monitorPage, /activeTab === ["']call-history["']/);
   // The history summary endpoint contract remains in place for analytics consumers.
-  assert.match(historyRoute, /summary=true/);
+  assert.match(historyRoute, /searchParams\.get\("summary"\) === "true"/);
 });
 
-test("call history keeps date controls inside the first command card before metric tiles", () => {
-  assert.match(callHistoryView, /call-history-command-card-controls/);
-  assert.match(callHistoryView, /call-history-command-card-controls[\s\S]*<HistoryMetricCard icon=\{IconPhoneIncoming\} label="Interactions"/);
-  assert.doesNotMatch(callHistoryView, /call-history-header-controls/);
-  assert.match(callHistoryView, />Custom range</);
-  assert.match(callHistoryView, /historyRange === "custom"/);
-  assert.match(callHistoryView, /Call history command center/);
-  assert.match(callHistoryView, /dark:bg-zinc-950\/70/);
-  assert.match(callHistoryView, /HistoryMetricCard/);
-  assert.match(callHistoryView, /function HistoryMetricCard[\s\S]*<Card className="overflow-hidden border bg-background\/85 shadow-sm transition hover:-translate-y-0\.5 hover:border-foreground\/20 hover:shadow-md">/);
-  assert.doesNotMatch(callHistoryView, /bg-background\/80 p-4 shadow-sm dark:bg-zinc-900\/70/);
-  assert.match(callHistoryView, /label="Interactions"/);
-  assert.match(callHistoryView, /label="Completed"/);
-  assert.match(callHistoryView, /label="Missed"/);
-  assert.match(callHistoryView, /label="Recordings"/);
-  assert.doesNotMatch(callHistoryView, /10 visible rows/);
-  assert.doesNotMatch(callHistoryView, /<CardContent className="flex-1 min-h-0 space-y-6 overflow-y-auto py-6">/);
+test("analytics and history place shared channel/date filters before metric tiles", () => {
+  const analytics = readFileSync("app/(portal)/supervisor/analytics/page.jsx", "utf8");
+  const toolbar = readFileSync("components/contact-center/AnalyticsReportFilters.jsx", "utf8");
+  for (const view of [analytics, dashboard, callHistoryView]) assert.match(view, /<AnalyticsReportFilters/);
+  assert.match(callHistoryView, /<AnalyticsReportFilters[\s\S]*<HistoryMetricCard/);
+  assert.match(toolbar, /ChannelFilter/);
+  assert.match(toolbar, /aria-label="Reporting period"/);
+  assert.match(toolbar, /\["custom", "Custom"\]/);
+  assert.match(toolbar, /aria-pressed=\{range === value\}/);
+  assert.doesNotMatch(toolbar, /<select/);
+  assert.doesNotMatch(analytics, /<SupervisorPageHeader|<CommandCard|REPORT_META/);
+  assert.doesNotMatch(dashboard, /Interaction intelligence|One view of volume/);
+  assert.doesNotMatch(callHistoryView, /Interactions history command center|Interaction archive for the selected range|<SupervisorPageHeader/);
+  for (const label of ["Interactions", "Completed", "Unserved", "Evidence"]) assert.ok(callHistoryView.includes(`label="${label}"`));
 });
 
 test("reporting tabs do not render duplicate top title headers above first cards", () => {
@@ -133,15 +124,13 @@ test("reporting tabs do not render duplicate top title headers above first cards
 
 test("agents and queues views use dark-theme card dashboards with top metric tiles", () => {
   for (const label of [
-    "Agent operations",
     "Roster coverage",
     "Available now",
-    "Live conversations",
+    "Assigned interactions",
     "Queue activations",
-    "Queue command center",
     "Queues monitored",
-    "Waiting callers",
-    "Active calls",
+    "Waiting interactions",
+    "Active interactions",
     "Service level",
   ]) {
     assert.match(monitorPage, new RegExp(label));
@@ -156,9 +145,11 @@ test("queues view expands one queue row and embeds a scroll-limited calls list",
   assert.match(monitorPage, /expandedQueueId/);
   assert.match(monitorPage, /setExpandedQueueId\(queueId\)/);
   assert.match(monitorPage, /queueCallsMap/);
-  assert.match(monitorPage, /slice\(0, 10\)/);
+  assert.doesNotMatch(monitorPage, /slice\(0, 10\)/);
+  assert.match(monitorPage, /InteractionChannel/);
+  assert.match(monitorPage, /InteractionPreviewAction/);
   assert.match(monitorPage, /max-h-\[360px\] overflow-y-auto/);
-  assert.match(monitorPage, /Recent calls in this queue/);
+  assert.match(monitorPage, /Live interactions in this queue/);
   assert.doesNotMatch(monitorPage, /Back<\/Button>/);
   assert.doesNotMatch(monitorPage, / - Calls/);
 });

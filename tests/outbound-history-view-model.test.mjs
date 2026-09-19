@@ -175,9 +175,9 @@ test("contact record label ignores non-callable contact methods when choosing a 
 test("contact record label uses joined attempt contact_row_data with semantic mappings", () => {
   const label = contactRecordLabel(
     {
-      to_number: "+48666368808",
+      to_number: "+48600000002",
       contact_row_data: { First: "Marta", Last: "Nowak", Display: "Marta N.", Company: "Telnyx PL" },
-      contact_methods: { number: { mobile: "+48666368808" } },
+      contact_methods: { number: { mobile: "+48600000002" } },
     },
     {
       custom_field_schema: [
@@ -189,7 +189,7 @@ test("contact record label uses joined attempt contact_row_data with semantic ma
     },
   );
 
-  assert.deepEqual(label, { to: "+48666368808", name: "Marta Nowak", displayName: "Marta N.", company: "Telnyx PL" });
+  assert.deepEqual(label, { to: "+48600000002", name: "Marta Nowak", displayName: "Marta N.", company: "Telnyx PL" });
 });
 
 test("contact record label infers identity columns from imported header names", () => {
@@ -206,20 +206,20 @@ test("contact record label infers identity columns from imported header names", 
 
 test("contact record label infers DEV imported row_data headers when contact list schema is unavailable", () => {
   const label = contactRecordLabel({
-    row_data: { "First name": "Leszek", "Last name": "Winiarski", Company: "Telnyx", Number: "+48602410402" },
-    contact_methods: { number: { mobile: "+48602410402" } },
+    row_data: { "First name": "Demo", "Last name": "User", Company: "Telnyx", Number: "+48600000001" },
+    contact_methods: { number: { mobile: "+48600000001" } },
   });
 
-  assert.deepEqual(label, { to: "+48602410402", name: "Leszek Winiarski", displayName: "", company: "Telnyx" });
+  assert.deepEqual(label, { to: "+48600000001", name: "Demo User", displayName: "", company: "Telnyx" });
 });
 
 test("contact record header label joins phone name and company with pipe separators", () => {
   assert.equal(
-    contactRecordHeaderLabel({ to: "+48602410402", name: "Leszek Winiarski", displayName: "", company: "Telnyx" }),
-    "+48602410402 | Leszek Winiarski | Telnyx",
+    contactRecordHeaderLabel({ to: "+48600000001", name: "Demo User", displayName: "", company: "Telnyx" }),
+    "+48600000001 | Demo User | Telnyx",
   );
-  assert.equal(contactRecordHeaderLabel({ to: "+48602410402", name: "", company: "Telnyx" }), "+48602410402 | Telnyx");
-  assert.equal(contactRecordHeaderLabel({ to: "+48602410402", name: "", company: "" }), "+48602410402");
+  assert.equal(contactRecordHeaderLabel({ to: "+48600000001", name: "", company: "Telnyx" }), "+48600000001 | Telnyx");
+  assert.equal(contactRecordHeaderLabel({ to: "+48600000001", name: "", company: "" }), "+48600000001");
 });
 
 test("attempt status reason label combines status and reason unless cancelled", () => {
@@ -235,8 +235,8 @@ test("campaign status events include persisted campaign run lifecycle rows", () 
     {
       "campaign-1": {
         campaign_runs: [
-          { id: "run-1", status: "running", started_by: "leszek", started_at: "2026-05-17T09:00:00.000Z" },
-          { id: "run-2", status: "stopped", started_at: "2026-05-17T10:00:00.000Z", stopped_by: "leszek", stopped_at: "2026-05-17T10:05:00.000Z", stop_reason: "manual" },
+          { id: "run-1", status: "running", started_by: "demo", started_at: "2026-05-17T09:00:00.000Z" },
+          { id: "run-2", status: "stopped", started_at: "2026-05-17T10:00:00.000Z", stopped_by: "demo", stopped_at: "2026-05-17T10:05:00.000Z", stop_reason: "manual" },
         ],
       },
     },

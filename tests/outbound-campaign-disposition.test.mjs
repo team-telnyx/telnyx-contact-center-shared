@@ -115,13 +115,26 @@ test("schema seeds On Outbound Call system status and disposition mapping tables
 });
 
 test("agent desktop opens a campaign disposition sheet after campaign dialing and submit endpoint is wired", async () => {
-  const agentDesktop = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
-  assert.match(agentDesktop, /CampaignDispositionSheet/);
-  assert.match(agentDesktop, /campaignDispositionAssignment/);
-  assert.match(agentDesktop, /\/api\/contact-center\/agent\/campaigns\/disposition/);
-  assert.match(agentDesktop, /Campaign Disposition/);
+  const sheet = await readFile(new URL("../components/contact-center/CampaignDispositionSheet.jsx", import.meta.url), "utf8");
+  const globalWrapup = await readFile(new URL("../components/contact-center/GlobalWrapupSheet.jsx", import.meta.url), "utf8");
+  assert.match(sheet, /\/api\/contact-center\/agent\/campaigns\/disposition/);
+  assert.match(sheet, /Disposition Codes/);
+  assert.match(sheet, /campaign-disposition-notes/);
+  assert.match(sheet, /<Checkbox/);
+  assert.match(sheet, /checked=\{selectedCode === code\.wrapup_code_id\}/);
+  assert.match(sheet, /setSelectedCode\(code\.wrapup_code_id\)/);
+  assert.doesNotMatch(sheet, /<Select\b/, "Campaign disposition must use the wrap-up-style code list instead of a dropdown");
+  assert.ok(
+    sheet.indexOf('htmlFor="campaign-disposition-notes"') < sheet.indexOf("codes.map"),
+    "Comment field should appear above the disposition-code list",
+  );
+  assert.match(globalWrapup, /CampaignDispositionSheet/);
+  assert.match(globalWrapup, /data\.pendingWrapup\?\.campaignAssignment/);
+  assert.match(globalWrapup, /subscribeCoreSnapshot/);
+  assert.match(globalWrapup, /pending-wrapup\?interactionId=/);
 
   const submitRoute = await readFile(new URL("../app/api/contact-center/agent/campaigns/disposition/route.js", import.meta.url), "utf8");
   assert.match(submitRoute, /applyCampaignDispositionToLedger/);
-  assert.match(submitRoute, /On Outbound Call/);
+  assert.match(submitRoute, /submitOutboundDisposition/);
+  assert.match(submitRoute, /readEffectiveAgentStatus/);
 });

@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { createDefaultForm, slugifyFormName } from "@/lib/forms/form-schema";
 import { notify } from "@/components/ToastNotify";
+import { Can } from "@/components/auth-provider";
 
 function FormCardSkeleton() {
   return <Card className="overflow-hidden flex flex-col">
@@ -207,8 +208,8 @@ export default function AdminFormsPage() {
     </div>
     <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importFormFile} />
     <Button size="sm" variant="outline" onClick={() => load({ showRefreshing: true, showSuccessToast: true })} disabled={loading || formsLoading || refreshing}><IconRefresh className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />Refresh</Button>
-    <Button size="sm" variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />Import JSON</Button>
-    <Button size="sm" onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button>
+    <Can permission="forms:import"><Button size="sm" variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />Import JSON</Button></Can>
+    <Can permission="forms:create"><Button size="sm" onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button></Can>
   </>;
 
   return <AdminPageShell>
@@ -256,9 +257,9 @@ export default function AdminFormsPage() {
         </CardContent>
         <CardFooter className="flex flex-wrap gap-2 border-t bg-muted/30 p-3">
           <Button size="sm" onClick={() => router.push(`/admin/forms/${form.id}`)}><IconPencil className="h-4 w-4 mr-1" />Edit</Button>
-          <Button size="sm" variant="outline" onClick={() => publishForm(form)} disabled={loading || form.status === "published"}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button>
+          <Can permission="forms:publish"><Button size="sm" variant="outline" onClick={() => publishForm(form)} disabled={loading || form.status === "published"}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button></Can>
           <Button size="sm" variant="outline" onClick={() => exportForm(form)} disabled={loading}><IconDownload className="h-4 w-4 mr-1" />Export</Button>
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => archiveForm(form)} disabled={loading || form.status === "archived"}><IconArchive className="h-4 w-4 mr-1" />Archive</Button>
+          <Can permission="forms:delete"><Button size="sm" variant="ghost" className="text-destructive" onClick={() => archiveForm(form)} disabled={loading || form.status === "archived"}><IconArchive className="h-4 w-4 mr-1" />Archive</Button></Can>
         </CardFooter>
       </Card>)}
     </div> : null}

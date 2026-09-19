@@ -1,28 +1,15 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 function getTelnyxBaseUrl() {
   return process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
 }
 
-export async function GET(request, context) {
+async function GET_handler(request, context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 }
-      );
-    }
 
     const resolvedParams = (await context?.params) || {};
     const { callControlId } = resolvedParams;
@@ -98,3 +85,5 @@ export async function GET(request, context) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["monitor:read", "interactions_history:read"], GET_handler, { route: "/api/contact-center/call-sessions/[callControlId]" });

@@ -8,11 +8,11 @@ import { stripTtsExpressionTags } from "../lib/ai/tts-expression-text.mjs";
 
 const root = new URL("../", import.meta.url);
 
-test("Admin navigation exposes AI Assistants to admin and owner roles", async () => {
+test("Admin navigation exposes AI Assistants through the admin.ai screens", async () => {
   const source = await readFile(new URL("config/menu.jsx", root), "utf8");
   assert.match(source, /title:\s*"AI Assistants"/);
   assert.match(source, /url:\s*"\/admin\/ai-assistants"/);
-  assert.match(source, /role_access:\s*\["admin",\s*"owner"\]/);
+  assert.match(source, /screens:\s*\["admin\.ai",\s*"supervisor\.scheduled-events"\]/);
 });
 
 test("AI Assistant editor represents every demo portal tab in the section rail", async () => {
@@ -39,6 +39,9 @@ test("AI Assistant editor represents every demo portal tab in the section rail",
 test("AI Assistant Call opens the dedicated AI phone widget and unsaved exit uses a custom dialog", async () => {
   const editor = await readFile(new URL("components/assistants/AssistantEditor.jsx", root), "utf8");
   const phone = await readFile(new URL("components/assistants/AssistantPhoneWidget.jsx", root), "utf8");
+  const messages = await readFile(new URL("components/ai-widget-messages.jsx", root), "utf8");
+  const provider = await readFile(new URL("components/ai-widget-ui-provider.jsx", root), "utf8");
+  const status = await readFile(new URL("components/ai-widget-status.jsx", root), "utf8");
   assert.match(editor, /import AssistantPhoneWidget/);
   assert.match(editor, /setShowPhone\(true\)/);
   assert.match(editor, /<AssistantPhoneWidget/);
@@ -52,8 +55,11 @@ test("AI Assistant Call opens the dedicated AI phone widget and unsaved exit use
   assert.match(editor, /skipLeaveGuardRef\.current = true/);
   assert.match(editor, /window\.location\.assign\(target\)/);
   assert.match(phone, /TelnyxAIAgentProvider/);
-  assert.match(phone, /client\.startConversation/);
-  assert.match(phone, /client\.sendConversationMessage/);
+  assert.match(phone, /widgetVersion="contact-center-ai-widget\/1\.0"/);
+  assert.match(phone, /<AIWidgetUIProvider>/);
+  assert.match(phone, /await startConversation\(callOptions\)/);
+  assert.doesNotMatch(phone, /await client\.connect\(\)/);
+  assert.match(messages, /client\.sendConversationMessage/);
   assert.match(phone, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(phone, /track\.enabled = !nextMuted/);
   assert.match(phone, /PANEL_WIDTH = 320/);
@@ -62,8 +68,14 @@ test("AI Assistant Call opens the dedicated AI phone widget and unsaved exit use
   assert.match(phone, /<AudioVisualizer/);
   assert.match(phone, /min-h-0 flex-1 border-t/);
   assert.match(phone, /Audio visualizer will appear during calls/);
-  assert.match(phone, /Real-time transcription will appear here during calls/);
-  assert.match(phone, /stripTtsExpressionTags\(message\.content\)/);
+  assert.match(phone, /<AIWidgetStatus compact \/>/);
+  assert.match(phone, /<AIWidgetMessages compact \/>/);
+  assert.match(messages, /Voice and typed messages will appear here in real time/);
+  assert.match(messages, /stripTtsExpressionTags\(message\.content\)/);
+  assert.match(provider, /agent\.login\.started/);
+  assert.match(provider, /client\.clearReconnectToken\(\)/);
+  assert.match(status, /Copy diagnostics/);
+  assert.doesNotMatch(phone, /streamingAudio|AIConversationMedia|mediaSettings/);
 });
 
 test("assistant webhook presets only expose Contact Center data sources", async () => {
@@ -176,11 +188,11 @@ test("AI Assistants rail exposes pronunciation dictionary management", async () 
   assert.match(page, /\/api\/tts\/speech/);
   assert.match(page, /Upload file/);
   assert.match(voicePicker, /href="\/admin\/ai-assistants\/pronunciation-dictionaries"/);
-  assert.match(listRoute, /export async function GET/);
-  assert.match(listRoute, /export async function POST/);
-  assert.match(itemRoute, /export async function GET/);
-  assert.match(itemRoute, /export async function PATCH/);
-  assert.match(itemRoute, /export async function DELETE/);
+  assert.match(listRoute, /export const GET = withPermission\("pronunciation_dicts:read"/);
+  assert.match(listRoute, /export const POST = withPermission\("pronunciation_dicts:create"/);
+  assert.match(itemRoute, /export const GET = withPermission\("pronunciation_dicts:read"/);
+  assert.match(itemRoute, /export const PATCH = withPermission\("pronunciation_dicts:update"/);
+  assert.match(itemRoute, /export const DELETE = withPermission\("pronunciation_dicts:delete"/);
 });
 
 test("AI Assistants rail tables use the Tools Library icon action pattern", async () => {
@@ -285,6 +297,26 @@ test("Agent model selectors match the demo portal and only show Telnyx-recommend
   assert.match(apiSource, /raw: model \|\| null/);
 });
 
+test("Workflow settings reuse the detailed provider model picker without filtering the Telnyx catalog", async () => {
+  const source = await readFile(new URL("app/(portal)/admin/workflows/[id]/page.jsx", root), "utf8");
+  assert.match(source, /import AIModels from "@\/components\/assistants\/AIModels"/);
+  assert.match(source, /<AIModels[\s\S]*models=\{llmModels\}/);
+  assert.match(source, /emptyMessage=\{loadingModels \? "Loading models\.\.\." : "No Telnyx models found\."\}/);
+  assert.doesNotMatch(source, /llmModels\.filter\([\s\S]*recommended_for_assistants/);
+  assert.doesNotMatch(source, /model\.parameters/);
+  assert.doesNotMatch(source, /model\.tier/);
+});
+
+test("Model details render above and outside the clipped model select viewport", async () => {
+  const pickerSource = await readFile(new URL("components/assistants/AIModels.jsx", root), "utf8");
+  const hoverCardSource = await readFile(new URL("components/ui/hover-card.jsx", root), "utf8");
+  assert.match(hoverCardSource, /<HoverCardPrimitive\.Portal>/);
+  assert.match(pickerSource, /<HoverCardContent side="right" align="start"/);
+  assert.match(pickerSource, /collisionPadding=\{16\}/);
+  assert.match(pickerSource, /z-\[110\]/);
+  assert.match(pickerSource, /max-w-\[calc\(100vw-2rem\)\]/);
+});
+
 test("Assistant conversations expose the demo portal recording and session actions", async () => {
   const source = await readFile(new URL("components/assistants/AssistantConversationsPanel.jsx", root), "utf8");
   assert.match(source, /title="Play recording"/);
@@ -334,5 +366,8 @@ test("Voice through Privacy use the demo portal tabs inside fixed rail-height ca
   assert.match(calling, /Voice Numbers[\s\S]*Call Settings Card[\s\S]*Call Settings/);
   assert.doesNotMatch(calling, /<Card className="h-full min-h-0 w-full overflow-hidden">/);
   const widgetRoute = await readFile(new URL("app/api/ai/assistants\/\[id\]\/route.js", root), "utf8");
-  assert.match(widgetRoute, /export async function POST\(request, context\)/);
+  // POST stays exposed for demo-portal components such as WidgetTab; since the
+  // Phase 0 hardening it is exported through the permission guard.
+  assert.match(widgetRoute, /async function POST_handler\(request, context\)/);
+  assert.match(widgetRoute, /export const POST = withPermission\("ai_assistants:update", POST_handler/);
 });

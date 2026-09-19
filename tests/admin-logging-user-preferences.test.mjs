@@ -76,11 +76,12 @@ test("Admin logging page hydrates topic filters from per-admin preferences and p
 test("admin logging preferences API is admin-only and reads/writes the current user's saved filters", async () => {
   const route = await readFile(routeUrl, "utf8");
 
-  assert.match(route, /async function requireAdmin\(\)/);
+  assert.match(route, /export const GET = withPermission\("logging:read", GET_handler, \{ route:/);
+  assert.match(route, /export const PUT = withPermission\("logging:update", PUT_handler, \{ route:/);
   assert.match(route, /getLoggingUserPreferences/);
   assert.match(route, /saveLoggingUserPreferences/);
-  assert.match(route, /export async function GET\(\)/);
-  assert.match(route, /export async function PUT\(request\)/);
+  assert.match(route, /async function GET_handler\(/);
+  assert.match(route, /async function PUT_handler\(request/);
   assert.match(route, /user\.id \|\| user\.email \|\| user\.username/);
   assert.match(route, /filters: body\?\.filters \|\| body\?\.preferences\?\.filters \|\| \{\}/);
 });

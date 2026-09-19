@@ -1,21 +1,42 @@
 import { NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";
-import { setUserStatus } from "@/lib/contact-center/user-status";
-import { getPostgresPool } from "@/lib/postgres.mjs";
 import { authErrorPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
+import {
+  completeTrackedLogout,
+  resolveTrackedAuthUser,
+} from "@/lib/auth-session-tracking.mjs";
 
-async function getCurrentAgentStatus(userId) {
-  try {
-    const pool = getPostgresPool();
-    if (!pool || !userId) return "Unknown";
-    const result = await pool.query(
-      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
-      [String(userId)],
-    );
-    return result.rows?.[0]?.agent_status || "Unknown";
-  } catch (_) {
-    return "Unknown";
+const NEXTAUTH_SESSION_COOKIE_BASES = [
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+];
+
+function expireAuthCookies(request, response) {
+  const names = new Set(["session", "refresh_token", ...NEXTAUTH_SESSION_COOKIE_BASES]);
+  for (const cookie of request.cookies.getAll()) {
+    if (
+      NEXTAUTH_SESSION_COOKIE_BASES.some(
+        (base) => cookie.name === base || cookie.name.startsWith(`${base}.`),
+      )
+    ) {
+      names.add(cookie.name);
+    }
+  }
+  for (const name of names) {
+    response.cookies.set({
+      name,
+      value: "",
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+      secure: name.startsWith("__Secure-") || process.env.NODE_ENV === "production",
+      expires: new Date(0),
+      maxAge: 0,
+    });
   }
 }
 
@@ -26,6 +47,18 @@ export async function POST(request) {
     const headerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
     const refreshCookie = request.cookies.get("refresh_token")?.value || null;
     const accessCookie = request.cookies.get("session")?.value || null;
+    let nextAuthToken = null;
+    try {
+      nextAuthToken = await getToken({
+        req: request,
+        secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+      });
+    } catch (nextAuthError) {
+      await logAuthEvent("warn", "logout_session_decode_failed", {
+        source: "api",
+        ...authErrorPayload(nextAuthError),
+      });
+    }
 
     let userId = null;
     if (accessCookie) {
@@ -36,128 +69,58 @@ export async function POST(request) {
       const p2 = await verifyRefreshToken(refreshCookie);
       if (p2?.sub) userId = p2.sub;
     }
+    if (!userId && nextAuthToken?.id) userId = String(nextAuthToken.id);
+    const email = nextAuthToken?.email || null;
     const refreshToRevoke = refreshCookie || headerMatch?.[1] || null;
     let revokedRefreshToken = false;
+    let trackedSessionClosed = false;
     await logAuthEvent("info", "logout_attempt", {
       userId: userId ? String(userId) : undefined,
       hasRefreshToken: Boolean(refreshToRevoke),
+      hasNextAuthSession: Boolean(nextAuthToken),
       source: "api",
     });
-    if (userId && refreshToRevoke) {
-      const user = await PgDb.findUserById(String(userId));
+
+    const user = await resolveTrackedAuthUser({ userId, email });
+    if (user && refreshToRevoke) {
       const list = Array.isArray(user?.refresh_tokens)
         ? user.refresh_tokens
         : [];
       const hashed = await hashToken(refreshToRevoke);
       const newList = list.filter((t) => t?.refreshToken !== hashed);
-      await PgDb.updateUserById(String(userId), { refresh_tokens: newList });
+      await PgDb.updateUserById(String(user.id), { refresh_tokens: newList });
       revokedRefreshToken = newList.length !== list.length;
+    }
 
-      // Set user status to Offline on logout
-      if (user) {
-        try {
-          const previousStatus = await getCurrentAgentStatus(userId);
-          await setUserStatus({
-            userId: String(userId),
-            username: user.username,
-            status: "Offline",
-            previousStatus,
-          });
-        } catch (_) {}
-      }
-
-      // Track logout activity
+    if (user) {
       try {
-        // Find the most recent login session that hasn't been logged out
-        const pool = await import("@/lib/postgres.mjs").then((m) =>
-          m.getPostgresPool()
-        );
-        if (pool) {
-          const sessionRes = await pool.query(
-            `SELECT id, login_at, session_token FROM cc_user_sessions 
-             WHERE user_id = $1 AND logout_at IS NULL 
-             ORDER BY login_at DESC LIMIT 1`,
-            [String(userId)]
-          );
-
-          if (sessionRes.rows.length > 0) {
-            const session = sessionRes.rows[0];
-            const logoutTime = new Date().toISOString();
-            let durationSeconds = null;
-            if (session.login_at) {
-              durationSeconds = Math.floor(
-                (new Date(logoutTime) - new Date(session.login_at)) / 1000
-              );
-            }
-
-            // Update session with logout time (use session_token if available, otherwise use id)
-            if (session.session_token) {
-              await PgDb.updateUserSessionLogout(
-                session.session_token,
-                logoutTime
-              );
-            } else {
-              // Fallback: update by ID
-              await pool.query(
-                `UPDATE cc_user_sessions 
-                 SET logout_at = $1, 
-                     duration_seconds = $2,
-                     updated_at = NOW()
-                 WHERE id = $3`,
-                [logoutTime, durationSeconds, session.id]
-              );
-            }
-
-            // Log logout activity
-            await PgDb.logUserActivity({
-              userId: String(userId),
-              activityType: "logout",
-              startedAt: session.login_at || logoutTime,
-              endedAt: logoutTime,
-              durationSeconds: durationSeconds,
-            });
-          } else {
-            // No active session found, just log the logout activity
-            await PgDb.logUserActivity({
-              userId: String(userId),
-              activityType: "logout",
-              startedAt: new Date().toISOString(),
-              endedAt: new Date().toISOString(),
-            });
-          }
-        }
+        const trackingResult = await completeTrackedLogout({
+          userId: String(user.id),
+          email: user.username,
+          sessionToken: nextAuthToken?.authTrackingSessionId || null,
+          source: nextAuthToken ? "nextauth_logout_api" : "jwt_logout_api",
+        });
+        trackedSessionClosed = Boolean(trackingResult?.closed);
       } catch (activityError) {
-        await logAuthEvent("warn", "logout_activity_failed", { userId: String(userId), source: "api", ...authErrorPayload(activityError) });
-        // Don't fail logout if activity logging fails
+        await logAuthEvent("warn", "logout_activity_failed", {
+          userId: String(user.id),
+          source: "api",
+          ...authErrorPayload(activityError),
+        });
       }
     }
     await logAuthEvent("info", "logout_success", {
-      userId: userId ? String(userId) : undefined,
+      userId: user?.id ? String(user.id) : userId ? String(userId) : undefined,
       source: "api",
       hasRefreshToken: Boolean(refreshToRevoke),
+      hasNextAuthSession: Boolean(nextAuthToken),
       revokedRefreshToken,
+      trackedSessionClosed,
     });
   } catch (error) {
     await logAuthEvent("warn", "logout_failed", { source: "api", ...authErrorPayload(error) });
   }
 
-  res.cookies.set({
-    name: "session",
-    value: "",
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 0,
-  });
-  res.cookies.set({
-    name: "refresh_token",
-    value: "",
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 0,
-  });
+  expireAuthCookies(request, res);
   return res;
 }

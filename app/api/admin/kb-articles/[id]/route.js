@@ -1,29 +1,17 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { requireAiApiKey } from "@/app/api/_utils/ai-auth";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAuth(request) {
-  if (requireAiApiKey(request).ok) return { type: "api_key", user: null };
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return { type: "session", user };
+// Machine access (telnyx-ai-api-key) or an administrator session; the guard decides.
+function requireAuth(authz) {
+  return authz.apiKey ? { type: "api_key", user: null } : { type: "session", user: authz.user };
 }
 
-export async function GET(request, { params }) {
-  const auth = await requireAuth(request);
+async function GET_handler(request, { params }, authz) {
+  const auth = requireAuth(authz);
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const pool = getPostgresPool();
@@ -54,8 +42,8 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
-  const auth = await requireAuth(request);
+async function PUT_handler(request, { params }, authz) {
+  const auth = requireAuth(authz);
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const pool = getPostgresPool();
@@ -162,8 +150,8 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(request, { params }) {
-  const auth = await requireAuth(request);
+async function DELETE_handler(request, { params }, authz) {
+  const auth = requireAuth(authz);
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const pool = getPostgresPool();
@@ -186,3 +174,8 @@ export async function DELETE(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard; API-key callers keep their access.
+export const GET = withPermission("kb_articles:read", GET_handler, { apiKey: requireAiApiKey, route: "/api/admin/kb-articles/[id]" });
+export const PUT = withPermission("kb_articles:update", PUT_handler, { apiKey: requireAiApiKey, route: "/api/admin/kb-articles/[id]" });
+export const DELETE = withPermission("kb_articles:delete", DELETE_handler, { apiKey: requireAiApiKey, route: "/api/admin/kb-articles/[id]" });

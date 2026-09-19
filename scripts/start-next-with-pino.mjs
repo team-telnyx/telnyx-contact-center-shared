@@ -103,11 +103,53 @@ async function startStreamingOnlyRuntime() {
 async function startWorkerOnlyRuntime() {
   logger.info("web_server_skipped_for_process_role", { processRole });
   logger.info("worker_only_runtime_starting", { processRole });
-  const { startCoordinator, stopCoordinator } = await import("../lib/contact-center/coordinator.js");
-  const started = await startCoordinator();
-  logger.info("worker_only_coordinator_start_requested", { processRole, started });
+  const { getPostgresPool } = await import("../lib/postgres.mjs");
+  const { createTelnyxProvider } = await import("../lib/acd/provider.mjs");
+  const { startAcdWorker } = await import("../lib/acd/worker.mjs");
+  const { startReconciler } = await import("../lib/acd/reconciler.mjs");
+  const { startGeneratorWorker } = await import("../lib/call-generator/runtime.mjs");
+  const { readPostgresSslConfig } = await import("../lib/postgres-ssl.mjs");
+  const pool = getPostgresPool();
+  const provider = createTelnyxProvider();
+  const node = process.env.NODE_ID || process.env.HOSTNAME || `worker-${process.pid}`;
+  const worker = startAcdWorker(pool, {
+    provider,
+    node,
+    connectionConfig: {
+      host: process.env.POSTGRES_HOST,
+      port: Number(process.env.POSTGRES_PORT || 5432),
+      user: process.env.POSTGRES_USER,
+      password: process.env.POSTGRES_PASSWORD,
+      database: process.env.POSTGRES_DB,
+      ssl: readPostgresSslConfig(),
+      application_name: `${process.env.POSTGRES_APPLICATION_NAME || "telnyx-contact-center"}:acd-listener`,
+    },
+    onDrain: (results) => {
+      const failures = (results || []).filter((result) => result?.error);
+      if (failures.length > 0) logger.warn("acd_worker_drain_failed", { failures });
+    },
+  });
+  const reconciler = startReconciler(pool, {
+    provider,
+    node,
+    onTick: (result) => {
+      if (result?.error) logger.warn("acd_reconciler_tick_failed", result);
+    },
+  });
+  const generator = process.env.CALL_GENERATOR_EXTERNAL_WORKER === "true"
+    ? null
+    : startGeneratorWorker(pool, {
+        node: `${node}:generator`,
+        onError: (error) =>
+          logger.warn("call_generator_worker_error", {
+            error: error?.message || String(error),
+          }),
+      });
+  logger.info("worker_only_core_runtime_started", { processRole, node });
   await waitUntilShutdown();
-  await stopCoordinator();
+  generator?.stop?.();
+  await worker.stop();
+  await reconciler.stop();
 }
 
 function startWebRuntime() {

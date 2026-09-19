@@ -31,6 +31,7 @@ import {
   IconChevronUp,
   IconShieldCheck,
   IconTools,
+  IconTrash,
 } from "@tabler/icons-react";
 
 function SecretRefCombobox({ value, onChange }) {
@@ -69,6 +70,47 @@ function SecretRefCombobox({ value, onChange }) {
   );
 }
 
+// Header values may hold a reference to an encrypted local secret instead of a
+// literal credential. The reference is what gets persisted and returned by the
+// admin API; the value is only resolved server-side at request time.
+const SECRET_HEADER_PATTERN = /^\{\{\s*secret:([^}]+?)\s*\}\}$/;
+
+function headersObjectToRows(headers) {
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return [];
+  return Object.entries(headers).map(([name, value]) => {
+    const match = SECRET_HEADER_PATTERN.exec(String(value ?? "").trim());
+    return match
+      ? { name, value: match[1].trim(), fromSecret: true }
+      : { name, value: String(value ?? ""), fromSecret: false };
+  });
+}
+
+function headerRowsToObject(rows) {
+  const headers = {};
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const name = String(row?.name || "").trim();
+    if (!name) return;
+    const value = String(row?.value ?? "").trim();
+    if (row?.fromSecret) {
+      if (!value) return;
+      headers[name] = `{{secret:${value}}}`;
+      return;
+    }
+    headers[name] = String(row?.value ?? "");
+  });
+  return headers;
+}
+
+// Authentication headers are generated from the selected auth type. Letting an
+// admin also set them by hand collides with the generated value.
+const RESERVED_HEADER_NAMES = new Set(["authorization"]);
+
+function reservedHeaderRowNames(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => String(row?.name || "").trim())
+    .filter((name) => RESERVED_HEADER_NAMES.has(name.toLowerCase()));
+}
+
 export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onSaved, oauthStatus = null }) {
   const id = serverId;
   const isNew = id === "new";
@@ -81,6 +123,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const [authHeaderName, setAuthHeaderName] = React.useState("");
   const [authScheme, setAuthScheme] = React.useState("");
   const [authSecretName, setAuthSecretName] = React.useState("");
+  const [headerRows, setHeaderRows] = React.useState([]);
   const [allowedTools, setAllowedTools] = React.useState([]);
   const [availableTools, setAvailableTools] = React.useState([]);
   const [expandedTools, setExpandedTools] = React.useState(new Set());
@@ -121,6 +164,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     setAuthHeaderName("");
     setAuthScheme("");
     setAuthSecretName("");
+    setHeaderRows([]);
     setAllowedTools([]);
     setAvailableTools([]);
     setExpandedTools(new Set());
@@ -145,6 +189,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
         setAuthHeaderName(d.auth_header_name || "");
         setAuthScheme(d.auth_scheme || "");
         setAuthSecretName(d.auth_secret_name || d.api_key_ref || "");
+        setHeaderRows(headersObjectToRows(d.headers));
         setAllowedTools(Array.isArray(d.allowed_tools) ? d.allowed_tools : []);
       } catch (_) {
       } finally {
@@ -187,6 +232,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
         body: JSON.stringify({
           type,
           url,
+          headers: headerRowsToObject(headerRows),
           ...authPayload,
         }),
         cache: "no-store",
@@ -218,6 +264,9 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       name,
       type,
       url,
+      // Always sent: updateMcpServer rewrites the headers column on every save,
+      // so omitting this would silently drop configured headers.
+      headers: headerRowsToObject(headerRows),
       ...buildAuthPayload(overrides),
       allowed_tools: allowedTools,
       ...overrides,
@@ -315,6 +364,18 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     }
   }
 
+  const reservedHeaderNames = reservedHeaderRowNames(headerRows);
+
+  const addHeaderRow = () => setHeaderRows((prev) => [...prev, { name: "", value: "", fromSecret: false }]);
+
+  const updateHeaderRow = (index, patch) => {
+    setHeaderRows((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  };
+
+  const removeHeaderRow = (index) => {
+    setHeaderRows((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
+  };
+
   const toggleTool = (toolName) => {
     setAllowedTools((prev) => prev.includes(toolName) ? prev.filter((tool) => tool !== toolName) : [...prev, toolName]);
   };
@@ -398,9 +459,14 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                         <label className="text-sm font-medium">Local Secret</label>
                         <SecretRefCombobox value={authSecretName} onChange={setAuthSecretName} />
                         {authType === "oauth_client_credentials" && (
-                          <p className="text-xs text-muted-foreground">
-                            Store OAuth credentials as JSON {`{"client_id":"...","client_secret":"..."}`} or as client_id:client_secret. Telnyx MCP HTTP uses resource https://api.telnyx.com/v2/mcp.
-                          </p>
+                          <>
+                            <p className="text-xs text-muted-foreground">
+                              Store OAuth credentials as JSON {`{"client_id":"...","client_secret":"..."}`} or as client_id:client_secret. Telnyx MCP HTTP uses resource https://api.telnyx.com/v2/mcp.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              For a non-Telnyx provider, add its token endpoint and scope to the same secret: {`{"client_id":"...","client_secret":"...","token_url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","scope":"<app-id>/.default"}`}. Optional keys: audience, resource, and auth_style (post or basic).
+                            </p>
+                          </>
                         )}
                       </div>
                     )}
@@ -492,6 +558,71 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Header Scheme (optional)</label>
                         <Input value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} placeholder="Bearer" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid gap-2 pt-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-sm font-medium">Custom Headers</label>
+                      <Button size="sm" variant="outline" onClick={addHeaderRow}>Add Header</Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Sent on every request to this MCP server, alongside the authentication above. Use this for gateway keys such as Ocp-Apim-Subscription-Key — tick &ldquo;local secret&rdquo; so the credential is stored encrypted rather than on this record.
+                    </p>
+                    {reservedHeaderNames.length > 0 && (
+                      <Alert variant="destructive">
+                        <IconAlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Reserved header</AlertTitle>
+                        <AlertDescription>
+                          {reservedHeaderNames.join(", ")} is generated from the Authentication setting above. Remove the custom row or it will be ignored.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {headerRows.length === 0 ? (
+                      <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">No custom headers</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {headerRows.map((row, index) => (
+                          <div key={index} className="space-y-2 rounded-lg border p-3">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={row.name}
+                                onChange={(e) => updateHeaderRow(index, { name: e.target.value })}
+                                placeholder="Header name"
+                                className="min-w-0 flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0"
+                                aria-label={`Remove header ${row.name || index + 1}`}
+                                onClick={() => removeHeaderRow(index)}
+                              >
+                                <IconTrash className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {row.fromSecret ? (
+                              <SecretRefCombobox
+                                value={row.value}
+                                onChange={(value) => updateHeaderRow(index, { value })}
+                              />
+                            ) : (
+                              <Input
+                                value={row.value}
+                                onChange={(e) => updateHeaderRow(index, { value: e.target.value })}
+                                placeholder="Header value"
+                              />
+                            )}
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Checkbox
+                                checked={Boolean(row.fromSecret)}
+                                onCheckedChange={(checked) => updateHeaderRow(index, { fromSecret: checked === true, value: "" })}
+                              />
+                              Value is a local secret (required for credentials — the value is resolved at request time and never stored on this record)
+                            </label>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

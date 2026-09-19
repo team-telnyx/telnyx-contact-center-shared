@@ -12,6 +12,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { syncWorkflowInsights, deleteWorkflowInsights } from "@/lib/telnyx-insights";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 function normalizeWorkflowDataActionButtons(buttons) {
   if (!Array.isArray(buttons)) return [];
   return buttons
@@ -37,7 +38,7 @@ function normalizeWorkflowDataActionButtons(buttons) {
 }
 
 // GET /api/admin/workflows/[id] - Get workflow with stages and items
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -117,7 +118,7 @@ export async function GET(request, { params }) {
 }
 
 // PUT /api/admin/workflows/[id] - Update workflow
-export async function PUT(request, { params }) {
+async function PUT_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -135,7 +136,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active, llm_model, llm_confidence_threshold, ai_assistant_id, data_action_buttons, syncInsights } = body;
+    const { name, description, category, is_active, llm_model, llm_fallback_model, llm_confidence_threshold, llm_reasoning_enabled, llm_max_output_tokens, ai_assistant_id, data_action_buttons, syncInsights } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -165,6 +166,38 @@ export async function PUT(request, { params }) {
     if (llm_model !== undefined) {
       updates.push(`llm_model = $${paramIndex++}`);
       values.push(llm_model);
+    }
+    if (llm_fallback_model !== undefined) {
+      const fallbackModel = typeof llm_fallback_model === "string" ? llm_fallback_model.trim() : "";
+      if (!fallbackModel || fallbackModel.length > 100) {
+        return NextResponse.json(
+          { error: "Invalid llm_fallback_model. Select a fallback model." },
+          { status: 400 }
+        );
+      }
+      updates.push(`llm_fallback_model = $${paramIndex++}`);
+      values.push(fallbackModel);
+    }
+    if (llm_reasoning_enabled !== undefined) {
+      if (typeof llm_reasoning_enabled !== "boolean") {
+        return NextResponse.json(
+          { error: "Invalid llm_reasoning_enabled. Must be a boolean." },
+          { status: 400 }
+        );
+      }
+      updates.push(`llm_reasoning_enabled = $${paramIndex++}`);
+      values.push(llm_reasoning_enabled);
+    }
+    if (llm_max_output_tokens !== undefined) {
+      const outputCap = Number(llm_max_output_tokens);
+      if (!Number.isInteger(outputCap) || outputCap < 512 || outputCap > 1200) {
+        return NextResponse.json(
+          { error: "Invalid llm_max_output_tokens. Must be an integer between 512 and 1200." },
+          { status: 400 }
+        );
+      }
+      updates.push(`llm_max_output_tokens = $${paramIndex++}`);
+      values.push(outputCap);
     }
     if (llm_confidence_threshold !== undefined) {
       if (llm_confidence_threshold === null || llm_confidence_threshold === "") {
@@ -302,7 +335,7 @@ export async function PUT(request, { params }) {
 }
 
 // DELETE /api/admin/workflows/[id] - Delete workflow
-export async function DELETE(request, { params }) {
+async function DELETE_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -376,3 +409,8 @@ export async function DELETE(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("workflows:read", GET_handler, { route: "/api/admin/workflows/[id]" });
+export const PUT = withPermission("workflows:update", PUT_handler, { route: "/api/admin/workflows/[id]" });
+export const DELETE = withPermission("workflows:delete", DELETE_handler, { route: "/api/admin/workflows/[id]" });

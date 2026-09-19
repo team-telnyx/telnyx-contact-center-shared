@@ -4,14 +4,16 @@ description: Read the interaction list, select work, and understand the detail p
 audiences: [agent, supervisor, admin, owner]
 keywords: [agent desktop, interaction list, ringing, call state]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-09-15
 ---
 
 **Desktop** shows current interactions in the left panel and details for the selected interaction in the main workspace. Entries combine authoritative interaction records with live WebRTC state, so mute and hold indicators can update immediately.
 
-An interaction can show caller identity/number, direction, queue, state, duration, and current mute/hold condition. Select a row to keep its content in view. Answer and Reject are intentionally located in WebRTC Phone, not in the interaction list.
+An interaction can show caller identity/number, direction, queue, state, duration, and current mute/hold condition. Select a row to keep its content in view. Voice cards offer Answer and Reject controls, also available in WebRTC Phone. Chat and Email cards provide Accept and Decline controls.
 
-The detail view is determined by Call Flow Agent Assist configuration:
+New offers show an **Incoming** badge and a softly pulsing frame in the channel color. Selecting the card keeps this indicator active until the offer is accepted, withdrawn, or expires. Connected interactions and outgoing calls do not pulse. With reduced motion enabled in your browser or operating system, the frame remains static and the badge still identifies incoming work.
+
+For voice, the detail view is determined by Call Flow Agent Assist configuration:
 
 - **KB Articles** is the default and shows live knowledge suggestions;
 - **Workflows** shows the guided staged workflow;
@@ -20,3 +22,41 @@ The detail view is determined by Call Flow Agent Assist configuration:
 - disabled Agent Assist shows an explicit disabled message.
 
 Ringing entries removed after timeout/re-enqueue must not be answered from stale browser state. When status becomes Agent Not Answering, stale ringing interactions are cleared. Completed, abandoned, and ended calls are removed from the active list after lifecycle processing.
+
+## Native chat
+
+Website chat appears beside voice interactions. Select a chat card, then **Accept chat** or **Decline**. Accepted chats have independent reply drafts and support text, emoji, typing indicators, and permitted attachments. Switching cards preserves unsent text. If another session changed a recovered draft, choose which version to keep before sending.
+
+The chat detail panel has two equal columns on wide screens: the conversation and AI assistance. Narrow panels stack the two cards. Messages show the customer name from website context, agent names and profile photos, timestamps, and copy controls. Open an attachment thumbnail or filename for a larger preview; images, audio, video, and PDF use their respective viewers. File upload availability, allowed types, and size limits come from the widget's published attachment policy.
+
+The right card contains **AI Copilot**, **Insights**, **Metadata**, **Variables**, and **Costs**. Insights includes the AI-to-human handoff summary, reason, intent, and sentiment when provided. Provider insights and billing appear when available. Private integration tokens are excluded from metadata and variables.
+
+### AI Copilot
+
+Type a question, or click the brain icon on a message to copy its text into the Copilot question. Click **Suggest replies** to generate up to five suggestions. Each card initially shows three lines; **Full reply** expands the answer and its supporting rationale. Confidence percentages are the model's estimates, not measured probabilities of correctness.
+
+Click **Use reply** to insert a suggestion into your message draft. Review and send it yourself; inserting a suggestion never sends a message. **Undo** restores the draft that was replaced. Suggestions can be prepared while an offer is ringing, but the chat must be accepted before a reply can be inserted or sent.
+
+Administrators select the model and up to five embedded Telnyx Object Storage buckets under **Admin → System → Settings → AI Copilot**, using the page's shared **Save settings** action. The selected buckets are passed to the Chat Completions retrieval tool. With no buckets selected, Copilot uses the conversation context. The Costs tab shows returned Copilot token usage and an estimate only when model pricing is available; it does not substitute zero for unavailable billing.
+
+**End chat**, or a customer disconnect after acceptance, opens the same global **Wrapup Codes** sheet used for voice. The agent enters **Wrapup** and new offers pause. Select a code and use **Save & Close** or **Save & Go on Break** to complete the interaction and release its slot. Multiple pending chats are presented one at a time. Offers, active chats, and required wrap-up count toward utilization across every queue. A chat-only agent can work with Voice disabled and without SIP credentials.
+
+## Email
+
+Email interactions use amber cards beside chat and voice. Select a card, then **Accept** to begin replying. The detail panel shows the thread above the reply editor, with **AI Copilot** on the right on wide screens. The brain icon copies a customer message into Copilot. **Use reply** inserts an editable suggestion; **Undo inserted reply** restores the previous draft.
+
+Choose **Reply**, **Reply all** or **Forward**. Reply all excludes managed mailboxes. Replies are limited to original recipients; use Forward to send an incoming message to a new recipient. The sender is the authorized queue mailbox. Agents handle incoming email routed through queues; they cannot compose standalone new email.
+
+Drafts save automatically on the server. A version conflict requires **Reload saved draft** before sending. The editor supports formatting, templates with variables and up to 20 attachments totalling 5 MB. Incoming files are accessed through the assigned interaction. The administrator controls the message format, embedded images and external images globally in **Admin → Email → Preview**. These settings also apply to supervisor previews and interaction history. Formatted email remains sandboxed; users cannot override the display policy in individual messages.
+
+Use the clock control to schedule a send between one minute and 30 days ahead. **Cancel scheduled send** is available until dispatch begins. Pending sends must be resolved before waiting, completing or transferring. If a send request loses its response, **Confirm send** reuses its original identity rather than creating a second email.
+
+**Waiting for customer** and **Complete** open the shared wrap-up flow. Completing wrap-up releases capacity; a subsequent customer reply reopens the thread as a new interaction. **Transfer** moves the thread to an email queue or offers it to an eligible agent. The original mailbox and conversation history stay with the thread.
+
+Delivery badges describe each recipient separately. BCC addresses are hidden in normal conversation history. “Accepted by Telnyx” and “delivered” are separate states; delivery does not establish that a customer has read the message.
+
+## WhatsApp: locations, contact cards and reactions
+
+A location shared by the customer appears as a map card with the place name and address. Click the card to open an interactive Google map in a preview window; from there you can open the point in Google Maps in a new tab. To send a location, use the map-pin button below the reply box: search for an address or type coordinates, check the preview, adjust the zoom and choose **Send location**. To send a contact card, use the contact button: pick up to five contacts from the Contacts directory and choose **Send contact**. The customer receives the name, phone numbers, email and company as a WhatsApp contact.
+
+When the customer reacts to one of your messages with an emoji, the reaction appears as a small chip under that message rather than as a new message. To react to a customer message, use the smiley button next to the copy action on their bubble and pick an emoji; choosing the same emoji again or the cross removes your reaction. A reply the customer sent by quoting one of your messages shows the quoted text above their answer. Locations, contact cards and reactions are free-form messages, so they need the 24-hour customer service window to be open.

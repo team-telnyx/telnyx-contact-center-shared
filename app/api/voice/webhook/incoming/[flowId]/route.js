@@ -1,3 +1,5 @@
+import { VERIFIED_INBOX_REPLAY } from "@/lib/acd/replay-effects.mjs";
+import { handleAcdMediaEvent } from "@/lib/acd/media-events.mjs";
 import { NextResponse } from "next/server";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows.js";
 import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks.js";
@@ -17,15 +19,17 @@ import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
 import { findNextEdges, findNextNodes } from "@/lib/voice-flow-routing.js";
 import { finalizeAgentlessAttemptByWebhook, handleOutboundMachineDetection } from "@/lib/outbound-dialer/execution";
-import {
-  addTimelineEvent,
-  TimelineEventTypes,
-} from "@/lib/contact-center/call-timeline-tracker.js";
 import { voiceRuntimePayload, voiceWebhookLogger } from "@/lib/voice/logging.mjs";
+import {
+  decodeAcdClientState,
+  encodeAcdClientState,
+  materializeAcdIntakeState,
+  mergeAcdClientState,
+} from "@/lib/acd/intake-source.mjs";
 
 // WS4-T1: transition/flow-completion dedupe is replay-safe across nodes and
 // restarts. The helper keeps the previous in-memory 5-minute TTL semantics as
-// a fast path and adds DB-backed idempotency (cc_processed_events) guarded by
+// a fast path and adds DB-backed idempotency guarded by
 // WEBHOOK_IDEMPOTENCY_DB (default on, fail-open to memory on DB errors).
 import {
   claimOnce as claimWebhookKeyOnce,
@@ -63,6 +67,14 @@ function decodeClientState(clientState) {
   } catch {
     return null;
   }
+}
+
+function mergeFlowClientState(base, ...updates) {
+  let merged = decodeAcdClientState(base);
+  for (const update of updates) {
+    merged = mergeAcdClientState(merged, update);
+  }
+  return encodeAcdClientState(merged);
 }
 
 async function hangupVoicemailDropCall(callControlId) {
@@ -151,59 +163,15 @@ function recordOutboundCampaignInitiatorMonitorEvent({ callControlId, flowId, in
   );
 }
 
-async function updateConversationMetadata(conversationId, metadata) {
-  const apiKey = process.env.TELNYX_API_KEY;
-  if (!apiKey || !conversationId) return null;
-  const baseUrl = buildTelnyxV2Url(
-    `/ai/conversations/${encodeURIComponent(conversationId)}`,
-  );
-  try {
-    const currentRes = await fetch(baseUrl, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!currentRes.ok) {
-      const text = await currentRes.text();
-      return null;
-    }
-    const currentData = await currentRes.json();
-    const currentMetadata =
-      currentData?.data?.metadata &&
-      typeof currentData.data.metadata === "object"
-        ? currentData.data.metadata
-        : {};
-    const merged = {
-      ...currentMetadata,
-      ...metadata,
-    };
-    const updateRes = await fetch(baseUrl, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ metadata: merged }),
-    });
-    if (!updateRes.ok) {
-      const text = await updateRes.text();
-      return null;
-    }
-    return await updateRes.json();
-  } catch (err) {
-    return null;
-  }
-}
-
 /**
  * Incoming Call Webhook Handler
  * This webhook should be configured in the Telnyx voice application
  * It triggers flows with an "incoming_call" initiator node
  */
 
-export async function POST(request, { params }) {
+export async function POST(request, context) {
+  const { params } = context;
+  const replay = context[VERIFIED_INBOX_REPLAY];
   try {
     const { flowId } = await params;
     if (!flowId) {
@@ -217,10 +185,10 @@ export async function POST(request, { params }) {
     const rawBody = await request.text();
 
     // Verify Telnyx signature (optional but recommended)
-    const isValid = await verifyTelnyxSignature(request, rawBody);
+    const isValid = replay || await verifyTelnyxSignature(request, rawBody);
     const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "true").toLowerCase() === "true";
     if (!isValid) {
-      voiceWebhookLogger.warn("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
+      voiceWebhookLogger.warn("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ flowId, reason: "invalid_signature" }));
       if (enforceSignature) {
         return NextResponse.json(
           { ok: false, error: "Invalid signature" },
@@ -232,26 +200,117 @@ export async function POST(request, { params }) {
     // Parse the body
     const body = JSON.parse(rawBody || "{}");
     const event = body?.data?.event_type;
-    const webhookEventId = body?.data?.id || null;
+    const payload = body?.data?.payload || {};
+    const callControlId = payload.call_control_id;
 
     // Log call event to database
     try {
       await logCallEvent(body);
     } catch (err) {
-      voiceWebhookLogger.error("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
+      voiceWebhookLogger.error("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: err, eventType: event, callControlId, callSessionId: payload.call_session_id, flowId }));
     }
 
     // Store webhook in memory for monitoring
-    const callControlId = body?.data?.payload?.call_control_id;
     if (callControlId) {
       addWebhookEvent(callControlId, event, body, flowId);
     }
 
-    // Extract webhook data into variables (needed for call.enqueued handling)
-    const payload = body?.data?.payload || {};
+    // The worker re-enters this adapter only after committing Core state. Most
+    // Core events need adapter-only media effects and stop here. Agentless
+    // outbound flows are the exception: Core authorizes their initial answered
+    // replay and subsequent events while the Flow is active.
+    if (replay) {
+      await handleAcdMediaEvent(event, payload);
+      if (event === "call.hangup" && callControlId) {
+        await VoiceFlowDb.completeFlowExecution(flowId, callControlId, body.data.occurred_at);
+      }
+      if (!(replay.outboundCore && replay.adapterEventType)) {
+        return NextResponse.json({ ok: true, durable: true, replayed: true });
+      }
+    }
+
+    // Bind the generator's signed ingress identity before Core admission.
+    // Direct-to-agent generator calls use this durable binding to select the
+    // exact agent while preserving a separately controllable Voice API
+    // customer leg for transfer and consult operations.
+    if (event === "call.initiated" && payload.direction === "incoming") {
+      const aiCallControlId = findCustomHeader(
+        payload.custom_headers || [],
+        AI_CALL_ID_HEADER,
+      )?.value || null;
+      const { bindGeneratedInbound } = await import(
+        "@/lib/call-generator/inbound-identity.mjs"
+      );
+      const generatorClientState = await bindGeneratedInbound(
+        getPostgresPool(),
+        payload,
+        flowId,
+      );
+      const marker = decodeClientState(generatorClientState);
+      const generatorIdentity =
+        marker?.callGenerator === true && marker.runId && marker.ledgerId
+          ? {
+              runId: marker.runId,
+              ledgerId: marker.ledgerId,
+              flowId,
+              ...(marker.directAgentId
+                ? { directAgentId: marker.directAgentId }
+                : {}),
+            }
+          : null;
+      const sourceClientState = aiCallControlId
+        ? mergeAcdClientState(payload.client_state, {
+            ai_call_control_id: aiCallControlId,
+          })
+        : payload.client_state;
+      payload.client_state = encodeAcdClientState(
+        materializeAcdIntakeState({
+          clientState: sourceClientState,
+          payload,
+          flowId,
+          generatorIdentity,
+        }),
+      );
+    }
+
+    // Durable Core intake runs before domain-specific flow effects. Every
+    // configured CC queue is Core-owned; unrelated flow events pass through.
+    let acdIntakeResult = replay || null;
+    if (!replay) try {
+      const acdPool = getPostgresPool();
+      if (!acdPool) return NextResponse.json({ ok: false, error: "Database unavailable" }, { status: 503 });
+      if (acdPool) {
+        const acdEvent = {
+          eventId: body?.data?.id || null,
+          eventType: event,
+          occurredAt: body?.data?.occurred_at || null,
+          payload,
+          sourceRoute: "incoming",
+          sourceFlowId: flowId,
+        };
+        const { admitAcdVoiceEvent } = await import("@/lib/acd/admission.mjs");
+        acdIntakeResult = await admitAcdVoiceEvent(acdPool, acdEvent);
+        if (acdIntakeResult?.retryable) {
+          return NextResponse.json(
+            { ok: false, error: "ACD durable intake unavailable", retryable: true },
+            {
+              status: acdIntakeResult.httpStatus || 503,
+              headers: { "Retry-After": "1" },
+            },
+          );
+        }
+        if (acdIntakeResult?.handled) return NextResponse.json({ ok: true, durable: true });
+      }
+    } catch {
+      return NextResponse.json({ ok: false, error: "ACD durable intake unavailable" }, { status: 503 });
+    }
+
+    if (event === "call.hangup" && callControlId) {
+      await VoiceFlowDb.completeFlowExecution(flowId, callControlId, body.data.occurred_at);
+    }
 
     if (
-      callControlId &&
+      !replay?.outboundCore && callControlId &&
       (event === "call.answered" || event === "call.bridged" || event === "call.hangup")
     ) {
       try {
@@ -274,7 +333,7 @@ export async function POST(request, { params }) {
     // machine/beep → campaign voicemailAction (hangup / drop_message). No-op
     // for calls that don't belong to an outbound attempt.
     if (
-      callControlId &&
+      !replay?.outboundCore && callControlId &&
       (event === "call.machine.detection.ended" ||
         event === "call.machine.premium.detection.ended" ||
         event === "call.machine.premium.greeting.ended")
@@ -309,398 +368,6 @@ export async function POST(request, { params }) {
     // Get the flow (without username filter to allow any user's flow to be triggered)
     const flow = await VoiceFlowDb.getFlowById(flowId, null);
 
-    // Handle call.initiated - Check for transfer legs (both incoming and outbound directions)
-    // Transfer legs to WebRTC clients can be either direction
-    if (event === "call.initiated") {
-      // Check if this is a transfer leg first (before checking direction)
-      const toField = payload.to || "";
-      const isTransferLeg =
-        toField.startsWith("sip:") && toField.includes("@sip.telnyx.com");
-
-      if (isTransferLeg) {
-        // Handle transfer leg regardless of direction
-        try {
-          const { PgDb } = await import("@/lib/pgdb.js");
-          // This is a transfer leg to an agent's WebRTC client
-          // Find the original interaction using custom headers or call_session_id
-          let originalInteraction = null;
-
-          // Try to find by custom headers first (from transfer)
-          const customHeaders = payload.custom_headers || [];
-          const originalCallControlIdHeader = customHeaders.find(
-            (h) => h.name === "X-Original-Call-Control-Id",
-          );
-          const originalCallSessionIdHeader = customHeaders.find(
-            (h) => h.name === "X-Original-Call-Session-Id",
-          );
-
-          if (originalCallControlIdHeader?.value) {
-            originalInteraction = await PgDb.findInteractionByCallControlId(
-              originalCallControlIdHeader.value,
-            );
-          }
-
-          // Fallback: try by call_session_id (both legs share the same session)
-          if (!originalInteraction && payload.call_session_id) {
-            originalInteraction = await PgDb.findInteractionByCallSessionId(
-              payload.call_session_id,
-            );
-          }
-
-          if (originalInteraction) {
-            // Extract AI call ID from custom headers if present
-            const aiCallHeader = findCustomHeader(
-              customHeaders,
-              AI_CALL_ID_HEADER,
-            );
-            const aiCallControlId = aiCallHeader?.value || null;
-
-            // Update the original interaction with the agent's call_control_id
-            // Keep call_control_id as the original incoming leg.
-            const metadata = originalInteraction.metadata || {};
-            metadata.agent_call_control_id = payload.call_control_id;
-
-            // Store the ORIGINAL queued call's call_control_id (before transfer)
-            // This is needed for issuing commands to the original call leg
-            // If original_call_control_id is not already set, use the interaction's current call_control_id
-            if (!metadata.original_call_control_id) {
-              metadata.original_call_control_id =
-                originalInteraction.call_control_id;
-            }
-
-            // Store AI call control ID if present and not already set
-            if (aiCallControlId && !metadata.ai_call_control_id) {
-              metadata.ai_call_control_id = aiCallControlId;
-            }
-
-            await PgDb.updateInteractionById(originalInteraction.id, {
-              metadata,
-            });
-
-            // Broadcast incoming_call_info to WebRTC client now that we have the agent's call_control_id
-            // This is critical for the WebRTC client to show the ringing state
-            if (originalInteraction.agent_username) {
-              try {
-                const { broadcastToKey } = await import("@/lib/sse");
-                const { storeIncomingCallData } =
-                  await import("@/lib/incoming-call-store");
-                const { PgDb: PgDbForUser } = await import("@/lib/pgdb.js");
-
-                // Get agent user ID for SSE broadcast
-                const agent = await PgDbForUser.findUserByUsername(
-                  originalInteraction.agent_username,
-                );
-
-                if (agent?.id) {
-                  // Get caller info from interaction
-                  const fromNumber = originalInteraction.from_number;
-                  const fromName = originalInteraction.from_name;
-
-                  // Store caller info for WebRTC client lookup
-                  if (payload.call_session_id) {
-                    storeIncomingCallData(
-                      `session:${payload.call_session_id}`,
-                      {
-                        fromNumber: fromNumber,
-                        fromName: fromName,
-                        callControlId: payload.call_control_id,
-                        originalCallControlId:
-                          metadata.original_call_control_id,
-                        callSessionId: payload.call_session_id,
-                        interactionId: originalInteraction.id,
-                        aiCallControlId: metadata.ai_call_control_id || null,
-                      },
-                    );
-                  }
-
-                  storeIncomingCallData(payload.call_control_id, {
-                    fromNumber: fromNumber,
-                    fromName: fromName,
-                    callControlId: payload.call_control_id,
-                    originalCallControlId: metadata.original_call_control_id,
-                    callSessionId: payload.call_session_id,
-                    interactionId: originalInteraction.id,
-                    aiCallControlId: metadata.ai_call_control_id || null,
-                  });
-
-                  // Broadcast to WebRTC client via SSE
-                  broadcastToKey(`user:status:${agent.id}`, {
-                    type: "incoming_call_info",
-                    callControlId: payload.call_control_id,
-                    fromNumber: fromNumber,
-                    fromName: fromName,
-                    originalCallControlId: metadata.original_call_control_id,
-                    callSessionId: payload.call_session_id,
-                    interactionId: originalInteraction.id,
-                    aiCallControlId: metadata.ai_call_control_id || null,
-                    contactCenter: {
-                      interactionId: originalInteraction.id,
-                      queueName: originalInteraction.queue_name,
-                      queuedAt:
-                        originalInteraction.enqueued_at ||
-                        originalInteraction.created_at,
-                      assignedAt:
-                        originalInteraction.assigned_at ||
-                        new Date().toISOString(),
-                      aiCallControlId: metadata.ai_call_control_id || null,
-                    },
-                  });
-                }
-              } catch (err) {
-                // Error broadcasting incoming_call_info
-              }
-            }
-          }
-
-          // Don't process transfer legs further
-          return NextResponse.json({
-            ok: true,
-            message: "Transfer leg ignored",
-          });
-        } catch (err) {
-          // Don't fail the webhook, just log the error
-        }
-      }
-
-      // Handle regular incoming calls (not transfer legs)
-      if (payload.direction === "incoming" && !isTransferLeg) {
-        try {
-          const { PgDb } = await import("@/lib/pgdb.js");
-          const aiCallHeader = findCustomHeader(
-            payload.custom_headers || [],
-            AI_CALL_ID_HEADER,
-          );
-          const aiCallControlId = aiCallHeader?.value || null;
-
-          // Check if interaction already exists for this call_control_id
-          const existingInteraction = await PgDb.findInteractionByCallControlId(
-            payload.call_control_id,
-          );
-
-          if (!existingInteraction) {
-            // Add timeline event for initiated
-            const routingMetadata = addTimelineEvent(
-              null,
-              TimelineEventTypes.INITIATED,
-              {
-                from: payload.from,
-                to: payload.to,
-                direction: payload.direction,
-                flowId: flowId,
-              },
-            );
-
-            // Create interaction record for incoming call
-            // This will be updated when call.enqueued is received
-            // For now, mark it as not visible to agents (is_contact_center: false, state: "initiated")
-            // queue_name is required by DB schema, so we use "PENDING" as placeholder until enqueued
-            const interactionId = await PgDb.insertInteraction({
-              interactionType: "voice",
-              queueName: "PENDING", // Placeholder, will be updated when call.enqueued is received
-              callControlId: payload.call_control_id,
-              callSessionId: payload.call_session_id || null,
-              callLegId: payload.call_leg_id || null,
-              direction: "inbound",
-              state: "queued", // Use valid state (will be updated when enqueued)
-              isContactCenter: false, // Not yet enqueued, so not visible to agents
-              fromNumber: payload.from || null,
-              toNumber: payload.to || null,
-              flowId: flowId,
-              routingMetadata: routingMetadata,
-              metadata: {
-                flow_owner: flow?.username || null,
-                initiated_at: payload.occurred_at || new Date().toISOString(),
-                ...(payload.client_state
-                  ? {
-                      client_state: payload.client_state,
-                      call_generator_client_state: payload.client_state,
-                    }
-                  : {}),
-                ...(aiCallControlId
-                  ? { ai_call_control_id: aiCallControlId }
-                  : {}),
-              },
-            });
-          }
-          if (
-            existingInteraction &&
-            aiCallControlId &&
-            !existingInteraction?.metadata?.ai_call_control_id
-          ) {
-            const metadata = {
-              ...(existingInteraction.metadata || {}),
-              ai_call_control_id: aiCallControlId,
-            };
-            await PgDb.updateInteractionById(existingInteraction.id, {
-              metadata,
-            });
-          }
-        } catch (err) {
-          // Don't fail the webhook, just log the error
-        }
-      }
-    }
-
-    if (event === "call.conversation.created") {
-      try {
-        const conversationId =
-          payload.conversation_id ||
-          payload.conversationId ||
-          payload?.conversation?.id ||
-          null;
-        if (conversationId) {
-          const { PgDb } = await import("@/lib/pgdb.js");
-          let interaction = null;
-          if (payload.call_control_id) {
-            interaction = await PgDb.findInteractionByCallControlId(
-              payload.call_control_id,
-            );
-          }
-          if (!interaction && payload.call_session_id) {
-            interaction = await PgDb.findInteractionByCallSessionId(
-              payload.call_session_id,
-            );
-          }
-          if (!interaction && payload.call_leg_id) {
-            interaction = await PgDb.findInteractionByCallLegId(
-              payload.call_leg_id,
-            );
-          }
-          const aiCallControlId =
-            interaction?.metadata?.ai_call_control_id || null;
-
-          if (aiCallControlId) {
-            await updateConversationMetadata(conversationId, {
-              call_control_id: String(aiCallControlId),
-            });
-
-            if (interaction?.id) {
-              const metadata = {
-                ...(interaction?.metadata || {}),
-                ai_call_control_id: aiCallControlId,
-                ai_conversation_id: conversationId,
-              };
-              await PgDb.updateInteractionById(interaction.id, {
-                metadata,
-              });
-            }
-          }
-        }
-      } catch (err) {
-        // Error linking conversation metadata
-      }
-    }
-
-    // Handle Contact Center events (call.enqueued, call.bridged, etc.)
-    // Note: Contact center event handling is integrated into the main flow execution
-    // Additional contact center-specific handlers can be added here if needed
-
-    // Handle Contact Center call.enqueued events
-    if (event === "call.enqueued") {
-      try {
-        const queueName = payload.queue;
-        if (queueName) {
-          try {
-            const { handleContactCenterEnqueue } =
-              await import("@/lib/contact-center/webhook-handler.js");
-            const { isContactCenterQueue } =
-              await import("@/lib/contact-center/queue-utils.js");
-
-            if (isContactCenterQueue(queueName)) {
-              // Get flow owner username
-              const flow = await VoiceFlowDb.getFlowById(flowId, null);
-              const flowOwner = flow?.username || null;
-
-              // Try to find existing interaction to extract original caller number from timeline
-              const { PgDb } = await import("@/lib/pgdb.js");
-              let originalFromNumber = payload.from;
-
-              // Check if payload.from is a SIP endpoint (indicates transferred call)
-              const isSipEndpoint =
-                payload.from &&
-                (payload.from.includes("@sip.") ||
-                  payload.from.startsWith("sip:") ||
-                  payload.from.includes("username@"));
-
-              // If it's a SIP endpoint or missing, try to get original number from existing interaction's timeline
-              if (isSipEndpoint || !payload.from) {
-                try {
-                  const existingInteraction =
-                    await PgDb.findInteractionByCallControlId(
-                      payload.call_control_id,
-                    );
-
-                  if (existingInteraction?.routing_metadata?.timeline) {
-                    const initiatedEvent =
-                      existingInteraction.routing_metadata.timeline.find(
-                        (e) => e.type === "initiated" && e.from,
-                      );
-                    if (
-                      initiatedEvent?.from &&
-                      initiatedEvent.from.trim() !== ""
-                    ) {
-                      originalFromNumber = initiatedEvent.from;
-                    }
-                  }
-                } catch (err) {
-                  // Error extracting original caller number
-                }
-              }
-
-              await handleContactCenterEnqueue({
-                callControlId: payload.call_control_id,
-                callSessionId: payload.call_session_id,
-                callLegId: payload.call_leg_id,
-                queueName,
-                currentPosition: payload.current_position,
-                queueAvgWaitTimeSecs: payload.queue_avg_wait_time_secs,
-                clientState: payload.client_state,
-                flowId,
-                flowOwnerUsername: flowOwner,
-                fromNumber: originalFromNumber || payload.from,
-                toNumber: payload.to,
-                direction: payload.direction,
-              });
-            }
-          } catch (err) {
-            // Don't fail the webhook, just log the error
-          }
-        }
-      } catch (err) {
-        // Don't fail the webhook, just log the error
-      }
-    }
-
-    // Handle other Contact Center events (call.answered, call.bridged, call.dequeued, call.held, call.unheld, call.hangup, call.speak.ended, call.recording.transcription.saved)
-    if (
-      event === "call.answered" ||
-      event === "call.bridged" ||
-      event === "call.dequeued" ||
-      event === "call.held" ||
-      event === "call.unheld" ||
-      event === "call.hangup" ||
-      event === "call.speak.ended" ||
-      event === "call.recording.transcription.saved"
-    ) {
-      try {
-        const { handleContactCenterEvent } =
-          await import("@/lib/contact-center/webhook-handler.js");
-        await handleContactCenterEvent(event, payload, { eventId: webhookEventId });
-      } catch (err) {
-        // Don't fail the webhook, just log the error
-      }
-    }
-
-    // Handle call.transcription for Agent Assist
-    if (event === "call.transcription") {
-      try {
-        const { handleTranscriptionEvent } =
-          await import("@/lib/contact-center/webhook-handler.js");
-        await handleTranscriptionEvent(payload);
-      } catch (err) {
-        // Don't fail the webhook, just log the error
-      }
-    }
     if (!flow) {
       return NextResponse.json(
         { ok: false, error: "Flow not found" },
@@ -815,6 +482,18 @@ export async function POST(request, { params }) {
       variables[incomingPayloadVariable] = payload;
     }
 
+    // Persist before sending commands: a fast hangup can arrive while a
+    // provider command is still returning. Retries reuse this record, and
+    // late events cannot restart an execution finalized by hangup.
+    if (event !== "call.hangup" && callControlId) {
+      const execution = await VoiceFlowDb.createFlowExecution(
+        flowId, callControlId, initiatorNode.id, variables,
+      );
+      if (execution.status !== "active") {
+        return NextResponse.json({ ok: true, message: "Flow already completed" });
+      }
+    }
+
     // Handle different event types
     if (event === "call.initiated") {
       if (
@@ -882,13 +561,13 @@ export async function POST(request, { params }) {
                   ...node.data,
                   config: {
                     ...existingConfig,
-                    // Always set client_state for flow tracking
-                    client_state: Buffer.from(
-                      JSON.stringify({
-                        flowId,
-                        currentNodeId: node.id,
-                      }),
-                    ).toString("base64"),
+                    // Preserve immutable Core intake correlation while adding
+                    // the next flow position.
+                    client_state: mergeFlowClientState(
+                      payload.client_state,
+                      existingConfig.client_state,
+                      { flowId, currentNodeId: node.id },
+                    ),
                   },
                 },
               };
@@ -1052,93 +731,14 @@ export async function POST(request, { params }) {
       });
     }
 
-    // Handle call.hangup - remove from Interactions and update phone state
+    // A terminal event ends an ordinary Voice Flow. Core-owned hangups have
+    // already returned through the durable replay branch above.
     if (event === "call.hangup") {
-      try {
-        const { PgDb } = await import("@/lib/pgdb.js");
-        const { broadcastToKey } = await import("@/lib/sse.js");
-        const { callTelnyxAction } = await import("@/lib/voice-flow-engine.js");
-
-        const callControlId = payload.call_control_id;
-        const callSessionId = payload.call_session_id;
-        const hangupCause = payload.hangup_cause;
-
-        // Check if this is a rejected WebRTC call (user_busy or timeout)
-        // In this case, we need to hangup the original incoming call leg
-        if (
-          (hangupCause === "user_busy" || hangupCause === "timeout") &&
-          callSessionId
-        ) {
-          try {
-            const { getPostgresPool } = await import("@/lib/postgres.mjs");
-            const pool = getPostgresPool();
-
-            if (pool) {
-              // Find all call legs in this session from cc_interactions table
-              const calls = await pool.query(
-                "SELECT call_control_id, direction, state FROM cc_interactions WHERE call_session_id = $1 ORDER BY created_at ASC",
-                [callSessionId],
-              );
-
-              // Find the other call leg (the one that's not the current WebRTC leg that hung up)
-              // This works for both incoming and outgoing calls transferred to agents
-              const originalCall = calls.rows?.find(
-                (call) => call.call_control_id !== callControlId,
-              );
-
-              if (originalCall) {
-                // Hangup the original call leg
-                const result = await callTelnyxAction(
-                  flowId,
-                  "hangup",
-                  originalCall.call_control_id,
-                  {},
-                );
-
-                // Hangup result handled
-              }
-
-              // Update the interaction state instead of calls table
-              try {
-                const { PgDb } = await import("@/lib/pgdb.js");
-                const interaction =
-                  await PgDb.findInteractionByCallControlId(callControlId);
-                if (interaction) {
-                  await PgDb.updateInteractionById(interaction.id, {
-                    state: "completed",
-                  });
-                }
-              } catch (err) {
-                // Error updating interaction state
-              }
-            }
-          } catch (err) {
-            // Don't fail the webhook processing
-          }
-        }
-
-        // Note: The actual interaction update, timeline event, and SSE broadcast
-        // are all handled by handleContactCenterEvent which is called above.
-      } catch (err) {
-        // Don't fail the webhook, just log the error
-      }
-
       return NextResponse.json({
         ok: true,
         message: "Call ended",
         variables,
       });
-    }
-
-    // Handle call.recording.saved - store recording payload in metadata
-    if (event === "call.recording.saved") {
-      try {
-        const { handleContactCenterEvent } =
-          await import("@/lib/contact-center/webhook-handler.js");
-        await handleContactCenterEvent(event, payload, { eventId: webhookEventId });
-      } catch (err) {
-        // Error handling call.recording.saved
-      }
     }
 
     // Try to decode client_state to get current execution info
@@ -1301,7 +901,10 @@ export async function POST(request, { params }) {
                 }
 
                 // Finally, merge flow tracking (must be last to ensure correct flowId/currentNodeId)
-                mergedClientState = { ...mergedClientState, ...flowTracking };
+                mergedClientState = mergeAcdClientState(
+                  payload?.client_state,
+                  { ...mergedClientState, ...flowTracking },
+                );
 
                 const configuredNextNode = {
                   ...nextNode,
@@ -1310,9 +913,7 @@ export async function POST(request, { params }) {
                     config: {
                       ...existingConfig,
                       // Merge client_state: preserve routing params, add flow tracking
-                      client_state: Buffer.from(
-                        JSON.stringify(mergedClientState),
-                      ).toString("base64"),
+                      client_state: encodeAcdClientState(mergedClientState),
                     },
                   },
                 };
@@ -1571,7 +1172,10 @@ async function executeNodeChain(
     }
 
     // Finally, merge flow tracking (must be last to ensure correct flowId/currentNodeId)
-    mergedClientState = { ...mergedClientState, ...flowTracking };
+    mergedClientState = mergeAcdClientState(
+      body?.data?.payload?.client_state,
+      { ...mergedClientState, ...flowTracking },
+    );
 
     const configuredNode = {
       ...nextNode,
@@ -1580,9 +1184,7 @@ async function executeNodeChain(
         config: {
           ...existingConfig,
           // Merge client_state: preserve routing params, add flow tracking
-          client_state: Buffer.from(JSON.stringify(mergedClientState)).toString(
-            "base64",
-          ),
+          client_state: encodeAcdClientState(mergedClientState),
         },
       },
     };
@@ -1716,12 +1318,11 @@ async function handleRecordStartNode(
               ...node.data,
               config: {
                 ...(node.data?.config || {}),
-                client_state: Buffer.from(
-                  JSON.stringify({
-                    flowId,
-                    currentNodeId: node.id,
-                  }),
-                ).toString("base64"),
+                client_state: mergeFlowClientState(
+                  body?.data?.payload?.client_state,
+                  node.data?.config?.client_state,
+                  { flowId, currentNodeId: node.id },
+                ),
               },
             },
           };

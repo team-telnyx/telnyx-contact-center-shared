@@ -50,7 +50,7 @@ test("Telnyx Standalone STT WebSocket transcripts are stored as distinct monitor
 test("Telnyx STT handler routes websocket transcripts through Agent Assist canonical transcription processing", () => {
   const handlerSource = readFileSync(join(repoRoot, "lib/telnyx-stt-handler.mjs"), "utf8");
   const routerSource = readFileSync(join(repoRoot, "lib/agent-assist-transcription-router.mjs"), "utf8");
-  const webhookSource = readFileSync(join(repoRoot, "lib/contact-center/webhook-handler.js"), "utf8");
+  const mediaEventsSource = readFileSync(join(repoRoot, "lib/acd/media-events.mjs"), "utf8");
 
   assert.match(handlerSource, /routeTranscriptionThroughAgentAssist/);
   assert.match(handlerSource, /routeAgentAssistTranscription/);
@@ -59,9 +59,9 @@ test("Telnyx STT handler routes websocket transcripts through Agent Assist canon
   assert.doesNotMatch(handlerSource, /broadcastToKey\(`contact-center:agent/);
   assert.match(routerSource, /processFinalTranscriptionEnhancements/);
   assert.match(routerSource, /interaction\.metadata\?\.agent_assist_config/);
-  assert.match(webhookSource, /export async function processFinalTranscriptionEnhancements/);
-  assert.match(webhookSource, /payload\?\.interaction_id \|\| payload\?\.interactionId/);
-  assert.match(webhookSource, /PgDb\.findInteractionById/);
+  assert.match(routerSource, /payload\?\.interaction_id \|\| payload\?\.interactionId/);
+  assert.match(routerSource, /findInteractionViewByReference/);
+  assert.match(mediaEventsSource, /return routeAgentAssistTranscription\(payload\)/);
 });
 
 test("Telnyx STT handler records websocket transcripts in the Call Flow Monitor", () => {

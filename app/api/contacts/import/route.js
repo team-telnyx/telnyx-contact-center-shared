@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
+import { withPermission } from "@/lib/authz/guard";
 
 // Expected CSV headers (same as validation)
 const REQUIRED_HEADERS = [
@@ -62,7 +62,7 @@ function validateRow(row) {
   return true;
 }
 
-export async function POST(request) {
+async function POST_handler(request) {
   // Check admin authentication
   const session = await getServerSession(authOptions);
   const id = session?.user?.id || null;
@@ -74,9 +74,6 @@ export async function POST(request) {
   if (id) user = await PgDb.findUserById(id);
   if (!user && email) user = await PgDb.findUserByUsername(email);
   if (!user) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (!isAdmin(user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -209,3 +206,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("contacts:import", POST_handler, { route: "/api/contacts/import" });

@@ -6,6 +6,7 @@ import {
   AGENT_CAMPAIGN_ACTIVATION_STATUSES,
   agentCampaignStatusBadgeClass,
   campaignDistributionWeight,
+  campaignPriorityScore,
   normalizeCampaignPriority,
   priorityDistributionCursor,
 } from "../lib/outbound-dialer/agent-campaigns-view-model.js";
@@ -69,6 +70,37 @@ test("priority distribution cursor favors campaigns with fewer served records pe
   assert.equal(priorityDistributionCursor(campaigns)?.id, "B");
 });
 
+test("priority distribution uses the current run count instead of a stale agent counter", () => {
+  const campaigns = [
+    { id: "A", metadata: { agent_priority: 5 }, run_served_count: 5, assignment_metadata: { served_count: 0 } },
+    { id: "B", metadata: { agent_priority: 1 }, run_served_count: 0, assignment_metadata: { served_count: 100 } },
+  ];
+  assert.equal(priorityDistributionCursor(campaigns)?.id, "B");
+});
+
+test("a newly joined campaign starts at the shared virtual baseline instead of monopolizing delivery", () => {
+  const existing = { id: "A", metadata: { agent_priority: 5 }, run_served_count: 50, active_run_metadata: { priority_baseline: 0 } };
+  const joined = { id: "B", metadata: { agent_priority: 1 }, run_served_count: 0, active_run_metadata: { priority_baseline: 10 } };
+  assert.equal(campaignPriorityScore(existing), 10);
+  assert.equal(campaignPriorityScore(joined), 10);
+  assert.equal(priorityDistributionCursor([existing, joined])?.id, "A");
+});
+
+test("weighted priority produces a stable 5:3:1 record mix without starving a campaign", () => {
+  const campaigns = [
+    { id: "A", metadata: { agent_priority: 5 }, run_served_count: 0 },
+    { id: "B", metadata: { agent_priority: 3 }, run_served_count: 0 },
+    { id: "C", metadata: { agent_priority: 1 }, run_served_count: 0 },
+  ];
+  const delivered = { A: 0, B: 0, C: 0 };
+  for (let index = 0; index < 90; index += 1) {
+    const selected = priorityDistributionCursor(campaigns);
+    delivered[selected.id] += 1;
+    selected.run_served_count += 1;
+  }
+  assert.deepEqual(delivered, { A: 50, B: 30, C: 10 });
+});
+
 test("campaign settings show inline five-star Priority and no explanatory helper copy", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
 
@@ -90,7 +122,10 @@ test("agent campaign selector matches compact queue activation formatting with i
   assert.match(source, /campaignIds/);
   assert.match(source, /Campaign Activation/);
   assert.match(source, /<div className="font-semibold">Campaign Activation<\/div>/);
-  assert.match(source, /className="text-sm font-medium cursor-pointer flex-1"/);
+  assert.match(source, /className="w-\[28rem\] max-w-\[calc\(100vw-2rem\)\]"/);
+  assert.match(source, /className="min-w-0 flex-1 cursor-pointer truncate whitespace-nowrap text-sm font-medium"/);
+  assert.match(source, /title=\{campaign\.name\}/);
+  assert.match(source, /className="flex shrink-0 items-center gap-1\.5"/);
   assert.match(source, /className=\{`text-xs uppercase/);
   assert.match(source, /IconPlayerPlay/);
   assert.match(source, /IconPlayerPause/);

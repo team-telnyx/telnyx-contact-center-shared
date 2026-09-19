@@ -11,6 +11,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getAiContextForInteraction } from "@/lib/agent-assist/ai-handoff-processor";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export const dynamic = "force-dynamic";
  * - data: AI context data (when available)
  * - message: Status message
  */
-export async function GET(request) {
+async function GET_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -56,3 +57,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agent:self", GET_handler, { route: "/api/agent-assist/workflow/ai-context" });

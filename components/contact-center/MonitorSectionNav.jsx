@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import {
   IconActivity,
+  IconMessages,
   IconTrendingUp,
   IconUsers,
   IconLayoutDashboard,
+  IconShieldCheck,
 } from "@tabler/icons-react";
 import { SectionRail } from "@/components/ui/section-rail";
 
@@ -16,10 +18,12 @@ export const MONITOR_ACTIVE_SECTION_STORAGE_KEY =
   "supervisor.monitor.activeSection";
 
 export const MONITOR_RAIL_ITEMS = [
-  { id: "overview", label: "Overview", icon: IconLayoutDashboard, description: "Real-time contact center performance dashboard" },
-  { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Today's contact center picture and live signals" },
-  { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
-  { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
+  { id: "overview", label: "Overview", icon: IconLayoutDashboard, description: "Live queue workload, agent presence and operational status" },
+  { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Channel performance, service levels and trends for a selected period" },
+  { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live interactions" },
+  { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting interactions" },
+  { id: "interactions", label: "Interactions", icon: IconMessages, description: "All live interactions, manual calls and consultation legs" },
+  { id: "operations", label: "Operations", icon: IconShieldCheck, description: "Voice platform health and audited recovery" },
 ];
 
 export function persistMonitorSection(sectionId) {
@@ -41,6 +45,7 @@ export function MonitorSectionRailNav({ activeId = "dashboard" }) {
         router.push(`/supervisor/monitor?section=${encodeURIComponent(sectionId)}`);
       }}
       ariaLabel="Supervisor monitor sections"
+      screenGroup="supervisor.monitor"
     />
   );
 }

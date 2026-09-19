@@ -248,8 +248,8 @@ function runReply({ testing, reply, transcript = "Can I get your name?" }) {
   };
   return handleWorkflowTestingFinalTranscription({
     pool,
-    interaction: { id: "int-x", from_number: "+48221811540" },
-    payload: { from: "+48221811540" },
+    interaction: { id: "int-x", from_number: "+48220000540" },
+    payload: { from: "+48220000540" },
     transcriptionData: { transcript, is_final: true },
     assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },
   }).then((res) => ({ res, aiBody, speakBody, captureUpdates })).finally(() => { global.fetch = original; });

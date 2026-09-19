@@ -8,9 +8,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+import {
+  mergeAgentAssistSuggestions,
+  mergeAgentAssistTranscriptions,
+} from "@/lib/agent-assist/history-merge.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 // POST /api/agent-assist/workflow/save-history - Save workflow history data
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -45,7 +50,7 @@ export async function POST(request) {
       workflowSession = s;
     } else {
       const { rows: [s] } = await pool.query(
-        `SELECT * FROM aa_workflow_sessions WHERE interaction_id = $1`,
+        `SELECT * FROM aa_workflow_sessions WHERE work_item_id::text = $1`,
         [interactionId]
       );
       workflowSession = s;
@@ -58,50 +63,53 @@ export async function POST(request) {
       );
     }
 
-    // Update interaction metadata with agent_assist data (transcriptions + suggestions)
-    const effectiveInteractionId = workflowSession.interaction_id;
-
-    // Get current metadata
-    const { rows: [interaction] } = await pool.query(
-      `SELECT metadata FROM cc_interactions WHERE id = $1`,
-      [effectiveInteractionId]
-    );
-
-    if (!interaction) {
-      return NextResponse.json(
-        { error: "Interaction not found" },
-        { status: 404 }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows: [lockedSession] } = await client.query(
+        `SELECT transcriptions, suggestions
+           FROM aa_workflow_sessions
+          WHERE id = $1
+          FOR UPDATE`,
+        [workflowSession.id]
       );
-    }
 
-    // Parse existing metadata
-    let metadata = interaction.metadata;
-    if (typeof metadata === "string") {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch {
-        metadata = {};
+      if (!lockedSession) {
+        await client.query("ROLLBACK");
+        return NextResponse.json(
+          { error: "Workflow session not found" },
+          { status: 404 }
+        );
       }
+      await client.query(
+        `UPDATE aa_workflow_sessions
+            SET transcriptions = $2::jsonb,
+                suggestions = $3::jsonb,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [
+          workflowSession.id,
+          JSON.stringify(
+            mergeAgentAssistTranscriptions(
+              lockedSession.transcriptions,
+              transcriptions,
+            ),
+          ),
+          JSON.stringify(
+            mergeAgentAssistSuggestions(
+              lockedSession.suggestions,
+              suggestions,
+            ),
+          ),
+        ]
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
     }
-    if (!metadata || typeof metadata !== "object") metadata = {};
-
-    // Merge with existing agent_assist data (don't overwrite if empty)
-    const existingAgentAssist = metadata.agent_assist || {};
-    metadata.agent_assist = {
-      ...existingAgentAssist,
-      // Only update transcriptions if provided and non-empty
-      ...(transcriptions && transcriptions.length > 0 ? { transcriptions } : {}),
-      // Only update suggestions if provided and non-empty
-      ...(suggestions && suggestions.length > 0 ? { suggestions } : {}),
-      workflow_session_id: workflowSession.id,
-      updated_at: new Date().toISOString(),
-    };
-
-    // Save updated metadata
-    await pool.query(
-      `UPDATE cc_interactions SET metadata = $1, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(metadata), effectiveInteractionId]
-    );
 
     return NextResponse.json({
       ok: true,
@@ -115,3 +123,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/agent-assist/workflow/save-history" });

@@ -49,6 +49,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/statuses/EditSheet";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminStatusesPage() {
   const [items, setItems] = useState([]);
@@ -154,9 +155,9 @@ export default function AdminStatusesPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={handleNewStatus} variant="default">
+    <Can permission="statuses:create"><Button onClick={handleNewStatus} variant="default">
       New Status
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -346,13 +347,13 @@ export default function AdminStatusesPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="statuses:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete status"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

@@ -4,6 +4,7 @@ import { IconAddressBook, IconBook, IconChecklist } from "@tabler/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth-provider";
 
 const tiles = [
   {
@@ -29,7 +30,10 @@ const tiles = [
 export default function DataSourcesTiles() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { canScreen, loaded } = useAuth();
   const activeView = searchParams.get("view") || "contacts";
+  // Tiles follow the screen grants (admin.configuration.data-sources.<tile>).
+  const visibleTiles = loaded ? tiles.filter((tile) => canScreen(`admin.configuration.data-sources.${tile.id}`)) : tiles;
 
   const handleTileClick = (viewId) => {
     router.push(`/admin/data-sources?view=${viewId}`);
@@ -37,7 +41,7 @@ export default function DataSourcesTiles() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      {tiles.map((tile) => {
+      {visibleTiles.map((tile) => {
         const Icon = tile.icon;
         const isActive = activeView === tile.id;
 

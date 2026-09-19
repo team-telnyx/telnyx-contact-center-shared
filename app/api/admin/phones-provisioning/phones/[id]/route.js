@@ -1,34 +1,20 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
 import { deleteLegacyPhoneCredential, deletePhoneSipConnection, assignPhoneNumberToConnection, unassignPhoneNumberFromConnection, updatePhoneSipConnectionCallerId } from "@/lib/hardphones/credentials.mjs";
 import { syncHardphonePhoneNumbersFromTelnyx } from "@/lib/hardphones/number-sync.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user) || user.experimental_features !== true) return null;
-  return user;
-}
 
 const PHONE_COLUMNS = `id, phone_name, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
   assigned_phone_number_id, assigned_phone_number, sip_username,
   admin_password, settings, provisioning_state, ip_address, last_ip, local_bridge_id, last_seen_at, last_user_agent, created_at, updated_at`;
 
-export async function GET(_request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(_request, { params }, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -47,9 +33,10 @@ export async function GET(_request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, { params }, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -117,9 +104,10 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(_request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(_request, { params }, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -137,3 +125,8 @@ export async function DELETE(_request, { params }) {
     return NextResponse.json({ error: "Failed to delete phone" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("phones:read", GET_handler, { route: "/api/admin/phones-provisioning/phones/[id]" });
+export const PUT = withPermission("phones:update", PUT_handler, { route: "/api/admin/phones-provisioning/phones/[id]" });
+export const DELETE = withPermission("phones:delete", DELETE_handler, { route: "/api/admin/phones-provisioning/phones/[id]" });

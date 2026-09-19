@@ -1,8 +1,11 @@
+import { RELEASED_CHANNELS } from "@/lib/acd/channel-registry.mjs";
+import { parseChannel } from "@/lib/acd/interaction-channels.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { createDiagnosticLogger } from "@/lib/diagnostic-logger.mjs";
+import { findWorkItemByReference } from "@/lib/acd/work-item-repository.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { interactionScopeSql, workItemInScope } from "@/lib/authz/scope.mjs";
 
 const qualityLogger = createDiagnosticLogger("contact-center.quality");
 
@@ -26,15 +29,9 @@ function clampDateRange(fromIso, toIso) {
  * Lists completed interactions in range with their evaluation state, plus
  * range metrics. Filters: from, to, queue, agent, status, recordedOnly.
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
     const pool = getPostgresPool();
     if (!pool) {
       return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
@@ -49,16 +46,15 @@ export async function GET(request) {
     const statusFilter = searchParams.get("status");
     const recordedOnly = searchParams.get("recordedOnly") === "true";
 
+    const channel=parseChannel(searchParams.get("channel"));
     const where = [
-      "i.is_contact_center = true",
-      "COALESCE(i.metadata->>'is_transfer_leg', 'false') <> 'true'",
-      "COALESCE(i.metadata->>'is_consult_call', 'false') <> 'true'",
-      "(i.completed_at IS NOT NULL OR i.abandoned_at IS NOT NULL)",
+      "i.interaction_type = ANY($3::text[])",
+      "i.terminal_at IS NOT NULL",
     ];
-    const vals = [from, to];
-    where.push("COALESCE(i.completed_at, i.abandoned_at, i.created_at) >= $1");
-    where.push("COALESCE(i.completed_at, i.abandoned_at, i.created_at) <= $2");
-    let idx = 3;
+    const vals = [from, to, channel?[channel]:RELEASED_CHANNELS];
+    where.push("i.terminal_at >= $1");
+    where.push("i.terminal_at < $2");
+    let idx = 4;
 
     if (queueName && queueName !== "all") {
       where.push(`i.queue_name = $${idx++}`);
@@ -81,13 +77,16 @@ export async function GET(request) {
         vals.push(statusFilter);
       }
     }
+    // Caller's data scope (Phase 3a).
+    where.push(...interactionScopeSql(authz.scope, { queue: "i.queue_id", agent: "i.agent_id", channel: "i.interaction_type", workItem: "i.work_item_id" }, vals));
+    idx = vals.length + 1;
 
     const whereSql = `WHERE ${where.join(" AND ")}`;
     const joinSql = `
       LEFT JOIN LATERAL (
         SELECT qe.id, qe.status, qe.score_percent, qe.evaluator_type, qe.form_id, qe.updated_at
         FROM quality_evaluations qe
-        WHERE qe.interaction_id = i.id
+        WHERE qe.work_item_id = i.id
         ORDER BY qe.updated_at DESC
         LIMIT 1
       ) e ON true
@@ -96,10 +95,10 @@ export async function GET(request) {
     const offset = (page - 1) * pageSize;
     const rowsQuery = `
       SELECT
-        i.id, i.queue_name, i.agent_username, i.direction, i.state,
+        i.id, i.interaction_type, i.queue_name, i.agent_username, i.direction, i.state,
         i.from_number, i.to_number, i.from_name, i.to_name,
         i.completed_at, i.abandoned_at, i.created_at,
-        i.handle_time_seconds, i.talk_time_seconds,
+        i.handle_time_seconds, CASE WHEN i.interaction_type='voice' THEN i.talk_time_seconds END AS talk_time_seconds,
         i.recording_url,
         i.metadata->'recording'->>'recording_id' AS recording_id,
         (i.metadata->>'transcription_text' IS NOT NULL) AS has_transcript,
@@ -109,7 +108,7 @@ export async function GET(request) {
         e.score_percent AS evaluation_score_percent,
         e.evaluator_type AS evaluation_evaluator_type,
         e.form_id AS evaluation_form_id
-      FROM cc_interactions i
+      FROM acd_history_interactions i
       LEFT JOIN users u ON i.agent_username = u.username
       ${joinSql}
       ${whereSql}
@@ -118,7 +117,7 @@ export async function GET(request) {
     `;
     const countQuery = `
       SELECT COUNT(*) AS c
-      FROM cc_interactions i
+      FROM acd_history_interactions i
       ${joinSql}
       ${whereSql}
     `;
@@ -130,7 +129,7 @@ export async function GET(request) {
         COUNT(*) FILTER (WHERE e.status = 'ai_draft')::int AS ai_drafts,
         COUNT(*) FILTER (WHERE e.status = 'final')::int AS finalized,
         AVG(e.score_percent) FILTER (WHERE e.status IN ('reviewed', 'final'))::NUMERIC(5,2) AS avg_score_percent
-      FROM cc_interactions i
+      FROM acd_history_interactions i
       ${joinSql}
       ${whereSql}
     `;
@@ -140,12 +139,12 @@ export async function GET(request) {
       pool.query(countQuery, vals),
       pool.query(metricsQuery, vals),
       pool.query(
-        `SELECT DISTINCT queue_name FROM cc_interactions WHERE queue_name IS NOT NULL ORDER BY queue_name ASC`,
+        `SELECT DISTINCT queue_name FROM acd_history_interactions WHERE queue_name IS NOT NULL ORDER BY queue_name ASC`,
       ),
       pool.query(
         `SELECT DISTINCT u.username, u.first_name, u.last_name
          FROM users u
-         JOIN cc_interactions i ON i.agent_username = u.username
+         JOIN acd_history_interactions i ON i.agent_username = u.username
          ORDER BY u.username ASC`,
       ),
     ]);
@@ -194,15 +193,9 @@ export async function GET(request) {
  * POST /api/contact-center/quality/evaluations
  * Create (or return existing draft) evaluation for an interaction + form.
  */
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
     const pool = getPostgresPool();
     if (!pool) {
       return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
@@ -218,28 +211,28 @@ export async function POST(request) {
       );
     }
 
-    const [interactionRes, formRes] = await Promise.all([
-      pool.query(
-        "SELECT id, agent_username, queue_name FROM cc_interactions WHERE id = $1",
-        [interactionId],
-      ),
+    const [interaction, formRes] = await Promise.all([
+      findWorkItemByReference(pool, interactionId),
       pool.query("SELECT id, version, status FROM quality_forms WHERE id = $1", [formId]),
     ]);
-    const interaction = interactionRes.rows[0];
     const form = formRes.rows[0];
     if (!interaction) {
       return NextResponse.json({ ok: false, error: "Interaction not found" }, { status: 404 });
     }
+    // Scope narrows writes too (permission tree rule 7): only interactions in scope can be evaluated.
+    if (!(await workItemInScope(pool, authz.scope, interaction.work_item_id, { queueId: interaction.queue_id, agentId: interaction.agent_id, channel: interaction.channel || interaction.interaction_type }))) {
+      return NextResponse.json({ ok: false, error: "Interaction is outside your data scope" }, { status: 403 });
+    }
     if (!form) {
       return NextResponse.json({ ok: false, error: "Form not found" }, { status: 404 });
     }
-
     // Reuse an open evaluation for the same interaction+form when present.
     const existing = await pool.query(
       `SELECT * FROM quality_evaluations
-       WHERE interaction_id = $1 AND form_id = $2 AND status NOT IN ('final')
+       WHERE work_item_id = $1
+         AND form_id = $2 AND status NOT IN ('final')
        ORDER BY updated_at DESC LIMIT 1`,
-      [interactionId, formId],
+      [interaction.work_item_id, formId],
     );
     if (existing.rows[0]) {
       return NextResponse.json({ ok: true, evaluation: existing.rows[0], existing: true });
@@ -247,11 +240,11 @@ export async function POST(request) {
 
     const result = await pool.query(
       `INSERT INTO quality_evaluations
-         (interaction_id, form_id, form_version, evaluator_type, evaluator_username, agent_username, queue_name, status)
+         (work_item_id, form_id, form_version, evaluator_type, evaluator_username, agent_username, queue_name, status)
        VALUES ($1, $2, $3, 'human', $4, $5, $6, 'draft')
        RETURNING *`,
       [
-        interactionId,
+        interaction.work_item_id,
         formId,
         form.version || 1,
         user.username || user.email || "unknown",
@@ -269,3 +262,7 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("quality_evaluations:read", GET_handler, { route: "/api/contact-center/quality/evaluations" });
+export const POST = withPermission("quality_evaluations:create", POST_handler, { route: "/api/contact-center/quality/evaluations" });

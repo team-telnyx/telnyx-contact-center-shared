@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import {
   Dialog,
   DialogContent,
@@ -44,12 +44,9 @@ import {
 
 // Prevent hydration mismatch by only rendering Select components after mount
 // Radix UI generates random IDs that differ between server and client renders
+const subscribeMounted = () => () => {};
 function ClientOnlySelect({ children, ...props }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
 
   if (!mounted) {
     // Return a placeholder that matches SelectTrigger styling
@@ -492,7 +489,7 @@ export function NumberSelectionModal({
 
             <button
               type="button"
-              onClick={() => setSelectionType("manual")}
+              data-testid="dial-manual" onClick={() => setSelectionType("manual")}
               className={cn(
                 "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
                 selectionType === "manual"
@@ -842,7 +839,7 @@ export function NumberSelectionModal({
               </Label>
               <Input
                 type="tel"
-                placeholder="+1234567890 or sip:user@domain.com"
+                data-testid="dial-number" placeholder="+1234567890 or sip:user@domain.com"
                 value={manualNumber}
                 onChange={(e) => setManualNumber(e.target.value)}
                 className="w-full"
@@ -856,7 +853,7 @@ export function NumberSelectionModal({
               Cancel
             </Button>
             <Button
-              onClick={handleConfirm}
+              data-testid="dial-number-confirm" onClick={handleConfirm}
               disabled={!isValid() || loading}
               className="min-w-[120px]"
             >

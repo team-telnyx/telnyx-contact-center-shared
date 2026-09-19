@@ -24,7 +24,7 @@ test("recall controls render outcome as a full-width row with labeled numeric fi
   assert.doesNotMatch(recallRows, /label=\{compact \? "" : "Minutes"\}/, "minutes labels should not disappear in compact phone-type rows");
 });
 
-test("campaign AMD settings are gated by mode and expose voicemail action/TTS controls", async () => {
+test("campaign AMD settings are gated by mode and expose detection, thresholds, and voicemail controls", async () => {
   const source = await sourcePromise;
   const campaignForm = functionSource(source, "CampaignSettingsForm", "AttemptControlSettingsForm");
 
@@ -35,6 +35,14 @@ test("campaign AMD settings are gated by mode and expose voicemail action/TTS co
   assert.match(campaignForm, /amd_config: \{ \.\.\.\(draft\.amd_config \|\| \{\}\), enabled: amdAvailable && draft\.amd_config\?\.enabled === true \}/, "saving should disable AMD for unsupported modes without dropping existing voicemail settings");
 
   const amdSettings = functionSource(source, "CampaignAmdSettings", "AttemptControlSettingsForm");
+  assert.match(amdSettings, /Detection mode/, "AMD panel should expose standard and premium detection mode selection");
+  assert.match(amdSettings, /AMD_DETECTION_MODE_OPTIONS/, "AMD panel should use the centrally declared mode options");
+  assert.match(amdSettings, /Advanced detection thresholds/, "AMD panel should expose advanced threshold controls");
+  assert.match(amdSettings, /STANDARD_AMD_DETECTION_FIELDS/, "standard AMD should expose its tunable detection thresholds");
+  assert.match(amdSettings, /PREMIUM_AMD_DETECTION_FIELDS/, "premium AMD should only expose supported detection thresholds");
+  assert.match(amdSettings, /onChange\(\{ mode, detectionConfig: nextDetectionConfig \}\)/, "changing AMD mode should persist the mode and compatible thresholds together");
+  assert.match(amdSettings, /delete nextDetectionConfig\[key\]/, "clearing a threshold should restore the Telnyx default instead of persisting zero");
+  assert.match(amdSettings, /Label className="flex min-h-10 items-end"/, "threshold controls should align even when labels wrap");
   assert.match(amdSettings, /Answering machine action/, "AMD panel should expose action selection");
   assert.match(amdSettings, /disconnect/, "AMD actions should include disconnect");
   assert.match(amdSettings, /leave_message/, "AMD actions should include leave message");
@@ -58,8 +66,8 @@ test("campaign AMD settings are gated by mode and expose voicemail action/TTS co
 
 test("voice webhook can start outbound AI assistant from ledger columns when event metadata is sparse", async () => {
   const source = await readFile(new URL("../app/api/voice/webhook/route.js", import.meta.url), "utf8");
-  assert.match(source, /finalizedMetadata\?\.outbound_handler_type \|\| finalizedLedger\?\.handler_type \|\| payloadMetadata\?\.outbound_handler_type/, "handler type should fall back to ledger columns");
-  assert.match(source, /finalizedMetadata\?\.outbound_handler_ref \|\| finalizedLedger\?\.handler_ref \|\| payloadMetadata\?\.outbound_handler_ref/, "handler ref should fall back to ledger columns");
+  assert.match(source, /metadata\.outbound_handler_type \|\| ledger\.handler_type \|\| payloadMetadata\.outbound_handler_type/, "handler type should fall back to ledger columns");
+  assert.match(source, /metadata\.outbound_handler_ref \|\| ledger\.handler_ref \|\| payloadMetadata\.outbound_handler_ref/, "handler ref should fall back to ledger columns");
 });
 
 test("campaign inventory keeps contact list names visible and removes readiness column", async () => {
@@ -74,7 +82,7 @@ test("campaign inventory keeps contact list names visible and removes readiness 
 
 test("campaign update API returns refreshed contact list name after save", async () => {
   const updateRoute = await readFile(new URL("../app/api/contact-center/outbound-dialer/campaigns/[campaignId]/route.js", import.meta.url), "utf8");
-  const putRoute = updateRoute.slice(updateRoute.indexOf("export async function PUT"), updateRoute.indexOf("export async function DELETE"));
+  const putRoute = updateRoute.slice(updateRoute.indexOf("async function PUT_handler"), updateRoute.indexOf("async function DELETE_handler"));
 
   assert.match(updateRoute, /SELECT c\.\*, l\.name AS contact_list_name/, "save campaign response should be able to reload the updated campaign with joined contact list name");
   assert.match(updateRoute, /LEFT JOIN outbound_contact_lists l ON l\.id = c\.contact_list_id/, "save campaign response should join the selected contact list");

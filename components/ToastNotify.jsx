@@ -6,7 +6,7 @@ const DEFAULT_DURATION_MS = 5000;
 const toastListeners = new Set();
 
 function createToastId() {
-  return `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `toast-${crypto.randomUUID()}`;
 }
 
 function variantDotClass(variant) {

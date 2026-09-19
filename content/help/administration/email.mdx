@@ -1,0 +1,37 @@
+---
+title: Email channel
+description: Configure Contact Center mailboxes, Telnyx Email transport, delivery and AI assistance.
+audiences: [admin, owner]
+keywords: [email, mailbox, domain, DNS, templates, suppression, copilot]
+owner: contact-center
+lastReviewed: 2026-09-13
+---
+
+Open **Admin → Email** to manage the email integration. A new installation starts without a mail domain. Add the domains owned by this installation under **Domain & DNS**; mailbox and domain controls are restricted to those domains. Templates and suppression rules are shared by the connected Telnyx account, as indicated in the interface.
+
+**Email** has its own menu card directly above **Web Widgets**. Use the left section rail to switch between **Mailboxes**, **Domain & DNS**, **Templates**, **Preview**, **Sender filters**, **Delivery** and **AI Copilot**. The selected section opens in the panel on the right.
+
+## Connect a mailbox
+
+1. Under **Domain & DNS**, enter your domain name and choose **Add domain**. This registers a new inbound-enabled domain or connects the exact domain already in your Telnyx account. Select a configured domain to view its DNS records. Publish the exact DNS records returned by Telnyx in the authoritative DNS zone, then verify the domain. DNS publication is performed outside this screen.
+2. Configure the public application URL and Telnyx Ed25519 verification key on the server. Domain registration and **Verify DNS** automatically ensure the email webhook subscription. Its destination is managed by the application and is not editable in this panel. If setup reports an incomplete integration, correct the server configuration and run **Verify DNS** again.
+3. Select the mail domain and create an inbox under **Mailboxes**. Configure its display name and queue mapping. Enable Email in the queue and agent Utilization settings, and assign agents to the queue.
+4. Enable incoming routing and sending when the connection is ready. Incoming synchronization continues while routing is paused. The mailbox card shows pending backlog, last synchronization time and any synchronization error.
+
+The server uses `TELNYX_EMAIL_API_KEY`, falling back to `TELNYX_API_KEY`. Credentials are configured on the server and are never exposed to the browser. Domains added in the interface are stored in this installation’s application settings. `CC_MAIL_DOMAIN` remains an optional explicit legacy configuration; it has no default. Existing mapped mailbox domains remain available. The webhook base uses `TELNYX_WEBHOOK_BASE_URL`, then `APP_BASE_URL`, `NEXT_PUBLIC_BASE_URL` or `NEXTAUTH_URL`, and must be a public HTTPS URL. The main **Email** header contains **Refresh**.
+
+## Content and delivery
+
+**Templates** stores reusable subject and HTML content. Agents select a template and fill its variables before inserting the rendered result into a draft. **Sender filters** controls inbox acceptance. **Delivery** shows per-recipient delivery status and account suppression rules. Delivery means acceptance by a receiving mail server, not proof of a read or inbox placement.
+
+The system retains email messages and private attachment copies. Use private object storage or a persistent shared storage location in a production deployment. A local development directory is not sufficient for multiple application instances.
+
+## Email preview
+
+**Preview** sets the display policy for every user in this Contact Center installation, including Agent Desktop, supervisor previews and interaction history. Choose **Plain text** or **Formatted HTML when available**, then configure embedded images and automatic loading of external HTTPS images separately. Plain text is the initial format, embedded images are enabled for HTML, and external images are initially blocked. Loading external images can disclose that a message was opened to its sender.
+
+Use the example preview to check the format, then **Save preview settings**. A toast confirms the save. Open agent views pick up changes on their next refresh; supervisor conversation previews update within approximately 15 seconds while connected. Users cannot override the policy inside a message. Messages without HTML always display as text; HTML-only messages are converted to text when plain text is selected. The policy affects message display, not the reply editor or attachment downloads. Formatted content remains sandboxed with scripts, forms and navigation disabled.
+
+## Email AI Copilot
+
+The **AI Copilot** section configures the email model through the shared searchable picker, grouped by provider with provider icons. Enable or disable up to five embedded knowledge buckets in the scrollable storage list. Before an email-specific configuration is saved, it inherits the chat Copilot configuration. Once saved, email settings are independent. Copilot can draft, summarize, translate or answer an agent's question using the assigned conversation. A suggestion must be reviewed and sent by the agent.

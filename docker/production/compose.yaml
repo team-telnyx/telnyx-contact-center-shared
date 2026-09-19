@@ -53,11 +53,13 @@ services:
       context: ../../
       dockerfile: docker/production/Dockerfile
       args:
+        CC_BUILD_INFO: ${CC_BUILD_INFO:-}
         NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-}
         NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY:-}
         NEXT_PUBLIC_STREAMING_PORT: ${NEXT_PUBLIC_STREAMING_PORT:-}
         NEXT_PUBLIC_TELNYX_WEBRTC_REGION: ${NEXT_PUBLIC_TELNYX_WEBRTC_REGION:-}
         NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES: ${NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES:-}
+        GOOGLE_MAPS_KEY: ${GOOGLE_MAPS_KEY:-}
     image: ${CC_IMAGE:-telnyx-contact-center-prod}
     container_name: telnyx-contact-center-app
     ports:
@@ -73,13 +75,13 @@ services:
       # out of the box on any host (laptop, any cloud VM), no host directory to
       # pre-create.
       #
-      # Existing GMR/EC2 production deployments: set CC_MEDIA_PATH to the
+      # Existing the reference workflow/EC2 production deployments: set CC_MEDIA_PATH to the
       # existing host path (e.g. /home/ubuntu/apps/media) in .env to keep using
       # a bind mount and preserve already-uploaded files without migration.
       - ${CC_MEDIA_PATH:-cc_media}:/app/public/media
       # Optional persistent diagnostic logs. Prefer Docker stdout for normal ops;
       # set LOG_FILE_PATH=/app/logs/diagnostics.jsonl when you need JSONL files
-      # across container restarts (for example DEBUG_TELNYX_STT=true on GMR).
+      # across container restarts (for example DEBUG_TELNYX_STT=true on the reference workflow).
       #
       # Same default-vs-override convention as CC_MEDIA_PATH above.
       - ${CC_LOGS_PATH:-cc_logs}:/app/logs

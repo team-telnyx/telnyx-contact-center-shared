@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
-
-export async function GET(request) {
+import { withPermission } from "@/lib/authz/guard";
+async function GET_handler(request) {
   // Check admin authentication
   const session = await getServerSession(authOptions);
   const id = session?.user?.id || null;
@@ -16,9 +15,6 @@ export async function GET(request) {
   if (id) user = await PgDb.findUserById(id);
   if (!user && email) user = await PgDb.findUserByUsername(email);
   if (!user) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (!isAdmin(user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -33,3 +29,6 @@ John,Doe,John Doe,Acme Corp,Software Engineer,Engineering,+13125551234,+13125551
     },
   });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("contacts:import", GET_handler, { route: "/api/contacts/import/template" });

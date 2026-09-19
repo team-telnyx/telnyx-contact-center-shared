@@ -15,6 +15,8 @@
 
 # next.js
 /.next/
+/.next-chat-validation/
+/.next-document-preview-check/
 /out/
 /.source/
 
@@ -78,3 +80,19 @@ cc.tfplan
 /image.tar.zst
 /image.tar.zst.sha256
 /manifest.json
+
+# Local live voice fixture configuration and receiver recordings
+/tests/live-voice/config.local.json
+/tests/live-voice/receiver-evidence/
+
+# Private retained email attachments (never publish as static assets)
+.data/email/
+
+# Isolated email production build verification
+.next-email-check/
+
+# Playwright MCP console logs
+.playwright-mcp/
+
+# Waiting-playlist videos uploaded at runtime (served by /api/video/media/[id])
+public/media/video-*

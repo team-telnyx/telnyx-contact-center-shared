@@ -113,7 +113,7 @@ function RankedList({ title, rows, valueKey = "avgScorePercent", labelKey, count
   );
 }
 
-export default function QualityDashboardView({ from, to, refreshNonce = 0 }) {
+export default function QualityDashboardView({ from, to, refreshNonce = 0,channel="all" }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -122,7 +122,7 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0 }) {
     async function load() {
       setLoading(true);
       try {
-        const sp = new URLSearchParams();
+        const sp = new URLSearchParams({channel});
         if (from) sp.set("from", from);
         if (to) sp.set("to", to);
         const res = await fetch(`/api/contact-center/quality/dashboard?${sp.toString()}`, {
@@ -148,7 +148,7 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0 }) {
     return () => {
       cancelled = true;
     };
-  }, [from, to, refreshNonce]);
+  }, [from, to,channel, refreshNonce]);
 
   if (loading) {
     return (
@@ -160,7 +160,8 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0 }) {
     );
   }
 
-  const totals = data?.totals || {};
+  if (!data) return <div role="alert" className="rounded-xl border p-5 text-sm text-destructive">Quality report unavailable. Use Refresh to try again.</div>;
+  const totals = data.totals || {};
   const aiShare =
     totals.total > 0
       ? Math.round(((totals.aiEvaluations + totals.hybridEvaluations) / totals.total) * 100)

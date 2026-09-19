@@ -35,15 +35,16 @@ test("pickSlotValue keeps false/0 instead of falling through like a || b || c", 
 test("formatSlotDisplay renders booleans as Yes/No", () => {
   assert.equal(formatSlotDisplay(false), "No");
   assert.equal(formatSlotDisplay(true), "Yes");
-  assert.equal(formatSlotDisplay("Mercy Hospital"), "Mercy Hospital");
+  assert.equal(formatSlotDisplay("Summit Hospital"), "Summit Hospital");
 });
 
 test("AgentAssistWorkflow no longer gates the slot display on truthiness", async () => {
   const cmp = await readFile(new URL("../components/contact-center/AgentAssistWorkflow.jsx", import.meta.url), "utf8");
   // Uses the present-check + formatter, not `slotValue ?` / `|| ""` / `|| ...`.
   assert.match(cmp, /hasSlotValue, pickSlotValue, formatSlotDisplay/);
-  assert.match(cmp, /\) : hasSlotValue\(slotValue\) \? \(/);
-  assert.match(cmp, /\{formatSlotDisplay\(slotValue\)\}/);
+  // Also renders when only MCP candidate chips are pending (no slot value yet).
+  assert.match(cmp, /\) : \(hasSlotValue\(slotValue\) \|\| hasAlternatives\) \? \(/);
+  assert.match(cmp, /\{formatSlotDisplay\(slotValue, item\.slot_type\)\}/);
   // The old truthiness gate must be gone.
   assert.doesNotMatch(cmp, /\) : slotValue \? \(/);
   assert.doesNotMatch(cmp, /status\.value \|\| status\.extracted_value \|\|/);

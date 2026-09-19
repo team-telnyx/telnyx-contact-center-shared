@@ -19,10 +19,13 @@ test("ai-handoff-processor.updateWorkflowSessionWithAiData persists alternatives
   assert.match(handoff, /\$7::jsonb/);
 
   // ON CONFLICT DO UPDATE must preserve agent-completed rows with the same
-  // CASE WHEN completed_by = 'agent' THEN <existing> ELSE $7::jsonb END guard.
+  // CASE WHEN completed_by IN ('agent','mcp','mcp_selected') THEN <existing>
+// ELSE $7::jsonb END guard. Widened for per-slot MCP bindings: an AI handoff
+// must not clobber candidate chips a lookup produced, or the choice an agent
+// already made from them, any more than it may clobber a hand-typed value.
   assert.match(
     handoff,
-    /alternatives = CASE WHEN aa_workflow_item_status\.completed_by = 'agent' THEN aa_workflow_item_status\.alternatives ELSE \$7::jsonb END/
+    /alternatives = CASE WHEN aa_workflow_item_status\.completed_by IN \('agent', 'mcp', 'mcp_selected'\) THEN aa_workflow_item_status\.alternatives ELSE \$7::jsonb END/
   );
 
   // Param must be built from slotData?.alternatives — JSON-stringified when
@@ -36,7 +39,7 @@ test("ai-handoff-processor.updateWorkflowSessionWithAiData persists alternatives
   // The existing source_transcript plumbing must remain intact (mirror guard).
   assert.match(
     handoff,
-    /source_transcript = CASE WHEN aa_workflow_item_status\.completed_by = 'agent' THEN aa_workflow_item_status\.source_transcript ELSE \$5 END/
+    /source_transcript = CASE WHEN aa_workflow_item_status\.completed_by IN \('agent', 'mcp', 'mcp_selected'\) THEN aa_workflow_item_status\.source_transcript ELSE \$5 END/
   );
 });
 
@@ -78,7 +81,7 @@ test("conversation-insights webhook INSERT persists alternatives with the agent-
   // ON CONFLICT DO UPDATE must preserve agent-completed rows.
   assert.match(
     route,
-    /alternatives = CASE WHEN aa_workflow_item_status\.completed_by = 'agent' THEN aa_workflow_item_status\.alternatives ELSE \$6::jsonb END/
+    /alternatives = CASE WHEN aa_workflow_item_status\.completed_by IN \('agent', 'mcp', 'mcp_selected'\) THEN aa_workflow_item_status\.alternatives ELSE \$6::jsonb END/
   );
 
   // Param must be built from slotData?.alternatives (non-empty array →
@@ -91,6 +94,6 @@ test("conversation-insights webhook INSERT persists alternatives with the agent-
   // The existing source_transcript guard must remain intact.
   assert.match(
     route,
-    /source_transcript = CASE WHEN aa_workflow_item_status\.completed_by = 'agent' THEN aa_workflow_item_status\.source_transcript ELSE \$5 END/
+    /source_transcript = CASE WHEN aa_workflow_item_status\.completed_by IN \('agent', 'mcp', 'mcp_selected'\) THEN aa_workflow_item_status\.source_transcript ELSE \$5 END/
   );
 });

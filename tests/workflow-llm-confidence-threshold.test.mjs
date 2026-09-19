@@ -30,7 +30,10 @@ test("live analyzer uses only the workflow threshold to split completed vs sugge
   const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
   const prompts = await read("../lib/agent-assist/workflow-prompts.js");
 
-  assert.match(route, /SELECT llm_model, llm_confidence_threshold FROM aa_workflows/);
+  // The projection has since gained fallback/reasoning/output-cap columns; the
+  // contract is that both the model and the threshold come from the workflow
+  // row rather than from a constant.
+  assert.match(route, /SELECT llm_model,[^`]*llm_confidence_threshold[^`]*FROM aa_workflows/);
   assert.match(route, /confidenceThreshold = normalizeConfidenceThreshold/);
   assert.match(route, /completed\.confidence >= confidenceThreshold/);
   assert.match(route, /'suggested'/);
@@ -83,13 +86,16 @@ test("live analyzer keeps suggested items eligible for later higher-confidence s
 test("workflow UI analyzes every unprocessed final transcript, not only the latest one", async () => {
   const ui = await read("../components/contact-center/AgentAssistWorkflow.jsx");
 
-  assert.match(ui, /const finalTranscriptionsToAnalyze = transcriptions\.filter/);
-  // Every unprocessed final is analyzed: the fired batch is derived from
-  // finalTranscriptionsToAnalyze and each item is dispatched (#1211).
-  assert.match(ui, /const batch = finalTranscriptionsToAnalyze\.filter/);
-  assert.match(ui, /for \(const transcription of batch\)/);
-  assert.match(ui, /analyzedTranscriptionIdsRef\.current\.add\(t\.id\)/);
+  // The single pre-batched request was later replaced by a per-utterance
+  // debounce feeding one analysis queue, but the property is the same: every
+  // unprocessed final is considered, never just the newest bubble.
+  assert.match(ui, /for \(const transcription of transcriptions\.filter\(needsAnalyze\)\)/);
+  assert.match(ui, /const needsAnalyze = \(transcription\) => \{/);
+  assert.match(ui, /enqueueAnalysis\(\{/);
+  assert.match(ui, /analyzeTranscriptBatch\(/, "queued utterances are still sent as one batch");
   assert.doesNotMatch(ui, /const latestTranscription = transcriptions\[transcriptions\.length - 1\]/);
+  assert.doesNotMatch(ui, /transcriptions\[transcriptions\.length - 1\]/,
+    "analysis must never be driven by the newest bubble alone");
 });
 
 test("workflow store keeps suggested slot values and exposes LLM confidence locally", async () => {
@@ -113,7 +119,8 @@ test("agent workflow UI renders low-confidence suggested slots with a subdued am
   assert.match(ui, /LLM/);
   assert.match(ui, /Confirm/);
   assert.match(ui, /handleConfirmSuggestedSlot/);
-  assert.match(ui, /disabled=\{isCompleted \|\| isSkipped \|\| isLowConfidence\}/);
+  // Also disabled while unresolved MCP candidate chips are pending selection.
+  assert.match(ui, /disabled=\{isCompleted \|\| isSkipped \|\| isLowConfidence \|\| hasAlternatives\}/);
 });
 
 test("agent assist node exposes STT and LLM confidence display toggles below sentiment analysis", async () => {
@@ -171,24 +178,20 @@ test("AI handoff respects workflow LLM threshold and keeps low-confidence slots 
 test("intent and sentiment transcription analysis uses workflow settings model instead of hardcoded Kimi", async () => {
   const sentiment = await read("../lib/agent-assist/sentiment-analysis.js");
   const router = await read("../lib/agent-assist-transcription-router.mjs");
-  const webhookHandler = await read("../lib/contact-center/webhook-handler.js");
 
-  assert.match(sentiment, /analyzeTranscription\(transcript, \{ model \} = \{\}\)/);
+  // The options bag has since gained intent/sentiment toggles and an abort
+  // signal; what matters is that the model is an argument, not a constant.
+  assert.match(sentiment, /export async function analyzeTranscription\(transcript, \{\s*\n?\s*model,/);
   assert.match(sentiment, /model: model \|\| DEFAULT_AGENT_ASSIST_LLM_MODEL/);
   assert.doesNotMatch(sentiment, /model: "moonshotai\/Kimi-K2\.5"/);
 
   assert.match(router, /resolveAgentAssistAnalysisModel\(assistConfig\)/);
   assert.match(router, /SELECT llm_model FROM aa_workflows WHERE id = \$1/);
-  assert.match(router, /analyzeTranscription\(transcriptionData\.transcript, \{ model: analysisModel \}\)/);
-
-  assert.match(webhookHandler, /resolveAgentAssistAnalysisModel\(assistConfig\)/);
-  assert.match(webhookHandler, /SELECT llm_model FROM aa_workflows WHERE id = \$1/);
-  assert.match(webhookHandler, /analyzeTranscription\(transcriptionData\.transcript, \{ model: analysisModel \}\)/);
+  assert.match(router, /analyzeTranscription\(transcriptionData\.transcript, \{\s*\n?\s*model: analysisModel,?/);
 
   const runtimeFiles = [
     sentiment,
     router,
-    webhookHandler,
     await read("../lib/agent-assist/workflow-analyzer.js"),
     await read("../lib/agent-assist/generate-test-scenario.js"),
     await read("../app/api/agent-assist/workflow/analyze/route.js"),

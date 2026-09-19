@@ -1,8 +1,12 @@
+import { normalizeBlending } from "@/lib/acd/outbound-blending.mjs";
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapOutboundSettings, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, mapOutboundSettings, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 import { normalizeOutboundDialTimeoutSecs } from "@/lib/outbound-dialer/execution";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { normalizeGlobalAnsweredWithoutAgentPolicy } from "@/lib/outbound-dialer/answered-without-agent-policy.mjs";
+import { normalizeMessagingSettings } from "@/lib/outbound-dialer/messaging/settings.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DEFAULT_CALLABLE_DAYS = ["mon", "tue", "wed", "thu", "fri"];
@@ -32,12 +36,14 @@ function normalizeCallableDays(settings = {}) {
 function normalizeSettings(body = {}) {
   const settings = safeJson(body.settings || body, {});
   const callable = settings.callable_window || settings.callableWindow || {};
+  const answeredWithoutAgentPolicy = normalizeGlobalAnsweredWithoutAgentPolicy(settings);
   return {
     max_calls_per_agent: Math.max(1, Math.min(100, Number.parseInt(settings.max_calls_per_agent ?? settings.maxCallsPerAgent, 10) || 1)),
     max_lines: Math.max(1, Math.min(10000, Number.parseInt(settings.max_lines ?? settings.maxLines, 10) || 10)),
     max_line_utilization_percent: Math.max(1, Math.min(100, Number.parseInt(settings.max_line_utilization_percent ?? settings.maxLineUtilizationPercent, 10) || 90)),
     max_cps: Math.max(1, Math.min(1000, Number.parseInt(settings.max_cps ?? settings.maxCps, 10) || 50)),
-    compliance_abandon_threshold_seconds: Math.max(0, Math.min(300, Number.parseInt(settings.compliance_abandon_threshold_seconds ?? settings.complianceAbandonThresholdSeconds, 10) || 2)),
+    compliance_abandon_threshold_seconds: answeredWithoutAgentPolicy.max_agent_connect_seconds,
+    answered_without_agent_policy: answeredWithoutAgentPolicy,
     global_max_attempts: normalizeGlobalMaxAttempts(settings.global_max_attempts ?? settings.globalMaxAttempts),
     dial_timeout_secs: normalizeOutboundDialTimeoutSecs(settings.dial_timeout_secs ?? settings.dialTimeoutSecs, 30),
     callable_days: normalizeCallableDays(settings),
@@ -47,18 +53,20 @@ function normalizeSettings(body = {}) {
       timezone: String(callable.timezone || "Europe/Warsaw").slice(0, 80),
     },
     allowed_numbers: normalizeAllowedNumbers(settings),
+    blending: normalizeBlending(settings.blending),
+    messaging: normalizeMessagingSettings(settings.messaging),
   };
 }
 
-export async function GET() {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows } = await pool.query(`SELECT * FROM outbound_settings WHERE id='default' LIMIT 1`);
   return NextResponse.json({ ok: true, settings: mapOutboundSettings(rows[0]) });
 }
 
-export async function PUT(request) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function PUT_handler(request, _context, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
     const settings = normalizeSettings(await request.json());
@@ -67,3 +75,7 @@ export async function PUT(request) {
     return NextResponse.json({ ok: true, settings: mapOutboundSettings(rows[0]) });
   } catch (err) { campaignsLogger.error("settings_save_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to save settings", 400); }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("dialer_settings:read", GET_handler, { route: "/api/contact-center/outbound-dialer/settings" });
+export const PUT = withPermission("dialer_settings:update", PUT_handler, { route: "/api/contact-center/outbound-dialer/settings" });

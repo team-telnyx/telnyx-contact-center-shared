@@ -72,7 +72,7 @@ import {
 
 /** Generate unique message ID to avoid React key collisions and doubled rendering */
 function uniqueMessageId(prefix = "msg") {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return `${prefix}-${crypto.randomUUID()}`;
 }
 
 // All test responses are generated dynamically via LLM based on AI assistant's messages

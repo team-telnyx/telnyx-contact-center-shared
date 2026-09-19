@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { buildFormExportBundle, collectFormMediaReferences, formExportFilename } from "@/lib/forms/form-bundles";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;
-  let user = id ? await PgDb.findUserById(id) : null; if (!user && email) user = await PgDb.findUserByUsername(email); return user && isAdmin(user) ? user : null;
-}
 function mapRow(row) { return row ? { ...row, queue_ids: row.queue_ids || [], queue_names: row.queue_names || [] } : null; }
 
-export async function GET(request, context) {
-  const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, context, authz) {
+  const user = authz.user;
   const { id } = await context.params; const pool = getPostgresPool(); if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   const { rows } = await pool.query("SELECT * FROM form_definitions WHERE id = $1", [id]);
   const form = mapRow(rows[0]);
@@ -37,3 +30,6 @@ export async function GET(request, context) {
     },
   });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("forms:export", GET_handler, { route: "/api/admin/forms/[id]/export" });

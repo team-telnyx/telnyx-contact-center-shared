@@ -19,7 +19,7 @@ const execFileAsync = promisify(execFileCb);
 // IMPORTANT — resource scoping (real bug found in 2026-07-06 E2E testing):
 // `simulate-principal-policy` defaults every action to `EvalResourceName:
 // "*"` unless `--resource-arns` is passed explicitly. Real-world operator
-// policies (including our own internal fde-app-bot-* policies, generated
+// policies (including our own internal cc-deploy-bot-* policies, generated
 // from THIS module's generateRequiredPolicyJson) scope S3/Secrets
 // Manager/IAM to deployment-name-prefixed resource patterns like
 // `arn:aws:s3:::cc-*` rather than granting blanket `Resource: "*"` — so a
@@ -377,7 +377,7 @@ export async function checkAwsIamPermissions({
  * `<deployment-name>-*` role/instance-profile names, since IAM is the one
  * service where handing out unscoped CreateRole/PassRole is meaningfully
  * riskier than the rest). This is intentionally narrower than the internal
- * fde-app-bot-aws-operator-policy.sh's wide `cc-*`/`fde-*` patterns, which
+ * cc-deploy-bot-aws-operator-policy.sh's wide `cc-*` patterns, which
  * only make sense for our own consolidated internal account.
  */
 export function generateRequiredPolicyJson({ deploymentNamePattern = '*' } = {}) {

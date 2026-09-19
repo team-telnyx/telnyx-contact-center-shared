@@ -6,17 +6,56 @@ import {
   normalizeE164Like,
   pickContactPhoneNumber,
   normalizeOutboundDialTimeoutSecs,
+  completeAttemptClaim,
   executeAgentlessAttempt,
   finalizeAgentlessAttemptByWebhook,
 } from '../lib/outbound-dialer/execution.js';
 
 function createMockPool(handler) {
-  return {
+  const pool = {
+    notifications: [],
     async query(sql, params) {
+      if (String(sql).includes("pg_notify('cc_events'")) {
+        const notification = JSON.parse(params?.[0] || '{}');
+        pool.notifications.push(notification);
+        return { rows: [] };
+      }
       return handler(String(sql), params || []);
     },
   };
+  return pool;
 }
+
+test('completeAttemptClaim notifies live-call monitors after a terminal transition', async () => {
+  const pool = createMockPool(async (sql, params) => {
+    if (sql.includes('UPDATE outbound_attempt_ledger')) {
+      return {
+        rows: [{
+          id: 'ledger-notify-1',
+          campaign_id: 'campaign-notify-1',
+          status: params[0],
+          dial_state: 'terminated',
+        }],
+      };
+    }
+    throw new Error(`Unexpected SQL(notify): ${sql}`);
+  });
+
+  const completed = await completeAttemptClaim(pool, 'ledger-notify-1', 'failed', {
+    failure_reason: 'user_busy',
+  });
+
+  assert.equal(completed.status, 'failed');
+  assert.deepEqual(pool.notifications, [{
+    topic: 'outbound.live_calls.changed',
+    payload: {
+      attempt_id: 'ledger-notify-1',
+      campaign_id: 'campaign-notify-1',
+      status: 'failed',
+      dial_state: 'terminated',
+    },
+  }]);
+});
 
 test('agentless execution only applies active reusable campaign resources', async () => {
   const source = await readFile(new URL('../lib/outbound-dialer/execution.js', import.meta.url), 'utf8');

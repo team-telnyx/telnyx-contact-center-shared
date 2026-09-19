@@ -115,7 +115,7 @@ test("confirmation is only offered once nothing anywhere is left to collect", ()
   // Both slots have values; i1 is a low-confidence suggestion → confirm it last.
   const itemStatuses = {
     i1: { status: "suggested", extracted_value: "ICU" },
-    i2: { status: "completed", extracted_value: "Northwestern" },
+    i2: { status: "completed", extracted_value: "Lakeview" },
   };
   const transcriptions = [{ isFinal: true, transcript: "pickup location department" }];
   const target = resolveSuggestedResponseTarget({ stages, itemStatuses, slotsFilled: {}, transcriptions });

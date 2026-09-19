@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx.js";
 
+import { withPermission } from "@/lib/authz/guard";
+import { platformApiLogger } from "@/lib/runtime-logging.mjs";
 export const dynamic = "force-dynamic";
 
 const ELEVENLABS_API_KEY_REF = process.env.ELEVENLABS_API_KEY_REF;
 
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -131,8 +133,11 @@ export async function POST(request) {
       },
     });
   } catch (err) {
+    // The provider's own error text can name internal hosts, credentials
+    // handling and request shapes. It belongs in the log, not in the response.
+    platformApiLogger.error("tts_speech_failed", { error: err?.message || String(err) });
     return new NextResponse(
-      JSON.stringify({ ok: false, error: err?.message || String(err) }),
+      JSON.stringify({ ok: false, error: "Speech synthesis failed" }),
       {
         status: 500,
         headers: {
@@ -143,3 +148,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("telephony_tools:use", POST_handler, { route: "/api/tts/speech" });

@@ -13,6 +13,7 @@
  * test results consistent with what a real customer conversation will produce.
  */
 
+import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -26,6 +27,7 @@ import {
   voiceExpressiveKind,
 } from "@/lib/call-generator/workflow-testing.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
 
@@ -42,20 +44,20 @@ function generateCustomerData() {
   const facilities = ["Mercy General Hospital", "St. Luke's Medical Center", "Cedar Valley Regional", "Riverside Community Hospital", "Mountain View Clinic"];
   const cities = ["Austin", "Denver", "Portland", "Seattle", "Phoenix", "Chicago", "Boston", "Atlanta", "Miami", "Dallas"];
 
-  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-  const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+  const firstName = firstNames[randomInt(firstNames.length)];
+  const lastName = lastNames[randomInt(lastNames.length)];
 
   return {
     caller_name: `${firstName} ${lastName}`,
     first_name: firstName,
     last_name: lastName,
-    callback_number: `555-${String(Math.floor(Math.random() * 900) + 100)}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-    facility_name: facilities[Math.floor(Math.random() * facilities.length)],
-    city: cities[Math.floor(Math.random() * cities.length)],
-    date_of_birth: `${Math.floor(Math.random() * 12) + 1}/${Math.floor(Math.random() * 28) + 1}/${Math.floor(Math.random() * 40) + 1960}`,
-    account_number: `AC${String(Math.floor(Math.random() * 900000) + 100000)}`,
+    callback_number: `555-${String(randomInt(900) + 100)}-${String(randomInt(9000) + 1000)}`,
+    facility_name: facilities[randomInt(facilities.length)],
+    city: cities[randomInt(cities.length)],
+    date_of_birth: `${randomInt(12) + 1}/${randomInt(28) + 1}/${randomInt(40) + 1960}`,
+    account_number: `AC${String(randomInt(900000) + 100000)}`,
     email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@email.com`,
-    patient_name: `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`,
+    patient_name: `${firstNames[randomInt(firstNames.length)]} ${lastNames[randomInt(lastNames.length)]}`,
   };
 }
 
@@ -160,7 +162,7 @@ function buildResponsePrompt(params) {
 }
 
 // POST /api/admin/workflows/[id]/generate-response
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -205,7 +207,7 @@ export async function POST(request, { params }) {
 
     // Fetch workflow
     const { rows: [workflow] } = await pool.query(
-      `SELECT id, name, description, category, llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT id, name, description, category, llm_model, llm_reasoning_enabled FROM aa_workflows WHERE id = $1`,
       [workflowId]
     );
 
@@ -292,6 +294,7 @@ export async function POST(request, { params }) {
         messages,
         temperature: 0.7,
         max_tokens: 160,
+        enable_thinking: workflow.llm_reasoning_enabled === true,
       }),
     });
 
@@ -330,7 +333,7 @@ export async function POST(request, { params }) {
 // GET /api/admin/workflows/[id]/generate-response - Get available personas.
 // Returns the same persona vocabulary as the Call Generator workflow tester so
 // the Test AI Agent page offers an identical persona list.
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -353,3 +356,7 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("workflows:ai", GET_handler, { route: "/api/admin/workflows/[id]/generate-response" });
+export const POST = withPermission("workflows:ai", POST_handler, { route: "/api/admin/workflows/[id]/generate-response" });

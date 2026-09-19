@@ -1,4 +1,11 @@
 import { createMDX } from "fumadocs-mdx/next";
+import { createBuildInfo } from "./scripts/lib/build-info.mjs";
+import { documentPreviewTracingIncludes } from "./scripts/lib/document-preview-tracing.mjs";
+
+// Pass the snapshot to build workers so they share one timestamp and identity.
+const applicationBuild = createBuildInfo();
+process.env.CC_BUILD_INFO = JSON.stringify(applicationBuild);
+const previewTracingIncludes = documentPreviewTracingIncludes();
 
 function devOriginHostname(value) {
   const candidate = String(value || "").trim();
@@ -21,12 +28,34 @@ const allowedDevOrigins = [...new Set([
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_CC_BUILD_INFO: JSON.stringify(applicationBuild),
+    // The Maps Embed API key is read by the browser (it travels in the iframe
+    // URL), so the server-side name is published under the NEXT_PUBLIC_ one.
+    // Restrict this key to HTTP referrers and to the Maps Embed API.
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_KEY || "",
+  },
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  outputFileTracingIncludes: {
+    "/api/contact-center/email/*/attachments/*/*": previewTracingIncludes,
+    "/api/contact-center/interactions/*/conversation/email-drafts/*/attachments/*": previewTracingIncludes,
+    "/api/contact-center/chat/*/attachments/*": previewTracingIncludes,
+    "/api/contact-center/interactions/*/conversation/attachments/*": previewTracingIncludes,
+    "/api/contact-center/interactions/*/conversation/email-attachments/*/*": previewTracingIncludes,
+    "/api/widget-sessions/*": previewTracingIncludes,
+  },
   // Configure body size limit for Server Actions (for profile picture uploads)
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
       allowedOrigins: allowedDevOrigins,
     },
+    // Route handlers read multipart uploads themselves (chat attachments up
+    // to 100 MB, waiting-playlist videos up to 64 MB). Next buffers request
+    // bodies for the proxy up to this size and truncates the rest, which
+    // left larger uploads with an unparsable form. (Next 16 name; the
+    // pre-16 `middlewareClientMaxBodySize` is a deprecated alias.)
+    proxyClientMaxBodySize: "110mb",
   },
   // Allowed dev origins - required when using a reverse proxy (e.g. your-dev-server.example.com)
   // Prevents "Blocked cross-origin request" which breaks HMR and causes ~40s page refreshes

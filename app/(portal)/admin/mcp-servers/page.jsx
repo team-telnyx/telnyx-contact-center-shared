@@ -28,6 +28,7 @@ import {
 } from "@tabler/icons-react";
 import MCPServerEditorSheet from "@/components/admin/MCPServerEditorSheet";
 import MCPToolDetailsSheet from "@/components/admin/MCPToolDetailsSheet";
+import { Can } from "@/components/auth-provider";
 
 function ServerTypeBadge({ type }) {
   const classes = {
@@ -121,10 +122,10 @@ function AdminMCPServersPageContent() {
   const headerActions = (
     <>
       <Button onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</Button>
-      <Button onClick={() => setSheetServerId("new")}>
+      <Can permission="mcp_servers:create"><Button onClick={() => setSheetServerId("new")}>
         <IconPlus className="size-4 mr-2" />
         Add MCP Server
-      </Button>
+      </Button></Can>
     </>
   );
 
@@ -193,9 +194,9 @@ function AdminMCPServersPageContent() {
                       </Button>
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button type="button" variant="ghost" size="icon" title="Delete MCP server">
+                          <Can permission="mcp_servers:delete"><Button type="button" variant="ghost" size="icon" title="Delete MCP server">
                             <IconTrash className="size-4 text-red-500" />
-                          </Button>
+                          </Button></Can>
                         </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>

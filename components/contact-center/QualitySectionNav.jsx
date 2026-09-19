@@ -39,6 +39,7 @@ export function QualitySectionRailNav({ activeId = "evaluations" }) {
         router.push(`/supervisor/quality?section=${encodeURIComponent(sectionId)}`);
       }}
       ariaLabel="Supervisor quality management sections"
+      screenGroup="supervisor.quality"
     />
   );
 }

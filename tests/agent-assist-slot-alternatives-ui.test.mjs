@@ -6,7 +6,7 @@ async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
 }
 
-test("FDE-535 frontend: workflow-store applyAiHandoffData normalizes slotDetail.alternatives to an array on item status", async () => {
+test("an earlier fix frontend: workflow-store applyAiHandoffData normalizes slotDetail.alternatives to an array on item status", async () => {
   const storeSource = await source("../lib/stores/workflow-store.js");
 
   // The applyAiHandoffData block builds newStatuses[item.id] with extracted_value,
@@ -18,17 +18,28 @@ test("FDE-535 frontend: workflow-store applyAiHandoffData normalizes slotDetail.
   );
 });
 
-test("FDE-535 frontend: WorkflowStagesCard renders alternatives chips only when low-confidence AND alternatives exist", async () => {
+test("an earlier fix frontend: alternatives chips render whenever a suggestion carries them", async () => {
   const workflowSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
 
-  // Conditional render guards against low-confidence + non-empty alternatives array.
+  // Chips are gated on the suggestion actually having alternatives, NOT on LLM
+  // confidence. An MCP lookup that matched several facilities fills no value and
+  // carries no confidence score, so a confidence gate would hide precisely the
+  // choices the agent needs to resolve.
   assert.match(
     workflowSource,
-    /isLowConfidence && Array\.isArray\(status\.alternatives\) && status\.alternatives\.length > 0/
+    /const hasAlternatives\s*=\s*\n?\s*isSuggested && Array\.isArray\(status\.alternatives\) && status\.alternatives\.length > 0;/,
   );
+  assert.match(workflowSource, /\{hasAlternatives && \(/);
+  assert.ok(
+    !/\{isLowConfidence && Array\.isArray\(status\.alternatives\)/.test(workflowSource),
+    "alternatives must not be gated on isLowConfidence",
+  );
+
+  // The low-confidence Confirm affordance is separate and stays.
+  assert.match(workflowSource, /\{isLowConfidence && \(/);
 });
 
-test("FDE-535 frontend: each alternative chip maps over status.alternatives and calls handleConfirmSuggestedSlot with alt.value", async () => {
+test("an earlier fix frontend: each alternative chip maps over status.alternatives and calls handleConfirmSuggestedSlot with alt.value", async () => {
   const workflowSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
 
   // The chips are rendered by mapping over status.alternatives (alt, altIdx) and
@@ -37,20 +48,28 @@ test("FDE-535 frontend: each alternative chip maps over status.alternatives and 
   assert.match(workflowSource, /handleConfirmSuggestedSlot\(item\.id, alt\.value\)/);
 });
 
-test("FDE-535 frontend: each alternative chip displays value and rounded confidence percentage", async () => {
+test("an earlier fix frontend: each alternative chip displays its value and rounded confidence percentage", async () => {
   const workflowSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
 
-  // Chips show the alt.value plus a rounded confidence percentage derived from alt.confidence.
-  assert.match(workflowSource, /\{alt\.value\}/);
-  assert.match(workflowSource, /Math\.round\(\(alt\.confidence \?\? 0\) \* 100\)/);
-  // The chip title conveys the alternative confidence as a percentage.
+  // Chips display alt.label when one is present, falling back to the formatted
+  // value. LLM alternatives carry no label so they render exactly as before;
+  // MCP lookup candidates carry a human-readable label because the raw value is
+  // an opaque facility id.
+  assert.match(workflowSource, /\{alt\.label \?\? formatSlotDisplay\(alt\.value, item\.slot_type\)\}/);
+
+  // The percentage still comes from alt.confidence, now only when one was
+  // supplied - an MCP lookup match is not a probability.
+  assert.match(workflowSource, /Math\.round\(alt\.confidence \* 100\)/);
+  assert.match(workflowSource, /alt\.confidence != null &&/);
+
+  // The chip title still conveys confidence for alternatives that have it.
   assert.match(
     workflowSource,
-    /Use this alternative \(\$\{Math\.round\(\(alt\.confidence \?\? 0\) \* 100\)\}% confidence\)/
+    /Use this alternative \(\$\{Math\.round\(\(alt\.confidence \?\? 0\) \* 100\)\}% confidence\)/,
   );
 });
 
-test("FDE-535 frontend regression guard: the existing Confirm-this-low-confidence-LLM-value button is retained", async () => {
+test("an earlier fix frontend regression guard: the existing Confirm-this-low-confidence-LLM-value button is retained", async () => {
   const workflowSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
 
   // The new alternatives chips must coexist with the original Confirm button

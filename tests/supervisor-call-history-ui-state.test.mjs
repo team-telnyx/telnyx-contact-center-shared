@@ -44,35 +44,14 @@ test("supervisor call history date range is persisted in the app state store", a
   );
 });
 
-test("supervisor call history exposes quick date range buttons", async () => {
+test("supervisor history exposes shared date presets and persists changes with pagination reset", async () => {
   const callHistorySource = await callHistorySourcePromise;
-
-  for (const label of ["1 day", "7 days", "30 days"]) {
-    assert.match(
-      callHistorySource,
-      new RegExp(`>${label}<`),
-      `Call History should render a ${label} quick range button`,
-    );
+  const toolbar = await readFile(new URL("../components/contact-center/AnalyticsReportFilters.jsx", import.meta.url), "utf8");
+  assert.match(callHistorySource, /<AnalyticsReportFilters/);
+  for (const [value, label] of [["1d", "1 day"], ["7d", "7 days"], ["30d", "30 days"], ["custom", "Custom"]]) {
+    assert.ok(toolbar.includes(`["${value}", "${label}"]`));
   }
-
-  assert.match(
-    callHistorySource,
-    /setQuickDateRange\(1\)/,
-    "1 day quick range should set a one-day range",
-  );
-  assert.match(
-    callHistorySource,
-    /setQuickDateRange\(7\)/,
-    "7 days quick range should set a seven-day range",
-  );
-  assert.match(
-    callHistorySource,
-    /setQuickDateRange\(30\)/,
-    "30 days quick range should set a thirty-day range",
-  );
-  assert.match(
-    callHistorySource,
-    /setPage\(1\);[\s\S]*setSupervisorCallHistoryDateRange\(/,
-    "Quick range changes should reset pagination and save the date range in app state",
-  );
+  assert.match(callHistorySource, /setQuickDateRange\(Number\(value.slice\(0, -1\)\)\)/);
+  assert.match(callHistorySource, /quickCallHistoryDateRange\(days\)/);
+  assert.match(callHistorySource, /setPage\(1\);[\s\S]*setSupervisorCallHistoryDateRange\(/);
 });

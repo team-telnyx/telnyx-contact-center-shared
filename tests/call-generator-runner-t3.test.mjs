@@ -100,15 +100,15 @@ describe("call generator runner (T3)", () => {
   it("runner enforces watchdog reaping of orphaned calls", async () => {
     const code = await readFile(new URL("../lib/call-generator/runner.mjs", import.meta.url), "utf8");
     assert.match(code, /reapOrphans/);
-    assert.match(code, /orphan_reaped/);
+    assert.match(code, /orphan_deadline/);
   });
 
-  it("runner fails pending and in-flight ledger rows when the settings switch is disabled mid-run", async () => {
-    const code = await readFile(new URL("../lib/call-generator/runner.mjs", import.meta.url), "utf8");
-    assert.match(code, /await isCallGeneratorEnabled\(pool\)/);
-    assert.match(code, /status = 'failed'/);
-    assert.match(code, /status IN \('pending','dialing','ringing','answered','talking'\)/);
-    assert.match(code, /call_generator_disabled/);
+  it("master switch cancellation retains unresolved media until provider end evidence", async () => {
+    const code=await readFile(new URL('../lib/call-generator/runtime.mjs',import.meta.url),'utf8');
+    assert.match(code,/cancelled_before_dial/);
+    assert.match(code,/media_ended_at IS NULL/);
+    assert.match(code,/is_alive === false/);
+    assert.match(code,/stop_requested/);
   });
 
   it("runner rejects targets without resolvable non-empty action sequences", async () => {

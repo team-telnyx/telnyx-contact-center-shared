@@ -1,27 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
 
-export async function GET(_request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(_request, { params }, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -34,9 +18,8 @@ export async function GET(_request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function PUT_handler(request, { params }, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -62,16 +45,34 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(_request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function DELETE_handler(_request, { params }, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
     const { id } = await params;
-    await pool.query("DELETE FROM cg_scenarios WHERE id = $1", [id]);
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('SELECT id FROM cg_scenarios WHERE id=$1 FOR UPDATE', [id]);
+      const active = await db.query(`SELECT 1 FROM cg_runs r WHERE r.scenario_id=$1 AND (r.status IN ('pending','running')
+        OR EXISTS(SELECT 1 FROM cg_call_ledger l WHERE l.run_id=r.id AND l.dial_requested_at IS NOT NULL
+          AND l.media_ended_at IS NULL AND COALESCE(l.result->>'dial_rejected','false')<>'true')) LIMIT 1`, [id]);
+      if (active.rowCount) {
+        await db.query('ROLLBACK');
+        return NextResponse.json({error:'Stop the scenario and wait for confirmed call cleanup before deleting it'}, {status:409});
+      }
+      await db.query("DELETE FROM cg_scenarios WHERE id = $1", [id]);
+      await db.query('COMMIT');
+    } catch(error) { await db.query('ROLLBACK'); throw error; }
+    finally { db.release(); }
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("call_generator:read", GET_handler, { route: "/api/admin/call-generator/scenarios/[id]" });
+export const PUT = withPermission("call_generator:update", PUT_handler, { route: "/api/admin/call-generator/scenarios/[id]" });
+export const DELETE = withPermission("call_generator:delete", DELETE_handler, { route: "/api/admin/call-generator/scenarios/[id]" });

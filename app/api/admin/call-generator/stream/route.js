@@ -6,11 +6,11 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { isAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { addSseClient, removeSseClient } from "@/lib/sse";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const maxDuration = 300;
 
@@ -70,12 +70,11 @@ async function loadSnapshot(pool) {
   return { runs, statsByRun, recentCalls, totals, timestamp: new Date().toISOString() };
 }
 
-export async function GET(request) {
+async function GET_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return new Response("Unauthorized", { status: 401 });
     const user = await PgDb.findUserById(session.user.id);
-    if (!user || !isAdmin(user)) return new Response("Access denied", { status: 403 });
 
     const pool = getPostgresPool();
     if (!pool) return new Response("Server not ready", { status: 500 });
@@ -159,3 +158,6 @@ export async function GET(request) {
     return new Response("Internal server error", { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("call_generator:read", GET_handler, { route: "/api/admin/call-generator/stream" });

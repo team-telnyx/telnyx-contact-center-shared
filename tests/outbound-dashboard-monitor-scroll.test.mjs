@@ -21,7 +21,7 @@ test("campaign monitor keeps summary stats static while only latest attempts scr
 
   assert.match(
     dashboardMonitorPanel,
-    /Latest call attempts[\s\S]*?className="[^"]*max-h-\[[^\]]+\][^"]*overflow-y-auto[^"]*"/,
-    "Latest call attempts list should own a bounded vertical scroll area",
+    /Latest (?:call )?attempts[\s\S]*?className="[^"]*max-h-\[[^\]]+\][^"]*overflow-y-auto[^"]*"/,
+    "Latest attempts list should own a bounded vertical scroll area",
   );
 });

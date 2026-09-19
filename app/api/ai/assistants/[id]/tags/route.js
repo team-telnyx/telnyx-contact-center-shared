@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { platformApiLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 function getApiKey() {
@@ -10,7 +11,7 @@ function getApiKey() {
   return apiKey;
 }
 
-export async function GET(_request, context) {
+async function GET_handler(_request, context) {
   try {
     const apiKey = getApiKey();
     if (!apiKey) {
@@ -82,7 +83,7 @@ export async function GET(_request, context) {
   }
 }
 
-export async function POST(request, context) {
+async function POST_handler(request, context) {
   try {
     const apiKey = getApiKey();
     if (!apiKey) {
@@ -150,7 +151,7 @@ export async function POST(request, context) {
   }
 }
 
-export async function DELETE(request, context) {
+async function DELETE_handler(request, context) {
   try {
     const apiKey = getApiKey();
     if (!apiKey) {
@@ -208,3 +209,8 @@ export async function DELETE(request, context) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("ai_assistants:read", GET_handler, { route: "/api/ai/assistants/[id]/tags" });
+export const POST = withPermission("ai_assistants:update", POST_handler, { route: "/api/ai/assistants/[id]/tags" });
+export const DELETE = withPermission("ai_assistants:update", DELETE_handler, { route: "/api/ai/assistants/[id]/tags" });

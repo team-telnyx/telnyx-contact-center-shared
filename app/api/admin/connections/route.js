@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-export async function GET(request) {
+async function GET_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -19,9 +19,6 @@ export async function GET(request) {
     if (userId) user = await PgDb.findUserById(userId);
     if (!user && email) user = await PgDb.findUserByUsername(email);
 
-    if (!user || !isAdmin(user)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const basePath = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
 
@@ -93,3 +90,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("system_settings:read", GET_handler, { route: "/api/admin/connections" });

@@ -4,17 +4,52 @@ import { useEffect } from "react";
 import useCallsStore from "@/lib/stores/calls-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import useWorkflowStore from "@/lib/stores/workflow-store";
+import { subscribeStatusStream, applyCoreSnapshot } from "@/lib/status-stream-client";
+import {
+  clearAllIncomingCallData,
+  storeIncomingCallData,
+} from "@/lib/incoming-call-store";
 
 export function ContactCenterStreamProvider({ children }) {
   useEffect(() => {
     let contactCenterEventSource = null;
     let reconnectTimeout = null;
+    let acdCursor = "0";
 
     const connectContactCenterStream = () => {
       try {
         contactCenterEventSource = new EventSource(
-          "/api/contact-center/agent/stream",
+          `/api/contact-center/agent/stream?after=${encodeURIComponent(acdCursor)}`,
         );
+
+        contactCenterEventSource.addEventListener("acd_sync", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            acdCursor = event.lastEventId || data.cursor || acdCursor;
+            if (!data.snapshot) return;
+            applyCoreSnapshot(data.snapshot);
+            for (const item of data.snapshot.interactions || []) {
+              if (item.channel && item.channel !== "voice") continue;
+              if (item.terminal_at || !item.owns_live_assignment) {
+                useCallsStore.getState().removeCall(item.interaction_id);
+                if (item.call_control_id) useCallsStore.getState().removeCall(item.call_control_id);
+                const current = useActiveCallStore.getState().contactCenter?.interactionId;
+                if (current && String(current) === String(item.interaction_id)) {
+                  useActiveCallStore.getState().clearActiveCall();
+                  useWorkflowStore.getState().clearSession();
+                }
+              } else if (item.call_control_id && ["offered", "active"].includes(item.state)) {
+                useCallsStore.getState().addCall({ callControlId: item.call_control_id, interactionId: item.interaction_id,
+                  callerNumber: item.customer_address, direction: item.direction,
+                  status: item.state === "active" ? "connected" : "ringing",
+                  metadata: { work_item_id: item.work_item_id,
+                    original_call_control_id: item.call_control_id, agent_assist_config: item.agent_assist_config || {} } });
+              }
+            }
+            window.dispatchEvent(new CustomEvent("contact-center:refresh-interactions"));
+            window.dispatchEvent(new CustomEvent("contact-center:acd-state", { detail: data.snapshot }));
+          } catch { /* a reconnect replays the last committed cursor */ }
+        });
 
         // Listen for connection event to refresh interactions list
         contactCenterEventSource.addEventListener("connected", () => {
@@ -28,59 +63,16 @@ export function ContactCenterStreamProvider({ children }) {
           try {
             const data = JSON.parse(event.data);
 
-            if (data.type === "new_interaction") {
-              if (data.interaction?.callControlId) {
-                // First, add to calls store with SSE data
-                useCallsStore.getState().addCall({
-                  callControlId: data.interaction.callControlId,
-                  callSessionId: data.interaction.callSessionId,
-                  interactionId: data.interaction.id,
-                  callerName:
-                    data.interaction.fromName || data.interaction.callerName,
-                  callerNumber:
-                    data.interaction.fromNumber ||
-                    data.interaction.callerNumber,
-                  queueName: data.interaction.queueName,
-                  queueId: data.interaction.queueId,
-                  aiCallControlId:
-                    data.interaction.aiCallControlId ||
-                    data.interaction.metadata?.ai_call_control_id ||
-                    null,
-                  queuedAt: data.interaction.queuedAt,
-                  assignedAt: data.interaction.assignedAt,
-                  direction: "inbound",
-                  status: data.interaction.state || "ringing",
-                  // Include full metadata for agent assist config
-                  metadata: data.interaction.metadata || {},
-                });
-
-                // Then, fetch full interaction from DB by call_session_id to get complete metadata
-                // This ensures we have agent_assist_config even if SSE data was incomplete
-                if (data.interaction.callSessionId) {
-                  fetch(`/api/contact-center/interactions/by-call-session-id?callSessionId=${encodeURIComponent(data.interaction.callSessionId)}`)
-                    .then(res => res.json())
-                    .then(result => {
-                      if (result.ok && result.interaction?.metadata) {
-                        // Update calls store with full metadata from DB
-                        useCallsStore.getState().updateCall(data.interaction.callControlId, {
-                          metadata: result.interaction.metadata,
-                        });
-                        // Trigger refresh to update UI
-                        window.dispatchEvent(
-                          new CustomEvent("contact-center:refresh-interactions"),
-                        );
-                      }
-                    })
-                    .catch(err => {
-                      console.error("[ContactCenterStreamProvider] Failed to fetch full interaction:", err);
-                    });
-                }
+            if (data.type === "transcription") {
+              const activeInteractionId =
+                useActiveCallStore.getState().contactCenter?.interactionId;
+              if (
+                data.interactionId &&
+                activeInteractionId &&
+                String(data.interactionId) !== String(activeInteractionId)
+              ) {
+                return;
               }
-              // Dispatch event to trigger interaction list refresh
-              window.dispatchEvent(
-                new CustomEvent("contact-center:refresh-interactions"),
-              );
-            } else if (data.type === "transcription") {
               const addTranscription =
                 useActiveCallStore.getState().addTranscription;
               if (addTranscription && data.transcription) {
@@ -120,64 +112,13 @@ export function ContactCenterStreamProvider({ children }) {
               if (updateTranscriptionAnalysis && data.transcriptionKey) {
                 updateTranscriptionAnalysis(data.transcriptionKey, data.updates || {});
               }
-            } else if (data.type === "interaction_updated") {
-              if (data.callControlId && data.updates) {
-                const callData = useCallsStore
-                  .getState()
-                  .getCall(data.callControlId);
-                if (callData) {
-                  useCallsStore.getState().updateCall(data.callControlId, {
-                    status: data.updates.state || callData.status,
-                    callerName: data.updates.from_name || callData.callerName,
-                    callerNumber:
-                      data.updates.from_number || callData.callerNumber,
-                    queueName: data.updates.queue_name || callData.queueName,
-                    aiCallControlId:
-                      data.updates.metadata?.ai_call_control_id ||
-                      callData.aiCallControlId ||
-                      null,
-                    metadata: data.updates.metadata || callData.metadata || {},
-                  });
-                }
-              }
-              if (data.updates?.metadata) {
-                const activeState = useActiveCallStore.getState();
-                const activeInteractionId = activeState.contactCenter?.interactionId;
-                if (!data.interactionId || !activeInteractionId || data.interactionId === activeInteractionId) {
-                  activeState.setContactCenterMetadata?.({ metadata: data.updates.metadata });
-                }
-              }
-              // Dispatch event to trigger interaction list refresh
-              window.dispatchEvent(
-                new CustomEvent("contact-center:refresh-interactions"),
-              );
             } else if (data.type === "ai_handoff_data") {
               window.dispatchEvent(
                 new CustomEvent("contact-center:ai-handoff-data", { detail: data }),
               );
-            } else if (data.type === "wrapup_required") {
+            } else if (data.type === "acd_intent_updated") {
               window.dispatchEvent(
-                new CustomEvent("contact-center:wrapup-required", { detail: data }),
-              );
-            } else if (data.type === "interaction_ended") {
-              if (data.callControlId) {
-                useCallsStore
-                  .getState()
-                  .updateCallStatus(data.callControlId, "ended");
-              }
-              if (data.interactionId) {
-                useCallsStore.getState().removeCall(data.interactionId);
-                // Clear active call + workflow state only if this is the currently active interaction.
-                // Guard prevents clearing a NEW call's state when an old call's ended event arrives late.
-                const activeInteractionId = useActiveCallStore.getState().contactCenter?.interactionId;
-                if (activeInteractionId && String(activeInteractionId) === String(data.interactionId)) {
-                  useActiveCallStore.getState().clearActiveCall();
-                  useWorkflowStore.getState().clearSession();
-                }
-              }
-              // Dispatch event to trigger interaction list refresh
-              window.dispatchEvent(
-                new CustomEvent("contact-center:refresh-interactions"),
+                new CustomEvent("contact-center:acd-intent-updated", { detail: data }),
               );
             }
           } catch (_) {
@@ -217,10 +158,59 @@ export function ContactCenterStreamProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    return subscribeStatusStream("incoming_call_info", (data) => {
+      if (!data?.interactionId) return;
+
+      const info = { ...data, timestamp: Date.now() };
+      for (const key of [
+        data.callControlId,
+        data.callSessionId ? `session:${data.callSessionId}` : null,
+        data.fromNumber ? `phone:${data.fromNumber}` : null,
+        "__latest_incoming__",
+      ]) {
+        if (key) storeIncomingCallData(key, info);
+      }
+
+      const contactCenter = data.contactCenter || {};
+      useActiveCallStore.getState().setContactCenterMetadata?.({
+        interactionId: data.interactionId,
+        queueName: contactCenter.queueName || data.queueName || null,
+        queuedAt: contactCenter.queuedAt || data.queuedAt || null,
+        assignedAt: contactCenter.assignedAt || data.assignedAt || Date.now(),
+        customerId: contactCenter.customerId || null,
+        customerData: contactCenter.customerData || null,
+        metadata: data.metadata || {},
+      });
+
+      useCallsStore.getState().addCall({
+        callControlId: data.callControlId || data.originalCallControlId,
+        callSessionId: data.callSessionId || null,
+        originalCallControlId: data.originalCallControlId || null,
+        interactionId: data.interactionId,
+        callerName: data.fromName || null,
+        callerNumber: data.fromNumber || null,
+        queueName: contactCenter.queueName || data.queueName || null,
+        direction: "inbound",
+        status: "ringing",
+        queuedAt: contactCenter.queuedAt || data.queuedAt || null,
+        assignedAt: contactCenter.assignedAt || data.assignedAt || Date.now(),
+        customerId: contactCenter.customerId || null,
+        customerData: contactCenter.customerData || null,
+        metadata: data.metadata || {},
+      });
+
+      window.dispatchEvent(
+        new CustomEvent("contact-center:refresh-interactions"),
+      );
+    });
+  }, []);
+
+  useEffect(() => {
     const clearCallStores = () => {
       try {
         useCallsStore.getState().clearAllCalls();
         useActiveCallStore.getState().clearActiveCall();
+        clearAllIncomingCallData();
         localStorage.removeItem("calls-store");
         localStorage.removeItem("active-call-store");
       } catch (_) {}

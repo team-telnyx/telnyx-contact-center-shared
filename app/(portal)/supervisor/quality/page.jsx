@@ -1,5 +1,6 @@
 "use client";
 
+import { ChannelFilter } from "@/components/contact-center/InteractionChannel";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,8 @@ function quickQualityDateRange(days) {
   from.setDate(from.getDate() - (safeDays - 1));
   from.setHours(0, 0, 0, 0);
   const to = new Date();
-  to.setHours(23, 59, 0, 0);
+  to.setDate(to.getDate() + 1);
+  to.setHours(0, 0, 0, 0);
   return {
     from: toLocalDateTimeInput(from),
     to: toLocalDateTimeInput(to),
@@ -101,6 +103,7 @@ function CommandCard({ icon: Icon, kicker, title, description, controls }) {
 }
 
 export default function SupervisorQualityPage() {
+  const [channel,setChannel]=useState("all");
   const [activeSection, setActiveSection] = useState("evaluations");
   const [range, setRange] = useState("7d");
   const [dateRange, setDateRange] = useState(() => quickQualityDateRange(7));
@@ -110,11 +113,11 @@ export default function SupervisorQualityPage() {
     try {
       const requested = new URLSearchParams(window.location.search).get("section");
       if (requested && QUALITY_RAIL_ITEMS.some((item) => item.id === requested)) {
-        setActiveSection(requested);
+        queueMicrotask(()=>setActiveSection(requested));
         return;
       }
       const saved = localStorage.getItem(QUALITY_ACTIVE_SECTION_STORAGE_KEY);
-      if (saved && QUALITY_RAIL_ITEMS.some((item) => item.id === saved)) setActiveSection(saved);
+      if (saved && QUALITY_RAIL_ITEMS.some((item) => item.id === saved)) queueMicrotask(()=>setActiveSection(saved));
     } catch {
       // Ignore storage errors so the quality page still works without persisted UI state.
     }
@@ -182,18 +185,19 @@ export default function SupervisorQualityPage() {
         )}
       />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
-        <SectionRail items={QUALITY_RAIL_ITEMS} activeId={activeSection} onSelect={setActiveSection} ariaLabel="Supervisor quality management sections" />
+        <SectionRail items={QUALITY_RAIL_ITEMS} activeId={activeSection} onSelect={setActiveSection} ariaLabel="Supervisor quality management sections" screenGroup="supervisor.quality" />
         <section className="h-full min-h-0 overflow-hidden pr-1">
           <Card className="flex h-full min-h-0 flex-col overflow-hidden">
             <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
               <div className="space-y-5">
                 <CommandCard icon={meta.icon} kicker={meta.kicker} title={meta.title} description={meta.description} controls={commandControls} />
+                {activeSection!=="forms"&&<ChannelFilter value={channel} onChange={setChannel}/>}
                 {activeSection === "dashboard" ? (
-                  <QualityDashboardView from={fromIso} to={toIso} refreshNonce={refreshNonce} />
+                  <QualityDashboardView key={channel} channel={channel} from={fromIso} to={toIso} refreshNonce={refreshNonce} />
                 ) : activeSection === "forms" ? (
                   <QualityFormsView refreshNonce={refreshNonce} />
                 ) : (
-                  <QualityEvaluationsView from={fromIso} to={toIso} refreshNonce={refreshNonce} />
+                  <QualityEvaluationsView key={channel} channel={channel} from={fromIso} to={toIso} refreshNonce={refreshNonce} />
                 )}
               </div>
             </CardContent>

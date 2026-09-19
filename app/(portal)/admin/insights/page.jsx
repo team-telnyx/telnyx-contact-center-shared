@@ -46,6 +46,7 @@ import { toast } from "@/lib/toast";
 import { Badge } from "@/components/ui/badge";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { AiAssistantsSectionPage } from "@/components/assistants/AiAssistantsSectionNav";
+import { Can } from "@/components/auth-provider";
 
 // ------------------ Helpers ------------------
 
@@ -155,9 +156,9 @@ export default function AiInsightsManagerPage() {
         icon={IconBrain}
         badges={<Badge variant="secondary">{insights.length} insights</Badge>}
         actions={tab === "insights" ? (
-          <Button size="sm" onClick={() => { setEditingInsight(null); setOpenInsightEditor(true); }}><IconPlus />Add Insight</Button>
+          <Can permission="ai_insights:create"><Button size="sm" onClick={() => { setEditingInsight(null); setOpenInsightEditor(true); }}><IconPlus />Add Insight</Button></Can>
         ) : (
-          <Button size="sm" onClick={() => { setEditingGroup(null); setOpenGroupEditor(true); }}><IconPlus />Add Group</Button>
+          <Can permission="ai_insights:create"><Button size="sm" onClick={() => { setEditingGroup(null); setOpenGroupEditor(true); }}><IconPlus />Add Group</Button></Can>
         )}
       />
       <AiAssistantsSectionPage activeId="insights">
@@ -260,7 +261,7 @@ export default function AiInsightsManagerPage() {
                               >
                                 <IconPencil className="size-4" />
                               </button>
-                              <button
+                              <Can permission="ai_insights:delete"><button
                                 type="button"
                                 className="inline-flex items-center text-red-500 hover:text-red-700"
                                 title="Delete"
@@ -288,7 +289,7 @@ export default function AiInsightsManagerPage() {
                                 }}
                               >
                                 <IconTrash className="size-4" />
-                              </button>
+                              </button></Can>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -334,7 +335,7 @@ export default function AiInsightsManagerPage() {
                           >
                             <IconPencil className="size-4" />
                           </button>
-                          <button
+                          <Can permission="ai_insights:delete"><button
                             type="button"
                             className="inline-flex items-center text-red-500 hover:text-red-700"
                             title="Delete"
@@ -360,7 +361,7 @@ export default function AiInsightsManagerPage() {
                             }}
                           >
                             <IconTrash className="size-4" />
-                          </button>
+                          </button></Can>
                         </div>
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground truncate">
@@ -428,7 +429,7 @@ export default function AiInsightsManagerPage() {
                           >
                             <IconPencil className="size-4" />
                           </button>
-                          <button
+                          <Can permission="ai_insights:delete"><button
                             type="button"
                             className="inline-flex items-center text-red-500 hover:text-red-700"
                             title="Delete"
@@ -454,7 +455,7 @@ export default function AiInsightsManagerPage() {
                             }}
                           >
                             <IconTrash className="size-4" />
-                          </button>
+                          </button></Can>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -499,7 +500,7 @@ export default function AiInsightsManagerPage() {
                         >
                           <IconPencil className="size-4" />
                         </button>
-                        <button
+                        <Can permission="ai_insights:delete"><button
                           type="button"
                           className="inline-flex items-center text-red-500 hover:text-red-700"
                           title="Delete"
@@ -523,7 +524,7 @@ export default function AiInsightsManagerPage() {
                           }}
                         >
                           <IconTrash className="size-4" />
-                        </button>
+                        </button></Can>
                       </div>
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground truncate">

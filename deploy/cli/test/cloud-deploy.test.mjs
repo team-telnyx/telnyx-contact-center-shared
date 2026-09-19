@@ -98,7 +98,7 @@ describe('cloud-deploy.mjs — buildAndPackageImage', () => {
       if (cmd === 'docker') {
         buildAttempts += 1;
         if (buildAttempts === 1) {
-          throw new Error('ERROR: failed to build: stat /Users/leszek/.docker/buildx/refs/desktop-linux/desktop-linux: permission denied');
+          throw new Error('ERROR: failed to build: stat /home/user/.docker/buildx/refs/desktop-linux/desktop-linux: permission denied');
         }
         return { stdout: '' };
       }

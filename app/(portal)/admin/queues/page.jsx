@@ -45,6 +45,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/queues/EditSheet";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminQueuesPage() {
   const [items, setItems] = useState([]);
@@ -179,9 +180,9 @@ export default function AdminQueuesPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={handleNewQueue} variant="default">
+    <Can permission="queues:create"><Button onClick={handleNewQueue} variant="default">
       New Queue
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -319,20 +320,20 @@ export default function AdminQueuesPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="queues:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete queue"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
                                     <DialogTitle>Delete queue?</DialogTitle>
                                     <DialogDescription>
                                       This action cannot be undone. This will
-                                      permanently delete the queue "{q.name}".
+                                      permanently delete the queue &quot;{q.name}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">

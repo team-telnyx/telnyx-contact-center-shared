@@ -7,7 +7,8 @@
 import { NextResponse } from "next/server";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
-export async function GET() {
+import { withPermission } from "@/lib/authz/guard";
+async function GET_handler() {
   try {
     // Return supervisor number from environment or fallback
     const supervisorNumber = process.env.TELNYX_SUPERVISOR_FROM_NUMBER || null;
@@ -23,3 +24,6 @@ export async function GET() {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["calls:supervise.listen","agent:self"], GET_handler, { route: "/api/config/supervisor-number" });

@@ -503,7 +503,7 @@ export async function purchasePhoneNumber({
   // voice_flow_phone_numbers actually need. Confirmed against the live API:
   // POSTing a number order returns e.g. "df769d03-2254-...", but the number
   // only shows up under GET /v2/phone_numbers with a completely different id
-  // like "2997256026475988480". PATCHing with the order-phone-number id
+  // like "1000000000000000000". PATCHing with the order-phone-number id
   // 404s. So: look the real resource up by its E.164 string right after the
   // order completes. In production this resolved within ~2s, but poll for a
   // few seconds in case provisioning is occasionally slower.

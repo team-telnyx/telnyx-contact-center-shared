@@ -43,6 +43,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/skills/EditSheet";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminSkillsPage() {
   const [items, setItems] = useState([]);
@@ -143,9 +144,9 @@ export default function AdminSkillsPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={handleNewSkill} variant="default">
+    <Can permission="skills:create"><Button onClick={handleNewSkill} variant="default">
       New Skill
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -271,13 +272,13 @@ export default function AdminSkillsPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="skills:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete skill"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

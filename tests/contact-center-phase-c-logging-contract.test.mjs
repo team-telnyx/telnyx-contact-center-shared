@@ -4,14 +4,8 @@ import test from "node:test";
 
 const files = {
   helper: "lib/contact-center/logging.mjs",
-  answer: "app/api/contact-center/interactions/[id]/answer/route.js",
   wrapup: "app/api/contact-center/interactions/[id]/wrapup/route.js",
-  timeoutCheck: "app/api/contact-center/interactions/[id]/timeout-check/route.js",
   transcription: "app/api/contact-center/interactions/[id]/transcription/route.js",
-  consult: "app/api/contact-center/interactions/[id]/consult/route.js",
-  consultByCallControl: "app/api/contact-center/interactions/by-call-control-id/consult/route.js",
-  transfer: "app/api/contact-center/interactions/[id]/transfer/route.js",
-  transferByCallControl: "app/api/contact-center/interactions/by-call-control-id/transfer/route.js",
   supervise: "app/api/contact-center/calls/supervise/route.js",
   switchSupervisorRole: "app/api/contact-center/calls/[callControlId]/switch-supervisor-role/route.js",
 };
@@ -38,14 +32,8 @@ test("Phase C Contact Center logger helper exposes canonical operational topics"
 
 test("Phase C route handlers use their canonical logger topics", async () => {
   const expectations = [
-    [files.answer, /interactionsLogger/, /contact-center\/logging\.mjs/],
-    [files.timeoutCheck, /interactionsLogger/, /contact-center\/logging\.mjs/],
     [files.transcription, /interactionsLogger/, /contact-center\/logging\.mjs/],
     [files.wrapup, /wrapupLogger/, /contact-center\/logging\.mjs/],
-    [files.consult, /consultLogger/, /contact-center\/logging\.mjs/],
-    [files.consultByCallControl, /consultLogger/, /contact-center\/logging\.mjs/],
-    [files.transfer, /transferLogger/, /contact-center\/logging\.mjs/],
-    [files.transferByCallControl, /transferLogger/, /contact-center\/logging\.mjs/],
     [files.supervise, /supervisionLogger/, /contact-center\/logging\.mjs/],
     [files.switchSupervisorRole, /supervisionLogger/, /contact-center\/logging\.mjs/],
   ];

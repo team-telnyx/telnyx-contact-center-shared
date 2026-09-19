@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildWorkflowExportBundle, workflowExportFilename } from "@/lib/agent-assist/workflow-bundles.mjs";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 async function loadWorkflowWithStages(pool, id) {
@@ -43,7 +44,7 @@ async function loadWorkflowWithStages(pool, id) {
   return workflow;
 }
 
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -78,3 +79,6 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("workflows:export", GET_handler, { route: "/api/admin/workflows/[id]/export" });

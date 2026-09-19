@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
   Accordion,
   AccordionContent,
@@ -60,14 +61,16 @@ import {
   Volume2,
   Languages,
   DatabaseZap,
+  ArrowDown,
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 import { normalizeLanguageCode as normalizeBaseLanguageCode } from "@/lib/language-code-utils";
-import { resolveSuggestedResponseTarget } from "@/lib/agent-assist/suggestion-target-resolver.mjs";
+import { resolveSuggestedResponseTarget, isItemStillRelevantInStage } from "@/lib/agent-assist/suggestion-target-resolver.mjs";
 import { hasSlotValue, pickSlotValue, formatSlotDisplay } from "@/lib/agent-assist/slot-display.mjs";
 import { upsertSuggestionByTarget } from "@/lib/agent-assist/suggestion-dedup.mjs";
 import { findTranscriptIdForUtterance } from "@/lib/agent-assist/slot-utterance-match.mjs";
 import { isReadBackItem } from "@/lib/agent-assist/readback.mjs";
+import { resolveFastSuggestionTemplate } from "@/lib/agent-assist/suggestion-templates.mjs";
 
 /**
  * AgentAssistWorkflow Component
@@ -92,7 +95,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     aiHandoff,
     fetchSession,
     startWorkflow,
-    analyzeTranscript,
+    analyzeTranscriptBatch,
     completeItem,
     skipItem,
     setAiAssisted,
@@ -106,6 +109,9 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   const callState = useActiveCallStore((state) => state.call?.state);
   const activeCall = useActiveCallStore((state) => state.call);
   const contactCenter = useActiveCallStore((state) => state.contactCenter);
+  const hydrateTranscriptions = useActiveCallStore(
+    (state) => state.hydrateTranscriptions,
+  );
 
   // AI Handoff polling timeout ref
   const aiPollTimeoutRef = useRef(null);
@@ -113,6 +119,15 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   // Map transcript id -> last analyzed text. Coalesced Flux fragments reuse the
   // same bubble id with longer text; comparing text lets us re-queue analyze.
   const analyzedTranscriptionIdsRef = useRef(new Map());
+  // Per-bubble debounce state plus a bounded latest-value queue. A single
+  // global trailing timer could be reset forever by unrelated STT partials;
+  // a promise-per-event FIFO could then preserve obsolete versions of a
+  // coalesced bubble behind one slow model call. These maps keep at most one
+  // pending version per transcript id while retaining ordered HTTP requests.
+  const pendingAnalysisTimersRef = useRef(new Map());
+  const analysisQueueRef = useRef(new Map());
+  const analysisDrainRunningRef = useRef(false);
+  const analysisDrainTimerRef = useRef(null);
   // Guards the "Initialize workflow session" effect below against React Strict
   // Mode's double-invoke-on-mount: InteractionDetail fully unmounts this
   // component whenever `interaction` is momentarily falsy between calls, so
@@ -439,8 +454,22 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     // call can recognize it's stale once it resolves and skip applying itself.
     clearSession(interactionId);
     analyzedTranscriptionIdsRef.current = new Map();
+    for (const pending of pendingAnalysisTimersRef.current.values()) {
+      clearTimeout(pending.timer);
+    }
+    pendingAnalysisTimersRef.current.clear();
+    analysisQueueRef.current.clear();
+    if (analysisDrainTimerRef.current) {
+      clearTimeout(analysisDrainTimerRef.current);
+      analysisDrainTimerRef.current = null;
+    }
 
     fetchSession(interactionId).then((existingSession) => {
+      const previousTranscriptions =
+        existingSession?.agent_assist_history?.transcriptions;
+      if (Array.isArray(previousTranscriptions)) {
+        hydrateTranscriptions(previousTranscriptions);
+      }
       if (!existingSession && workflowId) {
         startWorkflow(interactionId, workflowId).catch((err) => {
           console.error("[AgentAssistWorkflow] Failed to start workflow:", err);
@@ -449,7 +478,52 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     }).catch((err) => {
       console.error("[AgentAssistWorkflow] Failed to fetch session:", err);
     });
-  }, [interactionId, workflowId, interaction?.metadata?.preview_only, fetchSession, startWorkflow, clearSession]);
+  }, [interactionId, workflowId, interaction?.metadata?.preview_only, fetchSession, startWorkflow, clearSession, hydrateTranscriptions]);
+
+  const drainAnalysisQueue = useCallback(async () => {
+    if (analysisDrainRunningRef.current) return;
+    analysisDrainRunningRef.current = true;
+    try {
+      while (analysisQueueRef.current.size > 0) {
+        const queued = Array.from(analysisQueueRef.current.values());
+        analysisQueueRef.current.clear();
+        const activeInteractionId = useWorkflowStore.getState().activeInteractionId;
+        const currentBatch = queued.filter((item) => item.interactionId === activeInteractionId);
+        if (currentBatch.length === 0) continue;
+        try {
+          await analyzeTranscriptBatch(currentBatch.map(({ transcriptionId, transcript, speaker, recentContext }) => ({
+            transcriptionId,
+            transcript,
+            speaker,
+            recentContext,
+          })));
+        } catch (err) {
+          console.error("[AgentAssistWorkflow] Analysis error:", err);
+        }
+      }
+    } finally {
+      analysisDrainRunningRef.current = false;
+      if (analysisQueueRef.current.size > 0 && !analysisDrainTimerRef.current) {
+        analysisDrainTimerRef.current = setTimeout(() => {
+          analysisDrainTimerRef.current = null;
+          void drainAnalysisQueue();
+        }, 0);
+      }
+    }
+  }, [analyzeTranscriptBatch]);
+
+  const enqueueAnalysis = useCallback((utterance) => {
+    // Map.set replaces a stale queued version of the same growing STT bubble.
+    analysisQueueRef.current.set(utterance.transcriptionId, utterance);
+    if (!analysisDrainRunningRef.current && !analysisDrainTimerRef.current) {
+      // A tiny collection window preserves batching for finals that become due
+      // together without materially increasing user-visible latency.
+      analysisDrainTimerRef.current = setTimeout(() => {
+        analysisDrainTimerRef.current = null;
+        void drainAnalysisQueue();
+      }, 25);
+    }
+  }, [drainAnalysisQueue]);
 
   // Analyze new transcriptions as they come in
   useEffect(() => {
@@ -458,64 +532,66 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
 
     const needsAnalyze = (transcription) => {
       if (!transcription?.isFinal || !transcription?.id) return false;
+      // These utterances were already analyzed by the previous agent segment;
+      // the durable workflow session loaded above contains their effects.
+      if (transcription.historyHydrated === true) return false;
       const prevText = analyzedTranscriptionIdsRef.current.get(transcription.id);
       if (prevText === undefined) return true;
       // Coalesce grew the bubble — re-analyze the merged utterance.
       return String(prevText) !== String(transcription.transcript || "");
     };
 
-    const finalTranscriptionsToAnalyze = transcriptions.filter(needsAnalyze);
-    if (finalTranscriptionsToAnalyze.length === 0) return;
-
-    const analyzeIfNew = async () => {
-      // Reserve the whole fired batch synchronously, the moment the timer
-      // fires and BEFORE any await. Marking is deliberately NOT done before the
-      // timer: during active speech `transcriptions` updates on every STT
-      // partial, which re-runs this effect and clears the pending timer via
-      // cleanup; pre-marking would consume those finals without ever analyzing
-      // them (utterances silently dropped mid-conversation). Marking the full
-      // batch up-front here also prevents a second timer, scheduled while the
-      // first /analyze is still awaiting, from re-dispatching this batch's
-      // later utterances concurrently and clobbering slots_filled.
-      const batch = finalTranscriptionsToAnalyze.filter(needsAnalyze);
-      for (const t of batch) {
-        analyzedTranscriptionIdsRef.current.set(t.id, t.transcript || "");
+    const liveIds = new Set(transcriptions.map((item) => item?.id).filter(Boolean));
+    for (const [id, pending] of pendingAnalysisTimersRef.current.entries()) {
+      if (!liveIds.has(id)) {
+        clearTimeout(pending.timer);
+        pendingAnalysisTimersRef.current.delete(id);
       }
+    }
 
-      // Fire all utterances in this batch at once instead of awaiting each in
-      // turn: with N utterances landing close together (e.g. a caller
-      // answering several questions in one breath), sequential awaits meant
-      // N x ~3s LLM round trips before the checklist finished updating.
-      // Running them in parallel bounds the wait to the slowest single call.
-      // Safe to parallelize: each call is still one utterance / one explicit
-      // speaker (no prompt changes), and the server's slot merge is already
-      // written to handle out-of-order/concurrent analyze responses (see
-      // "MERGE into existing state" in workflow-store's analyzeTranscript).
-      await Promise.all(
-        batch.map(async (transcription) => {
-          try {
-            // Preceding final utterances (usually the agent's question) give the
-            // analyzer the context to interpret a bare answer like "No"/"ICU".
-            const at = transcriptions.findIndex((t) => t.id === transcription.id);
-            const recentContext = (at > 0 ? transcriptions.slice(0, at) : [])
-              .filter((t) => t?.isFinal && t?.transcript)
-              .slice(-4)
-              .map((t) => ({ speaker: t.track, text: t.transcript }));
-            await analyzeTranscript(
-              transcription.transcript,
-              transcription.track,
-              recentContext
-            );
-          } catch (err) {
-            console.error("[AgentAssistWorkflow] Analysis error:", err);
-          }
-        })
-      );
-    };
+    const now = Date.now();
+    for (const transcription of transcriptions.filter(needsAnalyze)) {
+      const text = String(transcription.transcript || "");
+      const existing = pendingAnalysisTimersRef.current.get(transcription.id);
+      // An unrelated partial/final changed the array, but this bubble did not:
+      // keep its original timer instead of globally restarting the debounce.
+      if (existing?.text === text) continue;
+      if (existing) clearTimeout(existing.timer);
+      const firstSeenAt = existing?.firstSeenAt || now;
+      const elapsed = now - firstSeenAt;
+      const delay = Math.max(0, Math.min(500, 1500 - elapsed));
+      const timer = setTimeout(() => {
+        pendingAnalysisTimersRef.current.delete(transcription.id);
+        const latest = transcriptionsRef.current;
+        const current = latest.find((item) => item?.id === transcription.id);
+        if (!current || !needsAnalyze(current)) return;
+        const currentText = String(current.transcript || "");
+        analyzedTranscriptionIdsRef.current.set(current.id, currentText);
+        const at = latest.findIndex((item) => item?.id === current.id);
+        const recentContext = (at > 0 ? latest.slice(0, at) : [])
+          .filter((item) => item?.isFinal && item?.transcript)
+          .slice(-4)
+          .map((item) => ({ speaker: item.track, text: item.transcript }));
+        enqueueAnalysis({
+          transcriptionId: current.id,
+          interactionId,
+          transcript: currentText,
+          speaker: current.track,
+          recentContext,
+        });
+      }, delay);
+      pendingAnalysisTimersRef.current.set(transcription.id, { timer, text, firstSeenAt });
+    }
+  }, [session, transcriptions, assistConfig.auto_detect_completion, interactionId, enqueueAnalysis]);
 
-    const timer = setTimeout(analyzeIfNew, 500);
-    return () => clearTimeout(timer);
-  }, [session, transcriptions, analyzeTranscript, assistConfig.auto_detect_completion]);
+  useEffect(() => () => {
+    for (const pending of pendingAnalysisTimersRef.current.values()) {
+      clearTimeout(pending.timer);
+    }
+    pendingAnalysisTimersRef.current.clear();
+    analysisQueueRef.current.clear();
+    if (analysisDrainTimerRef.current) clearTimeout(analysisDrainTimerRef.current);
+  }, []);
 
   // Find the current slot that needs filling (for suggested response)
   // MUST be before any conditional returns to maintain hook order
@@ -992,13 +1068,28 @@ function getItemStatusSnapshot(item, itemStatuses, slotsFilled) {
   const confidenceScore = status.confidence_score;
   const confidenceThreshold = status.confidence_threshold ?? 0.95;
   const isSuggested = status.status === "suggested";
-  const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
+  // An explicit "suggested" status wins over the slots_filled fallback: a
+  // correction candidate keeps its OLD value in slots_filled until confirmed
+  // (see analyze/route.js), and treating that as "completed" crossed the row
+  // out and disabled every confirm affordance — the an earlier fix "can't update a
+  // captured slot" report. The fallback still marks prefilled slots whose
+  // status row never updated (AI handoff) as done.
+  const isCompleted =
+    status.status === "completed" ||
+    (!isSuggested && isSlotFilledFromWorkflowState(item, slotsFilled));
+  // Needs review when the analyzer says so, not only when a locally-computed
+  // confidence comparison happens to agree. A correction is flagged
+  // low_confidence/is_correction by the route REGARDLESS of the model's
+  // confidence — a 0.97-confidence correction is still unconfirmed until the
+  // agent accepts it (an earlier fix).
   const needsConfirmation =
     isSuggested &&
     hasSlotValue(slotValue) &&
-    confidenceScore !== null &&
-    confidenceScore !== undefined &&
-    confidenceScore < confidenceThreshold;
+    (status.low_confidence === true ||
+      status.is_correction === true ||
+      (confidenceScore !== null &&
+        confidenceScore !== undefined &&
+        confidenceScore < confidenceThreshold));
 
   return { status, slotValue, isSuggested, isCompleted, needsConfirmation };
 }
@@ -1138,6 +1229,8 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
     }
   }, [itemStatuses, slotsFilled, stages, showExpandedStages, expandedStage]);
 
+  // Seeds the input with the raw captured value, never the display mask
+  // (an earlier fix): whatever sits in this input is what handleSaveEdit persists.
   const handleStartEdit = (item, currentValue) => {
     setEditingItemId(item.id);
     setEditValue(currentValue || "");
@@ -1257,22 +1350,61 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                       <div className="space-y-1.5 pt-1">
                         {stage.items?.map((item) => {
                           const status = itemStatuses[item.id] || { status: "pending" };
-                          const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
                           const isSuggested = status.status === "suggested";
+                          // "suggested" wins over the slots_filled fallback — a pending
+                          // correction keeps the OLD value in slots_filled, and crossing
+                          // the row out here disabled every confirm path (an earlier fix).
+                          const isCompleted = status.status === "completed" || (!isSuggested && isSlotFilledFromWorkflowState(item, slotsFilled));
                           const isSkipped = status.status === "skipped";
                           const isHighlighted = item.id === highlightedItemId;
                           const isEditing = editingItemId === item.id;
                           const slotValue = pickSlotValue(status.value, status.extracted_value, item.slot_name ? slotsFilled[item.slot_name] : null);
-                          const completedBy = status.completed_by; // 'ai' | 'agent' | null
+                          const completedBy = status.completed_by; // 'ai' | 'agent' | 'inferred' | null
                           const confidenceScore = status.confidence_score;
                           const confidenceThreshold = status.confidence_threshold ?? 0.95;
-                          const isLowConfidence = isSuggested && hasSlotValue(slotValue) && confidenceScore !== null && confidenceScore !== undefined && confidenceScore < confidenceThreshold;
+                          // Review state comes from the analyzer's own flags first
+                          // (low_confidence / is_correction are set for every pending
+                          // correction regardless of model confidence — an earlier fix); the
+                          // local threshold comparison remains for plain low-confidence
+                          // first captures.
+                          const isLowConfidence = isSuggested && hasSlotValue(slotValue) && (
+                            status.low_confidence === true ||
+                            status.is_correction === true ||
+                            (confidenceScore !== null && confidenceScore !== undefined && confidenceScore < confidenceThreshold)
+                          );
+                          // Alternatives are shown whenever a suggestion carries them,
+                          // independent of LLM confidence. An MCP lookup that matched
+                          // several facilities deliberately fills no value and carries
+                          // no confidence score, so gating on isLowConfidence would hide
+                          // exactly the choices the agent has to make.
+                          const hasAlternatives =
+                            isSuggested && Array.isArray(status.alternatives) && status.alternatives.length > 0;
                           // Check AI slots details for additional context
                           const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
                           const isAiFilled = completedBy === "ai" || (aiSlotInfo?.value && !completedBy);
-                          const isAgentFilled = completedBy === "agent";
+                          // 'mcp_selected' is the agent choosing from machine-offered
+                          // candidates. It reads as agent-filled here, but the server
+                          // treats it as replaceable by a later lookup - unlike a
+                          // hand-typed 'agent' override.
+                          const isAgentFilled = completedBy === "agent" || completedBy === "mcp_selected";
+                          // an earlier fix: resolved by rule, not by a model or a click —
+                          // e.g. bed set to N/A because the room has no number.
+                          const isInferred = completedBy === "inferred";
                           // Source utterance used to jump to the matching transcript bubble
                           const sourceUtteranceForJump = status?.source_transcript || aiSlotInfo?.source_utterance || null;
+                          // Preview of the question this item would ask, shown on hover over
+                          // the label. Static lookup (same resolver the suggested-response
+                          // panel uses for its fast path) — no LLM call, no dependency on
+                          // which item is the current live target, so it can't interfere
+                          // with the panel's "advances on completion" behavior.
+                          const hoverQuestion = resolveFastSuggestionTemplate({
+                            itemType: item.type,
+                            itemLabel: item.label,
+                            slotName: item.slot_name,
+                            suggestionTemplate: item.suggestion_template || item.suggestionTemplate,
+                            itemPromptHint: item.prompt_hint,
+                            itemHints: item.hints,
+                          });
 
                           return (
                             <div
@@ -1299,7 +1431,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                             >
                               <Checkbox
                                 checked={isCompleted}
-                                disabled={isCompleted || isSkipped || isLowConfidence}
+                                disabled={isCompleted || isSkipped || isLowConfidence || hasAlternatives}
                                 onCheckedChange={(checked) => {
                                   if (checked) {
                                     if (isSuggested && hasSlotValue(slotValue)) {
@@ -1316,15 +1448,32 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                               />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <p
-                                    className={`text-sm leading-tight ${
-                                      isCompleted || isSkipped
-                                        ? "line-through text-muted-foreground"
-                                        : ""
-                                    }`}
-                                  >
-                                    {item.label}
-                                  </p>
+                                  {hoverQuestion ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <p
+                                          className={`text-sm leading-tight w-fit cursor-help ${
+                                            isCompleted || isSkipped
+                                              ? "line-through text-muted-foreground"
+                                              : ""
+                                          }`}
+                                        >
+                                          {item.label}
+                                        </p>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">{hoverQuestion}</TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <p
+                                      className={`text-sm leading-tight ${
+                                        isCompleted || isSkipped
+                                          ? "line-through text-muted-foreground"
+                                          : ""
+                                      }`}
+                                    >
+                                      {item.label}
+                                    </p>
+                                  )}
                                   <ItemTypeBadge type={item.type} />
                                 </div>
                                 
@@ -1361,7 +1510,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           <X className="h-3.5 w-3.5" />
                                         </Button>
                                       </div>
-                                    ) : hasSlotValue(slotValue) ? (
+                                    ) : (hasSlotValue(slotValue) || hasAlternatives) ? (
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         {sourceUtteranceForJump ? (
                                           <>
@@ -1374,17 +1523,30 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                                 onJumpToUtterance?.(sourceUtteranceForJump);
                                               }}
                                             >
-                                              {formatSlotDisplay(slotValue)}
+                                              {formatSlotDisplay(slotValue, item.slot_type)}
                                             </button>
                                             <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden="true" />
                                           </>
                                         ) : (
                                           <span className="text-sm font-medium text-foreground">
-                                            {formatSlotDisplay(slotValue)}
+                                            {formatSlotDisplay(slotValue, item.slot_type)}
                                           </span>
                                         )}
-                                        {/* Source indicator: AI or Agent */}
-                                        {isAiFilled ? (
+                                        {/* Pending correction: the analyzer heard a replacement
+                                            for an already-captured value. The old value stays
+                                            authoritative until the agent confirms (an earlier fix). */}
+                                        {isSuggested && status.is_correction === true && (
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-700 dark:text-amber-300 border-amber-500/60 bg-amber-500/10" title="Heard as a correction — confirm to replace the captured value">
+                                            Correction
+                                          </Badge>
+                                        )}
+                                        {/* Source indicator: Inferred, AI or Agent */}
+                                        {isInferred ? (
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-600 dark:text-slate-300 border-slate-500/40 bg-slate-500/10" title="Inferred from an earlier answer — edit to override">
+                                            <Sparkles className="h-3 w-3 mr-0.5" />
+                                            Inferred
+                                          </Badge>
+                                        ) : isAiFilled ? (
                                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Filled by AI Assistant">
                                             <Bot className="h-3 w-3 mr-0.5" />
                                             AI
@@ -1411,7 +1573,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             LLM {Math.round(confidenceScore * 100)}%
                                           </Badge>
                                         )}
-                                        {isLowConfidence && Array.isArray(status.alternatives) && status.alternatives.length > 0 && (
+                                        {hasAlternatives && (
                                           <div className="flex flex-col gap-1 w-full mt-1">
                                             {status.alternatives.map((alt, altIdx) => (
                                               <Button
@@ -1421,13 +1583,17 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                                 variant="outline"
                                                 className="h-5 px-2 text-[10px] justify-start border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15"
                                                 onClick={(e) => {
+                                                  // Confirms the raw alt.value — the label below is masked for
+                                                  // display only and must not be what gets stored (an earlier fix).
                                                   e.stopPropagation();
                                                   handleConfirmSuggestedSlot(item.id, alt.value);
                                                 }}
                                                 title={`Use this alternative (${Math.round((alt.confidence ?? 0) * 100)}% confidence)`}
                                               >
-                                                {alt.value}
-                                                <span className="ml-1 text-amber-500/80">{Math.round((alt.confidence ?? 0) * 100)}%</span>
+                                                {alt.label ?? formatSlotDisplay(alt.value, item.slot_type)}
+                                                {alt.confidence != null && (
+                                                  <span className="ml-1 text-amber-500/80">{Math.round(alt.confidence * 100)}%</span>
+                                                )}
                                               </Button>
                                             ))}
                                           </div>
@@ -1543,21 +1709,125 @@ function ItemTypeBadge({ type }) {
   );
 }
 
+// The transcript bubble's closest Radix ScrollArea viewport — the actual
+// scrollable element, since neither the bubble nor the endRef sentinel is it.
+function findScrollViewport(el) {
+  return el?.closest("[data-radix-scroll-area-viewport]") ?? null;
+}
+
+// Shared between the scroll listener and scrollToBottom's own re-check below
+// once its programmatic-scroll guard clears — both need the exact same
+// "how close counts as bottom" threshold.
+const NEAR_BOTTOM_PX = 48;
+
 /**
  * Live Transcription Card with chat bubbles
  */
 function LiveTranscriptionCard({ transcriptions, translationConfig, interactionId, showSttConfidence = true, jumpTarget }) {
-  const scrollRef = useRef(null);
   const endRef = useRef(null);
   const bubbleRefs = useRef({});
   const [highlightedId, setHighlightedId] = useState(null);
   const highlightTimeoutRef = useRef(null);
   const rafIdRef = useRef(null);
 
-  // Auto-scroll to bottom on new messages
+  // Whether the panel should auto-scroll to the newest message. Suspended
+  // when the agent jumps to a specific slot's source utterance (or manually
+  // scrolls away from the bottom), so a new live utterance doesn't yank the
+  // view back down and away from what they navigated to look at. Resumed
+  // when they scroll back down themselves or click the "back to live" pill.
+  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
+  const isPinnedRef = useRef(true);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const prevCountRef = useRef(transcriptions.length);
+  // Reported live: auto-scroll sometimes stopped with the "back to live"
+  // pill showing even though the agent never clicked a slot or touched the
+  // scrollbar. Root cause: our OWN scrollIntoView({behavior:"smooth"})
+  // animates the viewport over several frames, firing native "scroll" events
+  // throughout — and right at the start (scrollHeight has already grown for
+  // the new message, but scrollTop hasn't animated to catch up yet),
+  // distanceFromBottom transiently looks larger than NEAR_BOTTOM_PX below,
+  // which the scroll listener misread as the user manually scrolling away.
+  // This flag lets the scroll listener ignore scroll events we triggered
+  // ourselves, so only a genuine user gesture can unpin.
+  const isProgrammaticScrollRef = useRef(false);
+  const programmaticScrollTimeoutRef = useRef(null);
+
+  const setPinned = useCallback((pinned) => {
+    isPinnedRef.current = pinned;
+    setIsPinnedToBottom(pinned);
+    if (pinned) setUnseenCount(0);
+  }, []);
+
+  const scrollToBottom = useCallback((behavior = "smooth") => {
+    isProgrammaticScrollRef.current = true;
+    if (programmaticScrollTimeoutRef.current) clearTimeout(programmaticScrollTimeoutRef.current);
+    // scrollIntoView has no completion callback; a fixed timeout comfortably
+    // outlasts the smooth-scroll animation (typically well under 500ms) and
+    // also covers the instant "auto" behavior case.
+    programmaticScrollTimeoutRef.current = setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+      programmaticScrollTimeoutRef.current = null;
+      // Codex review: while this guard was active, the scroll listener
+      // below ignored EVERY scroll event — including a genuine user wheel/
+      // trackpad scroll that happened to land in this same window (e.g.
+      // scrolling away right as a new message triggered auto-scroll). If
+      // that happened, isPinnedRef never caught up and would incorrectly
+      // stay "pinned", yanking the view back down on the next message
+      // instead of showing the unseen-message pill. Re-check the actual
+      // resting scroll position now that our own animation has settled, so
+      // the pinned state reflects reality rather than whatever it was
+      // before this window started.
+      const viewport = findScrollViewport(endRef.current);
+      if (!viewport) return;
+      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      const nearBottom = distanceFromBottom <= NEAR_BOTTOM_PX;
+      if (nearBottom !== isPinnedRef.current) setPinned(nearBottom);
+    }, 500);
+    endRef.current?.scrollIntoView({ behavior });
+  }, [setPinned]);
+
+  // Auto-scroll on new messages only while pinned; otherwise tally them as
+  // "unseen" so the floating pill can show a count instead of moving the view.
+  const unseenRafIdRef = useRef(null);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [transcriptions]);
+    const grew = transcriptions.length > prevCountRef.current;
+    prevCountRef.current = transcriptions.length;
+    if (!grew) return;
+    if (isPinnedRef.current) {
+      scrollToBottom();
+      return;
+    }
+    // Defer out of the synchronous effect body (react-hooks/set-state-in-effect).
+    if (unseenRafIdRef.current) cancelAnimationFrame(unseenRafIdRef.current);
+    unseenRafIdRef.current = requestAnimationFrame(() => {
+      unseenRafIdRef.current = null;
+      setUnseenCount((n) => n + 1);
+    });
+    return () => {
+      if (unseenRafIdRef.current) {
+        cancelAnimationFrame(unseenRafIdRef.current);
+        unseenRafIdRef.current = null;
+      }
+    };
+  }, [transcriptions, scrollToBottom]);
+
+  // Re-pin when the agent scrolls back down near the bottom themselves;
+  // unpin when they scroll away from it (matches standard chat-UI behavior).
+  useEffect(() => {
+    const viewport = findScrollViewport(endRef.current);
+    if (!viewport) return;
+    const handleScroll = () => {
+      // Ignore a scroll event we triggered ourselves (see
+      // isProgrammaticScrollRef above) — only a genuine user gesture should
+      // change the pinned state here.
+      if (isProgrammaticScrollRef.current) return;
+      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      const nearBottom = distanceFromBottom <= NEAR_BOTTOM_PX;
+      if (nearBottom !== isPinnedRef.current) setPinned(nearBottom);
+    };
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [setPinned]);
 
   // Jump to (and highlight) the transcript bubble matching a slot's source utterance
   useEffect(() => {
@@ -1565,9 +1835,20 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
     const id = jumpTarget.transcriptId;
     const el = bubbleRefs.current[id];
     if (el) {
+      // Same programmatic-scroll guard as scrollToBottom above — this jump
+      // is going to explicitly setPinned(false) itself below regardless, but
+      // without this a handleScroll firing mid-animation could momentarily
+      // read "near bottom" (e.g. jumping to a recent bubble) and re-pin
+      // before that explicit call runs.
+      isProgrammaticScrollRef.current = true;
+      if (programmaticScrollTimeoutRef.current) clearTimeout(programmaticScrollTimeoutRef.current);
+      programmaticScrollTimeoutRef.current = setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+        programmaticScrollTimeoutRef.current = null;
+      }, 500);
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       // Radix ScrollArea viewport fallback: ensure the scroll container aligns too
-      const viewport = el.closest("[data-radix-scroll-area-viewport]");
+      const viewport = findScrollViewport(el);
       if (viewport && typeof viewport.scrollTo === "function") {
         const elRect = el.getBoundingClientRect();
         const vpRect = viewport.getBoundingClientRect();
@@ -1575,11 +1856,14 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
         viewport.scrollTo({ top: viewport.scrollTop + offset, behavior: "smooth" });
       }
     }
-    // Defer the highlight state set out of the synchronous effect body (react-hooks/set-state-in-effect).
+    // Defer state updates out of the synchronous effect body (react-hooks/set-state-in-effect).
     if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     rafIdRef.current = requestAnimationFrame(() => {
       rafIdRef.current = null;
       setHighlightedId(id);
+      // Manual navigation away from live — suspend auto-scroll so the next
+      // incoming utterance doesn't scroll the view back to the bottom.
+      if (el) setPinned(false);
       if (highlightTimeoutRef.current) {
         clearTimeout(highlightTimeoutRef.current);
       }
@@ -1598,7 +1882,12 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
         highlightTimeoutRef.current = null;
       }
     };
-  }, [jumpTarget]);
+  }, [jumpTarget, setPinned]);
+
+  const handleResumeLive = useCallback(() => {
+    setPinned(true);
+    scrollToBottom();
+  }, [setPinned, scrollToBottom]);
 
   return (
     <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
@@ -1615,8 +1904,8 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="h-full" ref={scrollRef}>
+      <CardContent className="relative flex-1 min-h-0 p-0 overflow-hidden">
+        <ScrollArea className="h-full">
           <div className="p-4 space-y-3">
             {transcriptions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
@@ -1649,6 +1938,16 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
             <div ref={endRef} />
           </div>
         </ScrollArea>
+        {!isPinnedToBottom && (
+          <button
+            type="button"
+            onClick={handleResumeLive}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-lg transition-colors hover:bg-sky-500"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+            {unseenCount > 0 ? `${unseenCount} new message${unseenCount === 1 ? "" : "s"}` : "Back to live"}
+          </button>
+        )}
       </CardContent>
     </Card>
   );
@@ -2025,6 +2324,17 @@ function mergeReadBackSlots(stages, itemStatuses, slotsFilled) {
   return merged;
 }
 
+// Locate the full stage/item objects for a given item id — needed to
+// regenerate a suggestion (generateSuggestion needs prompt_hint/hints/etc,
+// not just the flattened fields already stored on a suggestion object).
+function findStageAndItemById(stages, itemId) {
+  for (const stage of stages || []) {
+    const item = stage?.items?.find((i) => i.id === itemId);
+    if (item) return { stage, item };
+  }
+  return null;
+}
+
 /**
  * Suggested Response Card - Accumulating list of suggestions
  */
@@ -2236,19 +2546,113 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   // Re-filter whenever itemStatuses changes to drop any suggestion whose item
   // is now completed. Fix 5a (.then guard) prevents re-appending, so it is
   // safe to clear all targetModes — including continue_stage read-backs.
+  //
+  // Also drops a stale NON-SLOT suggestion (greeting / "how can I help" /
+  // topic confirmations) once a LATER item in the same stage already shows
+  // progress, even though its own status never flipped to literal
+  // "completed" — non-slot completion detection can be unreliable (see
+  // isEffectivelyOpen in suggestion-target-resolver.mjs), and unlike a slot
+  // there is no explicit "Confirm" action to ever clear it otherwise.
+  // Reported live: "How can I help you today?" stayed in the panel after the
+  // caller had already stated their intent, because "Ask how to assist
+  // today" was still only "suggested" (not "completed"), which the OLD
+  // filter here never dropped. Slot suggestions are untouched by this check
+  // — isItemStillRelevantInStage is a no-op for type "slot", so a
+  // low-confidence slot capture still accumulates until explicitly confirmed.
   useEffect(() => {
     setSuggestions((prev) => {
       const filtered = prev.filter((s) => {
         if (!s.itemId) return true;
         const status = useWorkflowStore.getState().itemStatuses[s.itemId];
-        return status?.status !== "completed";
+        if (status?.status === "completed") return false;
+        const candidate = findStageAndItemById(stages, s.itemId);
+        if (candidate && !isItemStillRelevantInStage(candidate.item, candidate.stage, itemStatuses, slotsFilled)) {
+          return false;
+        }
+        return true;
       });
       if (filtered.length === prev.length) return prev; // bail out — no change
       if (onSuggestionsChange) onSuggestionsChange(filtered);
       return filtered;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemStatuses, onSuggestionsChange]);
+  }, [itemStatuses, onSuggestionsChange, stages, slotsFilled]);
+
+  // Fix 7: an already-displayed read-back suggestion can go stale even
+  // though the underlying data is already correct. Reported live: a
+  // correction is confirmed (slotsFilled/itemStatuses update), but the
+  // read-back text keeps showing the pre-correction value until the caller
+  // updates ANOTHER, unrelated slot. Root cause: the main effect above only
+  // regenerates the read-back text when currentSlot IS RESOLVED to the
+  // read-back item — but findCorrectionTargetSlot (suggestion-target-
+  // resolver.mjs) keeps the resolved target locked onto that specific slot's
+  // OWN collect_correction prompt for as long as the correction-trigger
+  // phrase is still inside the rolling conversation window, often several
+  // turns. The read-back card's own list entry just sits frozen for that
+  // whole stretch, since currentSlot never points back at it in the
+  // meantime. Refresh an EXISTING read-back entry directly whenever the
+  // merged (slotsFilled + pending corrections) slots actually change,
+  // independent of what the current resolved target happens to be.
+  const suggestionsRef = useRef([]);
+  useEffect(() => {
+    suggestionsRef.current = suggestions;
+  }, [suggestions]);
+  const lastReadBackRefreshKeyRef = useRef(null);
+  useEffect(() => {
+    const merged = mergeReadBackSlots(stages, itemStatuses, slotsFilled);
+    const mergedKey = JSON.stringify(merged);
+    if (lastReadBackRefreshKeyRef.current === mergedKey) return;
+    lastReadBackRefreshKeyRef.current = mergedKey;
+
+    // Resolve against the AUTHORITATIVE item definition (stages), not the
+    // flattened suggestion object — a suggestion only stores itemType/
+    // itemLabel, so a read-back item identified solely by its
+    // prompt_hint/hints (isReadBackItem also matches on those) would never
+    // be found by checking the suggestion's own fields alone.
+    let existing = null;
+    let found = null;
+    for (const s of suggestionsRef.current) {
+      const candidate = findStageAndItemById(stages, s.itemId);
+      if (!candidate) continue;
+      if (isReadBackItem({
+        itemType: candidate.item.type,
+        itemLabel: candidate.item.label,
+        itemPromptHint: candidate.item.prompt_hint,
+        itemHints: candidate.item.hints,
+      })) {
+        existing = s;
+        found = candidate;
+        break;
+      }
+    }
+    if (!existing || !found) return;
+
+    generateSuggestion(found.stage, found.item, session, transcriptions, {
+      isAiAssisted,
+      slotsFilled: merged,
+      targetMode: existing.targetMode,
+      conversationContext: null,
+      blockedItem: null,
+      itemStatus: itemStatuses[existing.itemId],
+    })
+      .then((newSuggestion) => {
+        if (!newSuggestion) return;
+        // Same staleness discard as the main effect's Fix 6: drop this
+        // response if the merged slots have moved on again since it was
+        // requested (another correction landed while this was in flight).
+        const latestState = useWorkflowStore.getState();
+        const latestMerged = mergeReadBackSlots(latestState.stages, latestState.itemStatuses, latestState.slotsFilled);
+        if (JSON.stringify(latestMerged) !== mergedKey) return;
+        setSuggestions((prev) => {
+          const updated = upsertSuggestionByTarget(prev, newSuggestion);
+          if (updated !== prev && onSuggestionsChange) onSuggestionsChange(updated);
+          return updated;
+        });
+      })
+      .catch((err) => {
+        console.error("[SuggestedResponseCard] Failed to refresh read-back suggestion:", err);
+      });
+  }, [itemStatuses, slotsFilled, stages, session, transcriptions, isAiAssisted, onSuggestionsChange]);
 
   // Auto-scroll to bottom when new suggestions added
   useEffect(() => {
@@ -2373,7 +2777,13 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
                             isLatest ? "font-medium" : "text-muted-foreground"
                           }`}>
-                            "{suggestion.text}"
+                            {/* Quoted-speech styling suits a single spoken
+                                line, but a multi-line suggestion (e.g. the
+                                read-back's fixed "Title: value" list) needs
+                                clean left/right alignment on every line — a
+                                literal quote mark on the first and last line
+                                only would throw that off. */}
+                            {suggestion.text?.includes("\n") ? suggestion.text : `"${suggestion.text}"`}
                           </p>
                           
                           {/* Slot options badges */}

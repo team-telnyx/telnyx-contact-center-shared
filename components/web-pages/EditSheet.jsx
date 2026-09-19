@@ -17,6 +17,7 @@ import { IconEdit, IconWorld } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { safeHttpUrl } from "@/lib/security/display-url.mjs";
 
 /**
  * Edit sheet component for Web Pages
@@ -464,7 +465,7 @@ export default function WebPageEditSheet({
                         <>
                           <div className="relative w-full rounded-lg overflow-hidden border bg-muted/30">
                             <iframe
-                              src={resolvedUrl || url.trim()}
+                              src={safeHttpUrl(resolvedUrl || url) || "about:blank"}
                               title="Page Preview"
                               className="w-full h-64 border-0"
                               sandbox="allow-scripts allow-same-origin allow-forms"

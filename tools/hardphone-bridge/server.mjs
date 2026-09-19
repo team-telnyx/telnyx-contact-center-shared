@@ -50,6 +50,10 @@ function requestJson(url, { method = "GET", headers = {}, body = null, timeoutMs
       method,
       headers: payload ? { ...headers, "content-type": "application/json", "content-length": Buffer.byteLength(payload) } : headers,
       timeout: timeoutMs,
+      // Desk phones ship with self-signed certificates issued to their own LAN
+      // address; there is no authority that could validate them and no way to
+      // provision the device over HTTPS otherwise. The target is an operator-
+      // configured address on the local network, not user input.
       rejectUnauthorized: false,
     }, (res) => {
       let raw = "";
@@ -81,6 +85,10 @@ function requestText(url, { method = "GET", headers = {}, body = null, timeoutMs
       method,
       headers: payload ? { ...headers, "content-length": Buffer.byteLength(payload) } : headers,
       timeout: timeoutMs,
+      // Desk phones ship with self-signed certificates issued to their own LAN
+      // address; there is no authority that could validate them and no way to
+      // provision the device over HTTPS otherwise. The target is an operator-
+      // configured address on the local network, not user input.
       rejectUnauthorized: false,
     }, (res) => {
       let raw = "";

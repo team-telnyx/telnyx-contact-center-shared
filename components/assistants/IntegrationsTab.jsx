@@ -2192,6 +2192,39 @@ function createDefaultTool(type) {
           description: "",
         },
       };
+    case "whatsapp_template":
+      return {
+        type: "whatsapp_template",
+        display_name: "WhatsApp Templates",
+        whatsapp_template: {
+          templates: [
+            {
+              name: "",
+              template_name: "",
+              template_id: "",
+              language: "",
+              description: "",
+              variables: [],
+            },
+          ],
+        },
+        timeout_ms: 5000,
+      };
+    case "client_side_tool":
+      return {
+        type: "client_side_tool",
+        display_name: "",
+        client_side_tool: {
+          name: "",
+          description: "",
+          parameters: {
+            type: "object",
+            properties: {},
+            required: [],
+          },
+        },
+        timeout_ms: 5000,
+      };
     case "invite":
       return {
         type: "invite",

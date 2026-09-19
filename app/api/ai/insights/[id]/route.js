@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -50,3 +51,6 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("ai_insights:read", GET_handler, { route: "/api/ai/insights/[id]" });

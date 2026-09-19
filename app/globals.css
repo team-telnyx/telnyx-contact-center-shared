@@ -851,3 +851,107 @@
 .dark .recharts-legend-wrapper {
   color: var(--muted-foreground) !important;
 }
+
+/* Incoming offers keep their channel color; animate only the frame, never text
+   or controls. The static outline remains visible with reduced motion. */
+.cc-interaction-offer {
+  --cc-offer-color: var(--color-orange-500, #f97316);
+}
+.cc-interaction-offer[data-channel="email"] {
+  --cc-offer-color: var(--color-amber-500, #f59e0b);
+}
+.cc-interaction-offer[data-channel="chat"] {
+  --cc-offer-color: var(--color-teal-500, #14b8a6);
+}
+.cc-interaction-offer::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  border: 2px solid var(--cc-offer-color);
+  border-radius: inherit;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cc-offer-color) 20%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cc-interaction-offer::after {
+    animation: cc-incoming-offer 1.8s ease-in-out infinite;
+  }
+}
+@keyframes cc-incoming-offer {
+  0%, 100% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cc-offer-color) 8%, transparent);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--cc-offer-color) 22%, transparent),
+      0 0 14px color-mix(in srgb, var(--cc-offer-color) 18%, transparent);
+  }
+}
+
+/* Persistent messaging offer in the application header. */
+.cc-app-header { container-type: inline-size; }
+.cc-header-interaction {
+  --offer-color: #b45309;
+  color: var(--offer-color);
+  border-color: color-mix(in srgb, var(--offer-color) 32%, transparent);
+  background: linear-gradient(115deg, color-mix(in srgb, var(--offer-color) 12%, var(--background)), var(--background));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--offer-color) 10%, transparent);
+}
+/* Overlay adds a stronger frame without changing header widths or hit targets. */
+.cc-header-interaction::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border: 2px solid var(--offer-color);
+  border-radius: inherit;
+  opacity: 0.85;
+}
+.cc-header-interaction[data-channel="chat"] { --offer-color: #0f766e; }
+.cc-header-interaction[data-channel="whatsapp"] { --offer-color: #15803d; }
+.cc-header-interaction[data-channel="sms"] { --offer-color: #2563eb; }
+.dark .cc-header-interaction { --offer-color: #fbbf24; }
+.dark .cc-header-interaction[data-channel="chat"] { --offer-color: #2dd4bf; }
+.dark .cc-header-interaction[data-channel="whatsapp"] { --offer-color: #4ade80; }
+.dark .cc-header-interaction[data-channel="sms"] { --offer-color: #60a5fa; }
+.cc-header-interaction-icon, .cc-header-interaction-count { background: color-mix(in srgb, var(--offer-color) 14%, transparent); }
+.cc-header-interaction-dot { background: var(--offer-color); }
+.cc-header-interaction-action { background: color-mix(in srgb, var(--offer-color) 12%, transparent); cursor: pointer; }
+.cc-header-interaction-action:hover { background: color-mix(in srgb, var(--offer-color) 25%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .cc-header-interaction::after { animation: cc-header-offer-frame 2s ease-in-out infinite; }
+  .cc-header-interaction-icon > svg {
+    transform-origin: 50% 30%;
+    animation: cc-header-offer-ring 3s ease-in-out infinite;
+  }
+  @keyframes cc-header-offer-frame {
+    0%, 100% {
+      opacity: 0.5;
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--offer-color) 8%, transparent);
+    }
+    50% {
+      opacity: 1;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--offer-color) 25%, transparent),
+        0 0 12px color-mix(in srgb, var(--offer-color) 22%, transparent);
+    }
+  }
+  @keyframes cc-header-offer-ring {
+    0%, 30%, 100% { transform: rotate(0deg); }
+    5%, 15% { transform: rotate(-14deg); }
+    10%, 20% { transform: rotate(14deg); }
+    25% { transform: rotate(-6deg); }
+  }
+}
+@container (max-width: 1450px) {
+  .cc-header-interaction-copy { max-width: 125px; }
+  .cc-app-header:has(.cc-header-interaction) [data-testid="agent-status"] { width: 190px; }
+  .cc-app-header:has(.cc-header-interaction) [data-testid="campaign-activation"] { width: 180px; }
+}
+@container (max-width: 1200px) {
+  .cc-header-interaction-copy { display: none; }
+}
+@container (max-width: 1050px) {
+  .cc-app-header:has(.cc-header-interaction) [data-testid="agent-status"] { width: 135px; }
+  .cc-app-header:has(.cc-header-interaction) [data-testid="campaign-activation"] { width: 130px; }
+}

@@ -66,170 +66,21 @@ describe("call generator engine (T2)", () => {
 
 
 
-  it("delays action sequence until agent bridge when configured", async () => {
-    const originalApiKey = process.env.TELNYX_API_KEY;
-    const originalFetch = global.fetch;
-    process.env.TELNYX_API_KEY = "test-key";
-    const calls = [];
-    global.fetch = async (url, options) => {
-      calls.push({ url: String(url), body: JSON.parse(options.body || "{}") });
-      return { ok: true, status: 200, json: async () => ({ data: {} }), text: async () => "" };
-    };
-
-    const ledger = {
-      status: "ringing",
-      result: {
-        action_trigger: "agent_bridge",
-        action_steps: [{ type: "speak", text: "hello agent", voice: "AWS.Polly.Joanna" }],
-      },
-    };
-    const pool = {
-      query: async (sql, params = []) => {
-        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
-        if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
-        if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
-        if (/JOIN cg_runs/.test(sql) && /scenario_config/.test(sql)) return { rows: [{ result: ledger.result, run_config: { maxDurationSecs: 120 }, scenario_config: {} }] };
-        if (/SET status = \$1/.test(sql)) {
-          const next = params[0];
-          if (params[3] !== ledger.status) return { rowCount: 0 };
-          ledger.status = next;
-          ledger.result = { ...ledger.result, ...JSON.parse(params[1] || "{}") };
-          return { rowCount: 1 };
-        }
-        if (/action_sequence_started_at/.test(sql)) {
-          if (ledger.result.action_sequence_started_at) return { rowCount: 0 };
-          ledger.result = { ...ledger.result, ...JSON.parse(params[0] || "{}") };
-          return { rowCount: 1 };
-        }
-        return { rows: [], rowCount: 0 };
-      },
-    };
-    const payload = {
-      client_state: buildGeneratorClientState({ runId: "run-1", ledgerId: "ledger-1" }),
-      call_control_id: "cc-1",
-    };
-
-    try {
-      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.answered", payload), "answered");
-      assert.strictEqual(calls.some((call) => call.url.includes("/actions/speak")), false);
-      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.bridged", payload), "talking");
-      assert.strictEqual(calls.some((call) => call.body.payload === "hello agent"), true);
-    } finally {
-      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
-      else process.env.TELNYX_API_KEY = originalApiKey;
-      global.fetch = originalFetch;
-    }
-  });
-
-  it("runs agent-bridge actions when bridged arrives before answered", async () => {
-    const originalApiKey = process.env.TELNYX_API_KEY;
-    const originalFetch = global.fetch;
-    process.env.TELNYX_API_KEY = "test-key";
-    const calls = [];
-    global.fetch = async (url, options) => {
-      calls.push({ url: String(url), body: JSON.parse(options.body || "{}") });
-      return { ok: true, status: 200, json: async () => ({ data: {} }), text: async () => "" };
-    };
-
-    const ledger = {
-      status: "dialing",
-      result: {
-        action_trigger: "agent_bridge",
-        action_steps: [{ type: "speak", text: "bridge first", voice: "AWS.Polly.Joanna" }],
-      },
-    };
-    const pool = {
-      query: async (sql, params = []) => {
-        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
-        if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
-        if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
-        if (/JOIN cg_runs/.test(sql) && /scenario_config/.test(sql)) return { rows: [{ result: ledger.result, run_config: { maxDurationSecs: 120 }, scenario_config: {} }] };
-        if (/SET status = \$1/.test(sql)) {
-          const next = params[0];
-          if (params[3] !== ledger.status) return { rowCount: 0 };
-          ledger.status = next;
-          ledger.result = { ...ledger.result, ...JSON.parse(params[1] || "{}") };
-          return { rowCount: 1 };
-        }
-        if (/action_sequence_started_at/.test(sql)) {
-          if (ledger.result.action_sequence_started_at) return { rowCount: 0 };
-          ledger.result = { ...ledger.result, ...JSON.parse(params[0] || "{}") };
-          return { rowCount: 1 };
-        }
-        return { rows: [], rowCount: 0 };
-      },
-    };
-
-    try {
-      const payload = {
-        client_state: buildGeneratorClientState({ runId: "run-1", ledgerId: "ledger-1" }),
-        call_control_id: "cc-1",
-      };
-      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.bridged", payload), "talking");
-      assert.strictEqual(ledger.status, "talking");
-      assert.strictEqual(calls.some((call) => call.body.payload === "bridge first"), true);
-    } finally {
-      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
-      else process.env.TELNYX_API_KEY = originalApiKey;
-      global.fetch = originalFetch;
-    }
-  });
-
-  it("preserves call-answer actions when bridged arrives before answered", async () => {
-    const originalApiKey = process.env.TELNYX_API_KEY;
-    const originalFetch = global.fetch;
-    process.env.TELNYX_API_KEY = "test-key";
-    const calls = [];
-    global.fetch = async (url, options) => {
-      calls.push({ url: String(url), body: JSON.parse(options.body || "{}") });
-      return { ok: true, status: 200, json: async () => ({ data: {} }), text: async () => "" };
-    };
-
-    const ledger = {
-      status: "dialing",
-      result: {
-        action_trigger: "call_answer",
-        action_steps: [{ type: "speak", text: "answer first", voice: "AWS.Polly.Joanna" }],
-      },
-    };
-    const pool = {
-      query: async (sql, params = []) => {
-        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
-        if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
-        if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
-        if (/JOIN cg_runs/.test(sql) && /scenario_config/.test(sql)) return { rows: [{ result: ledger.result, run_config: { maxDurationSecs: 120 }, scenario_config: {} }] };
-        if (/SET status = \$1/.test(sql)) {
-          const next = params[0];
-          if (params[3] !== ledger.status) return { rowCount: 0 };
-          ledger.status = next;
-          ledger.result = { ...ledger.result, ...JSON.parse(params[1] || "{}") };
-          return { rowCount: 1 };
-        }
-        if (/action_sequence_started_at/.test(sql)) {
-          if (ledger.result.action_sequence_started_at) return { rowCount: 0 };
-          ledger.result = { ...ledger.result, ...JSON.parse(params[0] || "{}") };
-          return { rowCount: 1 };
-        }
-        return { rows: [], rowCount: 0 };
-      },
-    };
-
-    try {
-      const payload = {
-        client_state: buildGeneratorClientState({ runId: "run-1", ledgerId: "ledger-1" }),
-        call_control_id: "cc-1",
-      };
-      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.bridged", payload), null);
-      assert.strictEqual(ledger.status, "dialing");
-      assert.strictEqual(calls.some((call) => call.body.payload === "answer first"), false);
-      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.answered", payload), "answered");
-      assert.strictEqual(calls.some((call) => call.body.payload === "answer first"), true);
-    } finally {
-      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
-      else process.env.TELNYX_API_KEY = originalApiKey;
-      global.fetch = originalFetch;
-    }
-  });
+  for (const order of [['call.answered','call.bridged'],['call.bridged','call.answered']]) {
+    it(`webhook order ${order.join(',')} never sends media commands inline`, async () => {
+      let status='dialing',fetches=0;const original=global.fetch;
+      global.fetch=async()=>{fetches++;throw new Error('Unexpected inline media');};
+      const pool={query:async(sql,params=[])=>{
+        if(sql.startsWith('SELECT status'))return {rows:[{status}]};
+        if(sql.includes('SET status = $1')){status=params[0];return {rowCount:1};}
+        return {rows:[],rowCount:0};
+      }};
+      try {
+        for(const event of order)await handleGeneratorWebhookEvent(pool,event,{client_state:buildGeneratorClientState({runId:'run',ledgerId:'ledger'})});
+        assert.equal(status,'answered');assert.equal(fetches,0);
+      }finally{global.fetch=original;}
+    });
+  }
 
   it("ignores late bridged events after the ledger is already final", async () => {
     const originalApiKey = process.env.TELNYX_API_KEY;
@@ -342,16 +193,10 @@ describe("call generator engine (T2)", () => {
 });
 
 describe("call generator webhook route (T2)", () => {
-  it("webhook route processes generator events via client_state correlation", async () => {
-    const { readFile } = await import("node:fs/promises");
-    const code = await readFile(new URL("../app/api/call-generator/webhook/route.js", import.meta.url), "utf8");
-    assert.match(code, /handleGeneratorWebhookEvent/);
-    assert.match(code, /findGeneratorStateByLedger/);
-    assert.match(code, /call_control_id = \$1/);
-    assert.match(code, /call_session_id = \$2/);
-    assert.match(code, /buildGeneratorClientState\(\{ runId: generatorState\.runId, ledgerId: generatorState\.ledgerId \}\)/);
-    assert.match(code, /ignored: true/);
-    assert.doesNotMatch(code, /CALL_GENERATOR/);
+  it("webhook intake verifies signatures and persists before acknowledging", async () => {
+    const { receiveGeneratorWebhook } = await import('../lib/call-generator/webhook.mjs');
+    const result=await receiveGeneratorWebhook(new Request('http://localhost/api/call-generator/webhook',{method:'POST',body:'{}'}),{}, {verify:async()=>false});
+    assert.equal(result.status,401);
   });
 
   it("run control route supports stop and panic", async () => {
@@ -360,6 +205,6 @@ describe("call generator webhook route (T2)", () => {
     assert.match(code, /panicStop/);
     assert.match(code, /action === "stop"/);
     assert.match(code, /action === "panic"/);
-    assert.match(code, /requireAdmin/);
+    assert.match(code, /withPermission\("call_generator:/);
   });
 });

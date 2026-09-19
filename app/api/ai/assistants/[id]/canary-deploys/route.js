@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,9 @@ async function proxy(request, { params }, method) {
   }
 }
 
-export const GET = (request, context) => proxy(request, context, "GET");
-export const POST = (request, context) => proxy(request, context, "POST");
-export const PUT = (request, context) => proxy(request, context, "PUT");
-export const DELETE = (request, context) => proxy(request, context, "DELETE");
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+const route = "/api/ai/assistants/[id]/canary-deploys";
+export const GET = withPermission("ai_assistants:read", (request, context) => proxy(request, context, "GET"), { route });
+export const POST = withPermission("ai_assistants:update", (request, context) => proxy(request, context, "POST"), { route });
+export const PUT = withPermission("ai_assistants:update", (request, context) => proxy(request, context, "PUT"), { route });
+export const DELETE = withPermission("ai_assistants:update", (request, context) => proxy(request, context, "DELETE"), { route });

@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { startChunkedSpeak } from "@/lib/contact-center/speak-queue";
 import { agentAssistRuntimePayload, translationLogger } from "@/lib/agent-assist/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const DEFAULT_VOICE = "Minimax.speech-2.8-turbo.English_magnetic_voiced_man";
 
@@ -11,7 +12,7 @@ function hasPrivilegedRole(roles = []) {
   return roles.includes("admin") || roles.includes("owner") || roles.includes("supervisor");
 }
 
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -37,7 +38,7 @@ export async function POST(request) {
     }
 
     const { rows: [interaction] } = await pool.query(
-      `SELECT id, agent_username, metadata FROM cc_interactions WHERE id = $1`,
+      `SELECT id, agent_username, metadata FROM acd_history_interactions WHERE id = $1`,
       [interactionId]
     );
 
@@ -95,3 +96,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/agent-assist/workflow/speak-translation" });

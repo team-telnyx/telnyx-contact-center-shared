@@ -4,6 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+// The console renderers read these from the environment, and a developer .env
+// with either turned on switches this file's output from JSON to human-readable
+// text — which every assertion below parses. Tests that want a renderer pass it
+// in their own config, so the ambient setting is dropped rather than inherited.
+delete process.env.LOG_CONSOLE_PRETTY;
+delete process.env.LOG_CONSOLE_FRIENDLY;
+
 const loggerModuleUrl = new URL("../lib/logger/index.mjs", import.meta.url).href;
 const diagnosticModuleUrl = new URL("../lib/diagnostic-logger.mjs", import.meta.url).href;
 

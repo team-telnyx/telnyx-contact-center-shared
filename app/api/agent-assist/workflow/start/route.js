@@ -11,10 +11,31 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { applyPendingAiHandoff, broadcastAiHandoffToAgent, recalculateCurrentStage } from "@/lib/agent-assist/ai-handoff-processor";
 import { buildWorkflowPrefillFromClientState } from "@/lib/agent-assist/workflow-prefill";
+import { runAndPersistSlotMcpBindings } from "@/lib/agent-assist/slot-mcp-execute";
 import { agentAssistRuntimePayload, handoffLogger, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+import { interactionAgentMatches } from "@/lib/contact-center/interaction-agent-access.mjs";
+import { findWorkItemByReference } from "@/lib/acd/work-item-repository.mjs";
+import { withPermission } from "@/lib/authz/guard";
+
+function hasPrivilegedRole(roles = []) {
+  return roles.includes("admin") || roles.includes("owner") || roles.includes("supervisor");
+}
+
+// session.user.username is derived from the JWT's token.email, captured at
+// login — a username rename or email-fallback login after that can leave it
+// stale relative to the Core assignment owner. A fresh by-id lookup is
+// the second candidate identity, same pattern as the wrapup/metrics routes.
+async function getUsernameForUserId(pool, userId) {
+  if (!pool || !userId) return null;
+  const { rows: [row] } = await pool.query(
+    `SELECT username FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  return row?.username || null;
+}
 
 // POST /api/agent-assist/workflow/start - Start workflow session
-export async function POST(request) {
+async function POST_handler(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -47,10 +68,7 @@ export async function POST(request) {
     }
 
     // Verify interaction exists and check for AI call control ID
-    const { rows: [interaction] } = await pool.query(
-      `SELECT id, metadata, agent_username FROM cc_interactions WHERE id = $1`,
-      [interactionId]
-    );
+    const interaction = await findWorkItemByReference(pool, interactionId);
 
     if (!interaction) {
       return NextResponse.json(
@@ -59,14 +77,33 @@ export async function POST(request) {
       );
     }
 
+    // A plain login must not be able to start a session on another agent's
+    // interaction and trigger its startup MCP pass (network egress + side
+    // effects) — same check as the manual MCP submit and slot/complete routes.
+    const roles = session.user.roles || [];
+    const currentUsername = await getUsernameForUserId(pool, session.user.id);
+    // interactionAgentMatches treats an empty candidate list as a match (the
+    // wrapup routes it was built for use that to skip the check when identity
+    // couldn't be derived at all). This caller must NOT inherit that: an
+    // authenticated session with no users-table identity (e.g. an OAuth login
+    // never provisioned in `users`) must be denied, not treated as a pass
+    // (Codex review on #1372/#1373 — fail closed, not open, on unresolved identity).
+    const candidateUsernames = [session.user.username, currentUsername].filter(Boolean);
+    if (
+      (candidateUsernames.length === 0 || !interactionAgentMatches(interaction, candidateUsernames)) &&
+      !hasPrivilegedRole(roles)
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Check if this interaction has AI call control ID (came from AI assistant)
     const aiCallControlId = interaction.metadata?.ai_call_control_id;
     const hasAiHandoff = Boolean(aiCallControlId);
-
     // Check if session already exists for this interaction
     const { rows: [existingSession] } = await pool.query(
-      `SELECT id FROM aa_workflow_sessions WHERE interaction_id = $1`,
-      [interactionId]
+      `SELECT id FROM aa_workflow_sessions
+        WHERE work_item_id = $1`,
+      [interaction.work_item_id]
     );
 
     if (existingSession) {
@@ -112,8 +149,9 @@ export async function POST(request) {
       // Read the previous session status BEFORE upsert so we can reliably detect
       // a completed→in_progress restart without relying on post-upsert row state
       const { rows: [prevSession] } = await client.query(
-        `SELECT status FROM aa_workflow_sessions WHERE interaction_id = $1`,
-        [interactionId]
+        `SELECT status FROM aa_workflow_sessions
+          WHERE work_item_id = $1`,
+        [interaction.work_item_id]
       );
       const wasCompleted = prevSession?.status === 'completed';
 
@@ -141,27 +179,57 @@ export async function POST(request) {
       // If the previous session was 'completed', fully reset progress.
       const { rows: [workflowSession] } = await client.query(
         `INSERT INTO aa_workflow_sessions 
-         (interaction_id, workflow_id, current_stage_id, status, started_at, slots_filled, completion_percentage)
+         (work_item_id, workflow_id, current_stage_id, status, started_at, slots_filled, completion_percentage)
          VALUES ($1, $2, $3, 'in_progress', NOW(), $4::jsonb, 0)
-         ON CONFLICT (interaction_id) DO UPDATE
+         ON CONFLICT (work_item_id) WHERE work_item_id IS NOT NULL DO UPDATE
            SET workflow_id = EXCLUDED.workflow_id,
                current_stage_id = EXCLUDED.current_stage_id,
                status = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 'in_progress' ELSE aa_workflow_sessions.status END,
                started_at = CASE WHEN aa_workflow_sessions.status = 'completed' THEN NOW() ELSE aa_workflow_sessions.started_at END,
                slots_filled = CASE WHEN aa_workflow_sessions.status = 'completed' THEN $4::jsonb ELSE aa_workflow_sessions.slots_filled END,
-               completion_percentage = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 0 ELSE aa_workflow_sessions.completion_percentage END
+               -- Codex review (PR #1388, P1): slots_filled gets wholesale
+               -- REPLACED above without this - every other writer of this
+               -- column bumps slots_version, and reconcileDerivedSlots (and
+               -- any other optimistic-concurrency reader) relies on that
+               -- being universally true to detect a stale read. Left
+               -- unbumped, a reconciliation pass that read the OLD document
+               -- moments before this restart would see its version guard
+               -- pass anyway and blindly apply its stale delta on top of
+               -- the brand-new prefill document.
+               slots_version = CASE WHEN aa_workflow_sessions.status = 'completed' THEN COALESCE(aa_workflow_sessions.slots_version, 0) + 1 ELSE aa_workflow_sessions.slots_version END,
+               completion_percentage = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 0 ELSE aa_workflow_sessions.completion_percentage END,
+               -- MCP state is session-scoped and must reset with everything
+               -- else. Carrying mcp_runs over would skip bindings whose
+               -- arguments match the previous call, and stale mcp_results would
+               -- fire on_result chains against the last caller's facility.
+               mcp_results = CASE WHEN aa_workflow_sessions.status = 'completed' THEN '{}'::jsonb ELSE COALESCE(aa_workflow_sessions.mcp_results, '{}'::jsonb) END,
+               mcp_runs = CASE WHEN aa_workflow_sessions.status = 'completed' THEN '{}'::jsonb ELSE COALESCE(aa_workflow_sessions.mcp_runs, '{}'::jsonb) END,
+               mcp_candidates = CASE WHEN aa_workflow_sessions.status = 'completed' THEN '{}'::jsonb ELSE COALESCE(aa_workflow_sessions.mcp_candidates, '{}'::jsonb) END
          RETURNING *`,
-        [interactionId, workflowId, firstStage?.id || null, JSON.stringify(workflowPrefill.slotsFilled)]
+        [interaction.work_item_id, workflowId, firstStage?.id || null, JSON.stringify(workflowPrefill.slotsFilled)]
       );
 
       // If restarting a completed session, reset all item statuses back to pending
       // (ON CONFLICT DO NOTHING would otherwise preserve old completed states)
+      // is_manual_edit reset too (Codex review, P2): a fresh run of the
+      // workflow starts collecting from scratch — a prior manual edit from
+      // the ENDED session must not protect whatever gets captured for that
+      // slot THIS time, whether spoken, prefilled, or edited again.
+      // derived_from_slot reset too (Codex review, PR #1387, P1): the
+      // ENDED session's pickup_facility <- caller_facility provenance is
+      // meaningless once slots_filled itself has been wiped below. Left
+      // stale, a genuinely independent completion written for THIS new
+      // session by the call-flow/AI-handoff prefill writers below (which
+      // don't touch this column) would inherit the old marker and get
+      // wrongly reopened by reconciliation the first time it runs, since
+      // the new run hasn't answered pickup_same_as_requesting_facility yet.
       const sessionWasCompleted = wasCompleted;
       if (sessionWasCompleted) {
         await client.query(
           `UPDATE aa_workflow_item_status SET status = 'pending', completed_at = NULL,
            completed_by = NULL, extracted_value = NULL, confidence_score = NULL,
-           source_transcript = NULL, updated_at = NOW()
+           source_transcript = NULL, is_manual_edit = FALSE, derived_from_slot = NULL,
+           updated_at = NOW()
            WHERE session_id = $1`,
           [workflowSession.id]
         );
@@ -181,6 +249,7 @@ export async function POST(request) {
         await client.query(
           `UPDATE aa_workflow_sessions
            SET slots_filled = COALESCE(slots_filled, '{}'::jsonb) || $2::jsonb,
+               slots_version = COALESCE(slots_version, 0) + 1,
                updated_at = NOW()
            WHERE id = $1`,
           [workflowSession.id, JSON.stringify(workflowPrefill.slotsFilled)]
@@ -199,6 +268,12 @@ export async function POST(request) {
                completed_at = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.completed_at ELSE NOW() END,
                completed_by = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN 'agent' ELSE 'call_flow' END,
                source_transcript = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.source_transcript ELSE $4 END,
+               -- Codex review (PR #1387, P1): unconditional, no CASE needed -
+               -- an agent-protected row should already be NULL here (every
+               -- agent-driven completion path clears it), and this prefill
+               -- value is by definition independent of the copy-guard
+               -- relationship, not a leftover from a previous session.
+               derived_from_slot = NULL,
                updated_at = NOW()`,
             [
               workflowSession.id,
@@ -247,7 +322,30 @@ export async function POST(request) {
         }
       }
 
-      // Fetch complete session state (will include AI data if applied)
+      // Startup prefill and pending AI handoff are first-class slot writers, but
+      // bindings may also be immediately eligible with no caller input at all
+      // (for example an input-free on_complete tool). Run one startup pass after
+      // initialization unconditionally; the adapter returns cheaply when the
+      // workflow has no bindings or no binding is currently eligible.
+      try {
+        await runAndPersistSlotMcpBindings({
+          sessionId: workflowSession.id,
+          workflowId,
+          interactionId,
+        });
+      } catch (mcpErr) {
+        // Session startup must remain available when enrichment is down. The
+        // same best-effort policy is used by the manual slot-edit route.
+        workflowLogger.error("slot_mcp_bindings_failed", agentAssistRuntimePayload({
+          sessionId: workflowSession.id,
+          interactionId,
+          workflowId,
+          reason: mcpErr?.message || "binding run failed during workflow startup",
+        }));
+      }
+
+      // Fetch complete session state after startup MCP so the initial response
+      // includes any derived slots, candidate chips, and completion changes.
       const sessionState = await getWorkflowSessionState(pool, workflowSession.id);
 
       return NextResponse.json({
@@ -287,8 +385,8 @@ async function getWorkflowSessionState(pool, sessionId) {
             u.last_name as agent_last_name
      FROM aa_workflow_sessions s
      JOIN aa_workflows w ON s.workflow_id = w.id
-     LEFT JOIN cc_interactions i ON s.interaction_id = i.id
-     LEFT JOIN users u ON i.agent_username = u.username
+     LEFT JOIN acd_history_interactions i ON s.work_item_id = i.id
+     LEFT JOIN users u ON u.username = i.agent_username
      WHERE s.id = $1`,
     [sessionId]
   );
@@ -355,3 +453,6 @@ async function getWorkflowSessionState(pool, sessionId) {
     currentStageIndex: currentStageIndex >= 0 ? currentStageIndex : 0,
   };
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("agent:self", POST_handler, { route: "/api/agent-assist/workflow/start" });

@@ -1,21 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { finishTelnyxMcpOAuth, browserSafeBaseUrl, getPendingTelnyxMcpOAuthServerId } from "@/lib/mcp/mcp-oauth";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user || !isAdmin(user)) return null;
-  return user;
-}
 
 function adminRedirect(request, params = {}) {
   const url = new URL("/admin/mcp-servers", browserSafeBaseUrl(request));
@@ -25,9 +11,8 @@ function adminRedirect(request, params = {}) {
   return NextResponse.redirect(url);
 }
 
-export async function GET(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, _context, authz) {
+  const user = authz.user;
 
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -47,3 +32,6 @@ export async function GET(request) {
     return adminRedirect(request, { mcp_oauth: "error", mcp_oauth_error: err?.message || "oauth_callback_failed", server_id: serverId });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("mcp_servers:read", GET_handler, { route: "/api/admin/mcp-servers/oauth/callback" });

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapOutboundAttemptControl, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, mapOutboundAttemptControl, optionalString, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeAttemptControlLimits, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const STATUSES = ["draft", "active", "paused"];
 const RESET_PERIODS = ["daily", "weekly", "monthly", "campaign", "lifetime"];
@@ -29,8 +30,8 @@ const normalizeAttemptControl = (body = {}, globalMaxAttempts = 5) => {
 };
 };
 
-export async function PUT(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function PUT_handler(request, context, authz) {
+  const user = authz.user;
   const { attemptControlId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
@@ -42,11 +43,15 @@ export async function PUT(request, context) {
   } catch (err) { campaignsLogger.error("attempt_control_update_failed", { attemptControlId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update attempt control", 400); }
 }
 
-export async function DELETE(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function DELETE_handler(request, context, authz) {
+  const user = authz.user;
   const { attemptControlId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   const { rows } = await pool.query(`UPDATE outbound_attempt_controls SET status='archived', updated_by=$1, updated_at=NOW() WHERE id=$2 RETURNING *`, [usernameFor(user), attemptControlId]);
   if (!rows[0]) return jsonError("Attempt control not found", 404);
   return NextResponse.json({ ok: true, attemptControl: mapOutboundAttemptControl(rows[0]) });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission("dialer_attempt_controls:update", PUT_handler, { route: "/api/contact-center/outbound-dialer/attempt-controls/[attemptControlId]" });
+export const DELETE = withPermission("dialer_attempt_controls:delete", DELETE_handler, { route: "/api/contact-center/outbound-dialer/attempt-controls/[attemptControlId]" });

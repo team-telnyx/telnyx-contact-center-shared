@@ -103,7 +103,7 @@ const DEFAULT_ASSISTANT = {
   tools: [],
   transcription: { model: "" },
   voice_settings: {},
-  telephony: {},
+  telephony: { send_conversation_message_events: false },
   messaging: {},
   privacy_settings: {},
   insight_settings: {},
@@ -178,6 +178,7 @@ function payloadForSave(values) {
 
 function assistantForEditor(assistant = {}) {
   const voiceSettings = assistant.voice_settings || {};
+  const telephony = assistant.telephony_settings || assistant.telephony || {};
   return {
     ...DEFAULT_ASSISTANT,
     ...assistant,
@@ -196,7 +197,11 @@ function assistantForEditor(assistant = {}) {
     voice_language: voiceSettings.language || "",
     pronunciation_dict_id: voiceSettings.pronunciation_dict_id || "",
     expressive_mode: voiceSettings.expressive_mode ?? false,
-    telephony: assistant.telephony_settings || assistant.telephony || {},
+    telephony: {
+      ...telephony,
+      send_conversation_message_events:
+        telephony?.send_conversation_message_events === true,
+    },
     messaging: assistant.messaging_settings || assistant.messaging || {},
     enabled_features: Array.isArray(assistant.enabled_features) ? assistant.enabled_features : [],
     widget_settings: assistant.widget_settings || {},

@@ -86,12 +86,15 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-[240px] justify-between" disabled={saving}>
+        <Button data-testid="campaign-activation" variant="outline" className="w-[240px] justify-between" disabled={saving}>
           <span className="truncate">{label}</span>
           {saving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ChevronDown className="ml-2 h-4 w-4 opacity-60" />}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent
+        align="end"
+        className="w-[28rem] max-w-[calc(100vw-2rem)]"
+      >
         <div className="space-y-3">
           <div className="font-semibold">Campaign Activation</div>
           {localCampaigns.length === 0 ? (
@@ -100,7 +103,7 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
             localCampaigns.map((campaign) => {
               const checkboxId = `campaign-activation-${campaign.id}`;
               return (
-                <div key={campaign.id} className="flex items-center justify-between gap-2">
+                <div key={campaign.id} className="flex min-w-0 items-center justify-between gap-3">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <Checkbox
                       id={checkboxId}
@@ -108,11 +111,15 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
                       onCheckedChange={(checked) => toggleCampaign(campaign.id, checked === true)}
                       disabled={saving}
                     />
-                    <label htmlFor={checkboxId} className="text-sm font-medium cursor-pointer flex-1">
+                    <label
+                      htmlFor={checkboxId}
+                      className="min-w-0 flex-1 cursor-pointer truncate whitespace-nowrap text-sm font-medium"
+                      title={campaign.name}
+                    >
                       {campaign.name}
                     </label>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <CampaignStatusIcon status={campaign.status} />
                     <Badge variant="outline" className={`text-xs uppercase ${campaignModeBadgeClass(campaign.mode)}`}>
                       {campaignModeLabel(campaign.mode)}

@@ -4,12 +4,10 @@ import {
   getOutboundPool,
   jsonError,
   mapOutboundDispositionCode,
-  optionalString,
-  requireOutboundSupervisor,
-  safeJson,
-  usernameFor,
-} from "@/lib/outbound-dialer/api";
+  optionalString, safeJson,
+  usernameFor } from "@/lib/outbound-dialer/api";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 const CLASSIFICATIONS = ["none", "right_party_contact", "number_uncallable", "contact_uncallable", "retry"];
 const BUSINESS_CATEGORIES = ["none", "success", "neutral", "failure"];
@@ -37,8 +35,8 @@ const SELECT_SQL = `
   LEFT JOIN outbound_campaigns c ON c.id = m.campaign_id
 `;
 
-export async function PUT(request, { params }) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function PUT_handler(request, { params }, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
     const body = await request.json();
@@ -61,9 +59,13 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(_request, { params }) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function DELETE_handler(_request, { params }, authz) {
+  const user = authz.user;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   await pool.query(`UPDATE outbound_disposition_code_mappings SET status = 'archived', updated_by = $2, updated_at = NOW() WHERE id = $1`, [params.id, usernameFor(user)]);
   return NextResponse.json({ ok: true });
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const PUT = withPermission("disposition_codes:update", PUT_handler, { route: "/api/contact-center/outbound-dialer/disposition-codes/[id]" });
+export const DELETE = withPermission("disposition_codes:delete", DELETE_handler, { route: "/api/contact-center/outbound-dialer/disposition-codes/[id]" });

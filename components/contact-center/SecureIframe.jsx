@@ -42,11 +42,23 @@ export function SecureIframe({ url, title, refreshKey = 0 }) {
       setLoading(false);
     };
 
-    // Listen for messages from iframe (some sites send error messages)
+    // Listen for messages from iframe (some sites send error messages).
+    //
+    // The origin is matched on its host exactly, or as a subdomain of
+    // google.com. An `origin.includes("google.com")` test would also trust
+    // https://google.com.attacker.example, a host anyone can register — and
+    // this handler acts on messages from whoever sends them.
+    const isGoogleOrigin = (origin) => {
+      try {
+        const host = new URL(origin).hostname.toLowerCase();
+        return host === "google.com" || host.endsWith(".google.com");
+      } catch {
+        return false;
+      }
+    };
     const handleMessage = (event) => {
-      // Check if message is from same origin or Google Maps
       if (
-        event.origin.includes("google.com") ||
+        isGoogleOrigin(event.origin) ||
         event.data?.error ||
         event.data?.type === "error"
       ) {

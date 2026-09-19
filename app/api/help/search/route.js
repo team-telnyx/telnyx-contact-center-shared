@@ -13,13 +13,14 @@ import {
   mergeHelpSearchResultSets,
   parseHelpSearchLimit,
 } from "@/lib/help/search-query";
+import { withPermission } from "@/lib/authz/guard";
 
 const helpSearch = createFromSource(helpSource, {
   language: "english",
   buildIndex: buildHelpSearchIndex,
 });
 
-export async function GET(request) {
+async function GET_handler(request) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -57,3 +58,6 @@ export async function GET(request) {
     ).slice(0, effectiveLimit),
   );
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("authenticated", GET_handler, { route: "/api/help/search" });

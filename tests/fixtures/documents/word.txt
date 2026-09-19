@@ -1,0 +1,8 @@
+Document preview acceptance fixture
+
+This synthetic document contains no customer data.
+Polish text: Zażółć gęślą jaźń.
+The preview must preserve this text in both DOC and DOCX conversions.
+
+Order: 00123
+Amount: 42.50

@@ -1,8 +1,12 @@
+import { DASHBOARD_SUMMARY_SQL } from "@/lib/outbound-dialer/dashboard-summary.mjs";
 import { NextResponse } from "next/server";
-import { getOutboundPool, loadOutboundContactLists, mapCampaign, mapContactList, mapDncList, mapForm, mapHandlerReference, mapOutboundAttemptControl, mapOutboundFilter, mapOutboundSettings, mapOutboundTimeSet, outboundSchemaPayload, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, loadOutboundContactLists, mapCampaign, mapContactList, mapDncList, mapForm, mapHandlerReference, mapOutboundAttemptControl, mapOutboundFilter, mapOutboundSettings, mapOutboundTimeSet, outboundSchemaPayload } from "@/lib/outbound-dialer/api";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getRunnerState } from "@/lib/outbound-dialer/runner";
 import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { listMessagingTemplates } from "@/lib/outbound-dialer/messaging/templates.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { campaignScopeSql, queueScopeSql, resolveScope } from "@/lib/authz/scope.mjs";
 
 async function safeQuery(pool, sql, params = [], fallback = []) {
   try {
@@ -89,6 +93,12 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
         l.call_control_id,
         l.call_session_id,
         l.status,
+        l.dial_state,
+        l.message_state,
+        l.to_address,
+        l.sender_address,
+        l.provider_message_id,
+        l.attempt_reason,
         l.created_at,
         l.updated_at,
         l.metadata,
@@ -100,7 +110,7 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       LEFT JOIN outbound_contact_records r ON r.id = l.contact_record_id
       WHERE l.campaign_id = ANY($1::uuid[])
     )
-    SELECT campaign_id, id, contact_record_id, call_control_id, call_session_id, status, created_at, updated_at, metadata, failure_reason, contact_row_data, contact_methods
+    SELECT campaign_id, id, contact_record_id, call_control_id, call_session_id, status, dial_state, message_state, to_address, sender_address, provider_message_id, attempt_reason, created_at, updated_at, metadata, failure_reason, contact_row_data, contact_methods
     FROM ranked
     WHERE rn <= 500
     ORDER BY campaign_id, created_at DESC, id DESC`,
@@ -110,34 +120,7 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
 
   const summaryRows = await safeQuery(
     pool,
-    `SELECT
-      l.campaign_id,
-      COUNT(*) FILTER (WHERE l.created_at > NOW() - INTERVAL '15 minutes')::int AS attempts_last_15m,
-      COUNT(*) FILTER (WHERE l.status = 'dialing')::int AS dialing_now,
-      COUNT(*) FILTER (
-        WHERE l.status IN ('dialing','answered')
-           OR (
-             l.status = 'claimed'
-             AND COALESCE(l.lease_expires_at, NOW() + INTERVAL '1 second') > NOW() - INTERVAL '5 seconds'
-           )
-      )::int AS active_now,
-      COUNT(*) FILTER (WHERE l.status = 'answered')::int AS answered_total,
-      COUNT(*) FILTER (WHERE l.status = 'failed')::int AS failed_total,
-      COUNT(*) FILTER (WHERE l.status = 'completed')::int AS completed_total,
-      COUNT(DISTINCT l.contact_record_id) FILTER (WHERE l.status = 'completed')::int AS completed_records,
-      COUNT(*) FILTER (WHERE COALESCE(l.metadata->>'reason_code','') IN ('answering_machine','machine','machine_detected'))::int AS machine_total,
-      COUNT(*) FILTER (WHERE COALESCE(l.metadata->>'reason_code','') IN ('no_answer','timeout'))::int AS no_answer_total,
-      COUNT(*) FILTER (WHERE l.status IN ('cancelled','recycled'))::int AS hangups_total,
-      COUNT(*) FILTER (WHERE l.status = 'suppressed')::int AS suppressed_total,
-      COUNT(*) FILTER (WHERE l.status = 'skipped')::int AS skipped_total,
-      COUNT(DISTINCT l.contact_record_id) FILTER (WHERE l.status IN ('completed','failed','cancelled','suppressed','skipped','recycled'))::int AS processed_records,
-      COUNT(*) FILTER (WHERE l.status = 'answered' AND l.created_at > NOW() - INTERVAL '30 minutes')::int AS answered_last_30m,
-      COUNT(*) FILTER (WHERE l.status = 'failed' AND l.created_at > NOW() - INTERVAL '30 minutes')::int AS failed_last_30m,
-      COUNT(*) FILTER (WHERE l.status = 'suppressed' AND l.created_at > NOW() - INTERVAL '30 minutes')::int AS suppressed_last_30m,
-      MAX(l.created_at) AS last_attempt_at
-    FROM outbound_attempt_ledger l
-    WHERE l.campaign_id = ANY($1::uuid[])
-    GROUP BY l.campaign_id`,
+    DASHBOARD_SUMMARY_SQL,
     [ids],
     [],
   );
@@ -207,6 +190,9 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
   const byCampaign = Object.fromEntries(ids.map((id) => [id, {
     runner: getRunnerState(id),
     summary: {
+      attempts_total: 0,
+      connected_total: 0,
+      connected_records: 0,
       attempts_last_15m: 0,
       dialing_now: 0,
       active_now: 0,
@@ -224,6 +210,16 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       failed_last_30m: 0,
       suppressed_last_30m: 0,
       last_attempt_at: null,
+      messages_queued: 0,
+      messages_in_flight: 0,
+      messages_sent: 0,
+      messages_delivered: 0,
+      messages_read: 0,
+      messages_replied: 0,
+      messages_failed: 0,
+      messages_unconfirmed: 0,
+      messages_throttled: 0,
+      messages_opted_out: 0,
     },
     recent_attempts: [],
     contact_records: [],
@@ -233,6 +229,9 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
   for (const row of summaryRows) {
     if (!byCampaign[row.campaign_id]) continue;
     byCampaign[row.campaign_id].summary = {
+      attempts_total: Number(row.attempts_total || 0),
+      connected_total: Number(row.connected_total || 0),
+      connected_records: Number(row.connected_records || 0),
       attempts_last_15m: Number(row.attempts_last_15m || 0),
       dialing_now: Number(row.dialing_now || 0),
       active_now: Number(row.active_now || 0),
@@ -250,6 +249,16 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       failed_last_30m: Number(row.failed_last_30m || 0),
       suppressed_last_30m: Number(row.suppressed_last_30m || 0),
       last_attempt_at: row.last_attempt_at || null,
+      messages_queued: Number(row.messages_queued || 0),
+      messages_in_flight: Number(row.messages_in_flight || 0),
+      messages_sent: Number(row.messages_sent || 0),
+      messages_delivered: Number(row.messages_delivered || 0),
+      messages_read: Number(row.messages_read || 0),
+      messages_replied: Number(row.messages_replied || 0),
+      messages_failed: Number(row.messages_failed || 0),
+      messages_unconfirmed: Number(row.messages_unconfirmed || 0),
+      messages_throttled: Number(row.messages_throttled || 0),
+      messages_opted_out: Number(row.messages_opted_out || 0),
     };
   }
 
@@ -292,6 +301,15 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       call_control_id: row.call_control_id || metadata.call_control_id || null,
       call_session_id: row.call_session_id || metadata.call_session_id || null,
       status: row.status,
+      dial_state: row.dial_state || null,
+      message_state: row.message_state || null,
+      to_address: row.to_address || null,
+      sender_address: row.sender_address || null,
+      provider_message_id: row.provider_message_id || null,
+      attempt_reason: row.attempt_reason || null,
+      rendered_text: metadata.rendered?.text || null,
+      delivery: metadata.delivery || null,
+      auto_dial_at: metadata.auto_dial_at || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       to_number: metadata.to_number || null,
@@ -309,28 +327,39 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
   return byCampaign;
 }
 
-export async function GET() {
-  const user = await requireOutboundSupervisor();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(_request, _context, authz) {
+  const campaignScopeVals = []; // campaign scope of the granting roles (RBAC review fix)
+  const user = authz.user;
 
   const pool = getOutboundPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
 
   try {
-    const [campaignsResult, listsResult, dncListsResult, formsResult, filtersRows, timeSetsRows, attemptControlsRows, settingsRows, queueRows, flowRows, workflowRows, assistants, inventoryNumbers] = await Promise.all([
-      pool.query(`SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name, ac.name AS attempt_control_name FROM outbound_campaigns c LEFT JOIN outbound_contact_lists l ON l.id = c.contact_list_id LEFT JOIN form_definitions f ON f.id = c.attached_form_id LEFT JOIN outbound_attempt_controls ac ON ac.id = c.attempt_control_id WHERE c.status <> 'archived' ORDER BY c.updated_at DESC LIMIT 100`),
-      loadOutboundContactLists(pool, 100),
-      pool.query(`SELECT * FROM outbound_dnc_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
-      pool.query(`SELECT id, name, status, category, schema FROM form_definitions WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 200`),
-      safeQuery(pool, `SELECT f.*, l.name AS contact_list_name FROM outbound_contact_filters f LEFT JOIN outbound_contact_lists l ON l.id = f.contact_list_id WHERE f.status <> 'archived' ORDER BY f.updated_at DESC LIMIT 100`),
-      safeQuery(pool, `SELECT * FROM outbound_time_sets WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
-      safeQuery(pool, `SELECT * FROM outbound_attempt_controls WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
-      safeQuery(pool, `SELECT * FROM outbound_settings WHERE id='default' LIMIT 1`),
-      safeQuery(pool, `SELECT id, name, display_name, enabled, active, routing_strategy FROM cc_queues WHERE enabled = true AND active = true ORDER BY priority DESC, name ASC LIMIT 200`),
-      safeQuery(pool, `SELECT id, name, description FROM voice_flows WHERE jsonb_typeof(nodes) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements(nodes) AS n WHERE n->'data'->>'nodeType' = 'outbound_campaign') ORDER BY updated_at DESC LIMIT 200`),
-      safeQuery(pool, `SELECT id, name, description FROM aa_workflows WHERE is_active = true ORDER BY updated_at DESC NULLS LAST, name ASC LIMIT 200`),
-      loadAiAssistants(),
-      loadInventoryNumbers(),
+    const campaignScope = await resolveScope(pool, user, authz.access, "campaigns:read");
+    const queueScope = await resolveScope(pool, user, authz.access, "queues:read");
+    const read = (permission, load, fallback = []) => authz.can(permission) ? load() : Promise.resolve(fallback);
+    const [campaignsResult, listsResult, dncListsResult, formsResult, filtersRows, timeSetsRows, attemptControlsRows, settingsRows, queueRows, flowRows, workflowRows, assistants, inventoryNumbers, smsSenders, smsTemplates, whatsappSenders, whatsappTemplates, emailSenders, emailTemplates] = await Promise.all([
+      read("campaigns:read", () => pool.query(`SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name, ac.name AS attempt_control_name FROM outbound_campaigns c LEFT JOIN outbound_contact_lists l ON l.id = c.contact_list_id LEFT JOIN form_definitions f ON f.id = c.attached_form_id LEFT JOIN outbound_attempt_controls ac ON ac.id = c.attempt_control_id WHERE c.status <> 'archived'${campaignScopeSql(campaignScope, "c.id::text", campaignScopeVals).map((c) => ` AND ${c}`).join("")} ORDER BY c.updated_at DESC LIMIT 100`, campaignScopeVals), { rows: [] }),
+      read("contact_lists:read", () => loadOutboundContactLists(pool, 100), { rows: [] }),
+      read("dnc_lists:read", () => pool.query(`SELECT * FROM outbound_dnc_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`), { rows: [] }),
+      read("forms:read", () => pool.query(`SELECT id, name, status, category, schema FROM form_definitions WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 200`), { rows: [] }),
+      read("dialer_filters:read", () => safeQuery(pool, `SELECT f.*, l.name AS contact_list_name FROM outbound_contact_filters f LEFT JOIN outbound_contact_lists l ON l.id = f.contact_list_id WHERE f.status <> 'archived' ORDER BY f.updated_at DESC LIMIT 100`)),
+      read("dialer_time_sets:read", () => safeQuery(pool, `SELECT * FROM outbound_time_sets WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`)),
+      read("dialer_attempt_controls:read", () => safeQuery(pool, `SELECT * FROM outbound_attempt_controls WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`)),
+      read("dialer_settings:read", () => safeQuery(pool, `SELECT * FROM outbound_settings WHERE id='default' LIMIT 1`)),
+      read("queues:read", () => safeQuery(pool, `SELECT id, name, display_name, enabled, active, routing_strategy FROM cc_queues WHERE enabled = true AND active = true${queueScopeSql(queueScope, "id::text", null).map((condition) => ` AND ${condition}`).join("")} ORDER BY priority DESC, name ASC LIMIT 200`)),
+      read("call_flows:read", () => safeQuery(pool, `SELECT id, name, description FROM voice_flows WHERE jsonb_typeof(nodes) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements(nodes) AS n WHERE n->'data'->>'nodeType' = 'outbound_campaign') ORDER BY updated_at DESC LIMIT 200`)),
+      read("workflows:read", () => safeQuery(pool, `SELECT id, name, description FROM aa_workflows WHERE is_active = true ORDER BY updated_at DESC NULLS LAST, name ASC LIMIT 200`)),
+      read("ai_assistants:read", () => loadAiAssistants()),
+      read("numbers:read", () => loadInventoryNumbers()),
+      read("sms_admin:read", () => safeQuery(pool, `SELECT n.id, n.phone_number, n.name, n.sending_enabled, n.routing_enabled, n.queue_id, q.name AS queue_name, n.country_code, n.number_type FROM cc_sms_numbers n LEFT JOIN cc_queues q ON q.id = n.queue_id ORDER BY n.name, n.phone_number`)),
+      read("sms_admin:read", () => listMessagingTemplates(pool, "sms").catch((err) => { campaignsLogger.warn("messaging_templates_load_failed", { channel: "sms", ...outboundErrorPayload(err) }); return []; })),
+      read("whatsapp_admin:read", () => safeQuery(pool, `SELECT n.id, n.phone_number, n.name, n.sending_enabled, n.routing_enabled, n.queue_id, q.name AS queue_name, n.waba_id, n.quality_rating, n.provider_status, n.messaging_profile_id FROM cc_whatsapp_numbers n LEFT JOIN cc_queues q ON q.id = n.queue_id ORDER BY n.name, n.phone_number`)),
+      // Provider-hosted template catalogues: a network failure must not take the
+      // whole dialer overview down, so each channel degrades to an empty list.
+      read("whatsapp_admin:read", () => listMessagingTemplates(pool, "whatsapp").catch((err) => { campaignsLogger.warn("messaging_templates_load_failed", { channel: "whatsapp", ...outboundErrorPayload(err) }); return []; })),
+      read("email_admin:read", () => safeQuery(pool, `SELECT b.id, b.address, b.name, b.sending_enabled, b.routing_enabled, b.queue_id, q.name AS queue_name FROM cc_email_mailboxes b LEFT JOIN cc_queues q ON q.id = b.queue_id ORDER BY b.name, b.address`)),
+      read("email_admin:read", () => listMessagingTemplates(pool, "email").catch((err) => { campaignsLogger.warn("messaging_templates_load_failed", { channel: "email", ...outboundErrorPayload(err) }); return []; })),
     ]);
 
     const campaigns = campaignsResult.rows.map(mapCampaign);
@@ -346,7 +375,7 @@ export async function GET() {
       filters: filtersRows.map(mapOutboundFilter),
       timeSets: timeSetsRows.map(mapOutboundTimeSet),
       attemptControls: attemptControlsRows.map(mapOutboundAttemptControl),
-      settings: mapOutboundSettings(settingsRows[0]),
+      settings: authz.can("dialer_settings:read") ? mapOutboundSettings(settingsRows[0]) : null,
       handlerReferences: {
         queue: queueRows.map((row) => mapHandlerReference(row, "queue")),
         call_flow: flowRows.map((row) => mapHandlerReference(row, "call_flow")),
@@ -354,6 +383,8 @@ export async function GET() {
         ai_assistant: assistants,
       },
       inventoryNumbers,
+      messagingSenders: { sms: smsSenders, whatsapp: whatsappSenders, email: emailSenders.map((row) => ({ ...row, phone_number: row.address })) },
+      messagingTemplates: { sms: smsTemplates, whatsapp: whatsappTemplates, email: emailTemplates },
       executionDebugByCampaign,
     });
   } catch (err) {
@@ -361,3 +392,6 @@ export async function GET() {
     return NextResponse.json({ error: "Failed to load outbound dialer data" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["campaigns:read", "contact_lists:read", "dnc_lists:read", "dialer_filters:read", "dialer_time_sets:read", "dialer_attempt_controls:read", "dialer_settings:read", "disposition_codes:read"], GET_handler, { route: "/api/contact-center/outbound-dialer" });

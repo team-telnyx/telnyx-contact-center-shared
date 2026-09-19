@@ -110,6 +110,10 @@ test("WS5-T1 webhook events map to expected dial states", () => {
     DIAL_STATES.NO_ANSWER,
   );
   assert.equal(
+    dialStateForWebhookEvent("call.hangup", { hangupCause: "not_found" }),
+    DIAL_STATES.FAILED,
+  );
+  assert.equal(
     dialStateForWebhookEvent("call.hangup", { wasConnected: true, hangupCause: "normal_clearing" }),
     DIAL_STATES.WRAPUP,
   );
@@ -162,6 +166,25 @@ test(
   { skip: !hasDb && "postgres not reachable" },
   async () => {
     const pool = getPostgresPool();
+    // This test owns its minimal fixture. A reachable PostgreSQL server does not
+    // imply that the application schema was already installed (as in fresh CI).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS outbound_campaigns (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        mode TEXT NOT NULL DEFAULT 'power'
+      );
+      CREATE TABLE IF NOT EXISTS outbound_attempt_ledger (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        campaign_id UUID NOT NULL REFERENCES outbound_campaigns(id) ON DELETE CASCADE,
+        status TEXT NOT NULL,
+        dial_state TEXT NOT NULL DEFAULT 'pending',
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
     // Create a scratch campaign + ledger row.
     const { rows: campaignRows } = await pool.query(
       `INSERT INTO outbound_campaigns (name, status, mode)

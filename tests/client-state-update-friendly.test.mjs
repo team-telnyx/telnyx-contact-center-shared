@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import test from "node:test";
+import {
+  encodeAcdClientState,
+  mergeAcdClientState,
+} from "../lib/acd/intake-source.mjs";
 
 async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -15,7 +19,7 @@ async function loadClientStateHelpers() {
   assert.ok(end > start, "client-state helper block should be bounded");
   return vm.runInNewContext(
     `${engineSource.slice(start, end)}; ({ decodeClientStateObject, buildClientStatePatch, buildMergedClientStateBase64, resolveClientStateUpdateBase });`,
-    { Buffer, console },
+    { Buffer, console, encodeAcdClientState, mergeAcdClientState },
   );
 }
 

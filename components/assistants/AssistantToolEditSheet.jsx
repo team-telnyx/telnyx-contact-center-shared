@@ -26,6 +26,8 @@ import {
   IconPhoneX,
   IconPlayerSkipForward,
   IconShare2,
+  IconBrandWhatsapp,
+  IconDeviceDesktopCog,
   IconUsers,
   IconWebhook,
 } from "@tabler/icons-react";
@@ -41,6 +43,9 @@ import ReferToolEditor from "@/components/assistants/tools/ReferToolEditor";
 import DTMFToolEditor from "@/components/assistants/tools/DTMFToolEditor";
 import RetrievalToolEditor from "@/components/assistants/tools/RetrievalToolEditor";
 import SkipTurnToolEditor from "@/components/assistants/tools/SkipTurnToolEditor";
+import WhatsAppTemplateToolEditor from "@/components/assistants/tools/WhatsAppTemplateToolEditor";
+import ClientSideToolEditor from "@/components/assistants/tools/ClientSideToolEditor";
+import { validateAssistantToolConfiguration } from "@/lib/ai/assistant-tool-validation";
 
 export function labelForAssistantToolType(type) {
   return ASSISTANT_TOOL_TYPES.find((t) => t.type === type)?.label || type;
@@ -64,6 +69,10 @@ export function descriptionForAssistantToolType(type) {
       return "Hang up the call";
     case "send_message":
       return "Send an SMS message to the caller";
+    case "whatsapp_template":
+      return "Send approved WhatsApp templates outside the 24-hour messaging window";
+    case "client_side_tool":
+      return "Run a function in the connected Voice SDK client";
     case "invite":
       return "Invite a third party to join the active call";
     case "skip_turn":
@@ -91,6 +100,10 @@ export function renderAssistantToolIcon(type, className = "size-4") {
       return <IconDatabaseSearch className={`${className} text-amber-500`} />;
     case "send_message":
       return <IconMessage className={`${className} text-green-500`} />;
+    case "whatsapp_template":
+      return <IconBrandWhatsapp className={`${className} text-green-500`} />;
+    case "client_side_tool":
+      return <IconDeviceDesktopCog className={`${className} text-sky-500`} />;
     case "invite":
       return <IconPhoneIncoming className={`${className} text-indigo-500`} />;
     case "skip_turn":
@@ -102,14 +115,33 @@ export function renderAssistantToolIcon(type, className = "size-4") {
 
 export function getAssistantToolDisplay(tool) {
   const type = tool?.type || "";
-  const name =
-    type === "webhook"
-      ? tool?.webhook?.name || tool?.display_name || ""
-      : tool?.display_name || labelForAssistantToolType(type);
+  let name = tool?.display_name || labelForAssistantToolType(type);
+  if (type === "webhook") {
+    name = tool?.webhook?.name || tool?.display_name || "";
+  } else if (type === "client_side_tool") {
+    name =
+      tool?.client_side_tool?.name ||
+      tool?.display_name ||
+      labelForAssistantToolType(type);
+  }
 
   let description = "";
   if (type === "webhook") {
     description = tool?.webhook?.description || "";
+  } else if (type === "client_side_tool") {
+    description =
+      tool?.client_side_tool?.description ||
+      descriptionForAssistantToolType(type);
+  } else if (type === "whatsapp_template") {
+    const templates = Array.isArray(tool?.whatsapp_template?.templates)
+      ? tool.whatsapp_template.templates
+      : [];
+    const templateNames = templates
+      .map((template) => template?.name || template?.template_name)
+      .filter(Boolean);
+    description = templateNames.length
+      ? `Templates: ${templateNames.join(", ")}`
+      : descriptionForAssistantToolType(type);
   } else if (type === "hangup") {
     description =
       tool?.hangup?.description ||
@@ -132,7 +164,8 @@ export function renderAssistantToolEditor(
   tool,
   onChange,
   assistantId,
-  availableVariables = []
+  availableVariables = [],
+  onValidationChange
 ) {
   switch (type) {
     case "webhook":
@@ -183,6 +216,22 @@ export function renderAssistantToolEditor(
           availableVariables={availableVariables}
         />
       );
+    case "whatsapp_template":
+      return (
+        <WhatsAppTemplateToolEditor
+          value={tool}
+          onChange={onChange}
+          onValidationChange={onValidationChange}
+        />
+      );
+    case "client_side_tool":
+      return (
+        <ClientSideToolEditor
+          value={tool}
+          onChange={onChange}
+          onValidationChange={onValidationChange}
+        />
+      );
     case "invite":
       return (
         <InviteToolEditor
@@ -220,13 +269,22 @@ export default function AssistantToolEditSheet({
 }) {
   const [draft, setDraft] = useState(tool);
   const [testOpen, setTestOpen] = useState(false);
+  const [editorValidationError, setEditorValidationError] = useState("");
   const type = tool?.type || "";
   const label = labelForAssistantToolType(type);
   const canShowTestIcon = type === "webhook" && assistantId && tool?.tool_id;
   const testWebhookConfig = open ? draft?.webhook : tool?.webhook;
+  const validationError =
+    editorValidationError || validateAssistantToolConfiguration(draft);
 
   useEffect(() => {
-    if (open) setDraft(tool);
+    if (open) {
+      // The sheet keeps an isolated draft and must refresh it when a different
+      // tool is opened without unmounting the surrounding Integrations tab.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDraft(tool);
+      setEditorValidationError("");
+    }
   }, [open, tool]);
 
   function handleOpenChange(nextOpen) {
@@ -244,19 +302,20 @@ export default function AssistantToolEditSheet({
               Edit {label}
             </SheetTitle>
             <SheetDescription>
-              Configure the {label.toLowerCase()} tool settings
+              Configure the {label} settings
             </SheetDescription>
           </SheetHeader>
 
           <div className="mt-6 flex flex-col flex-1 min-h-0">
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-              <Card className="p-6 mx-4 flex-1 min-h-0 overflow-visible">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <Card className="p-6 mx-4">
                 {renderAssistantToolEditor(
                   type,
                   draft,
                   setDraft,
                   assistantId,
-                  availableVariables
+                  availableVariables,
+                  setEditorValidationError
                 )}
               </Card>
             </div>
@@ -272,6 +331,11 @@ export default function AssistantToolEditSheet({
                   Test
                 </Button>
               )}
+              {validationError ? (
+                <p className="max-w-sm text-xs text-destructive">
+                  {validationError}
+                </p>
+              ) : null}
               <div className="flex gap-2 ml-auto">
                 <Button
                   type="button"
@@ -285,6 +349,7 @@ export default function AssistantToolEditSheet({
                 </Button>
                 <Button
                   type="button"
+                  disabled={Boolean(validationError)}
                   onClick={() => {
                     onSave(draft);
                     onOpenChange(false);

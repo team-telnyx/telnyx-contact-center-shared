@@ -26,11 +26,11 @@ test("transcription models config exposes nova-3 with diarization and languages"
 
 test("transcribe API accepts model/language/options and stores speaker turns", () => {
   // Request body fields
-  assert.match(transcribeRoute, /model: requestedModel/);
-  assert.match(transcribeRoute, /language: requestedLanguage/);
-  assert.match(transcribeRoute, /options: requestedOptions/);
+  assert.match(transcribeRoute, /const requestedModel = body\.model/);
+  assert.match(transcribeRoute, /const language =/);
+  assert.match(transcribeRoute, /const options =/);
   // Model allowlist validation with nova-3 default
-  assert.match(transcribeRoute, /TRANSCRIPTION_MODELS\.some\(\(m\) => m\.value === requestedModel\)/);
+  assert.match(transcribeRoute, /TRANSCRIPTION_MODELS\.some\(\(item\) => item\.value === requestedModel\)/);
   assert.match(transcribeRoute, /DEFAULT_TRANSCRIPTION_MODEL/);
   // model_config forwarded for nova-3
   assert.match(transcribeRoute, /buildTranscriptionModelConfig\(model, options, language\)/);
@@ -114,16 +114,25 @@ test("interaction details top tiles use the redesigned layout", () => {
   assert.match(detailPage, /bg-gradient-to-r from-emerald-500 to-teal-400/);
   assert.match(detailPage, /bg-gradient-to-r from-violet-500 to-fuchsia-400/);
   // Participants render as avatar rows with role badges
-  assert.match(detailPage, /Unknown caller/);
-  assert.match(detailPage, />\s*Caller\s*<\/Badge>/);
+  // "customer", not "caller": the tile serves chat, email and video interactions
+  // as well as calls (renamed with the video channel in e82c4fa5).
+  assert.match(detailPage, /Unknown customer/);
+  assert.match(detailPage, />\s*Customer\s*<\/Badge>/);
   assert.match(detailPage, />\s*Agent\s*<\/Badge>/);
   // Call details as mini stat boxes with status badge
   assert.match(detailPage, /Wrap-up codes/);
   assert.match(detailPage, /No codes recorded/);
   // Call IDs with copy buttons rendered from one map
-  assert.match(detailPage, /\["Interaction ID", interaction\.id\]/);
-  assert.match(detailPage, /\["Call Control ID", interaction\.call_control_id\]/);
-  assert.match(detailPage, /\["Call Session ID", interaction\.call_session_id\]/);
+  // The identifier rows were relabelled to distinguish the customer leg from
+  // the agent's; the contract is that every id still comes from one map with a
+  // copy affordance, not from bespoke rows.
+  assert.match(detailPage, /\["Interaction ID", interaction\??\.id\]/);
+  assert.match(detailPage, /\["Customer Call Control ID", interaction\??\.call_control_id\]/);
+  assert.match(detailPage, /"Agent Call Control ID",\s*\n?\s*activeSegment\?\.agent_call_control_id/);
+  assert.match(detailPage, /"Agent Call Session ID",\s*\n?\s*activeSegment\?\.agent_call_session_id/);
+  // The rows moved from an inline literal to a named `identifiers` array so the
+  // voice and non-voice sets can differ; still one map, still one copy button.
+  assert.match(detailPage, /identifiers\.map\(\(\[label, value\]\) => \(/);
   // Old plain key:value rows are gone
   assert.doesNotMatch(detailPage, /border-l-4 border-l-blue-500/);
   assert.doesNotMatch(detailPage, /grid-cols-\[120px_1fr\]/);

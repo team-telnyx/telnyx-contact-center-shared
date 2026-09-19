@@ -1,5 +1,7 @@
 "use client";
 
+import { supervisionCustomerIdentity } from "@/lib/contact-center/customer-identity";
+
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Dialog,
@@ -24,6 +26,7 @@ import {
 } from "@tabler/icons-react";
 import { Pause as IconPause, Play as IconPlay } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
+import { TelephonyAddress } from "@/components/contact-center/TelephonyAddress";
 import { cn } from "@/lib/utils";
 import { useTelnyx } from "@/components/telephony-provider";
 import useActiveCallStore, {
@@ -31,6 +34,7 @@ import useActiveCallStore, {
   useIsRinging,
   useCallUI,
 } from "@/lib/stores/active-call-store";
+import { useAuth } from "@/components/auth-provider";
 
 const SUPERVISOR_ROLES = {
   monitor: {
@@ -80,7 +84,89 @@ const SUPERVISOR_ROLES = {
   },
 };
 
+const PARTICIPANT_TONES = {
+  violet: {
+    border: "border-violet-500",
+    icon: "bg-violet-500/20 text-violet-500",
+    eyebrow: "text-violet-500",
+    badge: "border-violet-500 text-violet-500",
+  },
+  blue: {
+    border: "border-blue-500",
+    icon: "bg-blue-500/20 text-blue-500",
+    eyebrow: "text-blue-500",
+    badge: "border-blue-500 text-blue-500",
+  },
+  green: {
+    border: "border-green-500",
+    icon: "bg-green-500/20 text-green-500",
+    eyebrow: "text-green-500",
+    badge: "border-green-500 text-green-500",
+  },
+};
+
+function SupervisionParticipantCard({
+  testId,
+  role,
+  label,
+  detail,
+  status,
+  tone,
+  icon: Icon,
+  dashed = false,
+  className,
+}) {
+  const colors = PARTICIPANT_TONES[tone];
+  return (
+    <div
+      data-testid={testId}
+      className={cn(
+        "relative z-10 flex min-h-[76px] min-w-0 items-center gap-3 rounded-xl border-2 bg-background/95 p-3 text-left shadow-sm",
+        colors.border,
+        dashed && "border-dashed",
+        className,
+      )}
+    >
+      <div
+        className={cn(
+          "grid h-9 w-9 shrink-0 place-items-center rounded-full",
+          colors.icon,
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            "text-[10px] font-semibold uppercase tracking-wider",
+            colors.eyebrow,
+          )}
+        >
+          {role}
+        </div>
+        <div className="truncate text-sm font-semibold" title={label}>
+          {label}
+        </div>
+        <TelephonyAddress
+          value={detail}
+          className="block max-w-[190px] truncate text-xs text-muted-foreground"
+        />
+      </div>
+      <Badge
+        variant="outline"
+        className={cn("shrink-0 text-[10px] uppercase", colors.badge)}
+      >
+        {status}
+      </Badge>
+    </div>
+  );
+}
+
+// Each supervision mode needs its own calls:supervise.* grant (RBAC Phase 3).
+const SUPERVISION_PERMISSION = { monitor: "calls:supervise.listen", whisper: "calls:supervise.whisper", barge: "calls:supervise.barge" };
+
 export function SupervisionModal({ open, onOpenChange, call }) {
+  const { can } = useAuth();
   const { client } = useTelnyx();
   const [loading, setLoading] = useState(false);
 
@@ -109,6 +195,10 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   const userInitiatedSupervisionRef = useRef(false);
   // Flag to track if we've already attempted to auto-answer the supervisor call
   const autoAnswerAttemptedRef = useRef(false);
+  // `clearActiveCall` deliberately collapses the terminal SDK state to `idle`.
+  // Remember that this supervision leg was observed first so `idle` can be
+  // treated as terminal without cancelling a call that is still arriving.
+  const supervisorCallObservedRef = useRef(false);
   const supervisorRemoteAudioRef = useRef(null);
 
   // Update refs when state changes
@@ -672,6 +762,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
 
         // Mark as user-initiated to prevent checkSupervisorCall from resetting
         userInitiatedSupervisionRef.current = true;
+        supervisorCallObservedRef.current = false;
 
         // Update refs FIRST (immediate, synchronous)
         activeRoleRef.current = role;
@@ -751,30 +842,17 @@ export function SupervisionModal({ open, onOpenChange, call }) {
       return;
     }
 
-    // Use the supervised call control ID (the call leg being supervised)
-    // This is the same ID we used when starting supervision (supervise_call_control_id)
-    // Prefer agent's call leg when available, otherwise use original leg
-    const callControlIdToUse =
-      supervisedCallControlId || // Stored from when supervision started
-      call?.supervisionCallControlId || // Pre-computed by API (prefers agent leg when available)
-      call?.agentCallControlId || // Agent's call leg (WebRTC leg) - preferred when call is answered
-      call?.originalCallControlId || // Original inbound call leg - fallback for queued calls
-      call?.callControlId ||
-      call?.id ||
-      call?.call_control_id;
-
+    // The role belongs to the supervisor leg created by /calls, not the
+    // agent leg supplied as supervise_call_control_id during origination.
+    const callControlIdToUse = currentSupervisorCallControlId;
     if (!callControlIdToUse) {
-      console.error(
-        "[SupervisionModal] No supervised call control ID found, cannot switch role",
-      );
-      // If no supervised call ID exists, start supervision with new role
-      await handleStartSupervision(newRole);
+      notify({ title: "Supervision unavailable", description: "The supervisor call is no longer available. Start supervision again.", variant: "warning" });
       return;
     }
 
     console.log("[SupervisionModal] Switching supervisor role:", {
-      supervisedCallControlId: callControlIdToUse, // The call leg being supervised (agent leg when available)
-      supervisorCallControlId: currentSupervisorCallControlId, // The supervisor call (for reference only)
+      supervisedCallControlId, // Agent leg remains the monitoring target.
+      supervisorCallControlId: callControlIdToUse, // Role changes address this leg.
       currentRole: activeRole,
       newRole,
       agentCallControlId: call?.agentCallControlId,
@@ -837,29 +915,83 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   useEffect(() => {
     if (!supervisorCallControlId || !open) return;
 
-    // Only clear state if the call actually ended (not just 'idle' during initialization)
-    // 'idle' can happen before the call arrives, so we should only clear on actual end states
-    const isCallEnded =
-      callStatus &&
-      ["hangup", "ended", "destroy", "terminated"].includes(callStatus);
+    const store = useActiveCallStore.getState();
+    const storeStatus = String(callStatus || "").toLowerCase();
+    const sdkStatus = String(activeCall?.state || activeCall?.status || "").toLowerCase();
+    const terminalStates = [
+      "done",
+      "hangup",
+      "ended",
+      "destroy",
+      "purge",
+      "terminated",
+      "failed",
+    ];
+    const liveStates = [
+      "new",
+      "ringing",
+      "early",
+      "active",
+      "connected",
+      "answered",
+      "held",
+    ];
+    const activeCallIsSupervisor = Boolean(
+      activeCall &&
+        (store.fromName === "Supervisor Call" ||
+          (supervisorNumber && store.fromNumber === supervisorNumber)),
+    );
 
-    // Only clear if call actually ended (not 'idle' which happens before call arrives)
+    if (
+      activeCallIsSupervisor &&
+      (liveStates.includes(storeStatus) || liveStates.includes(sdkStatus))
+    ) {
+      supervisorCallObservedRef.current = true;
+    }
+
+    const isCallEnded =
+      terminalStates.includes(storeStatus) ||
+      (activeCallIsSupervisor && terminalStates.includes(sdkStatus)) ||
+      (supervisorCallObservedRef.current && !activeCall && storeStatus === "idle");
+
     if (isCallEnded) {
       console.log("[SupervisionModal] Call ended, clearing state:", {
         callStatus,
+        sdkStatus,
         supervisorCallControlId,
         activeRole,
         hasActiveCall: !!activeCall,
       });
       setSupervisorCallControlId(null);
+      setSupervisedCallControlId(null);
       setActiveRole(null);
       // Clear refs too
       activeRoleRef.current = null;
       supervisorCallControlIdRef.current = null;
       // Clear user-initiated flag
       userInitiatedSupervisionRef.current = false;
+      autoAnswerAttemptedRef.current = false;
+      supervisorCallObservedRef.current = false;
+      const callId = call?.id || call?.interactionId || call?.callControlId;
+      if (callId) {
+        try {
+          localStorage.removeItem(`supervisor_role_${callId}`);
+        } catch {
+          // Ignore localStorage errors
+        }
+      }
+      onOpenChange(false);
     }
-  }, [callStatus, supervisorCallControlId, open, activeRole, activeCall]);
+  }, [
+    callStatus,
+    supervisorCallControlId,
+    open,
+    activeRole,
+    activeCall,
+    supervisorNumber,
+    call,
+    onOpenChange,
+  ]);
 
   // Debug logging for button state - helps diagnose why buttons aren't activating
   useEffect(() => {
@@ -1030,109 +1162,39 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   };
 
   const renderAudioFlow = (role) => {
-    // If no role is active, don't show any lines
-    if (!role) {
-      const circleRadius = 32;
-      const supervisorPos = { x: 200, y: 60 };
-      const callerPos = { x: 100, y: 240 };
-      const agentPos = { x: 300, y: 240 };
+    const flow = role ? SUPERVISOR_ROLES[role].audioFlow : null;
+    const supervisorLabel =
+      [
+        user?.first_name || user?.firstName,
+        user?.last_name || user?.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ") ||
+      user?.name ||
+      user?.username ||
+      "You";
+    const supervisorDetail =
+      supervisorNumber || user?.username || "Supervisor WebRTC";
+    const {label: callerLabel, detail: callerDetail} = supervisionCustomerIdentity(call);
+    const agentIdentity =
+      call?.agentUsername ||
+      call?.metadata?.agent_username ||
+      call?.metadata?.assigned_agent ||
+      null;
+    const agentLabel =
+      call?.agentName || call?.metadata?.agent_name || agentIdentity || "Agent";
+    const agentDetail =
+      call?.agentNumber ||
+      call?.agentPhone ||
+      call?.agentAddress ||
+      (agentIdentity && agentIdentity !== agentLabel ? agentIdentity : null) ||
+      (isCallInQueue ? "Waiting for assignment" : "Connected via WebRTC");
+    const SupervisorIcon = role ? SUPERVISOR_ROLES[role].icon : IconEye;
 
-      return (
-        <div className="space-y-4">
-          <div className="relative h-64 bg-muted/30 rounded-lg p-4">
-            <svg
-              className="absolute inset-0 w-full h-full"
-              viewBox="0 0 400 300"
-            >
-              {/* Supervisor - Top middle */}
-              <circle
-                cx={supervisorPos.x}
-                cy={supervisorPos.y}
-                r={circleRadius}
-                fill="#a855f7"
-              />
-              <text
-                x={supervisorPos.x}
-                y={supervisorPos.y + 6}
-                textAnchor="middle"
-                className="text-base fill-white font-semibold"
-              >
-                You
-              </text>
-
-              {/* Caller - Bottom left */}
-              <circle
-                cx={callerPos.x}
-                cy={callerPos.y}
-                r={circleRadius}
-                fill="#3b82f6"
-              />
-              <text
-                x={callerPos.x}
-                y={callerPos.y + 6}
-                textAnchor="middle"
-                className="text-base fill-white font-semibold"
-              >
-                Caller
-              </text>
-
-              {/* Agent - Bottom right */}
-              <circle
-                cx={agentPos.x}
-                cy={agentPos.y}
-                r={circleRadius}
-                fill={isCallInQueue ? "transparent" : "#10b981"}
-                stroke={isCallInQueue ? "#10b981" : "none"}
-                strokeWidth="2"
-                strokeDasharray={isCallInQueue ? "5,5" : "none"}
-              />
-              <text
-                x={agentPos.x}
-                y={agentPos.y + 6}
-                textAnchor="middle"
-                className={cn(
-                  "text-base font-semibold",
-                  isCallInQueue ? "fill-gray-500" : "fill-white",
-                )}
-              >
-                Agent
-              </text>
-              {/* No lines when no role is active */}
-            </svg>
-          </div>
-        </div>
-      );
-    }
-
-    const flow = SUPERVISOR_ROLES[role].audioFlow;
-    const agentLabel = call?.agentName || call?.agentUsername || "Agent";
-
-    // Triangle layout: Supervisor top middle, Caller bottom left, Agent bottom right
-    // SVG coordinates: 400x300 viewBox
-    const circleRadius = 32; // Bigger circles
-    const supervisorPos = { x: 200, y: 60 }; // Top middle
-    const callerPos = { x: 100, y: 240 }; // Bottom left
-    const agentPos = { x: 300, y: 240 }; // Bottom right
-
-    // Helper to calculate point on circle edge for line connection
-    const getPointOnCircle = (centerX, centerY, targetX, targetY, radius) => {
-      const dx = targetX - centerX;
-      const dy = targetY - centerY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance === 0) return { x: centerX, y: centerY };
-      const ratio = radius / distance;
-      return {
-        x: centerX + dx * ratio,
-        y: centerY + dy * ratio,
-      };
-    };
-
-    // Helper to determine line style based on connection type
     const getLineStyle = (fromParty, toParty) => {
+      if (!flow) return null;
       const fromFlow = flow[fromParty];
       const toFlow = flow[toParty];
-
-      // Check if both can hear and speak to each other (bidirectional communication)
       const canHearEachOther =
         fromFlow.canHear.includes(toParty) &&
         toFlow.canHear.includes(fromParty);
@@ -1141,174 +1203,103 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         toFlow.canSpeak.includes(fromParty);
 
       if (canHearEachOther && canSpeakToEachOther) {
-        // Both can listen & speak - thick green line
-        return { stroke: "#10b981", strokeWidth: 4, strokeDasharray: "none" };
-      } else if (
+        return { stroke: "#10b981", strokeWidth: 4 };
+      }
+      if (
         canHearEachOther ||
         fromFlow.canHear.includes(toParty) ||
         toFlow.canHear.includes(fromParty)
       ) {
-        // Listen only (monitor) - orange dashed line with width 4
-        return { stroke: "#f97316", strokeWidth: 4, strokeDasharray: "8,4" };
+        return {
+          stroke: "#f97316",
+          strokeWidth: 4,
+          strokeDasharray: "8 5",
+        };
       }
-      return null; // No connection
+      return null;
+    };
+
+    const connector = (testId, fromParty, toParty, path) => {
+      const style = getLineStyle(fromParty, toParty);
+      if (!style) return null;
+      return (
+        <path
+          data-testid={testId}
+          d={path}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          {...style}
+        />
+      );
     };
 
     return (
-      <div className="space-y-4">
-        {/* Visual representation with triangle layout */}
-        <div className="relative h-64 bg-muted/30 rounded-lg p-4">
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 300">
-            {/* Supervisor - Top middle */}
-            <circle
-              cx={supervisorPos.x}
-              cy={supervisorPos.y}
-              r={circleRadius}
-              fill="#a855f7"
-            />
-            <text
-              x={supervisorPos.x}
-              y={supervisorPos.y + 6}
-              textAnchor="middle"
-              className="text-base fill-white font-semibold"
-            >
-              You
-            </text>
+      <div
+        data-testid="supervision-topology"
+        className="relative h-[300px] overflow-hidden rounded-xl border bg-muted/20"
+      >
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          preserveAspectRatio="none"
+          viewBox="0 0 600 300"
+        >
+          {connector(
+            "supervision-connector-caller",
+            "supervisor",
+            "caller",
+            "M 284 92 V 140 H 150 V 208",
+          )}
+          {!isCallInQueue &&
+            connector(
+              "supervision-connector-agent",
+              "supervisor",
+              "agent",
+              "M 316 92 V 140 H 450 V 208",
+            )}
+          {!isCallInQueue &&
+            connector(
+              "supervision-connector-parties",
+              "caller",
+              "agent",
+              "M 284 246 H 316",
+            )}
+        </svg>
 
-            {/* Caller - Bottom left */}
-            <circle
-              cx={callerPos.x}
-              cy={callerPos.y}
-              r={circleRadius}
-              fill="#3b82f6"
-            />
-            <text
-              x={callerPos.x}
-              y={callerPos.y + 6}
-              textAnchor="middle"
-              className="text-base fill-white font-semibold"
-            >
-              Caller
-            </text>
+        <div className="absolute left-1/2 top-4 w-[calc(50%_-_0.375rem)] min-w-[220px] -translate-x-1/2">
+          <SupervisionParticipantCard
+            testId="supervision-party-supervisor"
+            role="Supervisor"
+            label={supervisorLabel}
+            detail={supervisorDetail}
+            status={role || "ready"}
+            tone="violet"
+            icon={SupervisorIcon}
+          />
+        </div>
 
-            {/* Agent - Bottom right */}
-            <circle
-              cx={agentPos.x}
-              cy={agentPos.y}
-              r={circleRadius}
-              fill={isCallInQueue ? "transparent" : "#10b981"}
-              stroke={isCallInQueue ? "#10b981" : "none"}
-              strokeWidth="2"
-              strokeDasharray={isCallInQueue ? "5,5" : "none"}
-            />
-            <text
-              x={agentPos.x}
-              y={agentPos.y + 6}
-              textAnchor="middle"
-              className={cn(
-                "text-base font-semibold",
-                isCallInQueue ? "fill-gray-500" : "fill-white",
-              )}
-            >
-              Agent
-            </text>
-
-            {/* Connection lines based on role and flow - from circle edges */}
-            {/* Caller <-> Agent */}
-            {!isCallInQueue &&
-              (() => {
-                const style = getLineStyle("caller", "agent");
-                if (style) {
-                  const start = getPointOnCircle(
-                    callerPos.x,
-                    callerPos.y,
-                    agentPos.x,
-                    agentPos.y,
-                    circleRadius,
-                  );
-                  const end = getPointOnCircle(
-                    agentPos.x,
-                    agentPos.y,
-                    callerPos.x,
-                    callerPos.y,
-                    circleRadius,
-                  );
-                  return (
-                    <line
-                      x1={start.x}
-                      y1={start.y}
-                      x2={end.x}
-                      y2={end.y}
-                      {...style}
-                    />
-                  );
-                }
-                return null;
-              })()}
-
-            {/* Supervisor <-> Caller */}
-            {(() => {
-              const style = getLineStyle("supervisor", "caller");
-              if (style) {
-                const start = getPointOnCircle(
-                  supervisorPos.x,
-                  supervisorPos.y,
-                  callerPos.x,
-                  callerPos.y,
-                  circleRadius,
-                );
-                const end = getPointOnCircle(
-                  callerPos.x,
-                  callerPos.y,
-                  supervisorPos.x,
-                  supervisorPos.y,
-                  circleRadius,
-                );
-                return (
-                  <line
-                    x1={start.x}
-                    y1={start.y}
-                    x2={end.x}
-                    y2={end.y}
-                    {...style}
-                  />
-                );
-              }
-              return null;
-            })()}
-
-            {/* Supervisor <-> Agent */}
-            {!isCallInQueue &&
-              (() => {
-                const style = getLineStyle("supervisor", "agent");
-                if (style) {
-                  const start = getPointOnCircle(
-                    supervisorPos.x,
-                    supervisorPos.y,
-                    agentPos.x,
-                    agentPos.y,
-                    circleRadius,
-                  );
-                  const end = getPointOnCircle(
-                    agentPos.x,
-                    agentPos.y,
-                    supervisorPos.x,
-                    supervisorPos.y,
-                    circleRadius,
-                  );
-                  return (
-                    <line
-                      x1={start.x}
-                      y1={start.y}
-                      x2={end.x}
-                      y2={end.y}
-                      {...style}
-                    />
-                  );
-                }
-                return null;
-              })()}
-          </svg>
+        <div className="absolute inset-x-4 bottom-4 grid grid-cols-2 gap-8">
+          <SupervisionParticipantCard
+            testId="supervision-party-caller"
+            role="Customer"
+            label={callerLabel}
+            detail={callerDetail}
+            status={isCallInQueue ? "queued" : "live"}
+            tone="blue"
+            icon={IconPhone}
+          />
+          <SupervisionParticipantCard
+            testId="supervision-party-agent"
+            role="Agent"
+            label={agentLabel}
+            detail={agentDetail}
+            status={isCallInQueue ? "waiting" : "connected"}
+            tone="green"
+            icon={IconHeadphones}
+            dashed={isCallInQueue}
+          />
         </div>
       </div>
     );
@@ -1328,8 +1319,9 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         onOpenChange(newOpen);
       }}
     >
-      <audio ref={supervisorRemoteAudioRef} autoPlay playsInline className="hidden" />
+      <audio data-testid="supervisor-remote-audio" ref={supervisorRemoteAudioRef} autoPlay playsInline className="hidden" />
       <DialogContent
+        data-testid="supervision-dialog" data-active-role={activeRole || ""} data-supervisor-call-id={supervisorCallControlId || ""}
         className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
         onInteractOutside={(e) => {
           // Prevent closing when clicking outside if supervision is active
@@ -1356,7 +1348,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         <div className="space-y-6 py-4">
           {/* Mode Selection Cards */}
           <div className="grid gap-4 grid-cols-3">
-            {Object.entries(SUPERVISOR_ROLES).map(([role, config]) => {
+            {Object.entries(SUPERVISOR_ROLES).filter(([role]) => can(SUPERVISION_PERMISSION[role] || "calls:supervise.listen")).map(([role, config]) => {
               const Icon = config.icon;
               // Tile is truly active only if activeRole matches (supervision is actually started)
               const isActive = activeRole === role;
@@ -1365,33 +1357,34 @@ export function SupervisionModal({ open, onOpenChange, call }) {
               // Only show as active if supervision has actually started (has activeRole and supervisorCallControlId)
               // Don't show as active just because call is in queue - user needs to click to start
               const showAsActive = isActive && supervisorCallControlId;
-              const colorClasses = {
-                blue: showAsActive
-                  ? "bg-blue-500 text-white border-blue-600"
-                  : isDisabled
-                    ? "bg-blue-500/5 text-blue-600/50 border-blue-500/10 cursor-not-allowed"
-                    : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20",
-                purple: showAsActive
-                  ? "bg-purple-500 text-white border-purple-600"
-                  : isDisabled
-                    ? "bg-purple-500/5 text-purple-600/50 border-purple-500/10 cursor-not-allowed"
-                    : "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20",
-                green: showAsActive
-                  ? "bg-green-500 text-white border-green-600"
-                  : isDisabled
-                    ? "bg-green-500/5 text-green-600/50 border-green-500/10 cursor-not-allowed"
-                    : "bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20",
-              };
+              const accentClasses = {
+                blue: {
+                  icon: "text-blue-500",
+                  selected: "border-blue-500 ring-blue-500/40",
+                },
+                purple: {
+                  icon: "text-purple-500",
+                  selected: "border-purple-500 ring-purple-500/40",
+                },
+                green: {
+                  icon: "text-green-500",
+                  selected: "border-green-500 ring-green-500/40",
+                },
+              }[config.color];
 
               return (
                 <Card
+                  data-testid={`supervision-role-${role}`} data-active={showAsActive ? "true" : "false"}
                   key={role}
                   className={cn(
-                    "transition-all border-2 relative",
-                    colorClasses[config.color],
-                    showAsActive && "ring-2 ring-offset-2",
+                    "relative border-2 bg-background text-foreground transition-all",
+                    showAsActive
+                      ? cn("ring-1", accentClasses.selected)
+                      : "border-border hover:bg-muted/60",
                     loading && "opacity-50 cursor-not-allowed",
-                    isDisabled ? "cursor-not-allowed" : "cursor-pointer",
+                    isDisabled
+                      ? "cursor-not-allowed opacity-50 hover:bg-background"
+                      : "cursor-pointer",
                   )}
                   onClick={async () => {
                     if (loading || isDisabled) return;
@@ -1437,15 +1430,15 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                 >
                   <CardContent className="p-4 flex flex-col items-center gap-3">
                     <div className="relative">
-                      <Icon className="h-8 w-8" />
+                      <Icon className={cn("h-8 w-8", accentClasses.icon)} />
                       {/* Status indicator in top right corner */}
                       <div className="absolute -top-1 -right-1">
                         {showAsActive ? (
-                          <div className="bg-white rounded-full p-0.5">
+                          <div className="rounded-full bg-background p-0.5">
                             <IconCheck className="h-4 w-4 text-green-600" />
                           </div>
                         ) : isDisabled ? (
-                          <div className="bg-white rounded-full p-0.5">
+                          <div className="rounded-full bg-background p-0.5">
                             <IconX className="h-4 w-4 text-red-600" />
                           </div>
                         ) : null}
@@ -1455,7 +1448,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                       <div className="font-semibold text-sm">
                         {config.label}
                       </div>
-                      <div className="text-xs mt-1 opacity-90">
+                      <div className="mt-1 text-xs text-muted-foreground">
                         {config.description}
                       </div>
                     </div>

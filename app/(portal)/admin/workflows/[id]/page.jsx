@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import SlotMcpBindingEditor from "@/components/admin/SlotMcpBindingEditor";
 import { AutomationsSectionPage } from "@/components/admin/AutomationsSectionNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Combobox } from "@/components/ui/combobox";
+import AIModels from "@/components/assistants/AIModels";
 import {
   Dialog,
   DialogContent,
@@ -122,6 +123,16 @@ export default function WorkflowEditorPage() {
   const [saving, setSaving] = useState(false);
   const [workflow, setWorkflow] = useState(null);
   const [stages, setStages] = useState([]);
+  // Slot names across the workflow, so the MCP binding editor can hint at the
+  // slots a tool result may be written into.
+  const allSlotNames = useMemo(
+    () =>
+      stages
+        .flatMap((stage) => stage.items || [])
+        .filter((item) => item?.type === "slot" && item.slot_name)
+        .map((item) => item.slot_name),
+    [stages],
+  );
   const [selectedStageId, setSelectedStageId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [itemEditorDirty, setItemEditorDirty] = useState(false);
@@ -137,6 +148,9 @@ export default function WorkflowEditorPage() {
     category: "",
     is_active: false,
     llm_model: "openai/gpt-4o",
+    llm_fallback_model: "openai/gpt-5.6-luna",
+    llm_reasoning_enabled: false,
+    llm_max_output_tokens: 1200,
     llm_confidence_threshold: 0.95,
     data_action_buttons: [],
   });
@@ -295,6 +309,9 @@ export default function WorkflowEditorPage() {
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
         llm_model: data.workflow.llm_model || "openai/gpt-4o",
+        llm_fallback_model: data.workflow.llm_fallback_model || "openai/gpt-5.6-luna",
+        llm_reasoning_enabled: data.workflow.llm_reasoning_enabled === true,
+        llm_max_output_tokens: data.workflow.llm_max_output_tokens ?? 1200,
         llm_confidence_threshold: data.workflow.llm_confidence_threshold ?? 0.95,
         data_action_buttons: Array.isArray(data.workflow.data_action_buttons) ? data.workflow.data_action_buttons : [],
       });
@@ -695,9 +712,21 @@ export default function WorkflowEditorPage() {
       if (!Number.isFinite(confidenceThreshold) || confidenceThreshold < 0 || confidenceThreshold > 1) {
         throw new Error("LLM confidence threshold must be a number between 0 and 1.");
       }
+      const outputCap = Number(workflowForm.llm_max_output_tokens);
+      if (!Number.isInteger(outputCap) || outputCap < 512 || outputCap > 1200) {
+        throw new Error("Slot filling output cap must be an integer between 512 and 1200 tokens.");
+      }
+      const fallbackModel = typeof workflowForm.llm_fallback_model === "string"
+        ? workflowForm.llm_fallback_model.trim()
+        : "";
+      if (!fallbackModel) {
+        throw new Error("Select a slot filling fallback model.");
+      }
       const workflowPayload = {
         ...workflowForm,
+        llm_fallback_model: fallbackModel,
         llm_confidence_threshold: Math.round(confidenceThreshold * 100) / 100,
+        llm_max_output_tokens: outputCap,
       };
 
       const res = await fetch(`/api/admin/workflows/${workflowId}`, {
@@ -733,6 +762,9 @@ export default function WorkflowEditorPage() {
       workflowForm.category !== (workflow.category || "") ||
       workflowForm.is_active !== Boolean(workflow.is_active) ||
       workflowForm.llm_model !== (workflow.llm_model || "openai/gpt-4o") ||
+      workflowForm.llm_fallback_model !== (workflow.llm_fallback_model || "openai/gpt-5.6-luna") ||
+      workflowForm.llm_reasoning_enabled !== Boolean(workflow.llm_reasoning_enabled) ||
+      Number(workflowForm.llm_max_output_tokens) !== Number(workflow.llm_max_output_tokens ?? 1200) ||
       Number(workflowForm.llm_confidence_threshold) !== Number(workflow.llm_confidence_threshold ?? 0.95) ||
       JSON.stringify(workflowForm.data_action_buttons || []) !== JSON.stringify(workflow.data_action_buttons || [])
     )
@@ -1354,6 +1386,7 @@ export default function WorkflowEditorPage() {
               <div className="flex-1 min-h-0 overflow-hidden">
                 <ItemEditor
                   item={selectedItem}
+                  availableSlotNames={allSlotNames}
                   onSave={(updates) => updateItem(selectedItem.id, updates)}
                   onDirtyChange={setItemEditorDirty}
                 />
@@ -1424,23 +1457,83 @@ export default function WorkflowEditorPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-llm-model">LLM Model</Label>
-              <Combobox
+              <AIModels
                 value={workflowForm.llm_model}
-                onChange={(value) =>
+                onValueChange={(value) =>
                   setWorkflowForm((f) => ({ ...f, llm_model: value }))
                 }
-                options={llmModels.map((model) => ({
-                  value: model.id,
-                  label: `${model.id} (${model.parameters} • ${model.tier})`,
-                }))}
+                models={llmModels}
                 placeholder={loadingModels ? "Loading models..." : "Select model..."}
+                searchable
                 disabled={loadingModels}
-                searchable={true}
-                triggerClassName="w-full"
+                triggerClassName="w-full border bg-background"
                 contentClassName="w-[450px]"
+                emptyMessage={loadingModels ? "Loading models..." : "No Telnyx models found."}
               />
               <p className="text-xs text-muted-foreground">
                 Model used for workflow analysis and suggestions
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-llm-fallback-model">Slot filling fallback model</Label>
+              <AIModels
+                value={workflowForm.llm_fallback_model}
+                onValueChange={(value) =>
+                  setWorkflowForm((f) => ({ ...f, llm_fallback_model: value }))
+                }
+                models={llmModels}
+                placeholder={loadingModels ? "Loading models..." : "Select fallback model..."}
+                searchable
+                disabled={loadingModels}
+                triggerClassName="w-full border bg-background"
+                contentClassName="w-[450px]"
+                emptyMessage={loadingModels ? "Loading models..." : "No Telnyx models found."}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used only if the primary slot-filling request fails or times out. Default: GPT-5.6-luna.
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="edit-llm-reasoning-enabled">Reasoning enabled</Label>
+                <p className="text-xs text-muted-foreground">
+                  Optional for complex workflows. Disabled by default to keep slot filling fast and predictable.
+                </p>
+              </div>
+              <Switch
+                id="edit-llm-reasoning-enabled"
+                checked={workflowForm.llm_reasoning_enabled === true}
+                onCheckedChange={(checked) =>
+                  setWorkflowForm((f) => ({ ...f, llm_reasoning_enabled: checked }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-llm-max-output-tokens">Slot filling output cap</Label>
+              <Input
+                id="edit-llm-max-output-tokens"
+                type="number"
+                min="512"
+                max="1200"
+                step="100"
+                value={workflowForm.llm_max_output_tokens}
+                onChange={(e) =>
+                  setWorkflowForm((f) => ({ ...f, llm_max_output_tokens: e.target.value }))
+                }
+                onBlur={() =>
+                  setWorkflowForm((f) => {
+                    if (f.llm_max_output_tokens === "") return f;
+                    const value = Number(f.llm_max_output_tokens);
+                    if (!Number.isFinite(value)) return { ...f, llm_max_output_tokens: 1200 };
+                    return {
+                      ...f,
+                      llm_max_output_tokens: Math.min(1200, Math.max(512, Math.round(value))),
+                    };
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Default: 1,200. Use 800 for simple workflows; keep 1,200 for complex or multi-slot intake. Lower values reduce latency but may truncate unusually large responses.
               </p>
             </div>
             <div className="space-y-2">
@@ -2034,7 +2127,7 @@ function getHintColor(index) {
 }
 
 // Item Editor Component with all slot fields
-function ItemEditor({ item, onSave, onDirtyChange }) {
+function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
   // Determine default completion_trigger based on type
   const getDefaultCompletionTrigger = (itemType) => {
     if (itemType === "slot") return "customer";
@@ -2052,6 +2145,7 @@ function ItemEditor({ item, onSave, onDirtyChange }) {
     slot_validation: item.slot_validation || "",
     hints: item.hints || [],
     completion_trigger: item.completion_trigger || getDefaultCompletionTrigger(item.type || "action"),
+    mcp_binding: item.mcp_binding || null,
   });
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -2072,6 +2166,7 @@ function ItemEditor({ item, onSave, onDirtyChange }) {
       slot_validation: item.slot_validation || "",
       hints: Array.isArray(item.hints) ? item.hints : [],
       completion_trigger: item.completion_trigger || defaultTrigger,
+      mcp_binding: item.mcp_binding || null,
     });
     setHasChanges(false);
     setNewOption("");
@@ -2093,7 +2188,9 @@ function ItemEditor({ item, onSave, onDirtyChange }) {
       JSON.stringify(form.slot_options) !== JSON.stringify(originalOptions) ||
       form.slot_validation !== (item.slot_validation || "") ||
       JSON.stringify(form.hints) !== JSON.stringify(originalHints) ||
-      form.completion_trigger !== (item.completion_trigger || defaultTrigger);
+      form.completion_trigger !== (item.completion_trigger || defaultTrigger) ||
+      // Without this, editing only the binding leaves Save disabled.
+      JSON.stringify(form.mcp_binding ?? null) !== JSON.stringify(item.mcp_binding ?? null);
     setHasChanges(changed);
   }, [form, item]);
 
@@ -2178,6 +2275,9 @@ function ItemEditor({ item, onSave, onDirtyChange }) {
         type: form.type,
         is_required: form.is_required,
         completion_trigger: form.completion_trigger,
+        // null clears the binding; the shape is validated at run time by
+        // lib/agent-assist/slot-mcp-runner.mjs.
+        mcp_binding: form.type === "slot" ? form.mcp_binding : null,
         slot_name: form.type === "slot" ? form.slot_name.trim() : null,
         slot_type: form.type === "slot" ? form.slot_type : null,
         slot_options: form.type === "slot" && form.slot_type === "select" ? form.slot_options : null,
@@ -2496,6 +2596,14 @@ function ItemEditor({ item, onSave, onDirtyChange }) {
               LLM instructions for validating and formatting the captured value
             </p>
           </div>
+
+          <SlotMcpBindingEditor
+            value={form.mcp_binding}
+            slotName={form.slot_name}
+            itemId={item.id}
+            availableSlots={availableSlotNames}
+            onChange={(next) => setForm((f) => ({ ...f, mcp_binding: next }))}
+          />
         </div>
       )}
 

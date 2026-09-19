@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
-
-async function getFlowAccessUsername(session) {
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!email) return undefined;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  return user && isAdmin(user) ? null : email;
-}
 
 function exportFilename(name = "call_flow") {
   const safeName = String(name || "call_flow")
@@ -31,17 +18,10 @@ function exportFilename(name = "call_flow") {
  * GET /api/voice/flows/[id]/export
  * Export a call flow as a portable JSON bundle.
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
-
-    const username = await getFlowAccessUsername(session);
+    // Holders of the call-flow permission export any flow; others only their own.
+    const username = authz.permitted ? null : (authz.user.username || authz.user.email || undefined);
     const { id } = await params;
     const flow = await VoiceFlowDb.getFlowById(id, username);
 
@@ -79,3 +59,6 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("call_flows:export", GET_handler, { route: "/api/voice/flows/[id]/export" });

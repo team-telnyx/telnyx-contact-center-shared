@@ -5,6 +5,7 @@ import { AgentAssist } from "./AgentAssist";
 import { AgentAssistWorkflow } from "./AgentAssistWorkflow";
 import { AgentFormsView } from "./AgentFormsView";
 import { AgentWebPagesView } from "./AgentWebPagesView";
+import TransportMcpSubmitControl from "./TransportMcpSubmitControl";
 import { Sparkles } from "lucide-react";
 
 /**
@@ -80,12 +81,18 @@ export function InteractionDetail({ interaction }) {
   // Workflows mode - full width workflow view without tabs
   if (assistType === "workflows" && workflowId) {
     return (
-      <div className="flex flex-col h-full overflow-hidden p-3">
+      <div className="relative flex flex-col h-full overflow-hidden p-3">
         <AgentAssistWorkflow 
           interactionId={interaction.id} 
           workflowId={workflowId}
           interaction={interaction}
         />
+        {/* New-transport MCP submit lives beside the progress/count controls at
+            the bottom-right. It renders nothing for workflows without a
+            manual_submit create_transport binding. */}
+        <div className="absolute bottom-6 right-28 z-20">
+          <TransportMcpSubmitControl />
+        </div>
       </div>
     );
   }

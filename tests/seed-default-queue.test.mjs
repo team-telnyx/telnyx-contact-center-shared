@@ -141,9 +141,16 @@ test("seedDefaultQueue: returns false without throwing when no Postgres pool is 
   await import("../lib/postgres.mjs");
   const cached = global.__pg_pool;
   const prev = { pool: cached.pool, status: cached.status, listenersAttached: cached.listenersAttached };
+  // Emptying the cache is not enough: getPostgresPool() rebuilds a pool from the
+  // environment whenever the cache is empty and the connection is configured, so
+  // with POSTGRES_* set this test used to get a live pool and seed successfully.
+  // Hide the configuration too, and restore it either way.
+  const envKeys = ["POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER"];
+  const prevEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   cached.pool = null;
   cached.status = "disconnected";
   cached.listenersAttached = false;
+  for (const key of envKeys) delete process.env[key];
   try {
     const { seedDefaultQueue } = await import("../lib/seed-default-queue.mjs");
     const ok = await seedDefaultQueue();
@@ -152,6 +159,10 @@ test("seedDefaultQueue: returns false without throwing when no Postgres pool is 
     cached.pool = prev.pool;
     cached.status = prev.status;
     cached.listenersAttached = prev.listenersAttached;
+    for (const key of envKeys) {
+      if (prevEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = prevEnv[key];
+    }
   }
 });
 

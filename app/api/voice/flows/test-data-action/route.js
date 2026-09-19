@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import {
   getEntityBasePath,
   getEntitySearchPath,
 } from "@/lib/data-sources-schema";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 function parseDirectVariable(value) {
   if (typeof value !== "string") return null;
@@ -60,15 +59,9 @@ function addForwardedAuthHeaders(headers, request) {
   if (authorization) headers.authorization = authorization;
 }
 
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser(request.url);
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isAdmin(user)) {
-      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
 
     const payload = await request.json();
     const {
@@ -192,3 +185,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("call_flows:test", POST_handler, { route: "/api/voice/flows/test-data-action" });

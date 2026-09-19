@@ -31,7 +31,7 @@ test("analyzer, both routes, store, and component thread recentContext end-to-en
   assert.match(analyzer, /buildWorkflowAnalysisUserPrompt\(\{[\s\S]*?recentContext,/);
 
   const live = await read("../app/api/agent-assist/workflow/analyze/route.js");
-  assert.match(live, /speaker, recentContext \} = body/);
+  assert.match(live, /const \{ transcript, speaker, recentContext[^}]*\} = item;/);
   assert.match(live, /recentContext: Array\.isArray\(recentContext\)/);
 
   const testRoute = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
@@ -42,6 +42,10 @@ test("analyzer, both routes, store, and component thread recentContext end-to-en
   assert.match(store, /analyzeTranscript: async \(transcript, speaker, recentContext = \[\]\)/);
 
   const cmp = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+  // The component now builds the context per utterance and carries it through
+  // its analysis queue, so assert the threading rather than one call shape:
+  // context is derived from the preceding finals and travels with the speaker.
   assert.match(cmp, /const recentContext = /);
-  assert.match(cmp, /transcription\.track,\s*\n\s*recentContext/);
+  assert.match(cmp, /speaker: current\.track,\s*\n\s*recentContext,/);
+  assert.match(cmp, /recentContext \}\) => \(\{[\s\S]{0,200}?recentContext,/);
 });

@@ -5,17 +5,17 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { revalidatePath } from "next/cache";
+import {
+  readEffectiveAgentStatus,
+  setManualAgentStatus,
+} from "@/lib/acd/agent-state.mjs";
 
 async function getCurrentAgentStatus(userId) {
   if (!userId) return "Available";
   try {
     const pool = getPostgresPool();
     if (!pool) return "Available";
-    const result = await pool.query(
-      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
-      [String(userId)],
-    );
-    return result.rows?.[0]?.agent_status || "Available";
+    return await readEffectiveAgentStatus(pool, String(userId), "Offline");
   } catch (_) {
     return "Available";
   }
@@ -109,9 +109,9 @@ async function updateProfileWithId(idForQuery, formData, current) {
     if (formData.has("profilePictureUri")) {
       update.profilePictureUri = (formData.get("profilePictureUri") || "").toString();
     }
-    if (formData.has("status")) {
-      update.status = (formData.get("status") || current?.status || "").toString();
-    }
+    const requestedStatus = formData.has("status")
+      ? (formData.get("status") || current?.status || "").toString()
+      : null;
     
     let theme;
     if (formData.has("theme")) {
@@ -123,13 +123,24 @@ async function updateProfileWithId(idForQuery, formData, current) {
     if (typeof theme !== "undefined") update.theme = theme;
 
     // Only update if there are fields to update
-    if (Object.keys(update).length === 0) {
+    if (Object.keys(update).length === 0 && !requestedStatus) {
       return { ok: true };
     }
 
     // Ensure ID is a string
     const userId = String(idForQuery);
-    await PgDb.updateUserById(userId, update);
+    if (Object.keys(update).length > 0) {
+      await PgDb.updateUserById(userId, update);
+    }
+    if (requestedStatus) {
+      const pool = getPostgresPool();
+      if (!pool) throw new Error("Postgres not configured");
+      await setManualAgentStatus(pool, {
+        agentId: userId,
+        status: requestedStatus,
+        actor: `agent:${current?.username || userId}`,
+      });
+    }
 
     revalidatePath("/");
     revalidatePath("/profile");

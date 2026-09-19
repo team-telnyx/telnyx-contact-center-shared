@@ -26,7 +26,11 @@ test("Standalone STT language options are sourced per exact model from TRANSCRIP
   assert.match(providerSource, /provider\?\.languages/);
   assert.match(providerSource, /normalizeLanguageCode\(code/);
   assert.match(providerSource, /value: normalizedCode/);
+  assert.match(providerSource, /function uniqueLanguageOptions\(codes\)/);
   assert.match(providerSource, /const seen = new Set\(\)/);
+  assert.match(providerSource, /return uniqueLanguageOptions\(GOOGLE_STANDALONE_STT_LANGUAGE_CODES\)/,
+    "Google regional language codes should be deduplicated after base-code normalization");
+  assert.match(providerSource, /return uniqueLanguageOptions\(provider\?\.languages\)/);
   assert.match(providerSource, /label: `\$\{language\.flag\} \$\{language\.name\}`/);
   assert.doesNotMatch(
     providerSource,
@@ -38,7 +42,7 @@ test("Standalone STT language options are sourced per exact model from TRANSCRIP
 
   assert.match(providerSource, /model: "deepgram\/nova-2"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("deepgram\/nova-2"\)/);
   assert.match(providerSource, /model: "deepgram\/nova-3"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("deepgram\/nova-3"\)/);
-  assert.match(providerSource, /model: "deepgram\/flux"[\s\S]*language: "auto"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("deepgram\/flux"\)/);
+  assert.match(providerSource, /model: "deepgram\/flux"[\s\S]*language: "en"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("deepgram\/flux"\)/);
   assert.match(providerSource, /model: "xai\/grok-stt"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("xai\/grok-stt"\)/);
   assert.match(providerSource, /model: "speechmatics\/standard"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("speechmatics\/standard"\)/);
 });
@@ -49,10 +53,10 @@ test("Answer and Streaming Start expose Telnyx STT language selector with caller
 
   assertEditorLanguageUi(answerEditor, "AnswerNodeEditor");
   assertEditorLanguageUi(streamingEditor, "StreamingStartNodeEditor");
-  assert.match(answerEditor, /const model = provider\.telnyxStt\?\.model \|\| provider\.id;[\s\S]*const modelLabel = model;/,
-    "AnswerNodeEditor model dropdown should show only the model, not provider/model with duplicated provider prefix");
-  assert.match(streamingEditor, /const model = provider\.telnyxStt\?\.model \|\| provider\.id;[\s\S]*const modelLabel = model;/,
-    "StreamingStartNodeEditor model dropdown should show only the model, not provider/model with duplicated provider prefix");
+  assert.match(answerEditor, /const modelLabel = formatTelnyxSttModelLabel\(provider\);/,
+    "AnswerNodeEditor model dropdown should show every model in provider/model format");
+  assert.match(streamingEditor, /const modelLabel = formatTelnyxSttModelLabel\(provider\);/,
+    "StreamingStartNodeEditor model dropdown should show every model in provider/model format");
   assert.match(answerEditor, /\|\| "en";/,
     "AnswerNodeEditor STT fallback language should be a base code");
   assert.match(streamingEditor, /\|\| "en";/,
@@ -61,6 +65,19 @@ test("Answer and Streaming Start expose Telnyx STT language selector with caller
     "AnswerNodeEditor STT fallback language should not be regional en-US");
   assert.doesNotMatch(streamingEditor, /\|\| "en-US";/,
     "StreamingStartNodeEditor STT fallback language should not be regional en-US");
+});
+
+test("Standalone STT model labels add the engine prefix only when the runtime model has none", async () => {
+  const providerSource = await source("../config/ai-streaming-providers.js");
+
+  assert.match(providerSource, /export function formatTelnyxSttModelLabel\(provider\)/);
+  assert.match(providerSource, /provider\?\.telnyxStt\?\.transcription_engine/);
+  assert.match(providerSource, /if \(!model \|\| model\.includes\("\/"\) \|\| !engine\) return model;/);
+  assert.match(providerSource, /return `\$\{engine\}\/\$\{model\}`;/);
+  assert.match(providerSource, /transcription_engine: "Google"[\s\S]*model: "phone_call"/,
+    "The runtime model must stay unprefixed because the Telnyx WebSocket API receives the engine separately");
+  assert.match(providerSource, /transcription_engine: "Google"[\s\S]*model: "latest_long"/);
+  assert.match(providerSource, /transcription_engine: "Google"[\s\S]*model: "default"/);
 });
 
 test("call flow page passes upstream caller_language availability to STT-capable editors", async () => {
@@ -83,12 +100,19 @@ test("voice-flow engine resolves Telnyx STT language from static, variable, or c
   assert.match(engineSource, /delete body\.telnyx_stt_use_caller_language/);
 });
 
-test("agent-leg Telnyx STT uses the assigned user's profile language", async () => {
-  const webhookSource = await source("../lib/contact-center/webhook-handler.js");
-  assert.match(webhookSource, /findUserByUsername\(agentUsername\)/);
-  assert.match(webhookSource, /agentLanguage[\s\S]*normalizeLanguageCode\(agent\?\.language/);
-  assert.match(webhookSource, /outboundConfig = \{[\s\S]*language: agentLanguage/);
-  assert.doesNotMatch(webhookSource, /agent\?\.language \|\| sttConfig\.language \|\| "en-US"/);
+test("agent transport transcript uses the assigned user's profile language", async () => {
+  const webhookSource = await source("../lib/acd/media-events.mjs");
+  assert.match(webhookSource, /SELECT language FROM users WHERE username = \$1/);
+  assert.match(webhookSource, /agentLanguage[\s\S]*normalizeLanguageCode\(user\?\.language/);
+  assert.match(webhookSource, /const outboundConfig = \{[\s\S]*language: agentLanguage/);
+  assert.match(webhookSource, /startTelnyxSttMediaStream\([\s\S]*outboundConfig/);
+  assert.doesNotMatch(webhookSource, /user\?\.language \|\| config\.language \|\| "en-US"/);
+});
+
+test("prewarmed agent-leg STT normalizes the profile language against the model", async () => {
+  const handlerSource = await source("../lib/telnyx-stt-handler.mjs");
+  assert.match(handlerSource, /normalizeAgentSttLanguage\(agent\?\.language, config\)/);
+  assert.match(handlerSource, /configuredSupportedLanguageCodes/);
 });
 
 test("language codes are normalized to STT-safe base codes", async () => {
@@ -101,12 +125,9 @@ test("language codes are normalized to STT-safe base codes", async () => {
   assert.equal(normalizeSttLanguageCode("fr-FR", { supportedCodes: ["en", "pl"] }), "en");
 });
 
-test("queued interaction metadata is pre-populated with normalized agent language", async () => {
-  const routerSource = await source("../lib/contact-center/queued-call-router.js");
-
-  assert.match(routerSource, /u\.language/);
-  assert.match(routerSource, /agent_language: agentLanguage/);
-  assert.match(routerSource, /metadata: assignedMetadata \|\| interaction\.metadata/);
+test("Core intake preserves the materialized agent language", async () => {
+  const intakeSource = await source("../lib/acd/live-intake.mjs");
+  assert.match(intakeSource, /agent_language: intake\.agentLanguage/);
 });
 
 test("translation header and suggestions use bounded layout with language names", async () => {
@@ -128,17 +149,17 @@ test("translation header and suggestions use bounded layout with language names"
 
 test("Agent Assist transcription router accumulates provider-final STT deltas before translation", async () => {
   const routerSource = await source("../lib/agent-assist-transcription-router.mjs");
-  const webhookSource = await source("../lib/contact-center/webhook-handler.js");
+  const webhookSource = await source("../lib/acd/media-events.mjs");
 
   assert.match(routerSource, /__agentAssistActiveTranscriptionSegments/);
   assert.doesNotMatch(routerSource, /__agentAssistActiveConversationTracks/,
     "Do not close bubbles by speaker/track switching; each call leg must rely on STT finality markers");
-  assert.doesNotMatch(webhookSource, /activeConversationTracks|closeInterruptedTranscription|markConversationTranscriptionClosed/,
-    "Webhook transcription grouping must not infer utterance boundaries from the other call leg changing speaker");
-  assert.match(routerSource, /const isMessageFinal = hasSpeechFinal[\s\S]*\? transcriptionData\.speech_final === true[\s\S]*: isProviderFinal/,
+  assert.match(routerSource, /const isMessageFinal = isUtteranceFinal\(transcriptionData\)/,
     "speech_final=true should close a bubble; is_final=true alone is only a fallback when speech_final is absent");
-  assert.match(webhookSource, /const isMessageFinal = hasSpeechFinal[\s\S]*\? transcriptionData\.speech_final === true[\s\S]*: isProviderFinal/,
-    "Webhook path should use speech_final as the utterance boundary when present");
+  assert.doesNotMatch(routerSource, /const isMessageFinal = (?!isUtteranceFinal)/,
+    "the transcription router must not re-derive finality locally");
+  assert.match(webhookSource, /return routeAgentAssistTranscription\(payload\)/,
+    "the Core media adapter must delegate transcript finality to the shared router");
   assert.match(routerSource, /function buildDisplayTranscript/);
   assert.match(routerSource, /isProviderFinal[\s\S]*activeTranscriptionSegments\.set/,
     "Provider-final chunks before speech_final should be accumulated for the open bubble");

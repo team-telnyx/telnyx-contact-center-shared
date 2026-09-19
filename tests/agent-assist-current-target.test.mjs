@@ -21,7 +21,7 @@ test("focus section carries the facility-vs-person-name disambiguation (the repo
   const prompt = buildWorkflowAnalysisSystemPrompt({ pendingItems: PENDING, slotsFilled: {}, currentTarget: FOCUS });
   // A mis-heard destination hospital must not land in a patient-name slot.
   assert.match(prompt, /NOT a patient-name/i);
-  assert.match(prompt, /John Muir/);
+  assert.match(prompt, /John Mabry/);
 });
 
 test("focus is a tie-breaker, not a hard filter — clearly volunteered values still captured", () => {

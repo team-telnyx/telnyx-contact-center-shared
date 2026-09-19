@@ -27,6 +27,16 @@ import {
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { notify } from "@/components/ToastNotify";
+import { submitCoreHoldIntent } from "@/lib/acd/client-hold-intent";
+import {
+  cancelUnstartedWebrtcIntent,
+  claimWebrtcDialFailure,
+  describeWebrtcDialFailure,
+  directIntentIdFromCall,
+  isWebrtcDialFailureState,
+  markWebrtcCallConnected,
+  shouldHandleWebrtcDialFailure,
+} from "@/lib/webrtc-dial-failure";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -94,6 +104,9 @@ export function Softphone() {
   const activeCallDirection = useActiveCallStore((state) => state.direction);
   const activeCallFromNumber = useActiveCallStore((state) => state.fromNumber);
   const activeCallFromName = useActiveCallStore((state) => state.fromName);
+  const contactCenterInteractionId = useActiveCallStore(
+    (state) => state.contactCenter?.interactionId || null,
+  );
 
   // Zustand stores - dial state
   const {
@@ -240,6 +253,7 @@ export function Softphone() {
       customerId: interaction.customer_id || interaction.customerId || null,
       customerData:
         interaction.customer_data || interaction.customerData || null,
+      metadata: interaction.metadata || null,
     });
   };
 
@@ -248,6 +262,7 @@ export function Softphone() {
       const call = activeCall;
       const audioEl = remoteAudioRef.current;
       if (!call || !audioEl) return;
+      if (useActiveCallStore.getState().call !== call) return;
       const possibleStream =
         call.remoteStream || call.remoteMediaStream || call.stream;
       if (possibleStream && audioEl.srcObject !== possibleStream) {
@@ -307,7 +322,8 @@ export function Softphone() {
   useEffect(() => {
     if (activeCall) {
       const storeState = useActiveCallStore.getState();
-      let interactionId = storeState.contactCenter?.interactionId;
+      let interactionId =
+        contactCenterInteractionId || storeState.contactCenter?.interactionId;
 
       if (!interactionId) {
         const callControlId =
@@ -353,15 +369,16 @@ export function Softphone() {
                 interactionId &&
                 interactionId !== lastFetchedInteractionIdRef.current
               ) {
-                lastFetchedInteractionIdRef.current = interactionId;
                 const res = await fetch(
                   `/api/contact-center/interactions/${interactionId}`
                 );
                 const data = await res.json();
                 if (data.ok && data.interaction) {
+                  lastFetchedInteractionIdRef.current = interactionId;
                   setInteraction(data.interaction);
                   applyContactCenterMetadata(data.interaction);
                 } else {
+                  lastFetchedInteractionIdRef.current = null;
                   setInteraction(null);
                 }
               }
@@ -378,7 +395,6 @@ export function Softphone() {
             callControlId &&
             callControlId !== lastFetchedInteractionIdRef.current
           ) {
-            lastFetchedInteractionIdRef.current = callControlId;
             try {
               const res = await fetch(
                 `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
@@ -387,9 +403,11 @@ export function Softphone() {
               );
               const data = await res.json();
               if (data.ok && data.interaction) {
+                lastFetchedInteractionIdRef.current = callControlId;
                 setInteraction(data.interaction);
                 applyContactCenterMetadata(data.interaction);
               } else {
+                lastFetchedInteractionIdRef.current = null;
                 setInteraction(null);
               }
             } catch (err) {
@@ -397,6 +415,7 @@ export function Softphone() {
                 "[Softphone] Failed to fetch interaction by call_control_id:",
                 err
               );
+              lastFetchedInteractionIdRef.current = null;
               setInteraction(null);
             }
           }
@@ -408,7 +427,6 @@ export function Softphone() {
         interactionId &&
         interactionId !== lastFetchedInteractionIdRef.current
       ) {
-        lastFetchedInteractionIdRef.current = interactionId;
         const fetchInteraction = async () => {
           try {
             const res = await fetch(
@@ -416,13 +434,16 @@ export function Softphone() {
             );
             const data = await res.json();
             if (data.ok && data.interaction) {
+              lastFetchedInteractionIdRef.current = interactionId;
               setInteraction(data.interaction);
               applyContactCenterMetadata(data.interaction);
             } else {
+              lastFetchedInteractionIdRef.current = null;
               setInteraction(null);
             }
           } catch (err) {
             console.error("[Softphone] Failed to fetch interaction:", err);
+            lastFetchedInteractionIdRef.current = null;
             setInteraction(null);
           }
         };
@@ -432,7 +453,7 @@ export function Softphone() {
       lastFetchedInteractionIdRef.current = null;
       setInteraction(null);
     }
-  }, [activeCall]);
+  }, [activeCall, callStatus, contactCenterInteractionId]);
 
   // Listen for incoming calls (notifications from WebRTC SDK)
   // NOTE: softphone-mini.jsx is the PRIMARY handler for incoming calls
@@ -447,8 +468,13 @@ export function Softphone() {
           const callState = call?.state || notification?.call?.state || "";
 
           // Detect call end states
+          if (!call) {
+            // The SDK may emit an identity-free update when an older leg is
+            // purged. Only an identified terminal call may clear the active
+            // softphone state.
+            return;
+          }
           if (
-            !call ||
             [
               "done",
               "hangup",
@@ -460,7 +486,7 @@ export function Softphone() {
               "failed",
             ].includes(callState.toLowerCase())
           ) {
-            if (activeCall) {
+            if (activeCall && useActiveCallStore.getState().call === call) {
               handleCallEnd();
             }
             return;
@@ -497,9 +523,15 @@ export function Softphone() {
 
           // For active calls, update status and attach audio
           if (activeCall && call && callState) {
-            const lowerState = callState.toLowerCase();
-            updateStatus(lowerState);
-            hydrateRemoteAudio();
+            const activeCallControlId =
+              activeCall.callControlId || activeCall.call_control_id || activeCall.id;
+            const notificationCallControlId =
+              call.callControlId || call.call_control_id || call.id;
+            if (activeCallControlId === notificationCallControlId) {
+              const lowerState = callState.toLowerCase();
+              updateStatus(lowerState);
+              hydrateRemoteAudio();
+            }
           }
         }
       } catch (err) {
@@ -583,15 +615,6 @@ export function Softphone() {
         }
       }
 
-      // Ensure hold/transfer metrics are synced before clearing
-      try {
-        await useActiveCallStore.getState().syncCallMetricsToDb();
-      } catch (err) {
-        console.error("[Softphone] Failed to sync metrics:", err);
-      }
-
-      // Metrics are synced via /api/contact-center/interactions/:id/metrics
-
       clearActiveCall();
 
       // Also trigger refresh event as backup
@@ -640,6 +663,7 @@ export function Softphone() {
       }
     }
 
+    let directIntentId = null;
     try {
       try {
         client.enableMicrophone?.();
@@ -647,7 +671,15 @@ export function Softphone() {
 
       const experimentalOptions = getWebrtcExperimentalOptions();
       console.log("[webrtc] Starting outbound call", experimentalOptions);
+      const prepared = await fetch("/api/voice/direct-intent", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: crypto.randomUUID(), target: to }),
+      });
+      const directIntent = await prepared.json();
+      if (!prepared.ok) throw new Error(directIntent.error || "Voice capacity unavailable");
+      directIntentId = directIntent.intentId || null;
       const call = client.newCall({
+        customHeaders: directIntent.customHeaders,
         destinationNumber: to,
         callerNumber: from || undefined,
         callerName: callerName || undefined,
@@ -663,6 +695,7 @@ export function Softphone() {
         direction: "outbound",
         fromNumber: from,
         toNumber: to,
+        interactionId: directIntent.workItemId || null,
       });
 
       // Immediately update status to ensure UI reflects dialing state
@@ -672,7 +705,6 @@ export function Softphone() {
       }
 
       wireCall(call);
-      call.invite?.();
 
       // Proactively try to attach audio with retries
       const retryDelays = [500, 1000, 2000, 3000];
@@ -685,8 +717,37 @@ export function Softphone() {
       });
     } catch (err) {
       console.error("[Softphone] Failed to start call:", err);
+      if (directIntentId) void cancelUnstartedWebrtcIntent(directIntentId);
+      notify({
+        title: "Call failed",
+        description: err?.message || "The call could not be started.",
+        variant: "error",
+      });
       clearActiveCall();
     }
+  }
+
+  function handleDialFailure(call, state) {
+    const store = useActiveCallStore.getState();
+    if (!shouldHandleWebrtcDialFailure({
+      call,
+      state,
+      direction: store.direction,
+      currentStatus: store.status,
+    })) return;
+    if (!claimWebrtcDialFailure(call)) return;
+    const intentId = directIntentIdFromCall(call);
+    try { call.hangup?.(); } catch (_) {}
+    if (intentId) void cancelUnstartedWebrtcIntent(intentId);
+    notify({
+      title: "Call failed",
+      description: describeWebrtcDialFailure(state),
+      variant: "error",
+    });
+    updateStatus("ended");
+    setTimeout(() => {
+      if (useActiveCallStore.getState().call === call) void handleCallEnd();
+    }, 100);
   }
 
   function wireCall(call) {
@@ -719,24 +780,28 @@ export function Softphone() {
       };
 
       if (typeof call.on === "function") {
+        call.on("busy", () => handleDialFailure(call, "busy"));
         call.on("ringing", () => {
           updateStatus("ringing");
           syncCallState();
         });
 
         call.on("active", () => {
+          markWebrtcCallConnected(call);
           updateStatus("active");
           syncCallState();
           hydrateRemoteAudio();
         });
 
         call.on("connected", () => {
+          markWebrtcCallConnected(call);
           updateStatus("connected");
           syncCallState();
           hydrateRemoteAudio();
         });
 
         call.on("answered", () => {
+          markWebrtcCallConnected(call);
           updateStatus("answered");
           syncCallState();
           hydrateRemoteAudio();
@@ -769,6 +834,10 @@ export function Softphone() {
         call.on("stateChanged", (newState) => {
           if (newState) {
             const lowerState = String(newState).toLowerCase();
+            if (isWebrtcDialFailureState(lowerState)) {
+              handleDialFailure(call, lowerState);
+              return;
+            }
             updateStatus(lowerState);
 
             if (
@@ -832,12 +901,16 @@ export function Softphone() {
         // Update status before clearing held state so resume metrics close the hold interval
         updateStatus("active");
         storeSetHeld(false);
+        const workItemId = useActiveCallStore.getState().contactCenter?.interactionId;
+        if (workItemId) await submitCoreHoldIntent(workItemId, "unhold");
       } else {
         const hold = activeCall.hold || activeCall.pause;
         await hold?.call(activeCall);
         storeSetHeld(true);
         // Update status to 'held' to track hold start
         updateStatus("held");
+        const workItemId = useActiveCallStore.getState().contactCenter?.interactionId;
+        if (workItemId) await submitCoreHoldIntent(workItemId, "hold");
       }
     } catch (err) {
       console.error("[Softphone] Toggle hold error:", err);
@@ -853,21 +926,10 @@ export function Softphone() {
 
       hydrateRemoteAudio();
       activeCall.answer?.();
+      // This answers the existing routed WebRTC leg. Calling the interaction
+      // /answer endpoint as well would start a second transfer and make ACD
+      // treat the original leg as an agent no-answer.
       updateStatus("answered");
-      if (interaction?.id) {
-        fetch(
-          `/api/contact-center/interactions/${encodeURIComponent(
-            interaction.id
-          )}/answer`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ answeredAt: new Date().toISOString() }),
-          }
-        ).catch((err) => {
-          console.warn("[Softphone] Failed to mark answered:", err);
-        });
-      }
 
       const retryDelays = [100, 300, 500, 1000];
       retryDelays.forEach((delay) => {
@@ -1483,7 +1545,7 @@ export function Softphone() {
           type="button"
           className="w-full flex items-center justify-between px-1 py-1 text-[11px] text-zinc-300 hover:text-white"
           onClick={() => setShowDtmf((v) => !v)}
-          title="DTMF"
+          data-testid="voice-dtmf-open" title="DTMF"
         >
           <span className="flex items-center gap-1">
             <IconHash className="h-3 w-3" />
@@ -1506,6 +1568,7 @@ export function Softphone() {
               {keypadDigits.flat().map((digit) => (
                 <button
                   key={digit}
+                  data-testid="voice-dtmf-digit" data-digit={digit}
                   onClick={() => handleKeypadDigit(digit)}
                   disabled={!isCallActive}
                   aria-disabled={!isCallActive}
@@ -1541,6 +1604,13 @@ export function Softphone() {
         open={showTransfer}
         onOpenChange={setShowTransfer}
         interaction={interaction}
+        onConsultCallCreated={(call) => {
+          wireCall(call);
+          attachAudio(call);
+          for (const delay of [100, 300, 700, 1500]) {
+            setTimeout(() => attachAudio(call), delay);
+          }
+        }}
         onTransfer={() => {
           setShowTransfer(false);
           console.log("[Softphone] Transfer successful");

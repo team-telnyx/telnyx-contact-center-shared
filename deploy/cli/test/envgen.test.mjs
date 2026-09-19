@@ -239,14 +239,14 @@ describe('envgen.mjs', () => {
         existingPostgres: {
           host: 'localhost',
           port: 5433,
-          user: 'leszek',
+          user: 'demo',
           password: 'dev-pg-pw',
           database: 'cc_dev',
         },
       });
       assert.strictEqual(values.POSTGRES_HOST, 'localhost');
       assert.strictEqual(values.POSTGRES_PORT, '5433');
-      assert.strictEqual(values.POSTGRES_USER, 'leszek');
+      assert.strictEqual(values.POSTGRES_USER, 'demo');
       assert.strictEqual(values.POSTGRES_PASSWORD, 'dev-pg-pw');
       assert.strictEqual(values.POSTGRES_DB, 'cc_dev');
       assert.strictEqual(values.POSTGRES_MODE, 'existing');

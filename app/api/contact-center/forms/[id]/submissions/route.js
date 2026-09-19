@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildFormContext } from "@/lib/forms/form-context";
 import { createFormSubmission } from "@/lib/forms/form-submissions";
 import { executeFormDataAction } from "@/lib/forms/form-data-actions";
-export async function GET(request, context) {
-  const user = await getAuthenticatedUser();
-  if (!user)
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401 },
-    );
+import { findWorkItemByReference } from "@/lib/acd/work-item-repository.mjs";
+import { withPermission } from "@/lib/authz/guard";
+async function GET_handler(request, context, authz) {
+  const user = authz.user;
   const { id } = await context.params;
   const pool = getPostgresPool();
   if (!pool)
@@ -24,7 +20,7 @@ export async function GET(request, context) {
   let where = "form_id=$1";
   if (interactionId) {
     args.push(interactionId);
-    where += ` AND interaction_id=$2`;
+    where += ` AND work_item_id::text=$2`;
   }
   const { rows } = await pool.query(
     `SELECT * FROM form_submissions WHERE ${where} ORDER BY created_at DESC LIMIT 50`,
@@ -32,13 +28,8 @@ export async function GET(request, context) {
   );
   return NextResponse.json({ ok: true, submissions: rows });
 }
-export async function POST(request, context) {
-  const user = await getAuthenticatedUser();
-  if (!user)
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401 },
-    );
+async function POST_handler(request, context, authz) {
+  const user = authz.user;
   const { id } = await context.params;
   const pool = getPostgresPool();
   if (!pool)
@@ -59,10 +50,10 @@ export async function POST(request, context) {
     );
   let interaction = null;
   if (body.interactionId) {
-    const res = await pool.query(`SELECT * FROM cc_interactions WHERE id=$1`, [
-      body.interactionId,
-    ]);
-    interaction = res.rows[0] || null;
+    interaction = await findWorkItemByReference(pool, body.interactionId);
+    if (!interaction) {
+      return NextResponse.json({ ok: false, error: "Interaction not found" }, { status: 404 });
+    }
   }
   const contextObj = body.context || buildFormContext(interaction || {});
   const result = await createFormSubmission(pool, {
@@ -99,3 +90,7 @@ export async function POST(request, context) {
     { status: ok ? 200 : 400 },
   );
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("forms:read", GET_handler, { route: "/api/contact-center/forms/[id]/submissions" });
+export const POST = withPermission(["agent:self", "forms:create"], POST_handler, { route: "/api/contact-center/forms/[id]/submissions" });

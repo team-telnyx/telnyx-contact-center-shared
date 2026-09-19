@@ -1,28 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return null;
-  const userId = session.user.id;
-  const email = session.user.email;
-  let user = null;
-  if (userId) user = await PgDb.findUserById(userId);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user || !isAdmin(user)) return null;
-  return user;
-}
 
-export async function POST(request) {
+async function POST_handler(request, _context, authz) {
   try {
-    const user = await requireAdmin();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = authz.user;
 
     const body = await request.json();
     const { phone_numbers } = body;
@@ -72,3 +55,6 @@ export async function POST(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("numbers:create", POST_handler, { route: "/api/admin/numbers/order" });

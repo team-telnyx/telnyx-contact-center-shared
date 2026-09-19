@@ -40,9 +40,10 @@ test("Insights includes insight and group editors with assignment APIs", async (
   const item = await readFile(new URL("app/api/ai/conversations/insight-groups/[id]/route.js", root), "utf8");
   const assign = await readFile(new URL("app/api/ai/conversations/insight-groups/[id]/insights/[insightId]/assign/route.js", root), "utf8");
   const unassign = await readFile(new URL("app/api/ai/conversations/insight-groups/[id]/insights/[insightId]/unassign/route.js", root), "utf8");
-  assert.match(collection, /export async function POST/);
-  assert.match(item, /export async function PUT/);
-  assert.match(item, /export async function DELETE/);
-  assert.match(assign, /export async function POST/);
-  assert.match(unassign, /export async function DELETE/);
+  // Since the Phase 0 hardening every handler is exported through the permission guard.
+  assert.match(collection, /export const POST = withPermission\("ai_insights:create"/);
+  assert.match(item, /export const PUT = withPermission\("ai_insights:update"/);
+  assert.match(item, /export const DELETE = withPermission\("ai_insights:delete"/);
+  assert.match(assign, /export const POST = withPermission\("ai_insights:update"/);
+  assert.match(unassign, /export const DELETE = withPermission\("ai_insights:update"/);
 });

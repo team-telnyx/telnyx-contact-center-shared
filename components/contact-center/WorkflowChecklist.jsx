@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
   CheckCircle,
   Circle,
@@ -17,6 +18,7 @@ import {
   Loader2,
 } from "lucide-react";
 import useWorkflowStore from "@/lib/stores/workflow-store";
+import { resolveFastSuggestionTemplate } from "@/lib/agent-assist/suggestion-templates.mjs";
 
 /**
  * WorkflowChecklist Component
@@ -89,6 +91,19 @@ export function WorkflowChecklist() {
 function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) {
   const [inputValue, setInputValue] = useState(slotValue || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Preview of the question this item would ask, shown on hover. Purely a
+  // static lookup (same resolver the live suggested-response panel uses) —
+  // no LLM call, no dependency on which item is the current live target, so
+  // it can't interfere with the panel's "advances on completion" behavior.
+  const hoverQuestion = resolveFastSuggestionTemplate({
+    itemType: item.type,
+    itemLabel: item.label,
+    slotName: item.slot_name,
+    suggestionTemplate: item.suggestion_template || item.suggestionTemplate,
+    itemPromptHint: item.prompt_hint,
+    itemHints: item.hints,
+  });
 
   const isCompleted = status.status === "completed";
   const isSkipped = status.status === "skipped";
@@ -195,15 +210,32 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
             )}
           </div>
 
-          <p
-            className={`
-              text-sm leading-relaxed
-              ${isCompleted ? "line-through text-muted-foreground" : ""}
-              ${isSkipped ? "line-through text-muted-foreground" : ""}
-            `}
-          >
-            {item.label}
-          </p>
+          {hoverQuestion ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p
+                  className={`
+                    text-sm leading-relaxed w-fit cursor-help
+                    ${isCompleted ? "line-through text-muted-foreground" : ""}
+                    ${isSkipped ? "line-through text-muted-foreground" : ""}
+                  `}
+                >
+                  {item.label}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent side="top">{hoverQuestion}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <p
+              className={`
+                text-sm leading-relaxed
+                ${isCompleted ? "line-through text-muted-foreground" : ""}
+                ${isSkipped ? "line-through text-muted-foreground" : ""}
+              `}
+            >
+              {item.label}
+            </p>
+          )}
 
           {/* Slot input field */}
           {isSlot && isPending && (

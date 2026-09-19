@@ -34,10 +34,11 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
+import { Can } from "@/components/auth-provider";
 
 function emptyCriterion() {
   return {
-    id: `criterion-${Math.random().toString(36).slice(2, 9)}`,
+    id: `criterion-${crypto.randomUUID()}`,
     label: "",
     description: "",
     type: "score",
@@ -278,10 +279,10 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
           Evaluation scorecards used by supervisors and the AI assistant. Separate from agent
           scripting forms.
         </p>
-        <Button type="button" size="sm" onClick={openCreate}>
+        <Can permission="quality_forms:create"><Button type="button" size="sm" onClick={openCreate}>
           <IconPlus className="mr-2 h-4 w-4" />
           New form
-        </Button>
+        </Button></Can>
       </div>
 
       {loading ? (

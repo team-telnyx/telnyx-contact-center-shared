@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) return NextResponse.json({ ok: false, error: "Missing TELNYX_API_KEY" }, { status: 500 });
@@ -22,3 +23,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ ok: false, error: error?.message || String(error) }, { status: 500 });
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("ai_assistants:clone", POST_handler, { route: "/api/ai/assistants/[id]/clone" });

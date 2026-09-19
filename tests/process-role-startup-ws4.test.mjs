@@ -34,7 +34,7 @@ test("WS4-T4 process role helper defaults to single-node all and exposes role ga
   }
 });
 
-test("WS4-T4 instrumentation uses PROCESS_ROLE gates for schema/cleanup, streaming, and coordinator startup", async () => {
+test("instrumentation uses PROCESS_ROLE gates for schema, streaming, and Core workers", async () => {
   const instrumentation = await source("instrumentation.js");
 
   assert.match(instrumentation, /from "\.\/lib\/runtime\/process-role\.mjs"/);
@@ -43,7 +43,8 @@ test("WS4-T4 instrumentation uses PROCESS_ROLE gates for schema/cleanup, streami
   assert.match(instrumentation, /allowsStreamingRole\(processRole\)/);
   assert.match(instrumentation, /allowsWorkerRole\(processRole\)/);
   assert.match(instrumentation, /processRole/);
-  assert.match(instrumentation, /startCoordinator\(\)/);
+  assert.match(instrumentation, /startAcdWorker\(pool/);
+  assert.match(instrumentation, /startReconciler\(pool/);
   assert.match(instrumentation, /streaming_ws_skipped_for_process_role/);
   assert.doesNotMatch(
     instrumentation,
@@ -66,7 +67,8 @@ test("WS4-T4 production start wrapper can run web, worker, or streaming-only rol
   assert.match(startWrapper, /process_role_runtime_starting/);
   assert.match(startWrapper, /web_server_skipped_for_process_role/);
   assert.match(startWrapper, /initStreamingWSServer/);
-  assert.match(startWrapper, /startCoordinator/);
+  assert.match(startWrapper, /startAcdWorker/);
+  assert.match(startWrapper, /startReconciler/);
   assert.match(dockerfile, /PROCESS_ROLE/);
   assert.match(dockerfile, /exec yarn start/);
 });

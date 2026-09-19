@@ -58,6 +58,48 @@ test("Telnyx STT transcript normalizer still recognizes Deepgram Results frames"
   });
 });
 
+test("Telnyx STT WebSocket sends provider-native Deepgram model names", () => {
+  assert.equal(
+    __telnyxSttTestUtils.normalizeTelnyxSttWebSocketModel(
+      "Deepgram",
+      "deepgram/flux",
+    ),
+    "flux",
+  );
+  assert.equal(
+    __telnyxSttTestUtils.normalizeTelnyxSttWebSocketModel(
+      "Deepgram",
+      "deepgram/nova-3",
+    ),
+    "nova-3",
+  );
+  assert.equal(
+    __telnyxSttTestUtils.normalizeTelnyxSttWebSocketModel(
+      "Speechmatics",
+      "speechmatics/standard",
+    ),
+    "speechmatics/standard",
+  );
+});
+
+test("plain Deepgram Flux cannot be opened in multilingual auto mode", () => {
+  assert.equal(
+    __telnyxSttTestUtils.normalizeTelnyxSttWebSocketLanguage(
+      "Deepgram",
+      "deepgram/flux",
+      "auto",
+    ),
+    "en",
+  );
+  assert.equal(
+    __telnyxSttTestUtils.normalizeAgentSttLanguage("en-US", {
+      language: "en",
+      supported_languages: [{ value: "en" }],
+    }),
+    "en",
+  );
+});
+
 test("Telnyx STT diagnostics are controlled by runtime topic config, not DEBUG_TELNYX_STT", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8"));
   assert.doesNotMatch(source, /envFlagEnabled\("DEBUG_TELNYX_STT"\)/);
@@ -78,9 +120,12 @@ test("Telnyx STT log identifiers stay full-length for debugging", async () => {
   assert.doesNotMatch(source, /interactionId:\s*shortId\(/);
 });
 
-test("Telnyx STT transcript logs include the transcript text", async () => {
+test("Telnyx STT avoids high-volume media and transcript debug logging", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8"));
-  assert.match(source, /logSttInfo\("provider_socket_transcript", \{[\s\S]*transcript:\s*normalized\.transcript,[\s\S]*transcriptLength:\s*normalized\.transcript\.length/);
+  assert.doesNotMatch(source, /logSttDebug/);
+  assert.doesNotMatch(source, /provider_socket_transcript/);
+  assert.doesNotMatch(source, /provider_socket_audio_(?:sent|buffered)/);
+  assert.doesNotMatch(source, /logStt\w*\("media_ws_(?:media|no_target_for_track)",/);
 });
 
 test("Telnyx STT logger messages use technical snake_case event names", async () => {

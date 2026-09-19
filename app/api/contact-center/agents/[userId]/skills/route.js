@@ -1,32 +1,23 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { agentInScope } from "@/lib/authz/scope.mjs";
 
 /**
  * GET /api/contact-center/agents/[userId]/skills
  * Get agent's skills with skill names (converted from UUIDs)
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const user = authz.user;
 
     // Only supervisors and admins can view agent skills
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json(
-        { ok: false, error: "Forbidden" },
-        { status: 403 },
-      );
-    }
 
     const { userId } = await params;
+    if (userId && !agentInScope(authz.scope, userId)) {
+      return NextResponse.json({ ok: false, error: "Agent not found" }, { status: 404 });
+    }
     if (!userId) {
       return NextResponse.json(
         { ok: false, error: "User ID is required" },
@@ -107,3 +98,6 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agents:read", GET_handler, { route: "/api/contact-center/agents/[userId]/skills" });

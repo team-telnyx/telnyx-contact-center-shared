@@ -56,6 +56,7 @@ import {
   AdminPageShell,
 } from "@/components/contact-center/WorkspacePageLayout";
 import { AiAssistantsSectionPage } from "@/components/assistants/AiAssistantsSectionNav";
+import { Can } from "@/components/auth-provider";
 
 const MAX_ITEMS = 100;
 
@@ -427,10 +428,10 @@ export default function PronunciationDictionariesPage() {
         icon={IconBook2}
         badges={<Badge variant="secondary">{total} dictionaries</Badge>}
         actions={(
-          <Button onClick={openCreate} className="shrink-0">
+          <Can permission="pronunciation_dicts:create"><Button onClick={openCreate} className="shrink-0">
             <IconPlus className="size-4" />
             New Dictionary
-          </Button>
+          </Button></Can>
         )}
       />
       <AiAssistantsSectionPage activeId="pronunciation-dictionaries">
@@ -454,10 +455,10 @@ export default function PronunciationDictionariesPage() {
                 Create one to control how your AI assistant pronounces words.
               </p>
             </div>
-            <Button onClick={openCreate} variant="outline" className="mt-2">
+            <Can permission="pronunciation_dicts:create"><Button onClick={openCreate} variant="outline" className="mt-2">
               <IconPlus className="size-4 mr-1.5" />
               New Dictionary
-            </Button>
+            </Button></Can>
           </div>
         ) : (
           <Table>
@@ -497,7 +498,7 @@ export default function PronunciationDictionariesPage() {
                       >
                         <IconPencil className="size-4" />
                       </button>
-                      <button
+                      <Can permission="pronunciation_dicts:delete"><button
                         type="button"
                         className="inline-flex items-center text-red-500 hover:text-red-700"
                         title="Delete dictionary"
@@ -505,7 +506,7 @@ export default function PronunciationDictionariesPage() {
                         onClick={() => setDeleteTarget(dict)}
                       >
                         <IconTrash className="size-4" />
-                      </button>
+                      </button></Can>
                     </div>
                   </TableCell>
                 </TableRow>

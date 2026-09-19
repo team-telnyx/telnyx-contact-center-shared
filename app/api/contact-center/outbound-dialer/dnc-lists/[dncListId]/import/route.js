@@ -7,20 +7,18 @@ import {
   jsonError,
   mapDncList,
   normalizeDncValue,
-  parseCsv,
-  requireOutboundSupervisor,
-  usernameFor,
-} from "@/lib/outbound-dialer/api";
+  parseCsv, usernameFor } from "@/lib/outbound-dialer/api";
 import { applyCsvImportRules, normalizeCsvImportRules } from "@/lib/outbound-dialer/csv-import-rules";
 import { importsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 function valueTypesForColumn(classification, strategy) {
   const allowed = allowedSuppressionTypesForStrategy(strategy);
   return allowed.filter((type) => (type === "phone" ? classification.is_phone : classification.is_email));
 }
 
-export async function POST(request, context) {
-  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+async function POST_handler(request, context, authz) {
+  const user = authz.user;
   const { dncListId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
@@ -112,3 +110,6 @@ export async function POST(request, context) {
     finally { client.release(); }
   } catch (err) { importsLogger.error("dnc_import_failed", { dncListId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to import DNC CSV", 400); }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("dnc_lists:import", POST_handler, { route: "/api/contact-center/outbound-dialer/dnc-lists/[dncListId]/import" });

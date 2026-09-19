@@ -1,5 +1,7 @@
 "use client";
 
+import { InteractionChannel } from "./InteractionChannel";
+import { channelDefinition } from "@/lib/acd/channel-registry.mjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +45,7 @@ import {
   IconRobot,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
+import { Can } from "@/components/auth-provider";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -110,7 +113,7 @@ function MetricTile({ icon: Icon, label, value, detail, progress = 0, tone = "sl
   );
 }
 
-export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
+export default function QualityEvaluationsView({ from, to, refreshNonce = 0,channel="all" }) {
   const router = useRouter();
   const [rows, setRows] = useState([]);
   const [metrics, setMetrics] = useState(null);
@@ -122,7 +125,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
   const [queueFilter, setQueueFilter] = useState("all");
   const [agentFilter, setAgentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [recordedOnly, setRecordedOnly] = useState(true);
+  const [recordedOnly, setRecordedOnly] = useState(false);
 
   const [pickerInteraction, setPickerInteraction] = useState(null);
   const [forms, setForms] = useState([]);
@@ -130,7 +133,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
   const [creating, setCreating] = useState(false);
 
   const query = useMemo(() => {
-    const sp = new URLSearchParams();
+    const sp = new URLSearchParams({channel});
     if (from) sp.set("from", from);
     if (to) sp.set("to", to);
     sp.set("page", String(page));
@@ -140,11 +143,11 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
     if (statusFilter !== "all") sp.set("status", statusFilter);
     if (recordedOnly) sp.set("recordedOnly", "true");
     return sp.toString();
-  }, [from, to, page, pageSize, queueFilter, agentFilter, statusFilter, recordedOnly]);
+  }, [from, to,channel, page, pageSize, queueFilter, agentFilter, statusFilter, recordedOnly]);
 
   useEffect(() => {
     setPage(1);
-  }, [from, to, queueFilter, agentFilter, statusFilter, recordedOnly]);
+  }, [from, to,channel, queueFilter, agentFilter, statusFilter, recordedOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -315,7 +318,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
               onClick={() => setRecordedOnly((value) => !value)}
             >
               <IconMicrophone className="mr-2 h-4 w-4" />
-              {recordedOnly ? "Recorded only" : "All calls"}
+              {recordedOnly ? "Recorded only" : "All interactions"}
             </Button>
           </div>
 
@@ -333,12 +336,12 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Completed</TableHead>
+                  <TableHead>Channel</TableHead><TableHead>Closed</TableHead>
                   <TableHead>Queue</TableHead>
                   <TableHead>Agent</TableHead>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Talk time</TableHead>
-                  <TableHead>Recording</TableHead>
+                  <TableHead>Voice talk</TableHead>
+                  <TableHead>Evidence</TableHead>
                   <TableHead>Evaluation</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -348,7 +351,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
                 {rows.map((row) => {
                   const hasRecording = Boolean(row.recording_url || row.recording_id);
                   return (
-                    <TableRow key={row.id}>
+                    <TableRow key={row.id}><TableCell><InteractionChannel channel={row.interaction_type}/></TableCell>
                       <TableCell className="whitespace-nowrap text-sm">
                         {formatDateTime(row.completed_at || row.abandoned_at || row.created_at)}
                       </TableCell>
@@ -359,7 +362,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
                       </TableCell>
                       <TableCell className="text-sm">{formatDuration(row.talk_time_seconds)}</TableCell>
                       <TableCell>
-                        {hasRecording ? (
+                        {channelDefinition(row.interaction_type).capabilities.conversation ? <Badge variant="outline">Conversation</Badge> : hasRecording ? (
                           <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
                             <IconMicrophone className="mr-1 h-3 w-3" />
                             {row.has_transcript ? "Rec + transcript" : "Recorded"}
@@ -454,9 +457,9 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
             <Button type="button" variant="outline" onClick={() => setPickerInteraction(null)}>
               Cancel
             </Button>
-            <Button type="button" disabled={!selectedFormId || creating} onClick={startEvaluation}>
+            <Can permission="quality_evaluations:create"><Button type="button" disabled={!selectedFormId || creating} onClick={startEvaluation}>
               {creating ? "Starting…" : "Start evaluation"}
-            </Button>
+            </Button></Can>
           </DialogFooter>
         </DialogContent>
       </Dialog>

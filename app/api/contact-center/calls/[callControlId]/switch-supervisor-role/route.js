@@ -5,9 +5,8 @@ import { supervisionLogger, callPayload, agentPayload, contactCenterErrorPayload
  */
 
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { withPermission } from "@/lib/authz/guard";
 
 function getTelnyxApiKey() {
   const apiKey = process.env.TELNYX_API_KEY;
@@ -17,20 +16,11 @@ function getTelnyxApiKey() {
   return apiKey;
 }
 
-export async function POST(request, { params }) {
+async function POST_handler(request, { params }, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = authz.user;
 
     // Only supervisors and admins can switch supervisor roles
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json(
-        { error: "Access denied. Supervisor or admin privileges required." },
-        { status: 403 }
-      );
-    }
 
     // Await params in Next.js 15+
     const resolvedParams = await params;
@@ -65,6 +55,10 @@ export async function POST(request, { params }) {
         },
         { status: 400 }
       );
+    }
+    // Each mode is its own operation (calls:supervise.listen | whisper | barge).
+    if (!authz.can(SUPERVISION_PERMISSION[role])) {
+      return NextResponse.json({ error: "Forbidden", permission: SUPERVISION_PERMISSION[role] }, { status: 403 });
     }
 
     // Call Telnyx API to switch supervisor role
@@ -126,3 +120,6 @@ export async function POST(request, { params }) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+const SUPERVISION_PERMISSION = { monitor: "calls:supervise.listen", whisper: "calls:supervise.whisper", barge: "calls:supervise.barge" };
+export const POST = withPermission(Object.values(SUPERVISION_PERMISSION), POST_handler, { route: "/api/contact-center/calls/[callControlId]/switch-supervisor-role" });

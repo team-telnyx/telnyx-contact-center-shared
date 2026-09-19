@@ -4,33 +4,25 @@
  */
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { getQueueStatistics } from "@/lib/contact-center/stats-aggregator";
-import { isAdmin } from "@/lib/role-utils";
-import { PgDb } from "@/lib/pgdb";
+import { getQueueStatistics } from "@/lib/acd/stats-aggregator";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { queueInScope } from "@/lib/authz/scope.mjs";
 
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const user = authz.user;
 
     const { searchParams } = new URL(request.url);
     const queueId = searchParams.get("queueId");
 
-    // Get user to check permissions
-    const user = await PgDb.findUserById(session.user.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
     // Admins can see all queues, agents can only see their assigned queues
     let stats;
     if (queueId) {
-      if (!isAdmin(user)) {
+      if (authz.elevated && !queueInScope(authz.scope, queueId)) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+      if (!authz.elevated) {
         // Check if agent is assigned to this queue
         const { getPostgresPool } = await import("@/lib/postgres.mjs");
         const pool = getPostgresPool();
@@ -43,9 +35,9 @@ export async function GET(request) {
           return NextResponse.json({ error: "Access denied" }, { status: 403 });
         }
       }
-      stats = await getQueueStatistics(queueId);
+      stats = await getQueueStatistics(queueId, { restriction: authz.scope });
     } else {
-      if (!isAdmin(user)) {
+      if (!authz.elevated) {
         // Agents can only see their assigned queues
         const { getPostgresPool } = await import("@/lib/postgres.mjs");
         const pool = getPostgresPool();
@@ -58,10 +50,12 @@ export async function GET(request) {
         if (queueIds.length === 0) {
           return NextResponse.json({ stats: [] });
         }
-        stats = await Promise.all(queueIds.map((id) => getQueueStatistics(id)));
+        stats = await Promise.all(queueIds.map((id) => getQueueStatistics(id, { restriction: authz.scope })));
         stats = stats.filter(Boolean);
       } else {
-        stats = await getQueueStatistics();
+        stats = await getQueueStatistics(null, { restriction: authz.scope });
+        // Narrow the list to the caller's data scope (Phase 3a).
+        if (Array.isArray(stats)) stats = stats.filter((row) => queueInScope(authz.scope, row.queueId));
       }
     }
 
@@ -80,3 +74,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission(["reports:read", "queues:read", "agent:self"], GET_handler, { elevated: ["reports:read", "queues:read"], route: "/api/contact-center/stats/queues" });

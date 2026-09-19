@@ -50,6 +50,8 @@ import {
   IconDatabaseSearch,
   IconPlayerSkipForward,
   IconUsersPlus,
+  IconBrandWhatsapp,
+  IconDeviceDesktopCog,
 } from "@tabler/icons-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
@@ -66,6 +68,7 @@ import ToolEditSheet from "@/components/tools/ToolEditSheet";
 import WebhookTestSheet from "@/components/assistants/tools/WebhookTestSheet";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { AiAssistantsSectionPage } from "@/components/assistants/AiAssistantsSectionNav";
+import { Can } from "@/components/auth-provider";
 
 function CopyButton({ value }) {
   const [copied, setCopied] = useState(false);
@@ -104,6 +107,10 @@ function toolTypeIcon(type) {
       return <IconShare2 className="size-4 text-purple-500 shrink-0" />;
     case "send_message":
       return <IconMessage className="size-4 text-green-500 shrink-0" />;
+    case "whatsapp_template":
+      return <IconBrandWhatsapp className="size-4 text-green-500 shrink-0" />;
+    case "client_side_tool":
+      return <IconDeviceDesktopCog className="size-4 text-sky-500 shrink-0" />;
     case "invite":
       return <IconPhoneIncoming className="size-4 text-cyan-500 shrink-0" />;
     case "refer":
@@ -126,6 +133,8 @@ function toolTypeBadge(type) {
     transfer: "Transfer",
     handoff: "Handoff",
     send_message: "Send Message",
+    whatsapp_template: "WhatsApp Template",
+    client_side_tool: "Client-Side Tool",
     invite: "Invite",
     refer: "SIP Refer",
     send_dtmf: "Send DTMF",
@@ -329,7 +338,7 @@ export default function ToolsLibraryPage() {
         title="Tools Library"
         icon={IconTools}
         badges={<Badge variant="secondary">{total} tools</Badge>}
-        actions={<Button size="sm" onClick={handleNewTool} title="Create new tool"><IconPlus />New Tool</Button>}
+        actions={<Can permission="ai_tools:create"><Button size="sm" onClick={handleNewTool} title="Create new tool"><IconPlus />New Tool</Button></Can>}
       />
       <AiAssistantsSectionPage activeId="tools">
       <Card className="w-full">
@@ -450,14 +459,14 @@ export default function ToolsLibraryPage() {
                           >
                             <IconPencil className="size-4" />
                           </button>
-                          <button
+                          <Can permission="ai_tools:delete"><button
                             type="button"
                             onClick={() => setDeleteId(t.id)}
                             className="inline-flex items-center text-red-500 hover:text-red-700"
                             title="Delete tool"
                           >
                             <IconTrash className="size-4" />
-                          </button>
+                          </button></Can>
                         </div>
                       </TableCell>
                     </TableRow>

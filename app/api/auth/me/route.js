@@ -3,18 +3,26 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { readEffectiveAgentStatus } from "@/lib/acd/agent-state.mjs";
 import { authErrorPayload, authUserPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
+import { loadUserAccess } from "@/lib/authz/effective.mjs";
+
+async function describeAccessSafely(user) {
+  try {
+    const { summary } = await loadUserAccess(user);
+    return summary;
+  } catch (err) {
+    logAuthEvent("warn", "auth_profile_access_failed", { source: "api", ...authErrorPayload(err) });
+    return null;
+  }
+}
 
 async function getCurrentAgentStatus(userId) {
   if (!userId) return "Available";
   try {
     const pool = getPostgresPool();
     if (!pool) return "Available";
-    const result = await pool.query(
-      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
-      [String(userId)],
-    );
-    return result.rows?.[0]?.agent_status || "Available";
+    return readEffectiveAgentStatus(pool, String(userId), "Offline");
   } catch (_) {
     return "Available";
   }
@@ -52,6 +60,7 @@ export async function GET(request) {
     const status = await getCurrentAgentStatus(user.id || user._id);
     const language =
       user.language || session?.user?.language || session?.user?.locale || null;
+    const access = await describeAccessSafely(user);
 
     return NextResponse.json({
       isAuth: true,
@@ -63,6 +72,10 @@ export async function GET(request) {
         language,
         theme,
         roles,
+        permissions: access?.permissions || [],
+        screens: access?.screens || [],
+        scopes: access?.scopes || null,
+        unknownRoles: access?.unknownRoles || [],
         status,
         profilePictureUri: profilePictureUri || imageFromSession || null,
         smsNumber: user.sms_number || user.smsNumber || "Telnyx",

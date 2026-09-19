@@ -1,10 +1,11 @@
+import { withPermission } from "@/lib/authz/guard";
 /**
  * Returns the WebSocket streaming server URL/port for the flow editor.
  * Used by StreamingStartNodeEditor to build correct ws:// URLs.
  */
 export const runtime = "nodejs";
 
-export async function GET() {
+async function GET_handler() {
   const mainPort = parseInt(process.env.PORT || "3000", 10);
   const wsPort = parseInt(
     process.env.STREAMING_WS_PORT || String(mainPort + 1),
@@ -30,3 +31,6 @@ export async function GET() {
     ...(configuredWsUrl ? { wsUrl: configuredWsUrl } : {}),
   });
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("call_flows:read", GET_handler, { route: "/api/voice/streaming/capabilities" });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
+import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
 
 /**
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
  *   - conversation_id: string (required) - Conversation thread ID
  *   - name: string (optional) - Display name of the user
  */
-export async function POST(request, context) {
+async function POST_handler(request, context) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -100,3 +101,6 @@ export async function POST(request, context) {
     );
   }
 }
+
+// Phase 0 hardening: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("ai_assistants:chat", POST_handler, { route: "/api/ai/assistants/[id]/chat" });

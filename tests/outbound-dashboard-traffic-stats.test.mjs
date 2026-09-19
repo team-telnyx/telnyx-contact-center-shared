@@ -73,3 +73,9 @@ test("buildDashboardCampaignExpandedStats falls back safely when totals are miss
     ["Machine", "0"],
   ]);
 });
+
+test('Answered counts answered calls independently of customer-agent connections',()=>{
+  const stats=buildDashboardCampaignExpandedStats({progress:{total:1,completed:1},summary:{answered_total:1,connected_total:0,connected_records:0,attempts_total:1}});
+  assert.equal(stats.callProcessingStats.find(s=>s.label==='Answered').value,'1');
+  assert.equal(stats.contactStats.find(s=>s.label==='Connected').value,'0%');
+});

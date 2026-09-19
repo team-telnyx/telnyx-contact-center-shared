@@ -1,30 +1,18 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { agentInScope } from "@/lib/authz/scope.mjs";
 
 /**
  * GET /api/contact-center/agent/queues/list?userId=xxx
  * Get all queues for a specific user with their assignment and activation status
  * Requires supervisor or admin role
  */
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     // Only supervisors and admins can view other users' queue assignments
-    if (!isSupervisorOrAdmin(user)) {
-      return NextResponse.json(
-        { ok: false, error: "Access denied" },
-        { status: 403 }
-      );
-    }
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
@@ -34,6 +22,10 @@ export async function GET(request) {
         { ok: false, error: "userId parameter is required" },
         { status: 400 }
       );
+    }
+
+    if (!agentInScope(authz.scope, userId)) {
+      return NextResponse.json({ ok: false, error: "Agent not found" }, { status: 404 });
     }
 
     const pool = getPostgresPool();
@@ -94,3 +86,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agents:read", GET_handler, { route: "/api/contact-center/agent/queues/list" });

@@ -102,7 +102,7 @@ connection:
 ./docker/deploy.sh production --audit-telnyx-credentials --connection-id <connection-id>
 ```
 
-FDE-managed installations can read their existing environment file directly;
+centrally managed installations can read their existing environment file directly;
 secrets do not need to be copied into the repository:
 
 ```bash
@@ -143,7 +143,7 @@ docker compose -f compose.yaml -f compose.local.yaml down
 The application automatically creates all database tables on startup via `yarn ensure:pg`. The schema includes:
 
 - **Core**: `users`, `domains`, `app_settings`, `skills`
-- **Contact Center**: `cc_queues`, `cc_interactions`, `cc_agent_state`, `cc_queue_state`
+- **Contact Center**: `cc_queues`, `cc_queue_user_assignments`, and the Core `acd_*` lifecycle, capacity, artifact, and stream tables
 - **Voice Flows**: `voice_flows`, `voice_flow_phone_numbers`, `voice_flow_executions`
 - **Authentication**: `auth_users`, `auth_accounts`, `auth_sessions` (NextAuth.js)
 
@@ -190,7 +190,7 @@ For high-availability deployments with multiple application nodes behind a load 
 3. Terminate TLS at the load balancer
 4. Use `/api/health` as the health check endpoint
 5. Increase the load balancer idle timeout to ~300 seconds for SSE and WebSocket connections
-6. Ensure all `NEXT_PUBLIC_*` variables are consistent across nodes (they are compiled into the browser bundle at build time)
+6. Ensure all `NEXT_PUBLIC_*` variables, plus `GOOGLE_MAPS_KEY`, are consistent across nodes (they are compiled into the browser bundle at build time)
 7. Store recordings, uploads, and media in S3-compatible object storage shared across nodes
 
 The app is designed to be stateless or near-stateless — in-memory state is periodically synced to PostgreSQL, so individual nodes can be replaced without data loss.

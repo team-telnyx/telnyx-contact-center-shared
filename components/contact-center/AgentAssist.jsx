@@ -187,6 +187,7 @@ export function AgentAssist({ interactionId, interaction }) {
         body: JSON.stringify({
           to: callerNumber,
           body: messageBody,
+          interactionId: interactionId || interaction?.id,
           type: "SMS",
         }),
       });
@@ -217,7 +218,7 @@ export function AgentAssist({ interactionId, interaction }) {
   };
 
   const handleSpeak = async (customSpeakText = null) => {
-    if (!originalCallControlId) {
+    if (!originalCallControlId && !interaction?.id) {
       notify({
         title: "Cannot play content",
         description: "No active call",
@@ -262,20 +263,18 @@ export function AgentAssist({ interactionId, interaction }) {
         speakText = speakText.substring(0, 5000) + "...";
       }
 
-      const response = await fetch("/api/voice/call-action", {
+      const workItemId = interactionId || interaction?.id;
+      const mediaUrl = `/api/contact-center/interactions/${encodeURIComponent(workItemId)}/media`;
+      const response = await fetch(mediaUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
         body: JSON.stringify({
+          requestId: crypto.randomUUID(),
           action: "speak",
-          callControlId: originalCallControlId,
-          params: {
-            payload: speakText,
-            voice: "Telnyx.NaturalHD.astra",
-            stop: "all",
-          },
+          text: speakText,
         }),
       });
 

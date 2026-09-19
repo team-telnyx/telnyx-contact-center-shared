@@ -11,8 +11,8 @@ const historySource = readFileSync(
   "components/contact-center/TranscriptionHistory.jsx",
   "utf8"
 );
-const webhookHandlerSource = readFileSync(
-  "lib/contact-center/webhook-handler.js",
+const mediaEventsSource = readFileSync(
+  "lib/acd/media-events.mjs",
   "utf8"
 );
 const workflowSource = readFileSync(
@@ -27,12 +27,10 @@ test("Agent Assist transcription SSE preserves Telnyx STT confidence metadata", 
   assert.match(routerSource, /model: transcriptionData\.model/);
 });
 
-test("Voice API transcription webhooks preserve Telnyx STT confidence metadata", () => {
-  assert.match(webhookHandlerSource, /confidence: transcriptionData\.confidence/);
-  assert.match(webhookHandlerSource, /source: transcriptionData\.source/);
-  assert.match(webhookHandlerSource, /provider: transcriptionData\.provider/);
-  assert.match(webhookHandlerSource, /model: transcriptionData\.model/);
-  assert.match(webhookHandlerSource, /transcriptionData\.language_code/);
+test("Voice API transcription webhooks delegate their complete provider payload to the canonical router", () => {
+  assert.match(mediaEventsSource, /eventType === "call\.transcription"/);
+  assert.match(mediaEventsSource, /return routeAgentAssistTranscription\(payload\)/);
+  assert.match(routerSource, /language: transcriptionData\.language \|\| transcriptionData\.language_code \|\| null/);
 });
 
 test("ContactCenterStreamProvider passes transcript confidence into active-call store", () => {

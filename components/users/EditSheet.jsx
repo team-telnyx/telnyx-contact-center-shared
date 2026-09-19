@@ -1,4 +1,5 @@
 "use client";
+import ChannelUtilization, { useChannelUtilization } from "@/components/admin/ChannelUtilization";
 
 import React from "react";
 import {
@@ -23,7 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone, IconSelector, IconHelpCircle } from "@tabler/icons-react";
+import { IconEdit, IconCheck, IconLock, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone, IconSelector, IconHelpCircle } from "@tabler/icons-react";
+import { useAuth } from "@/components/auth-provider";
 import {
   Command,
   CommandInput,
@@ -57,23 +59,39 @@ import { notifyExperimentalFeaturesChanged } from "@/lib/experimental-features-c
 /**
  * Multi-select component for roles
  */
-function RolesMultiSelect({ value = [], onChange, options = [] }) {
+const ROLE_GROUPS = [
+  ["system", "System"],
+  ["preset", "Shipped"],
+  ["custom", "Custom"],
+];
+
+function RolesMultiSelect({ value = [], onChange, options = [], lockedValues = [], lockedHint = "" }) {
   const [open, setOpen] = React.useState(false);
 
   const toggleRole = (roleValue) => {
+    if (lockedValues.includes(roleValue)) return;
     const newRoles = value.includes(roleValue)
       ? value.filter((r) => r !== roleValue)
       : [...value, roleValue];
     onChange(newRoles);
   };
 
+  const byValue = new Map(options.map((option) => [option.value, option]));
   const selectedLabels = value
-    .map((v) => options.find((o) => o.value === v)?.label)
+    .map((v) => byValue.get(v)?.label || v)
     .filter(Boolean)
     .join(", ");
+  const groups = ROLE_GROUPS.map(([origin, label]) => ({
+    origin,
+    label,
+    items: options.filter((option) => (option.origin || "system") === origin),
+  })).filter((group) => group.items.length > 0);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    // `modal` lets the wheel scroll the list while the sheet's scroll lock is
+    // active; the Radix Dialog behind it otherwise swallows wheel events on
+    // portaled content.
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
           <span className="truncate">
@@ -81,28 +99,48 @@ function RolesMultiSelect({ value = [], onChange, options = [] }) {
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width]">
-        <div className="space-y-2">
-          {options.map((option) => {
-            const Icon = option.Icon;
-            const isSelected = value.includes(option.value);
-            return (
-              <div
-                key={option.value}
-                className="flex items-center gap-2 p-2 rounded hover:bg-accent cursor-pointer"
-                onClick={() => toggleRole(option.value)}
-              >
-                <Checkbox checked={isSelected} />
-                {Icon && <Icon className="h-4 w-4" />}
-                <span className="flex-1">{option.label}</span>
-                {isSelected && <IconCheck className="h-4 w-4 text-primary" />}
-              </div>
-            );
-          })}
+      <PopoverContent
+        align="start"
+        collisionPadding={12}
+        className="w-[--radix-popover-trigger-width] max-h-[min(22rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain p-2"
+      >
+        <div className="space-y-1">
+          {groups.map((group) => (
+            <div key={group.origin}>
+              <div className="px-2 pb-1 pt-2 text-[10px] uppercase tracking-widest text-muted-foreground">{group.label}</div>
+              {group.items.map((option) => {
+                const Icon = option.Icon;
+                const isSelected = value.includes(option.value);
+                const locked = lockedValues.includes(option.value);
+                return (
+                  <div
+                    key={option.value}
+                    title={locked ? lockedHint : option.description || undefined}
+                    className={`flex items-start gap-2 rounded p-2 ${locked ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-accent"}`}
+                    onClick={() => toggleRole(option.value)}
+                  >
+                    <Checkbox checked={isSelected} disabled={locked} className="mt-0.5" />
+                    {Icon && <Icon className="mt-0.5 h-4 w-4" />}
+                    <span className="min-w-0 flex-1">
+                      <span className="block">{option.label}</span>
+                      {option.description ? <span className="block truncate text-[11px] text-muted-foreground">{option.description}</span> : null}
+                    </span>
+                    {locked ? <IconLock className="mt-0.5 h-4 w-4 text-muted-foreground" /> : isSelected ? <IconCheck className="mt-0.5 h-4 w-4 text-primary" /> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
+        <p className="px-2 pb-1 pt-2 text-[11px] text-muted-foreground">Roles add up. Assign Agent when this person also handles interactions; position roles contain no agent desktop by themselves.</p>
       </PopoverContent>
     </Popover>
   );
+}
+
+/** Fallback when the roles table cannot be read: the four system roles. */
+function fallbackRoleOptions() {
+  return USER_ROLES.map((role) => ({ value: role.value, label: role.label, Icon: role.Icon, origin: "system", description: "" }));
 }
 
 /**
@@ -122,6 +160,8 @@ export default function EditSheet({
   createMode = false,
 }) {
   const { openHelp, registerHelpPortalContainer } = useHelp();
+  const { wildcard: actorIsOwner } = useAuth();
+  const [roleOptions, setRoleOptions] = React.useState(fallbackRoleOptions);
   const [username, setUsername] = React.useState("");
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
@@ -245,7 +285,7 @@ export default function EditSheet({
           );
           // Load user queue assignments
           if (d.queue_assignments && Array.isArray(d.queue_assignments)) {
-            setUserQueueIds(d.queue_assignments.map((qa) => qa.queue_id).filter(Boolean));
+            setUserQueueIds(d.queue_assignments.filter(qa => qa.enabled && !qa.deactivated_at).map((qa) => qa.queue_id).filter(Boolean));
           } else {
             setUserQueueIds([]);
           }
@@ -321,6 +361,35 @@ export default function EditSheet({
     }
   }, [open]);
 
+  // Load the roles table (system, shipped and custom roles) for the role picker
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadRoles() {
+      try {
+        const res = await fetch("/api/admin/roles", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !Array.isArray(data.roles)) return;
+        const icons = new Map(USER_ROLES.map((role) => [role.value, role.Icon]));
+        setRoleOptions(
+          data.roles.map((role) => ({
+            value: role.key,
+            label: role.name,
+            Icon: icons.get(role.key) || null,
+            origin: role.origin,
+            description: role.description || "",
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load roles:", err);
+      }
+    }
+    if (open) loadRoles();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // Load Telnyx numbers for voice number picker
   React.useEffect(() => {
     async function loadNumbers() {
@@ -383,7 +452,10 @@ export default function EditSheet({
     }
   }
 
+  const utilization = useChannelUtilization("agent", createMode ? null : userId, open);
+
   async function onSave() {
+    if (!utilization.ready) return;
     if (createMode) {
       // Validate required fields
       if (!firstName.trim() || !lastName.trim() || !username.trim()) {
@@ -431,6 +503,7 @@ export default function EditSheet({
             skills,
             sendInvite,
             experimentalFeatures,
+            active, verified, smsNumber, queueIds: userQueueIds, utilization: utilization.payload,
           }),
         });
         const data = await res.json();
@@ -514,6 +587,7 @@ export default function EditSheet({
           return acc;
         }, {}),
         queueIds: userQueueIds, // Send array of queue IDs
+        utilization: utilization.payload,
       };
 
       const r = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
@@ -582,8 +656,7 @@ export default function EditSheet({
 
         {/* Scrollable Content Section */}
         <div className="flex-1 overflow-y-auto">
-          <Card className="mx-5 my-4">
-            <CardContent className="p-6 space-y-4">
+          <div className="space-y-4">
               {loading ? (
                 <>
                   {/* Verified Switch Skeleton */}
@@ -677,6 +750,8 @@ export default function EditSheet({
                 </>
               ) : (
                 <>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
+                    <h3 className="text-sm font-semibold">Account Settings</h3>
                   {/* Invite Status Section */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1">
@@ -1004,14 +1079,17 @@ export default function EditSheet({
                         <RolesMultiSelect
                           value={roles}
                           onChange={setRoles}
-                          options={USER_ROLES}
+                          options={roleOptions}
+                          lockedValues={actorIsOwner ? [] : ["owner"]}
+                          lockedHint="Only an owner can grant or revoke the Owner role"
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <ChannelUtilization scope="agent" form={utilization} disabled={saving} />
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Assignments Section */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -1071,8 +1149,8 @@ export default function EditSheet({
                     )}
                   </div>
 
-                  <div className="border-t" />
-
+                  </CardContent></Card>
+                  <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Skills Section */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -1203,10 +1281,10 @@ export default function EditSheet({
                       </div>
                     )}
                   </div>
+                  </CardContent></Card>
                 </>
               )}
-            </CardContent>
-          </Card>
+          </div>
         </div>
 
         {/* Fixed Footer */}
@@ -1218,7 +1296,7 @@ export default function EditSheet({
           >
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={saving || (!createMode && loading)}>
+          <Button onClick={onSave} disabled={saving || (!createMode && loading) || !utilization.ready}>
             {saving
               ? createMode ? "Creating..." : "Saving..."
               : createMode ? "Create User" : "Save Changes"}

@@ -1,5 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { createBuildInfo } from '../../../scripts/lib/build-info.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -34,7 +37,11 @@ export async function composeUp({ cwd, build = true, profiles, excludeProfiles, 
   const args = composeArgs(['up', '-d', ...(build ? ['--build'] : [])], {
     profiles, excludeProfiles, localOverride: true,
   });
-  return execImpl('docker', args, { cwd });
+  const repoRoot = resolve(cwd || process.cwd(), '../..');
+  const env = build && existsSync(resolve(repoRoot, 'package.json'))
+    ? { ...process.env, CC_BUILD_INFO: JSON.stringify(createBuildInfo({ root: repoRoot, env: {} })) }
+    : process.env;
+  return execImpl('docker', args, { cwd, env });
 }
 
 export async function composeDown({ cwd, volumes = false, execImpl = execFileAsync } = {}) {

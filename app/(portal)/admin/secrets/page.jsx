@@ -32,6 +32,7 @@ import {
   IconPlus,
 } from "@tabler/icons-react";
 import SecretEditSheet from "@/components/secrets/EditSheet";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminSecretsPage() {
   const [secrets, setSecrets] = useState([]);
@@ -118,10 +119,10 @@ export default function AdminSecretsPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={openCreateSheet}>
+    <Can permission="secrets:create"><Button onClick={openCreateSheet}>
       <IconPlus className="size-4 mr-2" />
       Add Secret
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -193,13 +194,13 @@ export default function AdminSecretsPage() {
                             </button>
                             <Dialog>
                               <DialogTrigger asChild>
-                                <button
+                                <Can permission="secrets:delete"><button
                                   type="button"
                                   className="inline-flex items-center text-red-500"
                                   title="Delete secret"
                                 >
                                   <IconTrash className="size-4" />
-                                </button>
+                                </button></Can>
                               </DialogTrigger>
                               <DialogContent>
                                 <DialogHeader>

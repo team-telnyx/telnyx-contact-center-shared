@@ -1027,7 +1027,7 @@ export default function SettingsPage() {
                 setBrandName(e.target.value);
                 setHasChanges(true);
               }}
-              placeholder="e.g. Global Medical Response"
+              placeholder="e.g. Acme Air Medical"
               className="max-w-md"
             />
           </div>

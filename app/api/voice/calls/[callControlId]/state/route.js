@@ -1,21 +1,15 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { voiceRuntimePayload, callControlLogger } from "@/lib/voice/logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
 /**
  * GET /api/voice/calls/[callControlId]/state
  * Get call state from Telnyx API
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const user = authz.user;
 
     const { callControlId } = await params;
     if (!callControlId) {
@@ -74,3 +68,5 @@ export async function GET(request, { params }) {
   }
 }
 
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("agent:self", GET_handler, { route: "/api/voice/calls/[callControlId]/state" });

@@ -16,7 +16,7 @@ test("Quality menu item lives in the SUPERVISOR group with supervisor access", (
   );
   assert.match(
     supervisorSlice,
-    /title:\s*"Quality",[\s\S]*?url:\s*"\/supervisor\/quality",[\s\S]*?role_access:\s*\["supervisor",\s*"admin",\s*"owner"\]/,
+    /title:\s*"Quality",[\s\S]*?url:\s*"\/supervisor\/quality",[\s\S]*?screen:\s*"supervisor\.quality"/,
     "Quality sidebar item should be in the SUPERVISOR group for supervisor/admin/owner",
   );
 });
@@ -113,15 +113,16 @@ test("Quality API routes are supervisor/admin guarded", () => {
     "app/api/contact-center/quality/dashboard/route.js",
   ]) {
     const source = read(route);
-    assert.match(source, /getAuthenticatedUser/, `${route} should authenticate`);
-    assert.match(source, /isSupervisorOrAdmin/, `${route} should be supervisor/admin only`);
+    assert.match(source, /withPermission\("quality(_forms|_evaluations)?:[a-z]+"/, `${route} should declare a quality permission`);
+    assert.match(source, /withPermission\("quality(_forms|_evaluations)?:[a-z.]+"/, `${route} should be guarded by the quality permission family`);
   }
 });
 
-test("Quality evaluations API uses transfer-leg hygiene and clamped range", () => {
+test("Quality evaluations API reads terminal Core history and clamps the range", () => {
   const source = read("app/api/contact-center/quality/evaluations/route.js");
-  assert.match(source, /is_transfer_leg/);
-  assert.match(source, /is_consult_call/);
+  assert.match(source, /FROM acd_history_interactions i/);
+  assert.match(source, /i\.terminal_at IS NOT NULL/);
+  assert.match(source, /qe\.work_item_id = i\.id/);
   assert.match(source, /MAX_RANGE_DAYS = 92/);
 });
 

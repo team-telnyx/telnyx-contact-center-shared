@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -117,12 +116,9 @@ async function loadTelnyxSummary() {
   }
 }
 
-export async function GET(request) {
+async function GET_handler(request, _context, authz) {
   try {
-    const user = await getAuthenticatedUser();
-    if (!user || !isAdmin(user)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const user = authz.user;
 
     const rangeParam = new URL(request.url).searchParams.get("range") || "24h";
     const range = RANGE_CONFIG[rangeParam] ? rangeParam : "24h";
@@ -202,7 +198,7 @@ export async function GET(request) {
         COUNT(DISTINCT e.id)::int AS executions,
         COUNT(DISTINCT i.id) FILTER (WHERE i.state IN ('failed', 'abandoned'))::int AS exceptions
       FROM buckets b
-      LEFT JOIN cc_interactions i
+      LEFT JOIN acd_history_interactions i
         ON i.created_at >= b.bucket AND i.created_at < b.bucket + INTERVAL '${config.step}'
       LEFT JOIN voice_flow_executions e
         ON e.started_at >= b.bucket AND e.started_at < b.bucket + INTERVAL '${config.step}'
@@ -313,3 +309,6 @@ export async function GET(request) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("system_dashboard:read", GET_handler, { route: "/api/admin/system-dashboard" });

@@ -1,25 +1,27 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { getAuthenticatedUser } from "@/lib/auth-server";
-import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { createDiagnosticLogger } from "@/lib/diagnostic-logger.mjs";
 import { computeEvaluationScore } from "@/lib/quality/scoring.mjs";
+import { findWorkItemWithArtifacts } from "@/lib/acd/work-item-repository.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { workItemInScope } from "@/lib/authz/scope.mjs";
 
 const qualityLogger = createDiagnosticLogger("contact-center.quality");
 
-async function guard() {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return { error: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }) };
-  }
-  if (!isSupervisorOrAdmin(user)) {
-    return { error: NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 }) };
-  }
+function guard(authz) {
   const pool = getPostgresPool();
   if (!pool) {
     return { error: NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 }) };
   }
-  return { user, pool };
+  return { user: authz.user, pool };
+}
+
+// An evaluation is reachable only when its interaction is within the caller's data scope (Phase 3a).
+async function evaluationInScope(pool, scope, evaluation) {
+  if (!scope?.restricted) return true;
+  if (!evaluation?.work_item_id) return false;
+  const row = (await pool.query("SELECT queue_id, channel FROM acd_work_items WHERE id = $1", [evaluation.work_item_id])).rows[0];
+  return workItemInScope(pool, scope, evaluation.work_item_id, { queueId: row?.queue_id, channel: row?.channel });
 }
 
 async function loadEvaluationBundle(pool, id) {
@@ -51,25 +53,20 @@ async function loadEvaluationBundle(pool, id) {
  * GET /api/contact-center/quality/evaluations/[id]
  * Returns evaluation + form schema + interaction (with recording/transcript info).
  */
-export async function GET(request, { params }) {
+async function GET_handler(request, { params }, authz) {
   try {
-    const { error, pool } = await guard();
+    const { error, pool } = guard(authz);
     if (error) return error;
 
     const { id } = (await params) || {};
     const evaluation = await loadEvaluationBundle(pool, id);
-    if (!evaluation) {
+    if (!evaluation || !(await evaluationInScope(pool, authz.scope, evaluation))) {
       return NextResponse.json({ ok: false, error: "Evaluation not found" }, { status: 404 });
     }
 
-    const interactionRes = await pool.query(
-      `SELECT i.*, u.first_name, u.last_name
-       FROM cc_interactions i
-       LEFT JOIN users u ON i.agent_username = u.username
-       WHERE i.id = $1`,
-      [evaluation.interaction_id],
-    );
-    const interaction = interactionRes.rows[0] || null;
+    const interaction = evaluation.work_item_id
+      ? await findWorkItemWithArtifacts(pool, evaluation.work_item_id)
+      : null;
     if (interaction && typeof interaction.metadata === "string") {
       try {
         interaction.metadata = JSON.parse(interaction.metadata);
@@ -90,16 +87,16 @@ export async function GET(request, { params }) {
  * Save answers / notes / status transitions. Recomputes scores from answers.
  * body: { answers?, review_notes?, action?: "save" | "finalize" | "dispute" }
  */
-export async function PATCH(request, { params }) {
+async function PATCH_handler(request, { params }, authz) {
   try {
-    const { error, user, pool } = await guard();
+    const { error, user, pool } = guard(authz);
     if (error) return error;
 
     const { id } = (await params) || {};
     const body = await request.json().catch(() => ({}));
 
     const evaluation = await loadEvaluationBundle(pool, id);
-    if (!evaluation) {
+    if (!evaluation || !(await evaluationInScope(pool, authz.scope, evaluation))) {
       return NextResponse.json({ ok: false, error: "Evaluation not found" }, { status: 404 });
     }
     if (evaluation.status === "final" && body.action !== "dispute") {
@@ -175,12 +172,18 @@ export async function PATCH(request, { params }) {
  * DELETE /api/contact-center/quality/evaluations/[id]
  * Deletes a non-final evaluation draft.
  */
-export async function DELETE(request, { params }) {
+async function DELETE_handler(request, { params }, authz) {
   try {
-    const { error, pool } = await guard();
+    const { error, pool } = guard(authz);
     if (error) return error;
 
     const { id } = (await params) || {};
+    if (authz.scope.restricted) {
+      const existing = (await pool.query("SELECT work_item_id FROM quality_evaluations WHERE id = $1", [id])).rows[0];
+      if (!existing || !(await evaluationInScope(pool, authz.scope, existing))) {
+        return NextResponse.json({ ok: false, error: "Evaluation not found or already finalized" }, { status: 404 });
+      }
+    }
     const result = await pool.query(
       `DELETE FROM quality_evaluations WHERE id = $1 AND status <> 'final' RETURNING id`,
       [id],
@@ -200,3 +203,8 @@ export async function DELETE(request, { params }) {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("quality_evaluations:read", GET_handler, { route: "/api/contact-center/quality/evaluations/[id]" });
+export const PATCH = withPermission("quality_evaluations:update", PATCH_handler, { route: "/api/contact-center/quality/evaluations/[id]" });
+export const DELETE = withPermission("quality_evaluations:delete", DELETE_handler, { route: "/api/contact-center/quality/evaluations/[id]" });

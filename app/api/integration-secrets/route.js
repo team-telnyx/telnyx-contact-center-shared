@@ -1,32 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { withPermission } from "@/lib/authz/guard";
 
 export const dynamic = "force-dynamic";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user || !isAdmin(user)) return null;
-  return user;
-}
 
-export async function GET() {
-  const user = await requireAdmin();
-  if (!user) {
-    return NextResponse.json(
-      { ok: false, error: "Forbidden" },
-      { status: 403, headers: { "Cache-Control": "no-store" } },
-    );
-  }
+async function GET_handler(_request, _context, authz) {
+  const user = authz.user;
 
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey) {
@@ -94,3 +74,6 @@ export async function GET() {
     );
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("secrets:read", GET_handler, { route: "/api/integration-secrets" });

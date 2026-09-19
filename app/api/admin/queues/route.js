@@ -1,27 +1,14 @@
+import { saveAdminSettings } from "@/lib/acd/utilization.mjs";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
+import { queueScopeSql } from "@/lib/authz/scope.mjs";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user)) return null;
-  return user;
-}
 
-export async function GET(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function GET_handler(request, _context, authz) {
+  const user = authz.user;
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ rows: [], count: 0 });
 
@@ -57,6 +44,9 @@ export async function GET(request) {
     vals.push(enabled === "true");
     i += 1;
   }
+  // Queue scope of the granting roles (Phase 3a).
+  where.push(...queueScopeSql(authz.scope, "id", vals));
+  i = vals.length + 1;
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const rowsSql = `SELECT id, name, display_name, description, routing_strategy, max_wait_time_secs, max_size, timeout_secs, overflow_queue_id, overflow_action, priority, enabled, active, created_at, updated_at FROM cc_queues ${whereSql} ORDER BY priority DESC, name ASC LIMIT ${pageSize} OFFSET ${offset}`;
@@ -70,10 +60,12 @@ export async function GET(request) {
   });
 }
 
-export async function POST(request) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, _context, authz) {
+  const user = authz.user;
   const body = await request.json();
+  if (Array.isArray(body.userAssignments) && body.userAssignments.length && !authz.can("queues:agents.assign")) {
+    return NextResponse.json({ error: "Forbidden", permission: "queues:agents.assign" }, { status: 403 });
+  }
   const name = String(body.name || "").trim();
   if (!name)
     return NextResponse.json({ error: "name required" }, { status: 400 });
@@ -83,6 +75,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Server not ready" }, { status: 500 });
 
   try {
+    const saved = await saveAdminSettings(pool, { scope: "queue", create: true, utilization: body.utilization, actor: String(user.id) }, async (pool, afterCommit) => {
     const id = await PgDb.insertQueue({
       name,
       displayName: body.displayName || null,
@@ -91,14 +84,17 @@ export async function POST(request) {
       maxWaitTimeSecs: body.maxWaitTimeSecs || 600,
       maxSize: body.maxSize || 100,
       timeoutSecs: body.timeoutSecs || 300,
-      agentAnswerTimeoutSecs: body.agentAnswerTimeoutSecs || 30,
+      agentAnswerTimeoutSecs:
+        body.agentAnswerTimeoutSecs == null || body.agentAnswerTimeoutSecs === ""
+          ? null
+          : Number(body.agentAnswerTimeoutSecs),
       overflowQueueId: body.overflowQueueId || null,
       overflowAction: body.overflowAction || "transfer",
       priority: body.priority || 0,
       enabled: body.enabled !== undefined ? body.enabled : true,
       skillRequirements: body.skillRequirements || {},
       priorityRules: body.priorityRules || [],
-    });
+    }, pool);
 
     // Update queue audio settings if provided
     if (
@@ -156,14 +152,6 @@ export async function POST(request) {
           updateValues,
         );
       }
-    }
-
-    // Update agent answer timeout if provided
-    if (body.agentAnswerTimeoutSecs !== undefined) {
-      await pool.query(
-        `UPDATE cc_queues SET agent_answer_timeout_secs=$1, updated_at=$2 WHERE id=$3`,
-        [Number(body.agentAnswerTimeoutSecs), new Date().toISOString(), id],
-      );
     }
 
     // Update new routing engine fields if provided
@@ -264,7 +252,7 @@ export async function POST(request) {
       );
       const queue = queueRes.rows?.[0];
       if (queue) {
-        await broadcastToAllAgents(
+        afterCommit.push(() => broadcastToAllAgents(
           {
             type: "queue_created",
             queue: {
@@ -277,16 +265,22 @@ export async function POST(request) {
             timestamp: new Date().toISOString(),
           },
           "queue_changed",
-        );
+        ));
       }
     } catch (sseError) {
       adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       // Don't fail the request if SSE fails
     }
 
-    return NextResponse.json({ ok: true, id });
+    return { id };
+    });
+    return NextResponse.json({ ok: true, id: saved.id });
   } catch (err) {
     const msg = err?.message || String(err);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: msg }, { status: err.status || 400 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const GET = withPermission("queues:read", GET_handler, { route: "/api/admin/queues" });
+export const POST = withPermission("queues:create", POST_handler, { route: "/api/admin/queues" });

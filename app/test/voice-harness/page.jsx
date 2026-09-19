@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { TelnyxAIAgentProvider } from "@telnyx/ai-agent-lib";
 import VoiceTestHarness from "./voice-test-harness";
 
-// Default test assistant (Healthcare Intake - GMR)
-const DEFAULT_ASSISTANT_ID = "assistant-06fd0ed6-69fd-4235-986b-72e5ae1af71c";
+// Default test assistant (Healthcare Intake - the reference workflow)
+const DEFAULT_ASSISTANT_ID = "assistant-00000000-0000-0000-0000-000000000000";
 
 export default function VoiceTestPage() {
   const [assistantId, setAssistantId] = useState(DEFAULT_ASSISTANT_ID);

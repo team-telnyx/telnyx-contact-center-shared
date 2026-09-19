@@ -1,24 +1,9 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { PgDb } from "@/lib/pgdb";
-import { isAdmin } from "@/lib/role-utils";
 import { executeCtiAction, CTI_ACTIONS } from "@/lib/hardphones/cti.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { withPermission } from "@/lib/authz/guard";
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  const id = session?.user?.id || null;
-  const email = session?.user?.email || null;
-  if (!id && !email) return null;
-  let user = null;
-  if (id) user = await PgDb.findUserById(id);
-  if (!user && email) user = await PgDb.findUserByUsername(email);
-  if (!user) return null;
-  if (!isAdmin(user) || user.experimental_features !== true) return null;
-  return user;
-}
 
 function resolveBaseUrl(request) {
   const candidates = [process.env.TELNYX_WEBHOOK_BASE_URL, process.env.NEXTAUTH_URL, process.env.APP_BASE_URL];
@@ -56,9 +41,10 @@ function validHostOverride(value) {
 // POST { action, number?, digits? } — execute a CTI action on a phone.
 // Driver is resolved per vendor: Polycom REST, Yealink Action URI, or the
 // Telnyx fallback (AudioCodes / settings.cti_mode = "telnyx").
-export async function POST(request, { params }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+async function POST_handler(request, { params }, authz) {
+  const user = authz.user;
+  // Hardphone provisioning is an experimental feature enabled per user.
+  if (user.experimental_features !== true) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
@@ -105,3 +91,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: "Failed to execute CTI action" }, { status: 500 });
   }
 }
+
+// Phase 2 migration: every export goes through the permission guard (the internal documentation).
+export const POST = withPermission("phones:create", POST_handler, { route: "/api/admin/phones-provisioning/phones/[id]/cti" });

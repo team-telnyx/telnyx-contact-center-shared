@@ -44,6 +44,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/domains/EditSheet";
+import { Can } from "@/components/auth-provider";
 
 export default function AdminDomainsPage() {
   const [items, setItems] = useState([]);
@@ -133,10 +134,10 @@ export default function AdminDomainsPage() {
     <Button onClick={() => load()} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </Button>
-    <Button onClick={handleNewDomain} variant="default">
+    <Can permission="domains:create"><Button onClick={handleNewDomain} variant="default">
       <IconPlus className="size-4 mr-2" />
       New Domain
-    </Button>
+    </Button></Can>
   </>;
 
   return (
@@ -248,13 +249,13 @@ export default function AdminDomainsPage() {
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="domains:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
                                     title="Delete domain"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

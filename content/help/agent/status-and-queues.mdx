@@ -4,7 +4,7 @@ description: Change availability and control which inbound and outbound work can
 audiences: [agent, supervisor, admin, owner]
 keywords: [agent status, available, busy, queue activation, campaigns]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-09-15
 ---
 
 ## Manual status change
@@ -21,7 +21,17 @@ Common system lifecycle transitions are:
 | Caller abandons before answer | Available |
 | Wrap-up finishes successfully | Available |
 
-Configured names may include other user-selectable break or away statuses. Do not attempt to override Busy or Wrapup during active work. A requested transition may immediately be replaced by Busy if routing offers a call at the same moment.
+Configured names may include other user-selectable break or away statuses. A requested transition may immediately be replaced by Busy if routing offers a call at the same moment.
+
+## Changing status while busy
+
+Busy and Wrapup are computed from the interactions you are handling, so they cannot be replaced directly. You can still pick a break status such as Away while you are busy. The choice is stored as a **pending status**:
+
+- The status selector keeps showing Busy and adds a dashed chip with a clock icon and the chosen status. Hover the chip to see when you chose it. The dropdown marks the pending status and shows that Available cancels it.
+- No new interactions are offered to you on any channel while the pending status is set, even when you have free capacity. Supervisors see the queue waiting reason *Agent status blocks offers (Away pending)* and the same chip next to your status in the monitor.
+- When your last interaction and its wrap-up end, the pending status becomes your current status.
+
+To cancel the pending status, click the cross on the chip or choose **Available** in the selector. Offers resume immediately, still subject to your capacity. Choosing a next status on the wrap-up sheet works the same way and applies when the wrap-up completes.
 
 ## Queue activation
 

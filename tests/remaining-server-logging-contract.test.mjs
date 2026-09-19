@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 
@@ -13,6 +13,7 @@ function isClientish(file, src) {
   return firstLines.includes("use client")
     || file.startsWith("hooks/")
     || file.startsWith("components/")
+    || file.startsWith("public/") // Static browser scripts do not use server logging.
     || file.startsWith("lib/stores/")
     || file === "lib/color-utils.js"
     || file === "lib/expression-engine.js"
@@ -22,6 +23,12 @@ function isClientish(file, src) {
 test("Remaining server-side tracked JS files do not use legacy console diagnostics", async () => {
   const offenders = [];
   for (const file of trackedJs) {
+    try {
+      await access(file);
+    } catch {
+      // git ls-files includes staged deletions while validating a cutover.
+      continue;
+    }
     const src = await readFile(file, "utf8");
     if (isClientish(file, src)) continue;
     if (/\bconsole\.(log|warn|error|info|debug)\b/.test(src)) offenders.push(file);

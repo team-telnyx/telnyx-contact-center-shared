@@ -9,6 +9,17 @@ import { verifyUserPassword } from "@/lib/auth";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
 import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
+import {
+  completeTrackedLogout,
+  openTrackedAuthSession,
+} from "@/lib/auth-session-tracking.mjs";
+import { authzSnapshotFor } from "@/lib/authz/page-access-server.mjs";
+
+async function voiceProvisioningEnabled(userId) {
+  const result = await getPostgresPool().query(
+    "SELECT enabled FROM cc_agent_channel_policies WHERE agent_id=$1 AND channel='voice'",[userId]);
+  return result.rows[0]?.enabled !== false;
+}
 
 export const authOptions = {
   adapter: PostgresNextAuthAdapter(),
@@ -44,7 +55,7 @@ export const authOptions = {
           return null;
         }
         const user = await PgDb.findUserByUsername(username);
-        if (user && verifyUserPassword(user, password)) {
+        if (user && user.active !== false && verifyUserPassword(user, password)) {
           // Check if account is verified
           if (!user.verified && user.auth_strategy === "local") {
             await logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", source: "nextauth", reason: "account_not_verified", ...authUserPayload(user, username) });
@@ -54,7 +65,7 @@ export const authOptions = {
           }
 
           // Check if user has telephony credentials, create if missing
-          if (!user.telephony_credentials_id && !user.telephonyCredentialsId) {
+          if (!user.telephony_credentials_id && !user.telephonyCredentialsId && await voiceProvisioningEnabled(user.id)) {
             try {
               const credential = await createUserTelephonyCredentials({
                 email: user.username || username,
@@ -100,11 +111,11 @@ export const authOptions = {
       try {
         // If url is provided and it's a relative path, use the current origin
         if (url && url.startsWith("/")) {
-          // Check if we're in a tunnel environment by looking at the baseUrl
-          if (baseUrl.includes("tunnel.demotelnyx.com")) {
-            return `https://tunnel.demotelnyx.com${url}`;
-          }
-          // Use the NEXTAUTH_URL if set, otherwise use baseUrl
+          // NEXTAUTH_URL is the deployment's own public URL and must match it,
+          // so it is the right base behind a tunnel or proxy too. The previous
+          // version special-cased one demo hostname with a substring test,
+          // which both hard-coded an environment into product code and
+          // accepted any host merely containing that name.
           const redirectBase = process.env.NEXTAUTH_URL || baseUrl;
           return `${redirectBase}${url}`;
         }
@@ -122,9 +133,6 @@ export const authOptions = {
         }
 
         // Default to home page
-        if (baseUrl.includes("tunnel.demotelnyx.com")) {
-          return `https://tunnel.demotelnyx.com/`;
-        }
         const defaultUrl = process.env.NEXTAUTH_URL || baseUrl;
         return `${defaultUrl}/`;
       } catch (_) {}
@@ -132,6 +140,15 @@ export const authOptions = {
     },
     async signIn({ user, account, profile }) {
       try {
+        // All web providers must reject disabled app accounts before profile
+        // updates, provisioning, account linking or JWT/session creation.
+        const signInEmail = normalizeAuthEmail(user?.email || profile?.email);
+        const signInUser = signInEmail
+          ? await PgDb.findUserByUsername(signInEmail)
+          : account?.provider === "credentials" && user?.id
+            ? await PgDb.findUserById(user.id)
+            : null;
+        if (signInUser?.active === false) return false;
         // Track login activity (deferred to session callback where we have user ID)
         // We'll track it in the session callback instead
 
@@ -142,6 +159,7 @@ export const authOptions = {
           ).toLowerCase();
           if (email) {
             let existing = await PgDb.findUserByUsername(email);
+            if (existing?.active === false) return false;
             const googleImage = user?.image || profile?.picture || "";
 
             if (existing) {
@@ -186,6 +204,7 @@ export const authOptions = {
                   authStrategy: "google",
                 });
                 existing = await PgDb.findUserByUsername(email);
+                if (existing?.active === false) return false;
                 logAuthEvent("info", "signup_success", { method: "google", source: "nextauth", ...authUserPayload(existing, email) });
 
                 // Create Telnyx telephony credentials for the new user
@@ -215,10 +234,14 @@ export const authOptions = {
                 // In case of race, try to find again
                 existing = await PgDb.findUserByUsername(email);
               }
+              if (existing?.active === false) return false;
             }
           }
         }
-      } catch (_) {}
+      } catch (error) {
+        logAuthEvent("warn", "signin_failed", { method: account?.provider, source: "nextauth", reason: "user_lookup_failed", ...authErrorPayload(error) });
+        return false;
+      }
       return true;
     },
     async jwt({ token, user, account, profile, trigger }) {
@@ -228,6 +251,7 @@ export const authOptions = {
         try {
           const email = String(profile.email).toLowerCase();
           const existing = await PgDb.findUserByUsername(email);
+          if (existing?.active === false) return null;
           if (existing) {
             // Always use the app's users table ID for Google OAuth
             token.id = String(existing.id);
@@ -258,16 +282,26 @@ export const authOptions = {
 
           const dbUserPromise = PgDb.findUserByUsername(token.email);
           const dbUser = await Promise.race([dbUserPromise, timeoutPromise]);
+          if (dbUser?.active === false) return null;
 
           if (dbUser) {
             // Ensure we're using the correct ID from the app's users table
             token.id = String(dbUser.id);
             token.setupCompleted = dbUser.setup_completed ?? false;
 
+            // Screen grants snapshot for the proxy (RBAC Phase 3). Refreshed on
+            // every session read and on `update()` after an `authz_changed` push;
+            // server page authorization still resolves persisted permissions.
+            try {
+              token.authz = await authzSnapshotFor(dbUser);
+            } catch (authzErr) {
+              logAuthEvent("warn", "nextauth_jwt_authz_snapshot_failed", { email: token.email, source: "nextauth_jwt", ...authErrorPayload(authzErr) });
+            }
+
             // Check if user has telephony credentials, create if missing
             if (
               !dbUser.telephony_credentials_id &&
-              !dbUser.telephonyCredentialsId
+              !dbUser.telephonyCredentialsId && await voiceProvisioningEnabled(dbUser.id)
             ) {
               try {
                 const credential = await createUserTelephonyCredentials({
@@ -294,6 +328,29 @@ export const authOptions = {
         } catch (err) {
           logAuthEvent("warn", "nextauth_jwt_user_lookup_failed", { email: token.email, source: "nextauth_jwt", ...authErrorPayload(err) });
           // Keep existing token values on error
+        }
+      }
+
+      // `user`/`account` are present only on the initial JWT creation. Track
+      // the login here, once, and persist the opaque correlation id inside the
+      // encrypted NextAuth JWT so signOut can close this exact session.
+      if ((user || account) && token?.id && !token.authTrackingSessionId) {
+        try {
+          const trackedSession = await openTrackedAuthSession({
+            userId: String(token.id),
+            email: token.email,
+            source: "nextauth_jwt",
+          });
+          if (trackedSession?.sessionToken) {
+            token.authTrackingSessionId = trackedSession.sessionToken;
+          }
+        } catch (activityError) {
+          logAuthEvent("warn", "signin_activity_log_failed", {
+            userId: String(token.id),
+            email: token.email,
+            source: "nextauth_jwt",
+            ...authErrorPayload(activityError),
+          });
         }
       }
 
@@ -332,6 +389,7 @@ export const authOptions = {
           })();
 
           const user = await Promise.race([userPromise, timeoutPromise]);
+          if (user?.active === false) return null;
 
           if (user) {
             // Always use the ID from the app's users table, not from NextAuth's auth_users table
@@ -345,49 +403,10 @@ export const authOptions = {
             // Update token.id to ensure it's correct for future requests
             token.id = String(user.id);
 
-            // Track login activity on first session creation (when token doesn't have login tracked)
-            if (!token.loginTracked && user.id) {
-              try {
-                // Check if there's already a recent login session (within last minute) to avoid duplicates
-                const pool = await import("@/lib/postgres.mjs").then((m) =>
-                  m.getPostgresPool()
-                );
-                if (pool) {
-                  const recentSession = await pool.query(
-                    `SELECT id FROM cc_user_sessions 
-                     WHERE user_id = $1 AND login_at > NOW() - INTERVAL '1 minute'
-                     ORDER BY login_at DESC LIMIT 1`,
-                    [String(user.id)]
-                  );
-
-                  if (recentSession.rows.length === 0) {
-                    // Log user session (login)
-                    await PgDb.logUserSession({
-                      userId: String(user.id),
-                      loginAt: new Date().toISOString(),
-                    });
-
-                    // Log login activity
-                    await PgDb.logUserActivity({
-                      userId: String(user.id),
-                      activityType: "login",
-                      activityValue: "session_created",
-                    });
-
-                    // Mark token as having login tracked to avoid duplicates
-                    token.loginTracked = true;
-                  }
-                }
-              } catch (activityError) {
-                logAuthEvent("warn", "signin_activity_log_failed", { ...authUserPayload(user, token.email), source: "nextauth_session", ...authErrorPayload(activityError) });
-                // Don't fail session creation if activity logging fails
-              }
-            }
-
             // Check if user has telephony credentials, create if missing
             if (
               !user.telephony_credentials_id &&
-              !user.telephonyCredentialsId
+              !user.telephonyCredentialsId && await voiceProvisioningEnabled(user.id)
             ) {
               try {
                 const credential = await createUserTelephonyCredentials({
@@ -425,6 +444,7 @@ export const authOptions = {
 
           const userPromise = PgDb.findUserById(token.id);
           const user = await Promise.race([userPromise, timeoutPromise]);
+          if (user?.active === false) return null;
 
           if (user) {
             session.user.id = String(user.id);
@@ -440,6 +460,29 @@ export const authOptions = {
       }
 
       return session;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      try {
+        const result = await completeTrackedLogout({
+          userId: token?.id ? String(token.id) : null,
+          email: token?.email || null,
+          sessionToken: token?.authTrackingSessionId || null,
+          source: "nextauth_signout",
+        });
+        await logAuthEvent("info", "logout_success", {
+          userId: result?.user?.id ? String(result.user.id) : undefined,
+          source: "nextauth_signout",
+          trackedSessionClosed: Boolean(result?.closed),
+        });
+      } catch (activityError) {
+        await logAuthEvent("warn", "logout_activity_failed", {
+          userId: token?.id ? String(token.id) : undefined,
+          source: "nextauth_signout",
+          ...authErrorPayload(activityError),
+        });
+      }
     },
   },
   secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,

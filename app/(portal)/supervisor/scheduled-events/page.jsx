@@ -57,6 +57,7 @@ import {
   SupervisorPageShell,
 } from "@/components/contact-center/SupervisorPageLayout";
 import { AiAssistantsSectionPage } from "@/components/assistants/AiAssistantsSectionNav";
+import { Can } from "@/components/auth-provider";
 
 const neutralActionClass =
   "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
@@ -498,14 +499,14 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
               <IconUpload className="size-4" />
               Import CSV
             </Button>
-            <Button
+            <Can permission="scheduled_events:create"><Button
               size="sm"
               onClick={() => setShowCreateSheet(true)}
               className={`gap-2 ${neutralActionClass}`}
             >
               <IconPlus className="size-4" />
               Add Event
-            </Button>
+            </Button></Can>
           </>
         )}
       />
@@ -525,8 +526,8 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                   }
                   options={[
                     { value: "all", label: "All Channels" },
-                    { value: "phone_call", label: "Call" },
-                    { value: "sms_chat", label: "SMS" },
+                    { value: "phone_call", label: "Voice (provider)" },
+                    { value: "sms_chat", label: "SMS (provider)" },
                   ]}
                   placeholder="All Channels"
                   searchable={true}
@@ -703,7 +704,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <button
+                                  <Can permission="scheduled_events:delete"><button
                                     type="button"
                                     onClick={() => {
                                       setDeleteId(eventId);
@@ -713,7 +714,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                                     title="Delete event"
                                   >
                                     <IconTrash className="size-4" />
-                                  </button>
+                                  </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>

@@ -3,10 +3,6 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const handlerUrl = new URL("../lib/telnyx-stt-handler.mjs", import.meta.url);
-const generatorWebhookUrl = new URL(
-  "../app/api/call-generator/webhook/route.js",
-  import.meta.url,
-);
 
 // B: Telnyx Standalone STT WebSocket transcripts must carry call_session_id so
 // routeAgentAssistTranscription can fall back beyond call_control_id when the
@@ -36,24 +32,17 @@ test("STT route passes call_session_id to the agent-assist router", async () => 
   assert.match(source, /call_session_id: payload\.callSessionId \|\| null,/);
 });
 
-// A: the call-generator webhook (used as a per-leg webhook_url override) must
-// forward contact-center + transcription events so Agent Assist live
-// transcription and interaction state are not silently lost.
-test("call-generator webhook forwards CC and transcription events", async () => {
-  const source = await readFile(generatorWebhookUrl, "utf8");
-
-  assert.match(source, /eventType === "call\.transcription"/);
-  assert.match(source, /handleTranscriptionEvent \} = await import\("@\/lib\/contact-center\/webhook-handler\.js"\)/);
-  assert.match(source, /parseGeneratorClientState\(payload\?\.client_state\)/);
-  assert.match(source, /findGeneratorStateByLedger\(pool, payload\)/);
-  assert.match(source, /buildGeneratorClientState\(\{ runId: generatorState\.runId, ledgerId: generatorState\.ledgerId \}\)/);
-  assert.match(source, /generatorState && eventType === "call\.transcription"/);
-  assert.match(source, /handleContactCenterEvent \} = await import\("@\/lib\/contact-center\/webhook-handler\.js"\)/);
-  assert.match(source, /generatorState &&[\s\S]*eventType === "call\.hangup"/);
-  assert.match(source, /const webhookEventId = body\?\.data\?\.id \|\| body\?\.id \|\| null/);
-  assert.match(source, /handleContactCenterEvent\(eventType, payload, \{ eventId: webhookEventId \}\)/);
-  // still runs the generator ledger handler afterwards
-  assert.match(source, /handleGeneratorWebhookEvent\(pool, eventType, generatorPayload\)/);
-  // forwarding failures must not break ledger handling
-  assert.match(source, /call_generator_webhook_cc_forward_failed/);
+// Generator calls and CC legs have different ownership. A verified CC event
+// delivered to the generator endpoint must use normal durable core admission.
+test("call-generator webhook routes verified CC events through durable admission", async () => {
+  const { receiveGeneratorWebhook } = await import('../lib/call-generator/webhook.mjs');
+  for(const eventType of ['call.transcription','call.hangup']) {
+    let admitted;
+    const result=await receiveGeneratorWebhook(new Request('http://localhost/api/call-generator/webhook',{method:'POST',body:JSON.stringify({data:{id:'evt-'+eventType,event_type:eventType,payload:{call_control_id:'core-device',transcription_data:{transcription_track:'inbound'}}}})}),{}, {
+      verify:async()=>true,owns:async()=>false,admit:async(_pool,event)=>{admitted=event;return {handled:true};},
+      persist:async()=>{throw new Error('A core event cannot be relabeled as generator-owned');},
+    });
+    assert.equal(result.status,200);assert.equal(result.body.owner,'acd_core');
+    assert.equal(admitted.payload.transcription_data.transcription_track,'inbound');
+  }
 });

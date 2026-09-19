@@ -18,20 +18,28 @@ test("supervisor page headers do not render decorative implementation badges", (
   }
 });
 
-test("Outbound Dialer menu item is owner-only", () => {
+// Decision D-13 (the internal documentation): the system
+// admin role includes the Outbound Dialer; supervisors do not. Since RBAC
+// Phase 3 the menu item names its screen and visibility follows the roles'
+// screen grants (supervisor.outbound-dialer.* is granted to admin and owner).
+test("Outbound Dialer menu item declares its screen instead of a role list", () => {
   const menu = source("config/menu.jsx");
   assert.match(
     menu,
-    /title:\s*"Outbound Dialer",[\s\S]*?url:\s*"\/supervisor\/outbound-dialer",[\s\S]*?role_access:\s*\["owner"\]/,
-    "Outbound Dialer sidebar item should be visible only to owners",
+    /title:\s*"Outbound Dialer",[\s\S]*?url:\s*"\/supervisor\/outbound-dialer",[\s\S]*?screen:\s*"supervisor\.outbound-dialer"/,
+    "Outbound Dialer sidebar item should declare the supervisor.outbound-dialer screen",
   );
+  assert.doesNotMatch(menu, /role_access/, "role lists are gone from the menu");
 });
 
-test("Outbound Dialer page and APIs are owner-only", () => {
+test("Outbound Dialer page and APIs are limited to administrators and owners", () => {
   const page = source("app/(portal)/supervisor/outbound-dialer/page.jsx");
   const api = source("lib/outbound-dialer/api.js");
+  const campaigns = source("app/api/contact-center/outbound-dialer/campaigns/route.js");
 
-  assert.match(page, /userRoles\.includes\("owner"\)/, "direct page access should require owner role");
-  assert.doesNotMatch(api, /isSupervisorOrAdmin/, "outbound API guard should not allow supervisors/admins by default");
-  assert.match(api, /isOwner\(user\)/, "outbound API guard should require owner role");
+  assert.doesNotMatch(page, /userRoles\.includes\("owner"\)/, "the page no longer checks role names; the proxy and ScreenGuard enforce the screen");
+  assert.match(page, /screenGroup="supervisor\.outbound-dialer"/, "the dialer rail follows the screen grants");
+  assert.doesNotMatch(api, /requireOutboundSupervisor|isOwner\(user\)|isSupervisorOrAdmin/, "the owner-only helper is gone; routes use withPermission");
+  assert.match(campaigns, /withPermission\("campaigns:read", GET_handler, \{ route:/, "campaign routes use the campaigns permission family; the system admin holds it (D-13)");
+  assert.doesNotMatch(campaigns, /isSupervisorOrAdmin|requireOutboundSupervisor/, "supervisors are not granted the dialer");
 });
