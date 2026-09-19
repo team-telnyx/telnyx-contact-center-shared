@@ -299,6 +299,16 @@ or Application Load Balancer + ACM certificate (HA/multi-node or opt-in on
 single-node), RDS Postgres, S3 for artifact/media storage, and Secrets
 Manager for the app's runtime secrets.
 
+Instances require IMDSv2 (`http_tokens = "required"`). IMDSv1 answers an
+unauthenticated GET, so any server-side request forgery reaching the metadata
+address could read the instance role's credentials; IMDSv2 needs a PUT for a
+token first, which a forged GET cannot make. The hop limit is 2 rather than the
+default 1 because the application runs in a container and its metadata requests
+cross the Docker bridge — at the default it would lose the instance role it
+falls back to for S3 when `STORAGE_ACCESS_KEY` is unset. GCP and Azure need no
+equivalent setting: both metadata services already require a request header
+that a plain forged GET cannot set.
+
 The wizard additionally asks for/handles:
 
 - **Region** — a curated fast-path menu (`eu-central-1`, `eu-west-1`,
