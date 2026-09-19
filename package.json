@@ -1,6 +1,6 @@
 {
   "name": "telnyx-contact-center",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000 --webpack",

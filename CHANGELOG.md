@@ -3,7 +3,7 @@
 Official versions follow [Semantic Versioning](https://semver.org/). These notes
 are also available inside the application through **About Contact Center → Release notes**.
 
-## [Unreleased]
+## [1.7.0] - 2026-09-19
 
 ### Added
 
