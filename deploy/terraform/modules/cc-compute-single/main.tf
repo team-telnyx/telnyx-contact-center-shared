@@ -128,6 +128,23 @@ resource "aws_instance" "app" {
   key_name                    = var.key_name != "" ? var.key_name : null
   user_data_replace_on_change = true
 
+  # IMDSv2 only. A server-side request forgery that reaches the metadata service
+  # cannot mint credentials from it: IMDSv2 requires a PUT to obtain a token
+  # first, and a forged GET cannot make one. IMDSv1 needs no token at all, which
+  # is what turns any SSRF into credential theft.
+  #
+  # The hop limit is 2 rather than the default 1 because the application runs in
+  # a container: its metadata requests cross the Docker bridge and so are one
+  # hop further away than a request from the host. At the default, the app would
+  # lose the instance role it falls back to for S3 whenever STORAGE_ACCESS_KEY
+  # is unset (lib/storage/s3-driver.mjs).
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+    instance_metadata_tags      = "disabled"
+  }
+
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tpl", {
     region                  = data.aws_region.current.name
     app_port                = var.app_port
