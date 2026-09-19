@@ -774,7 +774,7 @@ Added Admin workspace pages for Tools Library and Insights, including filtering,
 pagination, create/edit sheets, per-tool editors, webhook testing, assistant
 assignment, and delete flows. Insights includes cards, schema and instruction
 editing, group editing, and assign/unassign APIs.
-[PR #1243](https://github.com/team-telnyx/telnyx-contact-center/pull/1243)
+PR #1243
 
 ### 2026-07-11 — Telnyx AI Assistant administration
 
@@ -783,14 +783,14 @@ Agent, Voice, Workflow, Integrations, Insights, Calling, Messaging, Widget,
 Privacy, and Conversations. Includes conversation details, recording playback,
 transcript seeking, costs, version actions, traffic distribution, chat, call,
 clone, save-as-version, and deletion.
-[PR #1242](https://github.com/team-telnyx/telnyx-contact-center/pull/1242)
+PR #1242
 
 ### 2026-07-10 — Agent Assist read-back and suggestion fixes
 
 Improved compact read-back, ordinals and hyphen handling, and a stuck suggestion race condition.
-[PR #1240](https://github.com/team-telnyx/telnyx-contact-center/pull/1240)
+PR #1240
 
 ### 2026-07-10 — Telnyx OpenAPI spec refresh
 
 Updated the Telnyx OpenAPI specification used by the application.
-[PR #1241](https://github.com/team-telnyx/telnyx-contact-center/pull/1241)
+PR #1241

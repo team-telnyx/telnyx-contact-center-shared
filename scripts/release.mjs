@@ -27,7 +27,7 @@ export function syncReleaseFiles({ root = process.cwd(), check = false, tag = nu
   const current = releases.find((entry) => entry.version === version);
   if (!current || releases[0] !== current) throw new Error("The first changelog release must match package.json");
   if (tag && tag !== `v${version}`) throw new Error("Tag does not match package.json");
-  const badge = `[![Version ${version}](https://img.shields.io/badge/version-${version.replaceAll("-", "--")}-00C389)](https://github.com/team-telnyx/telnyx-contact-center/releases)`;
+  const badge = `[![Version ${version}](https://img.shields.io/badge/version-${version.replaceAll("-", "--")}-00C389)](https://github.com/team-telnyx/telnyx-contact-center-shared/releases)`;
   const readme = readFileSync(resolve(root, "README.md"), "utf8");
   const badgeBlock = `<!-- app-version:start -->\n${badge}\n<!-- app-version:end -->`;
   if (!readme.includes("<!-- app-version:start -->")) throw new Error("README version marker is missing");

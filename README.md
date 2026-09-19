@@ -1,10 +1,10 @@
 # Telnyx Contact Center
 
 <!-- app-version:start -->
-[![Version 1.6.0](https://img.shields.io/badge/version-1.6.0-00C389)](https://github.com/team-telnyx/telnyx-contact-center/releases)
+[![Version 1.6.0](https://img.shields.io/badge/version-1.6.0-00C389)](https://github.com/team-telnyx/telnyx-contact-center-shared/releases)
 <!-- app-version:end -->
 
-[Release history](https://github.com/team-telnyx/telnyx-contact-center/releases) · [Changelog](CHANGELOG.md) · Versioning and release process
+[Release history](https://github.com/team-telnyx/telnyx-contact-center-shared/releases) · [Changelog](CHANGELOG.md) · Versioning and release process
 
 Find the version of your running installation beside your user profile, or open
 **About Contact Center** for the exact build and release notes. The badge above
