@@ -1,3 +1,4 @@
+import './process-shim.js';
 import React, {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {StatusSelector} from '../../components/contact-center/StatusSelector';

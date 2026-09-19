@@ -55,6 +55,16 @@ export async function startQuickTunnel({
   if (!port) throw new Error('startQuickTunnel requires { port }');
   if (!logPath) throw new Error('startQuickTunnel requires { logPath }');
 
+  // A quick tunnel is detached on purpose (it has to outlive the wizard), so
+  // a test that reaches this function without injecting spawnImpl leaves a
+  // real cloudflared process — a public URL onto localhost — running on the
+  // developer's machine after every `npm test`. node:test sets
+  // NODE_TEST_CONTEXT in each test process; refuse the real spawn there so a
+  // missing fake fails the test instead of leaking a tunnel.
+  if (spawnImpl === spawn && process.env.NODE_TEST_CONTEXT) {
+    throw new Error('startQuickTunnel: refusing to spawn a real cloudflared under node:test — inject startTunnelImpl/spawnImpl');
+  }
+
   // Truncate (not append) on every spawn: if a previous tunnel's log is still
   // on disk (e.g. resume after the old cloudflared process died), appending
   // would let the URL regex below match the STALE hostname from the old run

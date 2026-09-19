@@ -162,3 +162,21 @@ describe('tunnel.mjs — isProcessAlive / stopTunnel', () => {
     assert.strictEqual(stopTunnel(2147483647), false);
   });
 });
+
+describe('tunnel.mjs — startQuickTunnel under node:test', () => {
+  it('refuses to spawn a real cloudflared when no spawnImpl is injected', async () => {
+    // node:test sets NODE_TEST_CONTEXT in every test process; this is the
+    // guard that turns a forgotten fake into a failing test instead of a
+    // detached public tunnel left running on the developer's machine.
+    assert.ok(process.env.NODE_TEST_CONTEXT, 'expected to run under node:test');
+    const dir = await mkdtemp(join(tmpdir(), 'cc-tunnel-guard-'));
+    try {
+      await assert.rejects(
+        () => startQuickTunnel({ port: 3000, logPath: join(dir, 'tunnel.log') }),
+        /refusing to spawn a real cloudflared under node:test/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

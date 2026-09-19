@@ -1,3 +1,4 @@
+import './process-shim.js';
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {AppRouterContext} from 'next/dist/shared/lib/app-router-context.shared-runtime';

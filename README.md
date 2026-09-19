@@ -1,7 +1,7 @@
 # Telnyx Contact Center
 
 <!-- app-version:start -->
-[![Version 1.7.0](https://img.shields.io/badge/version-1.7.0-00C389)](https://github.com/team-telnyx/telnyx-contact-center-shared/releases)
+[![Version 1.7.1](https://img.shields.io/badge/version-1.7.1-00C389)](https://github.com/team-telnyx/telnyx-contact-center-shared/releases)
 <!-- app-version:end -->
 
 [Release history](https://github.com/team-telnyx/telnyx-contact-center-shared/releases) · [Changelog](CHANGELOG.md) · Versioning and release process

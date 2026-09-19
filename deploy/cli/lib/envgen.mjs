@@ -244,6 +244,13 @@ export function buildEnvValues({ sampleKeys, answers, target = 'local', postgres
     STORAGE_SECRET_KEY: '',
     GOOGLE_ID: '',
     GOOGLE_SECRET: '',
+    // Optional Maps Embed key for the WhatsApp location preview; without it
+    // the app falls back to the keyless embed. It is compiled into the
+    // browser bundle, so an operator who wants it sets it in .env before
+    // "docker compose build" — the wizard never asks for it.
+    GOOGLE_MAPS_KEY: '',
+    TELNYX_PHONE_ADMIN_PASSWORD: '',
+    TELNYX_HARDPHONE_WEBHOOK_URL: '',
     SECRETS_ENCRYPTION_KEY: randomHexSecret(32),
   };
 

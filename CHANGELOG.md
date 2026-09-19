@@ -3,6 +3,60 @@
 Official versions follow [Semantic Versioning](https://semver.org/). These notes
 are also available inside the application through **About Contact Center → Release notes**.
 
+## [1.7.1] - 2026-09-20
+
+### Security
+
+- Dependency updates closing 142 of the repository's 143 open advisories, six
+  of them critical. Two were unauthenticated remote code execution in Next.js's
+  Image Optimization API, affecting every 16.x before 16.3.3; this release ships
+  16.3.5. The others were arbitrary code execution in protobufjs, path traversal
+  in basic-ftp's `downloadToDir()`, a decompression denial of service in tar,
+  and an email-normalisation flaw in next-auth. **Anyone self-hosting an earlier
+  build should upgrade.** The one advisory left open has no published fix.
+- EC2 instances created by the deployment wizard now require IMDSv2
+  (`http_tokens = "required"`). IMDSv1 answers an unauthenticated GET, so any
+  server-side request forgery that reached the metadata address could read the
+  instance role's credentials; IMDSv2 needs a PUT for a token first, which a
+  forged GET cannot make. This raises the bar rather than closing the class: a
+  forgery that controls the request method and headers can still mint a token
+  and query metadata.
+
+### Fixed
+
+- `cc up` could not generate `.env` for the Local target. A key added to
+  `docker/production/sample.env` had no default in the wizard's environment
+  generator, and its parity guard refuses to generate a file it cannot fill
+  completely.
+- The production build failed on every JSON file in `node_modules`. A workaround
+  in `next.config.mjs`, written for a Turbopack rule schema Next 16.1 changed
+  briefly, had become both unnecessary and the cause once Next accepted the
+  original form again.
+- Starting against a database created before the ACD Core cutover rolled the
+  whole schema bootstrap back on every boot, leaving the portal without roles.
+- The deployment CLI's own test suite left a public Cloudflare tunnel to
+  localhost running after every run. It now refuses to start a real tunnel under
+  the test runner.
+
+### Changed
+
+- Continuous integration builds the application, runs the linter and runs the
+  deployment CLI's test suite. None of the three was covered before, which is
+  how a broken build and a broken `cc up` both reached the main branch with
+  every check green. The linter is advisory and does not block a merge.
+- Dependabot updates arrive grouped: every open advisory as a single pull
+  request, version updates as one weekly batch per dependency type, and major
+  versions on their own so each is reviewed separately.
+
+### Upgrade notes
+
+- Application code is unchanged apart from the fixes above; the upgrade is a
+  rebuild against the updated dependency tree. The Docker image must be rebuilt
+  for the Next.js patch to take effect.
+- The wizard requires Node.js 22 or newer, which every supported environment
+  already runs. `deploy/README.md` previously said 20, which reached end of life
+  on 2026-04-30.
+
 ## [1.7.0] - 2026-09-19
 
 ### Added
