@@ -35,6 +35,15 @@ function mergeMessages(current, incoming) {
   );
 }
 
+// The embedding page passes its origin as ?parentOrigin=, and every message the
+// widget posts back should be addressed to it. "*" stays as the fallback for
+// hosts that predate the parameter, but it is a fallback rather than the
+// default: with "*" any page that can see this frame receives the message.
+function parentTargetOrigin() {
+  if (typeof window === "undefined") return "*";
+  return new URLSearchParams(window.location.search).get("parentOrigin") || "*";
+}
+
 function Avatar({ spec, fallbackSpec = null, color, textColor, size = 36 }) {
   const [failedImageUrl, setFailedImageUrl] = useState(null);
   const imageFailed = spec?.type === "image" && failedImageUrl === spec.value;
@@ -932,7 +941,7 @@ export default function WidgetFrame({
         // nothing about that, because the customer navigates inside the panel.
         window.parent.postMessage(
           { type: "telnyx-widget-session", active: true },
-          new URLSearchParams(window.location.search).get("parentOrigin") || "*"
+          parentTargetOrigin()
         );
         if (widget.config.behavior.persistSession) {
           window.localStorage.setItem(storageKey, result.sessionToken);
@@ -981,7 +990,7 @@ export default function WidgetFrame({
               const merged = mergeMessages(current, result.messages);
               if (panelHidden && merged.length > current.length) {
                 unreadRef.current += merged.length - current.length;
-                const parentOrigin = new URLSearchParams(window.location.search).get("parentOrigin") || "*";
+                const parentOrigin = parentTargetOrigin();
                 window.parent.postMessage(
                   { type: "telnyx-widget-unread", count: unreadRef.current },
                   parentOrigin
@@ -1103,7 +1112,7 @@ export default function WidgetFrame({
       void fetch("/api/widget-sessions/disconnect", {method:"POST",keepalive:true,
         headers:{Authorization:`Bearer ${sessionToken}`}}).catch(()=>undefined);
     }
-    window.parent.postMessage({ type: "telnyx-widget-close" }, "*");
+    window.parent.postMessage({ type: "telnyx-widget-close" }, parentTargetOrigin());
   };
 
   const home = () => {
@@ -1116,7 +1125,7 @@ export default function WidgetFrame({
       setCallbackOpen(false);
       return;
     }
-    window.parent.postMessage({ type: "telnyx-widget-home" }, "*");
+    window.parent.postMessage({ type: "telnyx-widget-home" }, parentTargetOrigin());
   };
 
   const openSurface = (surface) => {
