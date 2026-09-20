@@ -12,6 +12,14 @@
 # batch per week and per dependency type. Major version updates are
 # deliberately left out of the groups, so each one still arrives as its own
 # pull request to be reviewed and smoke-tested on its own.
+#
+# Every entry also carries a cooldown: a newly published version is not
+# proposed until it has been on the registry for a week. A package account can
+# be compromised and a malicious release published under a name the lockfile
+# already trusts, and that window is when such a release is usually caught and
+# pulled. The cooldown applies ONLY to version updates — GitHub exempts
+# security updates from it, so an advisory with a published fix still arrives
+# immediately.
 
 version: 2
 
@@ -27,6 +35,8 @@ updates:
       time: "06:00"
       timezone: Europe/Warsaw
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     labels: ["dependencies"]
     commit-message:
       prefix: "chore(deps)"
@@ -56,6 +66,8 @@ updates:
       time: "06:00"
       timezone: Europe/Warsaw
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
     labels: ["dependencies", "deploy"]
     commit-message:
       prefix: "chore(deps)"
@@ -76,6 +88,8 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
     labels: ["dependencies", "ci"]
     commit-message:
       prefix: "chore(ci)"
