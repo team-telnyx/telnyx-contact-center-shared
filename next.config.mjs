@@ -144,16 +144,4 @@ const withMDX = createMDX({
 
 const configuredNext = withMDX(nextConfig);
 
-// Fumadocs' metadata loader already falls back to the normal JSON/YAML loader
-// when a file has no `?collection=` query. Next 16.1 removed `query` from the
-// public Turbopack rule-condition schema, so let the loader perform that check
-// instead of emitting an invalid Next config.
-for (const pattern of ["*.json", "*.yaml"]) {
-  const rule = configuredNext.turbopack?.rules?.[pattern];
-  if (rule && !Array.isArray(rule) && rule.condition?.query) {
-    const { condition: _condition, ...ruleWithoutLegacyCondition } = rule;
-    configuredNext.turbopack.rules[pattern] = ruleWithoutLegacyCondition;
-  }
-}
-
 export default configuredNext;

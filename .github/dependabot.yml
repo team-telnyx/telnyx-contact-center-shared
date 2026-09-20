@@ -1,0 +1,84 @@
+# Dependabot configuration.
+#
+# Until this file existed the repository ran on GitHub's defaults: security
+# updates only, one pull request per advisory, no version updates at all.
+# GitHub caps the security-update queue at ten open pull requests, so nine
+# separate lockfile bumps sitting unreviewed blocked every further fix from
+# being opened — advisories with a published patch (protobufjs, tar,
+# basic-ftp, next-auth) had no pull request at all while the queue was full.
+#
+# Everything below is grouped so the queue cannot fill up again: all open
+# advisories arrive as a single pull request, and version updates as one
+# batch per week and per dependency type. Major version updates are
+# deliberately left out of the groups, so each one still arrives as its own
+# pull request to be reviewed and smoke-tested on its own.
+
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # The application itself (root package.json + yarn.lock).
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      # Every open advisory in one pull request, as soon as one appears.
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+      npm-production:
+        applies-to: version-updates
+        dependency-type: production
+        update-types: ["minor", "patch"]
+      npm-development:
+        applies-to: version-updates
+        dependency-type: development
+        update-types: ["minor", "patch"]
+
+  # ---------------------------------------------------------------------------
+  # The deployment CLI (its own package-lock.json, plain npm).
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: "/deploy/cli"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "deploy"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      deploy-cli-security:
+        applies-to: security-updates
+        patterns: ["*"]
+      deploy-cli-version:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # ---------------------------------------------------------------------------
+  # Workflow actions — one batch, so pinned action majors stay current.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns: ["*"]

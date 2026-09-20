@@ -50,7 +50,9 @@ cd telnyx-contact-center
 
 First run installs the wizard's own isolated Node dependency tree
 (`deploy/cli/node_modules`, via `npm install` — never touches the main app's
-`yarn.lock`), then launches the wizard. Requires Node.js >= 20.
+`yarn.lock`), then launches the wizard. Requires Node.js >= 22, matching the
+Node 22 production image and every CI workflow (Node 20 reached end of life on
+2026-04-30).
 
 ---
 

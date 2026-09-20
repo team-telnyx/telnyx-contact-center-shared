@@ -173,6 +173,11 @@ describe('runWizard with --non-interactive answers (Task 1.4)', () => {
       fetchImpl,
       ports: [59911, 59912],
       buyNumber: false,
+      // No domain in the answers, so the Local flow takes the auto-tunnel
+      // branch. Without a fake this spawned a real, detached cloudflared on
+      // every `npm test` and left it running — a public URL onto
+      // localhost:3000 on the developer's machine.
+      startTunnelImpl: async () => ({ url: 'https://fake-tunnel.trycloudflare.com', pid: 999999 }),
     });
 
     assert.strictEqual(result.aborted, false);

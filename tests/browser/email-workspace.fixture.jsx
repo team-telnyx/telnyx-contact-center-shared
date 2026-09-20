@@ -1,3 +1,4 @@
+import './process-shim.js';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import EmailInteractionDetail from '../../components/contact-center/EmailInteractionDetail.jsx';
