@@ -1,3 +1,4 @@
+import {createMobileScreenGrant, validateMobileScreenGrant, refreshMobileScreenGrant, verifyScreenGrant, signScreenGrant} from "../lib/video/mobile-screen.mjs";
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -20,6 +21,9 @@ import {
 } from "../lib/video/lifecycle.mjs";
 
 const pool = await prepareAcdTestPool("acd_core_test_native_video");
+await pool.query(`CREATE TABLE IF NOT EXISTS cc_wrapup_codes(id text PRIMARY KEY,name text,is_active boolean DEFAULT true);
+  CREATE TABLE IF NOT EXISTS cc_queue_wrapup_codes(queue_id text,wrapup_code_id text);
+  ALTER TABLE cc_wrapup_codes ADD COLUMN IF NOT EXISTS icon text, ADD COLUMN IF NOT EXISTS color text;`);
 const withTx = makeTxRunner(pool);
 after(async () => { clearSagaDeadlineWakeups(); await pool.end(); });
 
@@ -97,7 +101,10 @@ test("video work is routed, accepted, joined by both sides, ended by the agent a
   const offered = (await readTextInteractions(pool, f.agentId)).interactions;
   assert.equal(offered.length, 1); assert.equal(offered[0].channel, "video"); assert.equal(offered[0].state, "ringing");
   await assert.rejects(agentJoinToken(pool, { workItemId: work.id, agentId: f.agentId, rooms }), (error) => error.status === 403);
-  await act(work, f.agentId, "accept");
+  const pendingDetail = await readVideoDetail(pool, { workItemId: work.id, agentId: f.agentId });
+  assert.ok(new Date(pendingDetail.offer.deadline_at).getTime() > Date.now());
+  await actOnTextWork(pool, { workItemId: work.id, agentId: f.agentId, channel: "video", action: "accept",
+    commandId: randomUUID(), expectedVersion: pendingDetail.work.version, offerId: pendingDetail.offer.id });
   assert.equal((await pool.query("SELECT state FROM acd_work_items WHERE id=$1", [work.id])).rows[0].state, "active");
   assert.equal((await agentJoinToken(pool, { workItemId: work.id, agentId: f.agentId, rooms })).roomId, rooms.roomId());
   const detail = await readVideoDetail(pool, { workItemId: work.id, agentId: f.agentId });
@@ -329,4 +336,45 @@ test("active video calls are supervisable in the live feed; voice still needs a 
   assert.equal(interactionCapabilities({ channel: "video", state: "queued", conversationId: "c" }).supervision, false);
   assert.equal(interactionCapabilities({ channel: "voice", state: "active" }).supervision, false);
   assert.equal(interactionCapabilities({ channel: "voice", state: "active", agentCallControlId: "leg" }).supervision, true);
+});
+
+test('mobile screen capability is signed, assignment-bound, expiring and revoked when its assignment ends', async () => {
+ const previous=process.env.NEXTAUTH_SECRET;process.env.NEXTAUTH_SECRET='screen-test-signing-secret';
+ try {
+  const f=await fixture(), rooms=fakeRooms();const work=await f.create();
+  await provisionVideoRoom(pool,{workItemId:work.id,rooms});await routeOne(pool,work.id);
+  const codeId=randomUUID();
+  await pool.query("INSERT INTO cc_wrapup_codes(id,name,icon,color) VALUES($1,'Resolved','IconCircleCheck','#00E5AA')",[codeId]);
+  await pool.query("INSERT INTO cc_queue_wrapup_codes(queue_id,wrapup_code_id) VALUES($1,$2)",[f.queueId,codeId]);
+  const offered=await readVideoDetail(pool,{workItemId:work.id,agentId:f.agentId});
+  assert.deepEqual(offered.wrapupCodes,[{id:codeId,name:'Resolved',icon:'IconCircleCheck',color:'#00E5AA'}]);
+  assert.ok(offered.offer.id);assert.ok(Array.isArray(offered.wrapupCodes));
+  await assert.rejects(createMobileScreenGrant(pool,{workItemId:work.id,agentId:f.agentId,rooms}),e=>e.status===403);
+  await act(work,f.agentId,'accept');
+  const result=await createMobileScreenGrant(pool,{workItemId:work.id,agentId:f.agentId,rooms});
+  const claims=await validateMobileScreenGrant(pool,result.screenCapability);
+  assert.equal(claims.agentId,f.agentId);assert.equal(claims.roomId,rooms.roomId());
+  assert.throws(()=>verifyScreenGrant(result.screenCapability+'x'),e=>e.status===403);
+  assert.throws(()=>verifyScreenGrant(signScreenGrant(claims,Date.now()-3700000)),e=>e.status===403);
+  const refreshed=await refreshMobileScreenGrant(pool,{capability:result.screenCapability,refreshToken:result.join.refreshToken},rooms);
+  assert.equal(refreshed.token,'jwt-2');
+  await pool.query("UPDATE acd_text_assignments SET state='wrapup' WHERE segment_id=$1",[claims.assignmentId]);
+  await assert.rejects(validateMobileScreenGrant(pool,result.screenCapability),e=>e.status===403);
+  await assert.rejects(refreshMobileScreenGrant(pool,{capability:result.screenCapability,refreshToken:'refresh'},rooms),e=>e.status===403);
+ } finally { if(previous===undefined)delete process.env.NEXTAUTH_SECRET;else process.env.NEXTAUTH_SECRET=previous; }
+});
+
+test('registered video alerts extend mobile presence without extending the SIP lease', async () => {
+ const f=await fixture(); const id=randomUUID(), device=randomUUID();
+ await pool.query("UPDATE users SET refresh_tokens=$2 WHERE id=$1",[f.agentId,JSON.stringify([{sessionId:'mobile-video'}])]);
+ await pool.query("INSERT INTO cc_mobile_devices(device_id,user_id,alert_token,auth_session_id,kind,bundle_identifier,environment) VALUES($1,$2,'alert','mobile-video','ios','test.video','development')",[device,f.agentId]);
+ const endpoint=(await pool.query(`INSERT INTO cc_voice_endpoints(id,agent_id,auth_session_id,device_id,kind,label,secret_hash)
+ VALUES($1,$2,'mobile-video',$3,'ios','iPhone','hash') RETURNING *`,[id,f.agentId,device])).rows[0];
+ const result=await heartbeatAgentSession(pool,{agentId:f.agentId,sessionId:id,deviceId:device,voiceEndpoint:endpoint,ready:{video:true},videoPushReady:true});
+ assert.equal(result.expiresInSeconds,3600);assert.equal(result.ready.video,true);
+ const voice=(await pool.query('SELECT expires_at FROM cc_voice_endpoints WHERE id=$1',[id])).rows[0];
+ assert.ok(new Date(voice.expires_at)-Date.now()<60000);
+ await pool.query("UPDATE users SET refresh_tokens='[]' WHERE id=$1",[f.agentId]);
+ const withdrawn=await heartbeatAgentSession(pool,{agentId:f.agentId,sessionId:id,deviceId:device,voiceEndpoint:endpoint,ready:{video:true},videoPushReady:true});
+ assert.equal(withdrawn.expiresInSeconds,45);
 });

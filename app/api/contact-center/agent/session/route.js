@@ -1,3 +1,4 @@
+import { authenticateVoiceEndpoint } from "@/lib/acd/voice-endpoints.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { heartbeatAgentSession } from "@/lib/acd/sessions.mjs";
@@ -9,8 +10,10 @@ async function PUT_handler(request, _context, authz) {
   if (!pool) return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
   try {
     const body = await request.json();
+    const token=request.headers.get('x-cc-endpoint-token');
+    const voiceEndpoint=token ? await authenticateVoiceEndpoint(pool,user,token) : null;
     const result = await heartbeatAgentSession(pool, { agentId: String(user.id), sessionId: body.sessionId,
-      deviceId: body.deviceId, voiceReady: body.voiceReady === true, chatReady: body.chatReady === true, emailReady: body.emailReady === true,
+      voiceEndpoint, pushReady: body.pushReady === true, videoPushReady: body.videoPushReady === true, deviceId: body.deviceId, voiceReady: body.voiceReady === true, chatReady: body.chatReady === true, emailReady: body.emailReady === true,
       ready: Object.fromEntries(Object.entries(body.ready && typeof body.ready === "object" ? body.ready : {}).map(([channel, value]) => [channel, value === true])),
       offline: body.offline === true, node: process.env.NODE_ID || "web" });
     return NextResponse.json({ ok: true, ...result });

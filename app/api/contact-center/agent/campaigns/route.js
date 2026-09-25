@@ -13,9 +13,12 @@ function usernameFor(user) {
   return user?.username || user?.email || null;
 }
 
-async function resolveTargetAgent(pool, requester, requestedUserId) {
+async function resolveTargetAgent(pool, requester, requestedUserId, elevated) {
   if (!requestedUserId || String(requestedUserId) === String(requester.id)) {
     return { userId: requester.id, username: usernameFor(requester) };
+  }
+  if (!elevated) {
+    throw Object.assign(new Error("Only supervisors and admins can manage other users' campaigns"), { status: 403 });
   }
   const { rows } = await pool.query(
     `SELECT id, username, email FROM users WHERE id = $1 LIMIT 1`,
@@ -32,7 +35,7 @@ async function GET_handler(request, _context, authz) {
     const pool = getPostgresPool();
     if (!pool) return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
     const { searchParams } = new URL(request.url);
-    const target = await resolveTargetAgent(pool, user, searchParams.get("userId"));
+    const target = await resolveTargetAgent(pool, user, searchParams.get("userId"), authz.elevated);
     if (!agentInScope(authz.scope, target.userId)) return NextResponse.json({ ok: false, error: "Target user not found" }, { status: 404 });
     if (!target.username) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const campaigns = await listAgentCampaigns(pool, target.username);
@@ -49,7 +52,7 @@ async function POST_handler(request, _context, authz) {
     const pool = getPostgresPool();
     if (!pool) return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
     const body = await request.json().catch(() => ({}));
-    const target = await resolveTargetAgent(pool, user, body?.userId ? String(body.userId) : null);
+    const target = await resolveTargetAgent(pool, user, body?.userId ? String(body.userId) : null, authz.elevated);
     if (!agentInScope(authz.scope, target.userId)) return NextResponse.json({ ok: false, error: "Target user not found" }, { status: 404 });
     if (!target.username) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
@@ -73,5 +76,7 @@ async function POST_handler(request, _context, authz) {
 }
 
 // Phase 2 migration: every export goes through the permission guard (the internal documentation).
-export const GET = withPermission("agents:campaigns.assign", GET_handler, { route: "/api/contact-center/agent/campaigns" });
-export const POST = withPermission("agents:campaigns.assign", POST_handler, { route: "/api/contact-center/agent/campaigns" });
+// Self allowed, as for queues and status: an agent reads and activates their own
+// campaigns; another agent's need agents:campaigns.assign (resolveTargetAgent).
+export const GET = withPermission(["agents:campaigns.assign","agent:self"], GET_handler, { route: "/api/contact-center/agent/campaigns", elevated: "agents:campaigns.assign" });
+export const POST = withPermission(["agents:campaigns.assign","agent:self"], POST_handler, { route: "/api/contact-center/agent/campaigns", elevated: "agents:campaigns.assign" });

@@ -74,15 +74,15 @@ async function disconnectChat(f, work) {
 test("the presentation exposes a manual status that waits behind Busy or Wrapup", () => {
   const at = "2026-09-15T10:00:00.000Z";
   const base = { presence: "online", manual_status: "Available", workflow_state: "idle", manual_status_set_at: at };
-  assert.deepEqual(agentStatusPresentation(base), { status: "Available", pendingStatus: null, pendingSince: null });
-  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "handling" }), { status: "Busy", pendingStatus: null, pendingSince: null });
-  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "handling", manual_status: "Away" }), { status: "Busy", pendingStatus: "Away", pendingSince: at });
-  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "offered", manual_status: "Break" }), { status: "Busy", pendingStatus: "Break", pendingSince: at });
-  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "wrapup", manual_status: "Break" }), { status: "Wrapup", pendingStatus: "Break", pendingSince: at });
+  assert.deepEqual(agentStatusPresentation(base), { version: null, status: "Available", pendingStatus: null, pendingSince: null });
+  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "handling" }), { version: null, status: "Busy", pendingStatus: null, pendingSince: null });
+  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "handling", manual_status: "Away" }), { version: null, status: "Busy", pendingStatus: "Away", pendingSince: at });
+  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "offered", manual_status: "Break" }), { version: null, status: "Busy", pendingStatus: "Break", pendingSince: at });
+  assert.deepEqual(agentStatusPresentation({ ...base, workflow_state: "wrapup", manual_status: "Break" }), { version: null, status: "Wrapup", pendingStatus: "Break", pendingSince: at });
   // Once the work ends the manual status is simply the status; nothing is pending.
-  assert.deepEqual(agentStatusPresentation({ ...base, manual_status: "Away" }), { status: "Away", pendingStatus: null, pendingSince: null });
-  assert.deepEqual(agentStatusPresentation({ ...base, presence: "offline", manual_status: "Away" }), { status: "Offline", pendingStatus: null, pendingSince: null });
-  assert.deepEqual(agentStatusPresentation(null), { status: "Offline", pendingStatus: null, pendingSince: null });
+  assert.deepEqual(agentStatusPresentation({ ...base, manual_status: "Away" }), { version: null, status: "Away", pendingStatus: null, pendingSince: null });
+  assert.deepEqual(agentStatusPresentation({ ...base, presence: "offline", manual_status: "Away" }), { version: null, status: "Offline", pendingStatus: null, pendingSince: null });
+  assert.deepEqual(agentStatusPresentation(null), { version: null, status: "Offline", pendingStatus: null, pendingSince: null });
 });
 
 test("a break chosen while handling stays pending, blocks new offers with a visible reason and applies when the work ends", { skip }, async () => {
@@ -141,7 +141,7 @@ test("a break chosen while handling stays pending, blocks new offers with a visi
   const wrapup = await completeTextWrapup(pool, { workItemId: first.id, expectedAgentId: f.agentId, wrapupCodeId: "resolved" });
   assert.equal(wrapup.completed, true);
   const done = await readAgentStatusPresentation(pool, f.agentId);
-  assert.deepEqual(done, { status: "Away", pendingStatus: null, pendingSince: null });
+  assert.deepEqual(done, { version: String((await state(f.agentId)).version), status: "Away", pendingStatus: null, pendingSince: null });
   assert.equal(await pendingBySql(f.agentId), null);
   // Once Away is effective the reason names it as the current status.
   await routeOne(pool, second.id);

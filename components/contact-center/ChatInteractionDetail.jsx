@@ -4,6 +4,7 @@ import { useCallback,useEffect,useRef,useState } from "react";
 import dynamic from "next/dynamic";
 import { Ban,Bot,Clock,Contact,FileText,Image as ImageIcon,LayoutTemplate,Loader2,MapPin,MessageCircle,MessageSquare,Paperclip,Send,Smile,Sticker,Undo2,X } from "lucide-react";
 import { IconBrandWhatsapp } from "@tabler/icons-react";
+import { readScopedDraftCache } from "@/lib/contact-center/chat-draft-cache.mjs";
 import { smsSegments } from "@/lib/sms/segments.mjs";
 import { SMS_MAX_BODY_CHARS } from "@/lib/sms/policy.mjs";
 import { utf8Bytes,validateWhatsAppMedia,whatsappMediaKind,WHATSAPP_MAX_FILES,WHATSAPP_MAX_TEXT_BYTES } from "@/lib/whatsapp/policy.mjs";
@@ -43,6 +44,7 @@ export default function ChatInteractionDetail({interaction,onChanged,composeStor
   const [emojiOpen,setEmojiOpen]=useState(false),[pexelsOpen,setPexelsOpen]=useState(false),[templateOpen,setTemplateOpen]=useState(false);
   const [locationOpen,setLocationOpen]=useState(false),[contactOpen,setContactOpen]=useState(false);
   const emojiInserted=useRef(false);
+  const draftScope=useRef("legacy");
   const initialized=useRef(false),draftVersion=useRef("0"),savedDraft=useRef(""),savingDraft=useRef(null);
   const bottom=useRef(null),typingAt=useRef(0),request=useRef(null);
   const fileInput=useRef(null),composer=useRef(null);
@@ -71,9 +73,10 @@ export default function ChatInteractionDetail({interaction,onChanged,composeStor
       if(!initialized.current){
         if(BigInt(body.draft.version)<BigInt(draftVersion.current))return;
         initialized.current=true;savedDraft.current=body.draft.body;draftVersion.current=String(body.draft.version);
-        let cached=null;try{cached=JSON.parse(sessionStorage.getItem(cacheKey)||"null");}catch{}
+        draftScope.current=body.draft.scope||"legacy";
+        let cached=null;try{cached=readScopedDraftCache(sessionStorage,cacheKey,draftScope.current);}catch{}
         setDraft(cached?.body ?? body.draft.body);
-        if(cached && String(cached.version)!==String(body.draft.version) && cached.body!==body.draft.body){
+        if(cached && (!body.draft.scope || body.draft.scope==="legacy") && String(cached.version)!==String(body.draft.version) && cached.body!==body.draft.body){
           setDraftConflict(body.draft);
           setError("A saved draft changed in another session. Your unsent text has been recovered; review it before sending.");
         }
@@ -97,7 +100,7 @@ export default function ChatInteractionDetail({interaction,onChanged,composeStor
         body:JSON.stringify({action:"draft",body:value,expectedDraftVersion:draftVersion.current})});
       const body=await response.json();if(!response.ok)throw new Error(body.error);
       draftVersion.current=String(body.version);savedDraft.current=value;
-      try{const cached=JSON.parse(sessionStorage.getItem(cacheKey)||"null");
+      try{const cached=readScopedDraftCache(sessionStorage,cacheKey,draftScope.current);
         if(cached?.body===value)sessionStorage.removeItem(cacheKey);
         else if(cached)sessionStorage.setItem(cacheKey,JSON.stringify({...cached,version:body.version}));
       }catch{}
@@ -164,7 +167,7 @@ export default function ChatInteractionDetail({interaction,onChanged,composeStor
   const react=(message,emoji)=>{if(!locked&&canReply)void sendStructured({reaction:{messageId:message.id,emoji}});};
   function edit(value){
     setDraft(value);
-    try{sessionStorage.setItem(cacheKey,JSON.stringify({body:value,version:draftVersion.current}));}catch{}
+    try{sessionStorage.setItem(cacheKey,JSON.stringify({body:value,version:draftVersion.current,scope:draftScope.current}));}catch{}
     if(!provider&&Date.now()-typingAt.current>2500){typingAt.current=Date.now();void fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"typing",typing:Boolean(value.trim())})});}
   }
   const mediaPolicy=whatsapp?detail?.whatsapp?.mediaPolicy:null;

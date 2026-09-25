@@ -5,7 +5,7 @@ import {
   DocsDescription,
   DocsPage,
   DocsTitle,
-} from "fumadocs-ui/layouts/the internal documentation";
+} from "fumadocs-ui/layouts/docs/page";
 import { getMDXComponents } from "@/mdx-components";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {

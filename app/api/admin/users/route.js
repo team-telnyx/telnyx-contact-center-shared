@@ -75,7 +75,7 @@ async function GET_handler(request, _context, authz) {
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const fromSql = `FROM users u LEFT JOIN acd_agent_state s ON s.agent_id = u.id`;
-  const rowsSql = `SELECT u.id, u.username, u.first_name, u.last_name, u.nick, u.mobile, u.roles, u.verified, u.experimental_features, ${effectiveStatusSql} AS status, u.skills, u.created_at, u.updated_at ${fromSql} ${whereSql} ORDER BY u.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
+  const rowsSql = `SELECT u.id, u.username, u.first_name, u.last_name, u.nick, u.mobile, u.roles, u.verified, u.profile_picture_uri, u.experimental_features, ${effectiveStatusSql} AS status, u.skills, u.created_at, u.updated_at ${fromSql} ${whereSql} ORDER BY u.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
   const [rowsRes, countRes] = await Promise.all([
     pool.query(rowsSql, vals),
     pool.query(`SELECT COUNT(*) AS c ${fromSql} ${whereSql}`, vals),

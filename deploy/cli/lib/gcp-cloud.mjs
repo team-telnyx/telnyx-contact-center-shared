@@ -106,7 +106,7 @@ export async function checkGcpCloudPreflight({
     results.push({
       key: 'gcloud', status: 'fail', label: 'gcloud CLI',
       detail: 'not found',
-      hint: 'Install the Google Cloud CLI: https://cloud.google.com/sdk/the internal documentation, then `gcloud auth login` and `gcloud auth application-default login`.',
+      hint: 'Install the Google Cloud CLI: https://cloud.google.com/sdk/docs/install, then `gcloud auth login` and `gcloud auth application-default login`.',
     });
     // No point probing auth/project without the CLI itself.
     return results;
@@ -442,7 +442,7 @@ export async function provisionGcpInfra({
  * Describes a google_compute_managed_ssl_certificate's current status via
  * `gcloud compute ssl-certificates describe`. Returns the raw
  * managed.status string (PROVISIONING, ACTIVE, FAILED_NOT_VISIBLE, etc.)
- * — see https://cloud.google.com/load-balancing/the internal documentation
+ * — see https://cloud.google.com/load-balancing/docs/ssl-certificates/troubleshooting
  * for the full status enum. Never throws on a not-yet-visible cert (the
  * gcloud call itself can fail transiently right after `terraform apply`
  * creates the resource) — returns status: null instead so callers can

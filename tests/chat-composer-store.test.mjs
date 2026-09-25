@@ -31,3 +31,29 @@ test("a late send response cannot restore files or results for an interaction th
   assert.deepEqual(store.get("chat").files,[]);
   store.update("chat",{files});assert.equal(store.get("chat").files,files);
 });
+
+// Browser sessionStorage survives sign-out/sign-in within the same tab.
+import { readScopedDraftCache } from "../lib/contact-center/chat-draft-cache.mjs";
+function draftStorage(value) {
+  const data=new Map([["draft",JSON.stringify(value)]]);
+  return {getItem:key=>data.get(key)??null,removeItem:key=>data.delete(key)};
+}
+test("reload recovers unsent text from the same authenticated draft scope",()=>{
+  const draft={body:"Unsent reply",version:"3",scope:"session-a"};
+  assert.deepEqual(readScopedDraftCache(draftStorage(draft),"draft","session-a"),draft);
+});
+test("a new login cannot import or autosave text left by the previous session",()=>{
+  const storage=draftStorage({body:"Previous login reply",version:"3",scope:"session-a"});
+  assert.equal(readScopedDraftCache(storage,"draft","session-b"),null);
+  assert.equal(storage.getItem("draft"),null);
+});
+test("unscoped drafts recover only against a legacy backend",()=>{
+  const draft={body:"Legacy unsent reply",version:"2"};
+  assert.deepEqual(readScopedDraftCache(draftStorage(draft),"draft"),draft);
+  assert.equal(readScopedDraftCache(draftStorage(draft),"draft","session-a"),null);
+});
+test("unavailable or invalid browser storage does not prevent loading server drafts",()=>{
+  assert.equal(readScopedDraftCache({getItem(){throw Error("disabled");}},"draft"),null);
+  assert.equal(readScopedDraftCache({getItem:()=>"invalid json"},"draft"),null);
+  assert.equal(readScopedDraftCache(draftStorage({body:42}),"draft"),null);
+});

@@ -1,3 +1,4 @@
+import { withWrapupDevice, mediaDevicePresentation } from "@/lib/acd/media-device-control.mjs";
 import { NextResponse } from "next/server";
 
 import { saveAcdDisposition } from "@/lib/acd/wrapup.mjs";
@@ -62,6 +63,7 @@ async function GET_handler(request, { params }, authz) {
     const { codes, defaultCode } = await loadCodes(context.pool, context.segment.queue_id);
     return NextResponse.json({
       ok: true,
+      deviceControl: await mediaDevicePresentation(context.pool,user,request,{workItemId:context.interaction.id,segmentId:context.segment.id,wrapup:true}),
       segmentId: context.segment.id,
       queueId: context.segment.queue_id || null,
       queueName: context.segment.queue_name || null,
@@ -94,6 +96,7 @@ async function POST_handler(request, { params }, authz) {
     const allowed = new Set(codes.map((code) => String(code.id)));
     const selected = requested.find((codeId) => allowed.has(String(codeId))) || defaultCode?.id || null;
 
+    await withWrapupDevice(context.pool,user,request,{workItemId:context.interaction.id,segmentId:context.segment.id,ownerVersion:body.ownerVersion},async()=>{
     const tx = await context.pool.connect();
     try {
       await tx.query("BEGIN");
@@ -110,10 +113,11 @@ async function POST_handler(request, { params }, authz) {
     } finally {
       tx.release();
     }
+    });
     return NextResponse.json({ ok: true, wrapupCodes: selected ? [selected] : [] });
   } catch (error) {
     contactCenterRuntimeLogger.error("runtime_error", runtimePayload({ error }));
-    return NextResponse.json({ ok: false, error: "Failed to save wrapup codes" }, { status: error.status || 500 });
+    return NextResponse.json({ ok: false, error: error.status ? error.message : "Failed to save wrapup codes" }, { status: error.status || 500 });
   }
 }
 

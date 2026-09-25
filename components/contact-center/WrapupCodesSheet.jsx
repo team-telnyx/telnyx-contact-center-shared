@@ -1,4 +1,5 @@
 "use client";
+import { voiceFetch } from "@/lib/telephony/endpoint-client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -71,6 +72,7 @@ export default function WrapupCodesSheet({
   // otherwise non-dismissable modal (e.g. a persistent server error / 403).
   const [saveFailed, setSaveFailed] = useState(false);
   const [codes, setCodes] = useState([]);
+  const ownerVersion = useRef(null);
   const [selectedCodes, setSelectedCodes] = useState([]);
   const [defaultCodeId, setDefaultCodeId] = useState(null);
   const [queueName, setQueueName] = useState(null);
@@ -105,7 +107,7 @@ export default function WrapupCodesSheet({
       const checkInteractionMetadata = async () => {
         try {
           // First check: Try to get interaction from wrapup-codes endpoint (faster, includes metadata)
-          const wrapupRes = await fetch(
+          const wrapupRes = await voiceFetch(
             `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`,
             { cache: "no-store" },
           );
@@ -138,7 +140,7 @@ export default function WrapupCodesSheet({
           }
 
           // Fallback: Try direct interaction endpoint
-          const res = await fetch(
+          const res = await voiceFetch(
             `/api/contact-center/interactions/${encodeURIComponent(interactionId)}`,
             { cache: "no-store" },
           );
@@ -222,14 +224,14 @@ export default function WrapupCodesSheet({
 
   async function sendWrapupEnd(nextStatus = null) {
     if (!interactionId) return;
-    const response = await fetch(
+    const response = await voiceFetch(
       `/api/contact-center/interactions/${encodeURIComponent(
         interactionId,
       )}/wrapup`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "end", nextStatus, segmentId }),
+        body: JSON.stringify({ action: "end", nextStatus, segmentId, ownerVersion: ownerVersion.current }),
       },
     );
     const data = await response.json().catch(() => ({}));
@@ -271,7 +273,7 @@ export default function WrapupCodesSheet({
       // would otherwise let the next wrap-up be dismissed without dispositioning.
       setSaveFailed(false);
       try {
-        const res = await fetch(
+        const res = await voiceFetch(
           `/api/contact-center/interactions/${encodeURIComponent(
             interactionId,
           )}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`,
@@ -282,6 +284,8 @@ export default function WrapupCodesSheet({
           throw new Error(data?.error || "Failed to load wrapup codes");
         }
 
+        ownerVersion.current = data.deviceControl?.version ?? null;
+        if (data.deviceControl?.canControl === false) { onOpenChange?.(false); return; }
         const timing = wrapupClock(data);
         if (!timing.pending) { onOpenChange?.(false); setLoading(false); return; }
         setClock({ ...timing, interactionId });
@@ -359,7 +363,7 @@ export default function WrapupCodesSheet({
       if (polling) return;
       polling = true;
       try {
-        const res = await fetch(`/api/contact-center/interactions/${encodeURIComponent(interactionId)}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`, { cache: "no-store" });
+        const res = await voiceFetch(`/api/contact-center/interactions/${encodeURIComponent(interactionId)}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`, { cache: "no-store" });
         const data = await res.json();
         if (!cancelled && res.ok && data.acdOwned && data.wrapupPending === false) onOpenChange?.(false);
       } catch { /* Keep the pending sheet visible until server confirmation. */ }
@@ -389,7 +393,7 @@ export default function WrapupCodesSheet({
     setSaving(true);
     setSaveFailed(false);
     try {
-      const res = await fetch(
+      const res = await voiceFetch(
         `/api/contact-center/interactions/${encodeURIComponent(
           interactionId,
         )}/wrapup-codes${segmentId ? `?segmentId=${encodeURIComponent(segmentId)}` : ""}`,
@@ -398,6 +402,7 @@ export default function WrapupCodesSheet({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             wrapupCodes: codesToSave,
+            ownerVersion: ownerVersion.current,
             segmentId,
           }),
         },

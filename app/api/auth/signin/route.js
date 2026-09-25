@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { mutateRefreshSession } from "@/lib/auth-refresh-sessions.mjs";
 import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth";
 import { PgDb } from "@/lib/pgdb";
@@ -77,9 +79,11 @@ export async function POST(request) {
       }
     }
 
+    const sessionId = randomUUID();
     const accessToken = await signAccessToken(
       {
         sub: String(user.id || user._id),
+        sid: sessionId,
         email: user.username,
         username: user.username,
       },
@@ -87,23 +91,16 @@ export async function POST(request) {
     );
 
     const refreshToken = await signRefreshToken(
-      { sub: String(user.id || user._id), purpose: "refresh" },
+      { sub: String(user.id || user._id), purpose: "refresh", sid: sessionId },
       "30d"
     );
 
-    // Hash the refresh token before storing
-    const hashedRefreshToken = await hashToken(refreshToken);
-
-    // Replace all refresh tokens with the new one using direct SQL to ensure proper JSONB format
     const { getPostgresPool } = await import("@/lib/postgres.mjs");
     const pool = getPostgresPool();
-    const refreshTokensJson = JSON.stringify([
-      { refreshToken: hashedRefreshToken },
-    ]);
-    await pool.query(
-      `UPDATE users SET refresh_tokens = $1::jsonb, updated_at = $2 WHERE id = $3`,
-      [refreshTokensJson, new Date().toISOString(), String(user.id || user._id)]
-    );
+    await mutateRefreshSession(String(user.id || user._id), {
+      add: { sessionId, refreshToken: await hashToken(refreshToken), expiresAt: new Date(Date.now() + 30 * 86400000).toISOString() },
+    });
+
 
     const { readEffectiveAgentStatus } = await import("@/lib/acd/agent-state.mjs");
     const currentAgentStatus = await readEffectiveAgentStatus(

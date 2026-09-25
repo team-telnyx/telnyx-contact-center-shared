@@ -39,6 +39,7 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
   const [localScreen, setLocalScreen] = useState(null);
   const [supervision, setSupervisionState] = useState(null); // { mode, participantId?, name? } | null
   const [mixedAudioTrack, setMixedAudioTrack] = useState(null);
+  const [audioTracks, setAudioTracks] = useState([]);
   const controllerRef = useRef(null);
   const localRef = useRef({ audio: null, video: null });
   const cameraWantedRef = useRef(initialCamera);
@@ -115,6 +116,7 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
           setRemote(snapshot.remote);
           setParticipants(snapshot.participants || []);
           setMixedAudioTrack(snapshot.mixedAudioTrack);
+          setAudioTracks(snapshot.audioTracks || []);
           if (snapshot.error) setError(snapshot.error?.message || String(snapshot.error));
           if (snapshot.status === "connected") setStatus("connected");
           // A supervisor's join context carries the mode; leaving clears it.
@@ -191,7 +193,7 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
     setParticipants([]);
     supervisionRef.current = null;
     setSupervisionState(null);
-    setMixedAudioTrack(null);
+    setMixedAudioTrack(null); setAudioTracks([]);
     setStatus("disconnected");
   }, [releaseLocal]);
 
@@ -209,6 +211,15 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
   const announceSupervision = useCallback((mode) => {
     controllerRef.current?.sendMessage({ type: "supervision", mode: mode || null, name, from: role });
   }, [name, role]);
+
+  const resumeAfterHandoff = useCallback(async () => {
+    const {audio, video} = localRef.current;
+    if (!controllerRef.current) throw new Error("Video disconnected before the move completed");
+    if (audio) audio.enabled = true;
+    await controllerRef.current.publish({audio, video});
+    micWantedRef.current = Boolean(audio); setMicOn(Boolean(audio));
+    cameraWantedRef.current = Boolean(video); setCameraOn(Boolean(video));
+  }, []);
 
   const toggleCamera = useCallback(async () => {
     const next = !cameraWantedRef.current;
@@ -287,7 +298,7 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
       track: item.videoTrack, cameraOff: item.key !== "screen" && !item.videoEnabled, name: item.name, participantId: item.participantId })),
   ], [cameraOn, local.video, localScreen, remote, role]);
 
-  return { status, error, local, cameraOn, micOn, layout, remote, participants, peer, screen, tiles, localScreen, screenSharing: Boolean(localScreen), supervision, mixedAudioTrack,
+  return { resumeAfterHandoff, status, error, local, cameraOn, micOn, layout, remote, participants, peer, screen, tiles, localScreen, screenSharing: Boolean(localScreen), supervision, mixedAudioTrack, audioTracks,
     prepare, join, leave, toggleCamera, toggleMic, toggleScreenShare, stopScreenShare, setLayout, setSupervision, announceSupervision, updateToken, clearError: () => setError("") };
 }
 

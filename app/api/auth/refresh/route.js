@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { mutateRefreshSession } from "@/lib/auth-refresh-sessions.mjs";
 import { NextResponse } from "next/server";
 import {
   verifyRefreshToken,
@@ -39,48 +41,24 @@ export async function POST(request) {
       return NextResponse.json({ error: "User not found" }, { status: 401 });
     }
 
-    // Parse refresh_tokens if it's a JSON string
-    let refreshTokens;
-    try {
-      refreshTokens =
-        typeof user?.refresh_tokens === "string"
-          ? JSON.parse(user.refresh_tokens)
-          : user?.refresh_tokens;
-    } catch (e) {
-      logAuthEvent("warn", "refresh_token_parse_failed", { source: "api", userId: String(payload.sub), ...authErrorPayload(e) });
-      refreshTokens = [];
-    }
-
-    const exists = Array.isArray(refreshTokens)
-      ? refreshTokens.some((t) => t?.refreshToken === hashed)
-      : false;
-    if (!exists) {
-      logAuthEvent("warn", "refresh_failed", { source: "api", ...authUserPayload(user), reason: "unrecognized_refresh_token", refreshToken: "[REDACTED]" });
-      return NextResponse.json(
-        { error: "Refresh token not recognized" },
-        { status: 401 }
-      );
-    }
-
-    // Rotate refresh token (remove old, add new)
-    const newList = (refreshTokens || []).filter(
-      (t) => t?.refreshToken !== hashed
-    );
-
+    const sessionId = payload.sid || randomUUID();
     const accessTokenTtlDays = 1;
     const refreshTokenTtlDays = 30;
     const accessToken = await signAccessToken(
       {
         sub: String(payload.sub),
+        sid: sessionId,
       },
       `${accessTokenTtlDays}d`
     );
     const newRefreshToken = await signRefreshToken(
-      { sub: String(payload.sub), purpose: "refresh" },
+      { sub: String(payload.sub), purpose: "refresh", sid: sessionId },
       `${refreshTokenTtlDays}d`
     );
-    newList.push({ refreshToken: await hashToken(newRefreshToken) });
-    await PgDb.updateUserById(String(payload.sub), { refresh_tokens: newList });
+    await mutateRefreshSession(String(payload.sub), {
+      consume: hashed,
+      add: { sessionId, refreshToken: await hashToken(newRefreshToken), expiresAt: new Date(Date.now() + 30 * 86400000).toISOString() },
+    });
     logAuthEvent("info", "refresh_success", { source: "api", ...authUserPayload(user), rotatedRefreshToken: true });
 
     const res = NextResponse.json({
@@ -114,7 +92,7 @@ export async function POST(request) {
     logAuthEvent("error", "refresh_failed", { source: "api", reason: "server_error", ...authErrorPayload(err) });
     return NextResponse.json(
       { error: "Server error", details: err.message },
-      { status: 500 }
+      { status: err.status || 500 }
     );
   }
 }

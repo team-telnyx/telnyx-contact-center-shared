@@ -1,4 +1,6 @@
 "use client";
+import { DeviceHandoff } from "./DeviceHandoff";
+import { voiceFetch } from "@/lib/telephony/endpoint-client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRightLeft, Bot, Loader2, Mic, MicOff, MonitorUp, MonitorX, PhoneOff, Video, VideoOff } from "lucide-react";
@@ -17,10 +19,13 @@ const LAYOUT_LABELS = { layoutRemote: "Customer only", layoutSplit: "Side by sid
 // accept/decline; once the assignment is active this view joins the Telnyx
 // room, renders the 1:1 stage and offers end/transfer.
 export default function VideoInteractionDetail({ interaction, onChanged }) {
+  const [acceptingMove,setAcceptingMove]=useState(false);
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const moveAttempt = useRef(null);
+  useEffect(() => () => { moveAttempt.current?.abort(); }, [interaction.id]);
   const request = useRef(null);
   const joinRef = useRef(null);
   const joiningRef = useRef(false);
@@ -35,7 +40,7 @@ export default function VideoInteractionDetail({ interaction, onChanged }) {
     const controller = new AbortController();
     request.current = controller;
     try {
-      const response = await fetch(endpoint, { cache: "no-store", signal: controller.signal });
+      const response = await voiceFetch(endpoint, { cache: "no-store", signal: controller.signal });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Unable to load the video call");
       if (!controller.signal.aborted) { setDetail(body); setSupervision(body.video?.supervision || null); }
@@ -51,13 +56,14 @@ export default function VideoInteractionDetail({ interaction, onChanged }) {
   }, [refresh]);
 
   // Join as soon as the assignment is active; leave when handling ends.
-  const active = detail?.assignmentState === "active" && !wrapup;
+  const canControl = Boolean(detail && detail.deviceControl?.canControl !== false);
+  const active = detail?.assignmentState === "active" && !wrapup && canControl;
   useEffect(() => {
     if (!active || joiningRef.current || room.status === "connected" || room.status === "joining") return;
     joiningRef.current = true;
     (async () => {
       try {
-        const response = await fetch(`${endpoint}/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const response = await voiceFetch(`${endpoint}/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || "Video token unavailable");
         joinRef.current = body.join;
@@ -70,8 +76,8 @@ export default function VideoInteractionDetail({ interaction, onChanged }) {
   }, [active, endpoint, room]);
 
   useEffect(() => {
-    if ((wrapup || interaction.completed_at || interaction.abandoned_at || detail?.work?.terminal_at) && room.status !== "idle" && room.status !== "disconnected") void room.leave();
-  }, [detail?.work?.terminal_at, interaction.abandoned_at, interaction.completed_at, room, wrapup]);
+    if (((!canControl && !acceptingMove) || wrapup || interaction.completed_at || interaction.abandoned_at || detail?.work?.terminal_at) && room.status !== "idle" && room.status !== "disconnected") void room.leave();
+  }, [acceptingMove, canControl, detail?.work?.terminal_at, interaction.abandoned_at, interaction.completed_at, room, wrapup]);
 
   useEffect(() => {
     if (room.status !== "connected") return undefined;
@@ -79,7 +85,7 @@ export default function VideoInteractionDetail({ interaction, onChanged }) {
       const refreshToken = joinRef.current?.refreshToken;
       if (!refreshToken) return;
       try {
-        const response = await fetch(`${endpoint}/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken }) });
+        const response = await voiceFetch(`${endpoint}/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken }) });
         const body = await response.json();
         if (response.ok) { joinRef.current = { ...joinRef.current, ...body.join }; await room.updateToken(body.join.token); }
       } catch { /* next poll surfaces a dead session */ }
@@ -87,11 +93,60 @@ export default function VideoInteractionDetail({ interaction, onChanged }) {
     return () => clearInterval(timer);
   }, [endpoint, room]);
 
+  async function joinMovedVideo(join, id) {
+    moveAttempt.current?.abort();
+    const attempt = new AbortController();
+    moveAttempt.current = attempt;
+    setAcceptingMove(true); joiningRef.current = true;
+    const movePath = `/api/contact-center/interactions/${interaction.id}/device-handoff`;
+    try {
+      joinRef.current = join;
+      await room.prepare({camera: true});
+      if (attempt.signal.aborted) return;
+      await room.join({...join, media: false});
+      while (!attempt.signal.aborted) {
+        let result;
+        try {
+          const response = await voiceFetch(movePath, {method: 'POST', signal: attempt.signal,
+            headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'ready', id})});
+          if (response.ok) result = await response.json();
+          else {
+            // A cancelled move also returns 409. Read its authoritative outcome
+            // instead of retrying forever or abandoning an uncertain cutover.
+            const state = await voiceFetch(movePath, {cache: 'no-store', signal: attempt.signal});
+            if (state.ok) result = await state.json();
+            else if ([401, 403, 404].includes(state.status)) result = {handoff: {state: 'failed'}};
+          }
+        } catch (reason) {
+          if (attempt.signal.aborted) return;
+          setError('Reconnecting to confirm the video move…');
+        }
+        if (result) {
+          if (result.handoff?.id !== id || ['cancelled', 'failed'].includes(result.handoff?.state))
+            throw new Error('The video move ended. Check the device handling the call.');
+          if (result.handoff.completed) {
+            if (attempt.signal.aborted) return;
+            await refresh();
+            await room.resumeAfterHandoff();
+            setError('');
+            return;
+          }
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (reason) {
+      await room.leave();
+      if (!attempt.signal.aborted) setError(reason.message);
+    } finally {
+      if (moveAttempt.current === attempt) { setAcceptingMove(false); joiningRef.current = false; }
+    }
+  }
+
   async function endCall() {
-    if (busy || !detail) return;
+    if (busy || !detail || !canControl) return;
     setBusy(true);
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" },
+      const response = await voiceFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "disconnect", commandId: crypto.randomUUID(), expectedVersion: detail.work.version }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Unable to end the video call");
@@ -114,6 +169,8 @@ export default function VideoInteractionDetail({ interaction, onChanged }) {
   const recordingEnabled = Boolean(detail?.video?.recordingEnabled);
   return (
     <div className="@container flex min-h-0 flex-1 flex-col" data-testid="video-interaction-detail">
+      {!canControl && <p className="rounded-xl border bg-muted/40 px-4 py-3 text-sm">Video is handled on {detail?.deviceControl?.label || 'the other device'}.</p>}
+      {detail?.assignmentState==='active'&&!wrapup&&<DeviceHandoff interactionId={interaction.id} onJoinVideo={joinMovedVideo}/>}
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-muted/20 p-3">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-background shadow-sm" aria-label="Video call">
           <header className="flex shrink-0 items-center gap-3 border-b bg-rose-500/[0.04] px-4 py-3">
@@ -137,21 +194,23 @@ export default function VideoInteractionDetail({ interaction, onChanged }) {
             ) : (
               <VideoStage scene={room.layout} tiles={tiles} viewerRole="agent" orientation="row" fill
                 hiddenLabel={(hidden) => `+${hidden.length} more`}
-                mixedAudioTrack={room.mixedAudioTrack} radius={12} className="min-h-[320px]" />
+                audioTracks={room.audioTracks} radius={12} className="min-h-[320px]" />
             )}
-            {active && (
-              <div className="flex flex-wrap items-center justify-center gap-2">
+            {detail?.assignmentState === "active" && !wrapup && (
+              <div title={!canControl ? `Video is handled on ${detail?.deviceControl?.label || 'the other device'}. Use that device to control this interaction.` : undefined}>
+              <fieldset disabled={!canControl} className="flex flex-wrap items-center justify-center gap-2">
                 <Button type="button" variant={room.micOn ? "outline" : "secondary"} size="icon" className="size-11 rounded-full" aria-label={room.micOn ? "Mute microphone" : "Unmute microphone"} onClick={() => room.toggleMic()}>{room.micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}</Button>
                 <Button type="button" variant="destructive" className="h-11 rounded-full px-5" disabled={busy} onClick={() => void endCall()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <PhoneOff className="size-4" />}End video call</Button>
                 <Button type="button" variant={room.cameraOn ? "outline" : "secondary"} size="icon" className="size-11 rounded-full" aria-label={room.cameraOn ? "Turn camera off" : "Turn camera on"} onClick={() => void room.toggleCamera()}>{room.cameraOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}</Button>
-                <Button type="button" variant={room.screenSharing ? "secondary" : "outline"} size="icon" className="size-11 rounded-full" aria-label={room.screenSharing ? "Stop sharing your screen" : "Share your screen"} title={room.screenSharing ? "Stop sharing your screen" : "Share your screen"} onClick={() => void room.toggleScreenShare()}>{room.screenSharing ? <MonitorX className="size-5" /> : <MonitorUp className="size-5" />}</Button>
+                <Button type="button" variant={room.screenSharing ? "secondary" : "outline"} size="icon" className="size-11 rounded-full" aria-label={room.screenSharing ? "Stop sharing your screen" : "Share your screen"} title={!canControl ? `Video is handled on ${detail?.deviceControl?.label || "the other device"}.` : room.screenSharing ? "Stop sharing your screen" : "Share your screen"} onClick={() => void room.toggleScreenShare()}>{room.screenSharing ? <MonitorX className="size-5" /> : <MonitorUp className="size-5" />}</Button>
                 <Button type="button" variant="outline" className="h-11 rounded-full px-4" disabled={busy} onClick={() => setTransferOpen(true)}><ArrowRightLeft className="size-4" />Transfer</Button>
+              </fieldset>
               </div>
             )}
           </div>
         </section>
       </div>
-      {transferOpen && <MessagingTransferModal interaction={interaction} onClose={() => setTransferOpen(false)} onTransferred={() => { void room.leave(); window.dispatchEvent(new CustomEvent("contact-center:chat-changed")); onChanged?.(); }} />}
+      {transferOpen && canControl && <MessagingTransferModal interaction={interaction} onClose={() => setTransferOpen(false)} onTransferred={() => { void room.leave(); window.dispatchEvent(new CustomEvent("contact-center:chat-changed")); onChanged?.(); }} />}
     </div>
   );
 }

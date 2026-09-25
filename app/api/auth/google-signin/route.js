@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { mutateRefreshSession } from "@/lib/auth-refresh-sessions.mjs";
 import { NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import { PgDb } from "@/lib/pgdb";
@@ -65,9 +67,11 @@ export async function POST(request) {
     }
 
     // Generate JWT tokens (same as /api/auth/signin)
+    const sessionId = randomUUID();
     const accessToken = await signAccessToken(
       {
         sub: String(existing.id),
+        sid: sessionId,
         email: existing.username,
         username: existing.username,
       },
@@ -75,20 +79,14 @@ export async function POST(request) {
     );
 
     const refreshToken = await signRefreshToken(
-      { sub: String(existing.id), purpose: "refresh" },
+      { sub: String(existing.id), purpose: "refresh", sid: sessionId },
       "30d"
     );
 
-    // Hash and store refresh token
-    const hashedRefreshToken = await hashToken(refreshToken);
-    const pool = getPostgresPool();
-    const refreshTokensJson = JSON.stringify([
-      { refreshToken: hashedRefreshToken },
-    ]);
-    await pool.query(
-      `UPDATE users SET refresh_tokens = $1::jsonb, updated_at = $2 WHERE id = $3`,
-      [refreshTokensJson, new Date().toISOString(), String(existing.id)]
-    );
+    await mutateRefreshSession(String(existing.id), {
+      add: { sessionId, refreshToken: await hashToken(refreshToken), expiresAt: new Date(Date.now() + 30 * 86400000).toISOString() },
+    });
+
 
     // Prepare user data (same format as /api/auth/signin)
     const nameParts = [

@@ -21,6 +21,11 @@ test('wrap-up API exposes the pending Core segment and rejects a completed conte
   const route=await loadRoute('app/api/contact-center/interactions/[id]/wrapup-codes/route.js',{
     '@/lib/auth-server':{getAuthenticatedUser:async()=>({id:'agent',username:'agent'})},
     '@/lib/postgres.mjs':{getPostgresPool:()=>pool},
+    '@/lib/acd/media-device-control.mjs':{mediaDevicePresentation:async(db,user,request,options)=>{
+      assert.equal(db,pool);assert.equal(user.id,'agent');
+      assert.deepEqual(options,{workItemId:'work',segmentId:'segment',wrapup:true});
+      return {canControl:false,canTakeOver:true,label:'iPhone',version:'2'};
+    }},
     '@/lib/acd/work-item-repository.mjs':{findInteractionViewByReference:async()=>({id:'work'})},
     '@/lib/acd/wrapup-context.mjs':{findPendingAcdWrapupSegment:async(_pool,input)=>{requested=input;return pending;}},
     '@/lib/runtime-logging.mjs':{contactCenterRuntimeLogger:{error:()=>{}},runtimePayload:value=>value},
@@ -31,6 +36,7 @@ test('wrap-up API exposes the pending Core segment and rejects a completed conte
   assert.equal(first.body.wrapupPending,true);
   assert.equal(first.body.wrapupDeadlineAt,pending.wrapup_deadline_at);
   assert.equal(first.body.segmentId,'segment');
+  assert.deepEqual(first.body.deviceControl,{canControl:false,canTakeOver:true,label:'iPhone',version:'2'});
   assert.deepEqual(requested,{workItemId:'work',agentId:'agent',segmentId:'segment'});
   pending=null;
   const done=await route.GET(request, {params:{id:'i'}});

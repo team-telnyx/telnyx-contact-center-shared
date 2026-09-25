@@ -1,5 +1,7 @@
 "use client";
 
+import { withdrawVoiceEndpoint } from "@/lib/telephony/endpoint-client";
+import { notify } from "@/components/ToastNotify";
 import {
   IconDotsVertical,
   IconLogout,
@@ -123,47 +125,22 @@ export function NavUser({ user, hideExtras }) {
     if (logoutInFlightRef.v) return;
     logoutInFlightRef.v = true;
 
-    // Mark that we're logging out to prevent automatic offline status
-    if (typeof window !== "undefined" && window.__markLoggingOut) {
-      window.__markLoggingOut();
-    }
-
     try {
-      try {
-        useCallsStore.getState().clearAllCalls();
-        useActiveCallStore.getState().clearActiveCall();
-        localStorage.removeItem("calls-store");
-        localStorage.removeItem("active-call-store");
-      } catch (_) {}
-
-      // Clear local storage
-      try {
-        localStorage.removeItem("nav-main.selected");
-        localStorage.removeItem("webrtc.token.cache");
-      } catch (_) {}
-
-      // Try to call logout API to clear server-side session and refresh tokens
-      try {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-          cache: "no-store",
-        });
-      } catch (_) {
-        // Ignore errors - we'll clear cookies client-side anyway
+      await withdrawVoiceEndpoint();
+      const response = await fetch("/api/auth/logout", {method:"POST",credentials:"include",cache:"no-store"});
+      if (!response.ok) {
+        const body=await response.json().catch(()=>({}));
+        throw new Error(body.error || "Could not sign out. Please retry.");
       }
-
-      // Try NextAuth signOut (may fail if session already expired, that's ok)
-      try {
-        await signOut({ redirect: false });
-      } catch (_) {
-        // Session might already be expired, continue with logout anyway
-      }
-    } finally {
-      // Always redirect to signin, even if some logout steps failed
-      logoutInFlightRef.v = false;
-      window.location.href = "/signin";
-    }
+      window.__markLoggingOut?.();
+      useCallsStore.getState().clearAllCalls();
+      useActiveCallStore.getState().clearActiveCall();
+      for (const key of ["calls-store","active-call-store","webrtc.token.cache","nav-main.selected"]) localStorage.removeItem(key);
+      await signOut({redirect:false});
+      window.location.href="/signin";
+    } catch(error) {
+      notify({title:"Sign out failed",description:error.message,variant:"error"});
+    } finally { logoutInFlightRef.v=false; }
   }
 
   return (

@@ -73,6 +73,11 @@ const nextConfig = {
       ],
     };
   },
+  async headers() {
+    return [{ source: "/cobrowse/replay", headers: [{ key: "Content-Security-Policy",
+      value: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; font-src data:; frame-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'" },
+    { key: "Referrer-Policy", value: "no-referrer" }] }];
+  },
   // Server-side externals for Turbopack (Next.js 16+)
   // ws, bufferutil, utf-8-validate are needed for Telnyx WebSocket TTS
   serverExternalPackages: ["pg", "pgpass", "pg-connection-string", "ws", "alawmulaw", "@google/genai", "bufferutil", "utf-8-validate"],

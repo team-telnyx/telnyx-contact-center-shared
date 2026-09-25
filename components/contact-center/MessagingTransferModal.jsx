@@ -1,4 +1,5 @@
 "use client";
+import { voiceFetch } from "@/lib/telephony/endpoint-client";
 
 import { useCallback,useEffect,useRef,useState } from "react";
 import { ArrowRightLeft,Loader2,Mail,UserCheck,UsersRound } from "lucide-react";
@@ -20,7 +21,7 @@ export default function MessagingTransferModal({interaction,onClose,onTransferre
     request.current?.abort();const controller=new AbortController();request.current=controller;
     setLoading(true);setError("");
     try{
-      const response=await fetch(`${endpoint}/transfer`,{cache:"no-store",signal:controller.signal}),result=await response.json();
+      const response=await voiceFetch(`${endpoint}/transfer`,{cache:"no-store",signal:controller.signal}),result=await response.json();
       if(!response.ok)throw Error(result.error||"Unable to load transfer destinations");
       if(controller.signal.aborted)return;
       setData(result);setQueueId(current=>result.queues.some(q=>q.id===current)?current:result.currentQueueId||"");
@@ -38,7 +39,7 @@ export default function MessagingTransferModal({interaction,onClose,onTransferre
     if(!pending.current)pending.current={commandId:crypto.randomUUID(),expectedVersion:data.version,
       ...(manual?{action:"forward",messageId:data.forward.message_id,to:address.trim()}:{action:"transfer",queueId:kind==="agent"?agent.queue_id:queueId,targetAgentId:kind==="agent"?agent.id:null})};
     try{
-      const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending.current)}),result=await response.json();
+      const response=await voiceFetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending.current)}),result=await response.json();
       if(!response.ok){
         if(response.status<500){pending.current=null;if(alive.current){setUncertain(false);void load();}}
         throw Error(result.error||"Unable to transfer interaction");

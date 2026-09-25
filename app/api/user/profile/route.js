@@ -72,6 +72,7 @@ async function GET_handler(request, _context, authz) {
       // Manual status waiting to apply once the agent's current interactions end.
       pending_status: agentStatus.pendingStatus,
       pending_since: agentStatus.pendingSince,
+      agent_state_version: agentStatus.version,
       voice_enabled: voicePolicy?.enabled !== false,
       language: user.language,
       profile_picture_uri: user.profile_picture_uri,
@@ -167,6 +168,7 @@ async function PUT_handler(request, _context, authz) {
       );
     }
 
+    if (requestedStatus && payload.expectedVersion == null) return NextResponse.json({error:"Refresh your status before changing it."},{status:428});
     if (Object.keys(update).length > 0) {
       await PgDb.updateUserById(userId, update);
     }
@@ -177,6 +179,7 @@ async function PUT_handler(request, _context, authz) {
         agentId: userId,
         status: requestedStatus,
         actor: `agent:${userId}`,
+        expectedVersion: payload.expectedVersion ?? null,
       });
       presentation = await getCurrentAgentStatus(userId);
     }
@@ -187,6 +190,7 @@ async function PUT_handler(request, _context, authz) {
       status: presentation?.status,
       pendingStatus: presentation?.pendingStatus ?? null,
       pendingSince: presentation?.pendingSince ?? null,
+      version: presentation?.version ?? null,
     });
   } catch (err) {
     platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
@@ -251,10 +255,12 @@ async function POST_handler(request, _context, authz) {
         { status: 503 },
       );
     }
+    if (payload.expectedVersion == null) return NextResponse.json({error:"Refresh your status before changing it."},{status:428});
     await setManualAgentStatus(pool, {
       agentId: String(user.id),
       status: requestedStatus,
       actor: `agent:${user.id}`,
+      expectedVersion: payload.expectedVersion ?? null,
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });

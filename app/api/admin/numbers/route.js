@@ -1,23 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 import { withPermission } from "@/lib/authz/guard";
 
 async function GET_handler(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Get full user object to check roles
-    const userId = session.user.id;
-    const email = session.user.email;
-    let user = null;
-    if (userId) user = await PgDb.findUserById(userId);
-    if (!user && email) user = await PgDb.findUserByUsername(email);
+    // `numbers:read` on the export already authenticated and authorised this
+    // caller. The cookie lookup that stood here refused bearer-token clients
+    // outright, and the user it then loaded "to check roles" was never read.
 
 
     const { searchParams } = new URL(request.url);

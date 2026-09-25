@@ -4,13 +4,57 @@ description: Release notes for Telnyx Contact Center.
 audiences: [agent, supervisor, admin, owner]
 keywords: [changelog, release notes, changes, version]
 owner: contact-center
-lastReviewed: 2026-09-20
+lastReviewed: 2026-09-24
 ---
 
 {/* Generated from CHANGELOG.md by yarn release:sync. */}
 
 Official versions follow [Semantic Versioning](https://semver.org/). These notes
 are also available inside the application through **About Contact Center → Release notes**.
+
+## [1.8.0] - 2026-09-24
+
+### Added
+
+- Companion iPhone support with independent authenticated sessions, mobile device
+  registration, alert notifications and synchronized agent status, queue and
+  campaign activation.
+- Calls On device selection and repeatable target-initiated voice/video takeover
+  between web and iPhone, preserving the customer connection and monitoring view.
+  Media controls and wrap-up are restricted to the handling device.
+- Native mobile video-room support with assignment-scoped screen-sharing
+  capabilities, offer deadlines, background presence and supervisor controls.
+- Mobile administration and bounded monitoring APIs for users, queues, teams,
+  skills, statuses, wrap-up codes and numbers, including queue audio/TTS catalogs
+  and Telnyx voice/messaging profiles.
+- Supervisor active-interaction browsing, queue workload and dialer dashboard,
+  Command Center and Live Calls support for the mobile workspace.
+- Independent messaging drafts per authenticated session so agents can alternate
+  replies between web and mobile without conflicting draft versions.
+- Consented co-browsing with page sharing and assisted customer interaction.
+
+### Fixed
+
+- Manual outbound and supervisory calls no longer consume the messaging capacity
+  gate. Concurrent voice/video occupancy remains protected, and incoming queue
+  offers continue to enforce configured capacity.
+- Preserve interaction visibility during repeated device takeovers and keep
+  non-owner video controls disabled with device-specific explanations.
+- Discard browser draft caches from previous login sessions instead of restoring
+  their text into the current session's chat, SMS or WhatsApp draft.
+- Return upstream Telnyx authentication failures as administration service errors
+  instead of incorrectly expiring the user's mobile login.
+- Serialize monitoring transaction queries for compatibility with PostgreSQL
+  client concurrency requirements, and include all relevant queue workloads.
+- Honor the selected environment file during environment generation and enforce
+  the deployment CLI's supported Node.js version.
+
+### Changed
+
+- Updated UI and provider dependencies and expanded mobile API, device ownership,
+  media, authorization and regression coverage.
+- Pair this backend release with mobile 1.0.0 for the complete companion workflow.
+  Deployment remains an explicit infrastructure operation.
 
 ## [1.7.1] - 2026-09-20
 

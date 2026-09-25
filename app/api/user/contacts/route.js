@@ -1,3 +1,4 @@
+import { mobileDirectory } from "@/lib/acd/mobile-monitor-pages.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
@@ -85,13 +86,13 @@ async function GET_handler(request, _context, authz) {
       platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     }
 
-    return NextResponse.json({
+    return NextResponse.json(mobileDirectory({
       ok: true,
       customers: customers,
       patients: patients,
       users: usersRes.rows || [],
       assistants: assistants,
-    });
+    }, new URL(request.url).searchParams), { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(

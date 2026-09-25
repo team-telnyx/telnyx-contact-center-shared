@@ -4,7 +4,7 @@ This directory contains the Docker production configuration for Telnyx Contact C
 
 Word previews run inside the CC application using bundled JavaScript libraries;
 no additional conversion service is required. See
-[chat document previews](../../the internal documentation) for supported formats
+[chat document previews](../../docs/document-previews.md) for supported formats
 and preview limits.
 
 ## Files

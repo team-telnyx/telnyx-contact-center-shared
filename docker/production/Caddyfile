@@ -5,10 +5,11 @@
 # compose.yaml — the `caddy` service only starts under the `cloud` profile).
 
 {$CC_DOMAIN} {
-	# Main app (Next.js) on 3000
-	reverse_proxy /* localhost:3000
-
-	# Streaming WebSocket server (Google Gemini / OpenAI Realtime / Azure) on 3001.
-	# Caddy auto-upgrades to wss:// for Upgrade: websocket requests under the same domain.
-	reverse_proxy /ws* localhost:3001
+	# Strip the public /ws prefix; the sidecar dispatches /streaming/* and /cobrowse.
+	handle_path /ws/* {
+		reverse_proxy localhost:3001
+	}
+	handle {
+		reverse_proxy localhost:3000
+	}
 }

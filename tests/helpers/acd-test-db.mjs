@@ -72,7 +72,8 @@ export async function prepareAcdTestPool(testDbName) {
   const client = await pool.connect();
   try {
     await client.query(`
-      DROP TABLE IF EXISTS acd_sla_measurements, cc_sla_policy_audit, form_submissions, aa_ai_handoff_events,
+      DROP TABLE IF EXISTS cc_mobile_alerts, cc_mobile_devices, cc_agent_voice_preferences, cc_voice_endpoints, acd_cobrowse_tickets, acd_cobrowse_sessions, acd_cobrowse_pairings, acd_cobrowse_claim_attempts,
+        acd_sla_measurements, cc_sla_policy_audit, form_submissions, aa_ai_handoff_events,
         quality_ai_jobs, quality_evaluations, aa_workflow_sessions CASCADE;
       DROP TABLE IF EXISTS acd_work_item_annotations, acd_transcripts, acd_recordings,
         acd_action_requests, acd_outbound_lines, acd_direct_intents, acd_test_provider_calls, acd_stream_events, acd_retention_watermarks, acd_operator_actions, acd_outbox, acd_webhook_events, acd_events, acd_commands,
@@ -95,6 +96,9 @@ export async function prepareAcdTestPool(testDbName) {
       CREATE TABLE users (
         id TEXT PRIMARY KEY,
         username TEXT,
+        refresh_tokens JSONB DEFAULT '[]',
+        active BOOLEAN DEFAULT true,
+        updated_at TIMESTAMPTZ DEFAULT now(),
         first_name TEXT,
         last_name TEXT,
         profile_picture_uri TEXT,

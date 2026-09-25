@@ -1,5 +1,6 @@
 "use client";
 
+import { voiceFetch } from "@/lib/telephony/endpoint-client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTelnyx } from "@/components/telephony-provider";
 import { usePhoneUi } from "@/components/phone-ui-provider";
@@ -354,7 +355,7 @@ export default function SoftphoneMini() {
                 interactionId &&
                 interactionId !== lastFetchedInteractionIdRef.current
               ) {
-                const res = await fetch(
+                const res = await voiceFetch(
                   `/api/contact-center/interactions/${interactionId}`
                 );
                 const data = await res.json();
@@ -380,7 +381,7 @@ export default function SoftphoneMini() {
             callControlId !== lastFetchedInteractionIdRef.current
           ) {
             try {
-              const res = await fetch(
+              const res = await voiceFetch(
                 `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
                   callControlId
                 )}`
@@ -411,7 +412,7 @@ export default function SoftphoneMini() {
       ) {
         const fetchInteraction = async () => {
           try {
-            const res = await fetch(
+            const res = await voiceFetch(
               `/api/contact-center/interactions/${interactionId}`
             );
             const data = await res.json();
@@ -803,7 +804,7 @@ export default function SoftphoneMini() {
     // Initialize To/From from user profile
     (async () => {
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const res = await voiceFetch("/api/auth/me", { cache: "no-store" });
         const data = await res.json();
         const mobile = data?.user?.mobile || "";
         const voice = data?.user?.voiceNumber || "";
@@ -1255,7 +1256,7 @@ export default function SoftphoneMini() {
     let callerName = overrides.callerName || outboundCallerName;
     if (!callerName) {
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const res = await voiceFetch("/api/auth/me", { cache: "no-store" });
         const data = await res.json();
         callerName = [data?.user?.firstName, data?.user?.lastName]
           .filter(Boolean)
@@ -1270,7 +1271,7 @@ export default function SoftphoneMini() {
     // If fromNumber is empty, try to get mainFromNumber as fallback
     if (!from) {
       try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const res = await voiceFetch("/api/auth/me", { cache: "no-store" });
         const data = await res.json();
         const mainFromNumber = data?.user?.mainFromNumber || "";
         if (mainFromNumber) {
@@ -1292,7 +1293,7 @@ export default function SoftphoneMini() {
 
       const experimentalOptions = getWebrtcExperimentalOptions();
       console.log("[webrtc] Starting outbound call", experimentalOptions);
-      const prepared = await fetch("/api/voice/direct-intent", {
+      const prepared = await voiceFetch("/api/voice/direct-intent", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ requestId: crypto.randomUUID(), target: to }),
       });

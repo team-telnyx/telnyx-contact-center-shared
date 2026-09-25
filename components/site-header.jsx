@@ -21,6 +21,7 @@ import { IconBook2 } from "@tabler/icons-react";
 export function SiteHeader() {
   const [status, setStatus] = useState(DEFAULT_USER_STATUS);
   // Manual status chosen while busy; applies once the current interactions end.
+  const statusVersion = useRef(null);
   const [pendingStatus, setPendingStatus] = useState(null);
   const [pendingSince, setPendingSince] = useState(null);
   const [queues, setQueues] = useState([]);
@@ -62,6 +63,7 @@ export function SiteHeader() {
         const res = await fetch("/api/user/profile", { cache: "no-store" });
         const data = await res.json();
         if (data.ok && data.data?.status) {
+          statusVersion.current = data.data.agent_state_version;
           setStatus(data.data.status);
           setPendingStatus(data.data.pending_status || null);
           setPendingSince(data.data.pending_since || null);
@@ -153,6 +155,7 @@ export function SiteHeader() {
       unsubscribers.push(
         subscribeStatusStream("status_changed", (data) => {
           if (data?.status) {
+            if (data.version != null) statusVersion.current = data.version;
             setStatus(data.status);
             // Core snapshots carry the pending status; legacy payloads do not
             // mention it and must not clear it.
@@ -212,7 +215,7 @@ export function SiteHeader() {
       const res = await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, expectedVersion: statusVersion.current }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -222,6 +225,7 @@ export function SiteHeader() {
         // resolves. If we set newStatus here, the selector briefly flashes
         // Available after the DB has already moved the agent back to Busy.
         if (data.status) {
+          statusVersion.current = data.version;
           setStatus(data.status);
           setPendingStatus(data.pendingStatus || null);
           setPendingSince(data.pendingSince || null);
@@ -236,6 +240,7 @@ export function SiteHeader() {
           });
         }
       } else {
+        await loadStatusRef.current?.();
         notify({ title: "Status update failed", description: data.error || "Failed to update status", variant: "error" });
       }
     } catch (err) {

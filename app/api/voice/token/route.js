@@ -1,8 +1,10 @@
+import { authenticateVoiceEndpoint, renewVoiceEndpoint } from "@/lib/acd/voice-endpoints.mjs";
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { credentialsLogger, credentialPayload, securityErrorPayload, securityUserPayload } from "@/lib/security-logging.mjs";
 import { withPermission } from "@/lib/authz/guard";
+import { renewUserTelephonyCredential, createTelephonyCredential } from "@/lib/telnyx-credentials";
 
 async function fetchCredentialIdByUsername(apiKey, username, expectedConnectionId) {
   const url = `${buildTelnyxV2Url(
@@ -84,7 +86,7 @@ async function createAccessToken(apiKey, credentialId) {
     // If credential expired, throw a specific error that can be handled
     if (detail?.includes("expired") || errorCode === "credential_expired") {
       const error = new Error(
-        "The telephony credential has expired. Please contact your administrator to renew it."
+        "The telephony credential has expired."
       );
       error.code = "CREDENTIAL_EXPIRED";
       error.credentialId = credentialId;
@@ -122,6 +124,19 @@ async function POST_handler(_request, _context, authz) {
       "SELECT enabled FROM cc_agent_channel_policies WHERE agent_id=$1 AND channel='voice'",[String(user.id)])).rows[0];
     if (policy?.enabled === false) return NextResponse.json({error:"Voice is disabled for this agent",code:"VOICE_DISABLED"},{status:409});
 
+    const endpointToken = _request.headers.get('x-cc-endpoint-token');
+    const managed = (await getPostgresPool().query("SELECT 1 FROM cc_agent_voice_preferences WHERE agent_id=$1",[String(user.id)])).rowCount;
+    if (managed || endpointToken) {
+      const endpoint = await authenticateVoiceEndpoint(getPostgresPool(), user, endpointToken);
+      try { return NextResponse.json({ token: await createAccessToken(telnyxApiKey, endpoint.credential_id) }); }
+      catch (error) {
+        if (error.code !== 'CREDENTIAL_EXPIRED') throw error;
+        const renewed = await renewVoiceEndpoint(getPostgresPool(),user,endpoint,(id)=>createTelephonyCredential(telnyxApiKey,{
+          connectionId:process.env.TELNYX_SIP_CONNECTION_ID,name:`CC ${user.id} ${endpoint.kind} ${id}`,
+        }));
+        return NextResponse.json({token:await createAccessToken(telnyxApiKey,renewed.credential_id),renewed:true});
+      }
+    }
     // Support both snake_case (DB rows) and camelCase (mapped objects)
     const usernameCandidate =
       user.telephony_user_name || user.telephonyUserName || "";
@@ -147,14 +162,22 @@ async function POST_handler(_request, _context, authz) {
         }
       }
       if (!credentialId) {
-        return NextResponse.json(
-          {
-            error:
-              "No telephony credential is assigned to this user. Ask an administrator to provision or repair the user's SIP identity.",
-            code: "MISSING_SIP_CONNECTION_ID",
-          },
-          { status: 404 }
-        );
+        // A user with no SIP identity at all gets one here rather than a note
+        // telling them to find an administrator. Sign-in already provisions
+        // one on this same connection; refusing to do it at the moment the
+        // agent is actually trying to work only moves the problem.
+        const provisioned = await renewUserTelephonyCredential(user);
+        if (!provisioned?.id) {
+          return NextResponse.json(
+            {
+              error:
+                "No telephony credential could be provisioned for this user. Check TELNYX_SIP_CONNECTION_ID.",
+              code: "MISSING_SIP_CONNECTION_ID",
+            },
+            { status: 404 }
+          );
+        }
+        credentialId = provisioned.id;
       }
     }
 
@@ -162,10 +185,29 @@ async function POST_handler(_request, _context, authz) {
       const token = await createAccessToken(telnyxApiKey, credentialId);
       return NextResponse.json({ token });
     } catch (tokenError) {
-      if (tokenError.code === "CREDENTIAL_EXPIRED" && credentialId) {
-        credentialsLogger.warn("telephony_credential_expired", {
+      if (tokenError.code !== "CREDENTIAL_EXPIRED" || !credentialId) throw tokenError;
+
+      // An expired credential is repairable, and this is the only place that
+      // learns it has expired. Leaving it to an administrator meant the
+      // softphone stayed dead for everyone holding an old credential — which
+      // on the dev connection was all 250 of them.
+      credentialsLogger.warn("telephony_credential_expired", {
+        ...credentialPayload({ credentialId }),
+      });
+
+      // A renewal that fails is still an expired credential, and that is what
+      // the agent needs to be told — reporting the renewal's own failure as an
+      // unrelated 500 would hide which of the two broke.
+      let renewed = null;
+      try {
+        renewed = await renewUserTelephonyCredential(user, credentialId);
+      } catch (renewError) {
+        credentialsLogger.error("telephony_credential_renew_failed", {
           ...credentialPayload({ credentialId }),
+          ...securityErrorPayload(renewError),
         });
+      }
+      if (!renewed?.id) {
         return NextResponse.json(
           {
             error: tokenError.message || "The telephony credential has expired",
@@ -174,7 +216,11 @@ async function POST_handler(_request, _context, authz) {
           { status: 400 }
         );
       }
-      throw tokenError;
+
+      // Exactly one retry: a second expiry on a credential minted seconds ago
+      // means something other than age is wrong, and looping would hide it.
+      const token = await createAccessToken(telnyxApiKey, renewed.id);
+      return NextResponse.json({ token, renewed: true });
     }
   } catch (err) {
     credentialsLogger.error("voice_token_request_failed", { ...securityErrorPayload(err) });
@@ -183,7 +229,7 @@ async function POST_handler(_request, _context, authz) {
         error: err?.message || "Unexpected error",
         code: err?.code || "UNKNOWN_ERROR",
       },
-      { status: err?.code === "CREDENTIAL_EXPIRED" ? 400 : 500 }
+      { status: err?.status || (err?.code === "CREDENTIAL_EXPIRED" ? 400 : 500) }
     );
   }
 }

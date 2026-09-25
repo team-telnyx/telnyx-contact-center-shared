@@ -1,5 +1,6 @@
 "use client";
 
+import { voiceFetch } from "@/lib/telephony/endpoint-client";
 import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
@@ -307,7 +308,7 @@ export function TransferModal({
 
   const postCoreIntent = async (action, options = {}) => {
     if (!interaction?.id) throw new Error("Missing Core ACD interaction ID");
-    const res = await fetch(
+    const res = await voiceFetch(
       `/api/contact-center/interactions/${encodeURIComponent(interaction.id)}/intents`,
       {
         method: "POST",
@@ -429,7 +430,7 @@ export function TransferModal({
     let cancelled = false;
     const poll = async () => {
       try {
-        const res = await fetch(
+        const res = await voiceFetch(
           `/api/contact-center/interactions/${encodeURIComponent(interaction.id)}/intents`,
           { cache: "no-store" },
         );
@@ -469,7 +470,7 @@ export function TransferModal({
       if (!consultState.parkedCall?.interactionId) return;
 
       try {
-        const res = await fetch(
+        const res = await voiceFetch(
           `/api/contact-center/interactions/${consultState.parkedCall.interactionId}`,
           { cache: "no-store" }
         );
@@ -648,14 +649,14 @@ export function TransferModal({
     setLoadingData(true);
     try {
       // Get current user
-      const userRes = await fetch("/api/auth/me", { cache: "no-store" });
+      const userRes = await voiceFetch("/api/auth/me", { cache: "no-store" });
       const userData = await userRes.json();
       if (userData.isAuth && userData.user) {
         setUser(userData.user);
       }
 
       // Load queues
-      const queuesRes = await fetch("/api/contact-center/queues/list", {
+      const queuesRes = await voiceFetch("/api/contact-center/queues/list", {
         cache: "no-store",
       });
       const queuesData = await queuesRes.json();
@@ -664,7 +665,7 @@ export function TransferModal({
       }
 
       // Load contacts for fallback and to get full user profiles with telephony_user_name
-      const contactsRes = await fetch("/api/user/contacts", {
+      const contactsRes = await voiceFetch("/api/user/contacts", {
         cache: "no-store",
       });
       const contactsData = await contactsRes.json();
@@ -684,7 +685,7 @@ export function TransferModal({
       }
 
       // Load statuses for status colors
-      const statusesRes = await fetch("/api/user/statuses", {
+      const statusesRes = await voiceFetch("/api/user/statuses", {
         cache: "no-store",
       });
       const statusesData = await statusesRes.json();
@@ -705,7 +706,7 @@ export function TransferModal({
     const request = queueStatsRequestsRef.current.begin();
     queueStatsInFlightRef.current = request;
     try {
-      const res = await fetch(
+      const res = await voiceFetch(
         `/api/contact-center/stats/queues?queueId=${encodeURIComponent(
           queueId
         )}`,
@@ -732,7 +733,7 @@ export function TransferModal({
 
   const loadAgentStats = async (agentId) => {
     try {
-      const res = await fetch(
+      const res = await voiceFetch(
         `/api/contact-center/stats/agents?userId=${encodeURIComponent(
           agentId
         )}`,
@@ -907,7 +908,7 @@ export function TransferModal({
         await useActiveCallStore.getState().syncAgentAssistToDb();
       }
 
-      const res = await fetch(
+      const res = await voiceFetch(
         `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/intents`,
         {
           method: "POST",

@@ -261,9 +261,358 @@
       "@keyframes tn-in-fade{from{opacity:0}}@keyframes tn-in-scale{from{opacity:0;transform:scale(.88)}}@keyframes tn-in-slide-up{from{opacity:0;transform:translateY(18px)}}@keyframes tn-in-drop{from{opacity:0;transform:translateY(-18px)}}@keyframes tn-in-slide-right{from{opacity:0;transform:translateX(26px)}}" +
       ".frame.enter-scale{transform-origin:" + (dimensions.panelPosition === "bottom-left" ? "bottom left" : "bottom right") + "}" +
       ".backdrop{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.55)}" +
+      ".cb-indicator{position:fixed;z-index:2147483003;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:calc(100vw - 24px);padding:10px 14px;border-radius:12px;background:#111827;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.3);font:600 13px/1.3 system-ui}" +
+      ".cb-indicator button{border:1px solid #fff;border-radius:8px;background:#fff;color:#111827;padding:6px 12px;cursor:pointer;font-weight:700}" +
+      ".cb-indicator button:focus-visible{outline:3px solid #facc15;outline-offset:3px}" +
+      ".cb-dialog{position:fixed;inset:0;z-index:2147483004;display:grid;place-items:center;background:rgba(0,0,0,.65);font:14px/1.5 system-ui;color:#111827}" +
+      ".cb-card{width:min(360px,calc(100vw - 32px));box-sizing:border-box;border-radius:16px;background:#fff;padding:22px;box-shadow:0 16px 48px rgba(0,0,0,.3)}" +
+      ".cb-card h2{font-size:19px;margin:0 0 9px}.cb-card p{margin:8px 0}.cb-card strong{font-size:28px;letter-spacing:4px}.cb-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}.cb-actions button{border:1px solid #111827;border-radius:8px;padding:8px 12px;background:#fff;color:#111827;cursor:pointer}.cb-actions button.primary{background:#111827;color:#fff}" +
       "@media(prefers-reduced-motion:reduce){.pulse,.bounce,.fade,.enter{animation:none}}" +
       "@media(max-width:600px){.frame.full{inset:0;width:100vw;height:100dvh}.frame:not(.full){width:calc(100vw - 24px);height:min(" + dimensions.panelHeight + "px,calc(100dvh - 24px));bottom:12px;left:12px;right:auto}.wrap{bottom:12px;" + launcherSide + ":12px;" + launcherOtherSide + ":auto}}";
     shadow.appendChild(style);
+
+    var capture = null;
+    var captureSessionId = null;
+    var captureScriptPromise = null;
+    var indicator = null;
+    var controlDialog = null;
+    var controlStopButton = null;
+    var controlPollTimer = null;
+    var controlDecisionBusy = false;
+    var controlRevokePending = false;
+    var controlActivityTimer = null;
+    var activeCaptureKey = "telnyx-cobrowse-active:" + widget.id;
+    var pageSuspended = false;
+    var captureGeneration = 0;
+    function loadCaptureScript() {
+      if (window.TelnyxCobrowseCapture) return Promise.resolve();
+      if (!captureScriptPromise) captureScriptPromise = new Promise(function (resolve, reject) {
+        var element = document.createElement("script");
+        element.src = baseUrl + "/widget/v1/cobrowse.js";
+        element.async = true;
+        element.onload = function () { window.TelnyxCobrowseCapture ? resolve() : reject(new Error("capture unavailable")); };
+        element.onerror = function () { reject(new Error("capture script blocked")); };
+        document.head.appendChild(element);
+      });
+      return captureScriptPromise;
+    }
+    function removeIndicator() {
+      captureGeneration += 1;
+      clearTimeout(controlPollTimer);
+      controlPollTimer = null;
+      if (controlDialog) controlDialog.remove();
+      controlDialog = null;
+      controlRevokePending = false;
+      clearTimeout(controlActivityTimer);
+      controlActivityTimer = null;
+      if (indicator) indicator.remove();
+      indicator = null;
+      controlStopButton = null;
+      capture = null;
+      captureSessionId = null;
+      sessionStorage.removeItem(activeCaptureKey);
+    }
+    function showIndicator() {
+      if (indicator) return indicator.firstChild;
+      indicator = document.createElement("div");
+      indicator.className = "cb-indicator";
+      indicator.setAttribute("role", "status");
+      indicator.setAttribute("aria-live", "polite");
+      var label = document.createElement("span");
+      label.textContent = config.cobrowse.indicator.text;
+      var button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Stop sharing";
+      button.setAttribute("aria-label", "Stop sharing this page");
+      button.addEventListener("click", function () {
+        if (capture) { void capture.stop(); return; }
+        var previous = null;
+        try { previous = JSON.parse(sessionStorage.getItem(activeCaptureKey) || "null"); } catch (_) { /* Remove malformed local state. */ }
+        removeIndicator();
+        if (previous) fetch(baseUrl + "/api/widget-cobrowse/sessions/" + previous.sessionId + "/stop", {
+          method: "POST", mode: "cors", credentials: "omit", keepalive: true,
+          headers: { Authorization: "Bearer " + previous.browserCredential },
+        }).catch(function () {});
+      });
+      controlStopButton = document.createElement("button");
+      controlStopButton.type = "button";
+      controlStopButton.textContent = "Stop control";
+      controlStopButton.hidden = true;
+      controlStopButton.addEventListener("click", function () {
+        capture?.setControlAllowed(false);
+        controlRevokePending = true;
+        controlStopButton.hidden = true;
+        void decideControl("revoke");
+      });
+      indicator.appendChild(label);
+      indicator.appendChild(controlStopButton);
+      indicator.appendChild(button);
+      shadow.appendChild(indicator);
+      return label;
+    }
+    function controlCredential() {
+      if (capture?.getCredential) return capture.getCredential();
+      try { return JSON.parse(sessionStorage.getItem(activeCaptureKey) || "null")?.browserCredential; }
+      catch (_) { return null; }
+    }
+    function hideControlDialog() {
+      if (controlDialog) controlDialog.remove();
+      controlDialog = null;
+    }
+    async function decideControl(decision) {
+      if (controlDecisionBusy || !captureSessionId) return;
+      controlDecisionBusy = true;
+      var decidingSession = captureSessionId;
+      try {
+        const response = await fetch(baseUrl + "/api/widget-cobrowse/sessions/" + decidingSession + "/control", {
+          method: "POST", mode: "cors", credentials: "omit", cache: "no-store",
+          headers: { Authorization: "Bearer " + controlCredential(), "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: decision }),
+        });
+        if (!response.ok) throw new Error("Could not save control decision");
+        const data = await response.json();
+        if (captureSessionId !== decidingSession) return;
+        controlRevokePending = false;
+        capture?.setControlAllowed(data.session?.controlLevel === "assist");
+        if (controlStopButton) controlStopButton.hidden = data.session?.controlLevel !== "assist";
+        hideControlDialog();
+      } catch (_) {
+        if (indicator?.firstChild) indicator.firstChild.textContent = "Control decision could not be saved; sharing remains active";
+      } finally { controlDecisionBusy = false; }
+    }
+    function showControlDialog(agentName) {
+      if (controlDialog) return;
+      controlDialog = document.createElement("div");
+      controlDialog.className = "cb-dialog";
+      controlDialog.setAttribute("role", "dialog");
+      controlDialog.setAttribute("aria-modal", "true");
+      controlDialog.setAttribute("aria-label", "Agent control request");
+      var card = document.createElement("div");
+      card.className = "cb-card";
+      var title = document.createElement("h2");
+      title.textContent = "Allow agent to control this page?";
+      var explanation = document.createElement("p");
+      explanation.textContent = (agentName || "Your support agent") + " can click site-approved links and buttons and fill explicitly allowed fields in this tab. Password, payment, private fields and submit buttons stay blocked. You can stop control at any time.";
+      var actions = document.createElement("div");
+      actions.className = "cb-actions";
+      [{ label: "Decline", decision: "decline" }, { label: "Allow control", decision: "accept", primary: true }].forEach(function (choice) {
+        var action = document.createElement("button");
+        action.type = "button";
+        action.textContent = choice.label;
+        if (choice.primary) action.className = "primary";
+        action.addEventListener("click", function () { void decideControl(choice.decision); });
+        actions.appendChild(action);
+      });
+      card.appendChild(title);
+      card.appendChild(explanation);
+      card.appendChild(actions);
+      controlDialog.appendChild(card);
+      shadow.appendChild(controlDialog);
+    }
+    function pollControl(generation) {
+      if (pageSuspended || generation !== captureGeneration || !captureSessionId) return;
+      fetch(baseUrl + "/api/widget-cobrowse/sessions/" + captureSessionId, {
+        mode: "cors", credentials: "omit", cache: "no-store",
+        headers: { Authorization: "Bearer " + controlCredential() },
+      }).then(function (response) { if (!response.ok) throw new Error("Control state unavailable"); return response.json(); })
+        .then(function (data) {
+          if (generation !== captureGeneration || !captureSessionId) return;
+          var state = data.session;
+          if (!state || state.state === "ended") { capture?.setControlAllowed(false); hideControlDialog(); return; }
+          if (controlRevokePending) { if (!controlDecisionBusy) void decideControl("revoke"); return; }
+          var allowed = state.controlLevel === "assist";
+          capture?.setControlAllowed(allowed);
+          if (controlStopButton) controlStopButton.hidden = !allowed;
+          if (indicator?.firstChild && !controlActivityTimer) {
+            if (allowed) indicator.firstChild.textContent = "Agent control is active";
+            else if (indicator.firstChild.textContent === "Agent control is active") indicator.firstChild.textContent = config.cobrowse.indicator.text;
+          }
+          if (state.controlRequestedAt && !allowed) showControlDialog(state.agentName);
+          else hideControlDialog();
+        }).catch(function () { capture?.setControlAllowed(false); })
+        .finally(function () {
+          if (generation === captureGeneration && !pageSuspended) controlPollTimer = setTimeout(function () { pollControl(generation); }, 1500);
+        });
+    }
+    function startCapture(sessionId, browserCredential) {
+      if (!config.cobrowse || !config.cobrowse.enabled) return;
+      if (!/^[0-9a-f-]{36}$/i.test(sessionId) || !/^cbr_[A-Za-z0-9_-]{43}$/.test(browserCredential)) return;
+      if (capture && captureSessionId === sessionId) return;
+      if (capture) void capture.stop();
+      var generation = ++captureGeneration;
+      captureSessionId = sessionId;
+      var label = showIndicator();
+      label.textContent = "Connecting page sharing…";
+      sessionStorage.setItem(activeCaptureKey, JSON.stringify({ sessionId: sessionId, browserCredential: browserCredential }));
+      pollControl(generation);
+      loadCaptureScript().then(function () {
+        if (pageSuspended || captureGeneration !== generation || captureSessionId !== sessionId) return;
+        capture = window.TelnyxCobrowseCapture.start({
+          baseUrl: baseUrl,
+          sessionId: sessionId,
+          browserCredential: browserCredential,
+          privacy: config.cobrowse.privacy,
+          onCredential: function (next) {
+            if (captureGeneration === generation && !pageSuspended)
+              sessionStorage.setItem(activeCaptureKey, JSON.stringify({ sessionId: sessionId, browserCredential: next }));
+          },
+          onStopped: function () { if (captureGeneration === generation) removeIndicator(); },
+          onStatus: function (status) {
+            if (!indicator || captureGeneration !== generation) return;
+            label.textContent = status === "connected" ? config.cobrowse.indicator.text
+              : status === "page_too_large" ? "This page is too large to share safely"
+              : status === "capture_error" ? "Page sharing could not capture this page"
+              : "Page sharing is reconnecting…";
+          },
+          onControlAction: function (action, accepted) {
+            if (!indicator || captureGeneration !== generation) return;
+            clearTimeout(controlActivityTimer);
+            label.textContent = accepted ? "Agent action: " + action : "Blocked agent action: " + action;
+            controlActivityTimer = setTimeout(function () {
+              controlActivityTimer = null;
+              if (indicator && captureGeneration === generation)
+                label.textContent = controlStopButton && !controlStopButton.hidden ? "Agent control is active" : config.cobrowse.indicator.text;
+            }, 2500);
+          },
+        });
+      }).catch(function () {
+        if (captureGeneration === generation && !pageSuspended) label.textContent = "Page sharing script was blocked by this site";
+      });
+    }
+    var pairingDialog = null;
+    var pairingTimer = null;
+    var pairingState = null;
+    function closePairing() {
+      clearTimeout(pairingTimer);
+      pairingTimer = null;
+      if (pairingState && pairingState.pairingId && pairingState.pairingCredential && !pairingState.accepted) {
+        fetch(baseUrl + "/api/widget-cobrowse/pairings/" + pairingState.pairingId + "/cancel", {
+          method: "POST", mode: "cors", credentials: "omit", keepalive: true,
+          headers: { Authorization: "Bearer " + pairingState.pairingCredential },
+        }).catch(function () {});
+      }
+      pairingState = null;
+      if (pairingDialog) pairingDialog.remove();
+      pairingDialog = null;
+    }
+    function pairingContent(title, body, actions) {
+      if (!pairingDialog) return;
+      var card = pairingDialog.firstChild;
+      card.replaceChildren();
+      var heading = document.createElement("h2");
+      heading.textContent = title;
+      var text = document.createElement("p");
+      text.textContent = body;
+      var buttons = document.createElement("div");
+      buttons.className = "cb-actions";
+      actions.forEach(function (action) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.textContent = action.label;
+        if (action.primary) button.className = "primary";
+        button.addEventListener("click", action.run);
+        buttons.appendChild(button);
+      });
+      card.appendChild(heading);
+      card.appendChild(text);
+      card.appendChild(buttons);
+    }
+    function beginPairing() {
+      if (pairingDialog || !config.cobrowse || !config.cobrowse.enabled || !config.cobrowse.entryPoints.pairingCode) return;
+      pairingDialog = document.createElement("div");
+      pairingDialog.className = "cb-dialog";
+      pairingDialog.setAttribute("role", "dialog");
+      pairingDialog.setAttribute("aria-modal", "true");
+      pairingDialog.setAttribute("aria-label", "Share this page");
+      var card = document.createElement("div");
+      card.className = "cb-card";
+      pairingDialog.appendChild(card);
+      shadow.appendChild(pairingDialog);
+      pairingContent("Share this page", "Creating a code…", [{ label: "Cancel", run: closePairing }]);
+      fetch(bootstrapUrl(widget.id), { mode: "cors", credentials: "omit", cache: "no-store" })
+        .then(function (response) { if (!response.ok) throw new Error("Bootstrap unavailable"); return response.json(); })
+        .then(function (payload) { return fetch(baseUrl + "/api/widgets/" + encodeURIComponent(widget.id) + "/cobrowse/pairings", {
+          method: "POST", mode: "cors", credentials: "omit", cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bootstrapToken: payload.widget.bootstrapToken }),
+        }); })
+        .then(function (response) { if (!response.ok) throw new Error("Could not create a pairing code"); return response.json(); })
+        .then(function (result) {
+          if (!pairingDialog) return;
+          pairingState = { pairingId: result.pairingId, pairingCredential: result.browserCredential,
+            browserCredential: result.browserCredential };
+          pairingContent("Read this code to your agent", result.code + " · Expires in " + Math.ceil(config.cobrowse.pairing.seconds / 60) + " minutes. Sharing has not started.", [{ label: "Cancel", run: closePairing }]);
+          function poll() {
+            if (!pairingDialog || !pairingState) return;
+            fetch(baseUrl + "/api/widget-cobrowse/pairings/" + result.pairingId, {
+              mode: "cors", credentials: "omit", cache: "no-store",
+              headers: { Authorization: "Bearer " + result.browserCredential },
+            }).then(function (response) { if (!response.ok) throw new Error("Pairing unavailable"); return response.json(); })
+              .then(function (state) {
+                if (!pairingDialog || !pairingState) return;
+                if (state.state === "claimed") {
+                  pairingState.sessionId = state.sessionId;
+                  pairingState.browserCredential = state.browserCredential;
+                  return fetch(baseUrl + "/api/widget-cobrowse/sessions/" + state.sessionId, {
+                    mode: "cors", credentials: "omit", cache: "no-store",
+                    headers: { Authorization: "Bearer " + state.browserCredential },
+                  }).then(function (response) { if (!response.ok) throw new Error("Session unavailable"); return response.json(); })
+                    .then(function (details) {
+                      var session = details.session;
+                      pairingContent("Allow page sharing?", (session.agentName || state.agentName || "Support agent") + " can view this tab. Control requires a separate request and approval. Recording is off. " + (session.consent?.text || config.cobrowse.consent.text), [
+                        { label: "Decline", run: closePairing },
+                        { label: "Share this page", primary: true, run: function () {
+                          pairingContent("Share this page", "Saving your decision…", []);
+                          fetch(baseUrl + "/api/widget-cobrowse/sessions/" + state.sessionId + "/consent", {
+                            method: "POST", mode: "cors", credentials: "omit", cache: "no-store",
+                            headers: { Authorization: "Bearer " + state.browserCredential, "Content-Type": "application/json" },
+                            body: JSON.stringify({ accepted: true }),
+                          }).then(function (response) { if (!response.ok) throw new Error("Consent could not be saved"); return response.json(); })
+                            .then(function (decision) {
+                              pairingState.accepted = true;
+                              startCapture(state.sessionId, decision.browserCredential);
+                              closePairing();
+                            }).catch(function () { pairingContent("Share this page", "Could not start sharing. Please try again.", [{ label: "Close", run: closePairing }]); });
+                        } },
+                      ]);
+                    });
+                }
+                if (state.state !== "open") { pairingContent("Code expired", "Please generate a new code.", [{ label: "Close", run: closePairing }]); return; }
+                pairingTimer = window.setTimeout(poll, 1000);
+              }).catch(function () { pairingContent("Pairing unavailable", "Please try again.", [{ label: "Close", run: closePairing }]); });
+          }
+          poll();
+        }).catch(function () { pairingContent("Pairing unavailable", "This site blocked the request or pairing is disabled.", [{ label: "Close", run: closePairing }]); });
+    }
+    if (config.cobrowse && config.cobrowse.enabled) {
+      try {
+        var previousCapture = JSON.parse(sessionStorage.getItem(activeCaptureKey) || "null");
+        if (previousCapture) startCapture(previousCapture.sessionId, previousCapture.browserCredential);
+      } catch (_) { sessionStorage.removeItem(activeCaptureKey); }
+      window.addEventListener("pagehide", function () {
+        pageSuspended = true;
+        captureGeneration += 1;
+        clearTimeout(controlPollTimer);
+        controlPollTimer = null;
+        clearTimeout(controlActivityTimer);
+        controlActivityTimer = null;
+        hideControlDialog();
+        capture?.suspend();
+        capture = null;
+        captureSessionId = null;
+        if (indicator) indicator.remove();
+        indicator = null;
+        controlStopButton = null;
+      });
+      window.addEventListener("pageshow", function (event) {
+        if (!event.persisted || !pageSuspended) return;
+        pageSuspended = false;
+        try {
+          var prior = JSON.parse(sessionStorage.getItem(activeCaptureKey) || "null");
+          if (prior) startCapture(prior.sessionId, prior.browserCredential);
+        } catch (_) { sessionStorage.removeItem(activeCaptureKey); }
+      });
+    }
 
     var wrap = document.createElement("div");
     wrap.className = "wrap";
@@ -273,7 +622,7 @@
     // The bootstrap response carries the callback experience beside the public
     // config, which never includes it.
     var callbacks = Boolean(widget.callbacks && widget.callbacks.enabled);
-    var availableActionCount = Number(messaging) + Number(voice) + Number(video) + Number(callbacks);
+    var availableActionCount = Number(messaging) + Number(voice) + Number(video) + Number(callbacks) + Number(Boolean(config.cobrowse && config.cobrowse.enabled && config.cobrowse.entryPoints.pairingCode));
     var soleAction = callbacks ? "callbacks" : voice ? "voice" : video ? "video" : "messaging";
     var opening = false;
     // With more than one way to reach support the panel opens on its home
@@ -558,6 +907,8 @@
       function onMessage(event) {
         if (event.origin !== baseUrl || event.source !== frame.contentWindow) return;
         if (event.data && event.data.type === "telnyx-widget-session") hasMessagingSession = event.data.active === true;
+        if (event.data && event.data.type === "telnyx-cobrowse-start") startCapture(event.data.sessionId, event.data.browserCredential);
+        if (event.data && event.data.type === "telnyx-cobrowse-pair") beginPairing();
         if (event.data && event.data.type === "telnyx-widget-bootstrap-request" && event.data.widgetId === widget.id) refreshFrameBootstrap(event.data.requestId);
         if (event.data && event.data.type === "telnyx-widget-expand") expandFrame(event.data.widthPercent, event.data.heightPercent, event.data.backdrop === true, event.data.aspectRatio, event.data.headerHeight);
         if (event.data && event.data.type === "telnyx-widget-collapse") collapseFrame();

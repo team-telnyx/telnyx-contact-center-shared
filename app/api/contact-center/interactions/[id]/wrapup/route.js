@@ -1,3 +1,4 @@
+import { withWrapupDevice, takeOverWrapup } from "@/lib/acd/media-device-control.mjs";
 import { NextResponse } from "next/server";
 
 import { completeAcdWrapup } from "@/lib/acd/wrapup.mjs";
@@ -25,7 +26,7 @@ async function POST_handler(request, { params }, authz) {
     if (!interaction) {
       return NextResponse.json({ ok: false, error: "Interaction not found" }, { status: 404 });
     }
-    const { action, nextStatus = null, segmentId = null } = await request.json();
+    const { action, nextStatus = null, segmentId = null, expectedVersion, ownerVersion } = await request.json();
     const segment = await findPendingAcdWrapupSegment(pool, {
       workItemId: interaction.id,
       agentId: user.id,
@@ -38,6 +39,8 @@ async function POST_handler(request, { params }, authz) {
       );
     }
 
+    if (action === 'takeover') return NextResponse.json(await takeOverWrapup(pool,user,request,
+      {workItemId:interaction.id,segmentId:segment.id,expectedVersion}));
     if (!['start', 'end'].includes(action)) {
       return NextResponse.json({ ok: false, error: "Invalid wrapup action" }, { status: 400 });
     }
@@ -52,13 +55,13 @@ async function POST_handler(request, { params }, authz) {
       });
     }
 
-    const result = await completeAcdWrapup(pool, {
+    const result = await withWrapupDevice(pool,user,request,{workItemId:interaction.id,segmentId:segment.id,ownerVersion},()=>completeAcdWrapup(pool, {
       workItemId: interaction.id,
       expectedAgentId: user.id,
       segmentId: segment.id,
       nextManualStatus: nextStatus,
       actor: `agent:${user.id}`,
-    });
+    }));
     if (!result.completed) {
       const status = result.reason === "work_item_not_found" ? 404 : 409;
       return NextResponse.json({ ok: false, error: result.reason }, { status });
@@ -67,8 +70,8 @@ async function POST_handler(request, { params }, authz) {
   } catch (error) {
     wrapupLogger.error("wrapup_failed", contactCenterErrorPayload(error));
     return NextResponse.json(
-      { ok: false, error: "Failed to update wrapup status" },
-      { status: 500 },
+      { ok: false, error: error.status ? error.message : "Failed to update wrapup status" },
+      { status: error.status || 500 },
     );
   }
 }
