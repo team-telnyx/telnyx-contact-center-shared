@@ -88,6 +88,6 @@ export async function GET(request) {
     });
   } catch (err) {
     logAuthEvent("warn", "auth_profile_failed", { source: "api", ...authErrorPayload(err) });
-    return NextResponse.json({ isAuth: false });
+    return NextResponse.json({ error: "Profile temporarily unavailable" }, { status: 503 });
   }
 }

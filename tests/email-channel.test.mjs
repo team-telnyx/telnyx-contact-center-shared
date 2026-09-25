@@ -461,3 +461,15 @@ test('recipient reconciliation recovers missed callbacks with a durable cursor',
   assert.deepEqual(statuses.map(d=>d.status).sort(),['delivered','gw_reject','queued']);
   assert.equal(statuses.find(d=>d.kind==='bcc').address,null);
 });
+
+test('web and mobile email drafts and attachments are independent with a shared sent history',async()=>{
+ const f=await fixture(),work=await receive(f),detail=await accept(f,work),input=sendInput(f,detail);
+ const web=await saveEmailDraft(pool,{...input,draftScope:'web',expectedVersion:'0',content:{...input.content,text:'Web unsent'}});
+ const mobile=await saveEmailDraft(pool,{...input,draftScope:'mobile',expectedVersion:'0',content:{...input.content,text:'Mobile unsent'}});
+ await sendAgentEmail(pool,{...input,draftScope:'mobile',draftVersion:mobile.version,content:{...input.content,text:'Mobile unsent'}},{provider:acceptedProvider()});
+ const after=await readEmailDetail(pool,{workItemId:work.id,agentId:f.agentId,draftScope:'web'});
+ assert.equal(after.draft.content.text,'Web unsent');assert.equal(after.draft.version,web.version);
+ assert.equal(after.messages.at(-1).body,'Mobile unsent');
+ await sendAgentEmail(pool,{...input,commandId:randomUUID(),draftScope:'web',draftVersion:web.version,content:{...input.content,text:'Web unsent'}},{provider:acceptedProvider()});
+ assert.equal((await readEmailDetail(pool,{workItemId:work.id,agentId:f.agentId,draftScope:'mobile'})).messages.length,3);
+});

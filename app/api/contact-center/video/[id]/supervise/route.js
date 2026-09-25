@@ -61,3 +61,31 @@ async function POST_handler(request, context, authz) {
 }
 
 export const POST = withPermission(Object.values(SUPERVISION_PERMISSION), POST_handler, { route: "/api/contact-center/video/[id]/supervise" });
+
+async function GET_handler(request, context, authz) {
+  const pool = getPostgresPool();
+  if (!pool) return NextResponse.json({error: "Database unavailable"}, {status: 503});
+  try {
+    const {id} = await context.params;
+    if (!UUID.test(id || "")) return NextResponse.json({error: "Invalid video call id"}, {status: 400});
+    if (!(await inScope(pool, authz, id))) return NextResponse.json({error: "Video call is outside your data scope"}, {status: 403});
+    const work = (await pool.query("SELECT id,state,terminal_at,version FROM acd_work_items WHERE id=$1 AND channel='video'", [id])).rows[0];
+    if (!work) return NextResponse.json({error: "Video call not found"}, {status: 404});
+    const session = await readVideoSession(pool, id);
+    // Recheck the active mode on every mobile verification, not just token refresh.
+    if (session?.supervision?.supervisorId === String(authz.user.id)) {
+      const permission = SUPERVISION_PERMISSION[session.supervision.mode];
+      if (permission) {
+        const modeAuthz = await requirePermission(permission, {request, route: ROUTE});
+        if (!(await inScope(pool, modeAuthz, id))) return NextResponse.json({error: "Video call is outside your data scope"}, {status:403});
+      }
+    }
+    return NextResponse.json({work, video: session ? {state:session.state, recordingEnabled:session.recording_enabled,
+      supervision:session.supervision ? {mode:session.supervision.mode, name:session.supervision.name,
+        id:session.supervision.id, supervisorId:session.supervision.supervisorId} : null} : null}, {headers:{"Cache-Control":"no-store"}});
+  } catch (error) {
+    if (error instanceof AuthzError) return authzErrorResponse(error);
+    return NextResponse.json({error: "Video supervision unavailable"}, {status:500});
+  }
+}
+export const GET = withPermission(Object.values(SUPERVISION_PERMISSION), GET_handler, {route: ROUTE});

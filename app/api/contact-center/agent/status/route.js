@@ -51,6 +51,9 @@ async function PUT_handler(request, _context, authz) {
       );
     }
 
+    if (body.expectedVersion == null && targetUserIdFinal === user.id) {
+      return NextResponse.json({error:"Refresh your status before changing it."},{status:428});
+    }
     // Validate status against database
     // If supervisor is changing another agent's status, only allow user-selectable statuses
     // Otherwise (self-update), allow all active statuses (but Offline is not user-selectable)
@@ -152,6 +155,7 @@ async function PUT_handler(request, _context, authz) {
     return NextResponse.json({
       ok: true,
       status: presentation.status,
+      version: presentation.version,
       pendingStatus: presentation.pendingStatus,
       pendingSince: presentation.pendingSince,
       requestedStatus: status,

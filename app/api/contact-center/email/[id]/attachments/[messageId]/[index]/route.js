@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/auth-server';
 import { getPostgresPool } from '@/lib/postgres.mjs';
 import { requireEmailWork } from '@/lib/email/store.mjs';
 import { fetchEmailContent,emailError } from '@/lib/email/provider.mjs';
@@ -7,8 +6,8 @@ import { readEmailFile } from '@/lib/email/private-storage.mjs';
 import { emailAttachmentResponse } from '@/lib/email/attachment-response.mjs';
 import { withPermission } from "@/lib/authz/guard";
 
-async function GET_handler(request, context){
-  const user=await getAuthenticatedUser();if(!user)return NextResponse.json({error:'Unauthorized'},{status:401});
+async function GET_handler(request, context, authz){
+  const user=authz.user;
   try{
     const {id,messageId,index}=await context.params,pool=getPostgresPool();
     const work=await requireEmailWork(pool,{workItemId:id,agentId:String(user.id)});

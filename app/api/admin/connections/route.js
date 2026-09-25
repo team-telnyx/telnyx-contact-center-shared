@@ -1,26 +1,36 @@
+import { providerResponseStatus } from "@/lib/provider-http-status.mjs";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PgDb } from "@/lib/pgdb";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 import { withPermission } from "@/lib/authz/guard";
 
 async function GET_handler(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Get full user object to check roles
-    const userId = session.user.id;
-    const email = session.user.email;
-    let user = null;
-    if (userId) user = await PgDb.findUserById(userId);
-    if (!user && email) user = await PgDb.findUserByUsername(email);
-
-
     const basePath = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
+
+    const query = new URL(request.url).searchParams;
+    if (query.has("pageSize")) {
+      const sources = {
+        texml: { path: "texml_applications", type: "TeXML" },
+        "voice-api": { path: "call_control_applications", type: "Voice API" },
+        sip: { path: "connections", type: "SIP" },
+      };
+      const source = sources[query.get("kind")];
+      if (!source) return NextResponse.json({ error: "Invalid connection type" }, { status: 400 });
+      const page = Math.max(1, parseInt(query.get("page"), 10) || 1);
+      const size = Math.min(25, Math.max(1, parseInt(query.get("pageSize"), 10) || 25));
+      const response = await fetch(`${basePath}/v2/${source.path}?page[size]=${size}&page[number]=${page}`, {
+        headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store",
+      });
+      if (!response.ok) return NextResponse.json({ error: "Failed to fetch voice profiles from Telnyx" }, { status: providerResponseStatus(response.status) });
+      const result = await response.json();
+      const data = (result.data || []).map((item) => ({
+        id: item.id,
+        connection_name: item.connection_name || item.application_name || item.friendly_name || item.name || item.id,
+        connection_type: source.type,
+      }));
+      return NextResponse.json({ data, meta: { total: result.meta?.total_results ?? data.length } },
+        { headers: { "Cache-Control": "no-store" } });
+    }
 
     // Fetch all three types of connections with large page size to get all records
     const [texmlRes, voiceApiRes, sipRes] = await Promise.all([

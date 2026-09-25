@@ -10,6 +10,7 @@ import { sceneAspect } from "@/lib/video/scenes.mjs";
 import HandoffTimeline from "./HandoffTimeline";
 import { handoffTimelinePhases } from "@/lib/widgets/handoff-timeline";
 import WidgetIcon from "./WidgetIcon";
+import CobrowseVisitorConsent from "./CobrowseVisitorConsent";
 
 const TOKEN_REFRESH_MS = 10 * 60 * 1000;
 // Every video frame keeps 4:3; the scene planner arranges them per scene
@@ -55,6 +56,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
   const [error, setError] = useState("");
   const [handoff, setHandoff] = useState(preview ? (scenario === "prejoin" ? null : { status: scenario === "waiting" ? "waiting" : "connected", queueName: ui.preview.fallbackQueue, agentName: scenario === "waiting" ? null : "Anna Kowalska" }) : null);
   const [sessionToken, setSessionToken] = useState(null);
+  const [cobrowseTabKey, setCobrowseTabKey] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [chromeHeight, setChromeHeight] = useState(0);
   const mainRef = useRef(null);
@@ -102,12 +104,14 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
     setPhase("starting");
     try {
       const fresh = await requestFreshWidgetBootstrap(widget.id);
+      const clientKey = crypto.randomUUID();
       const result = await widgetFetch(`/api/widgets/${encodeURIComponent(widget.id)}/sessions`, fresh.bootstrapToken, {
         method: "POST",
-        body: { channel: "video", clientKey: crypto.randomUUID(), context: fresh.decisionContext || widget.decisionContext || {} },
+        body: { channel: "video", clientKey, context: fresh.decisionContext || widget.decisionContext || {} },
       });
       sessionTokenRef.current = result.sessionToken;
       setSessionToken(result.sessionToken);
+      setCobrowseTabKey(clientKey);
       setHandoff(result.handoff || null);
       window.parent.postMessage({ type: "telnyx-widget-session", active: true }, new URLSearchParams(window.location.search).get("parentOrigin") || "*");
       const joined = await widgetFetch("/api/widget-sessions/video/join", result.sessionToken, { method: "POST" });
@@ -119,6 +123,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
       const token = sessionTokenRef.current;
       sessionTokenRef.current = null;
       setSessionToken(null);
+      setCobrowseTabKey(null);
       await room.leave().catch(() => undefined);
       if (token) await widgetFetch("/api/widget-sessions/video/leave", token, { method: "POST", keepalive: true }).catch(() => undefined);
       setError(config.content.videoErrorMessage);
@@ -396,7 +401,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
             thumbShare={(video.scenes?.pipThumbnail || 30) / 100}
             notice={noticeShown ? <span className="rounded-full px-3 py-1 text-xs font-medium text-white" style={{ backgroundColor: "rgba(0,0,0,0.55)" }}>{noticeShown}</span> : null}
             bottom={controlsPosition === "overlay" && phase !== "ended" ? <div className="rounded-full backdrop-blur-sm" style={{ backgroundColor: `rgba(0,0,0,${((video.controls?.overlay?.opacity ?? 35) / 100).toFixed(2)})`, padding: `${Math.round(8 * overlayScale)}px ${Math.round(12 * overlayScale)}px` }}>{controlButtons}</div> : null}
-            mixedAudioTrack={room.mixedAudioTrack}
+            audioTracks={room.audioTracks}
             radius={config.theme.shape.bubbleRadius}
             overlay={waitingOverlay}
           />
@@ -412,6 +417,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
             {room.error && phase !== "error" && <p className="text-center text-xs" style={{ color: "#b91c1c" }}>{room.error}</p>}
         </footer>
       )}
+      <CobrowseVisitorConsent config={config} sessionToken={sessionToken} tabKey={cobrowseTabKey} preview={preview} />
     </main>
   );
 }

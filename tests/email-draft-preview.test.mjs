@@ -16,9 +16,10 @@ import { emailAttachmentResponse } from '../lib/email/attachment-response.mjs';
 import { clearSagaDeadlineWakeups } from '../lib/acd/saga-engine.mjs';
 
 const pool=await prepareAcdTestPool('acd_core_test_email_draft_preview');
-await pool.query(`DROP TABLE IF EXISTS app_settings,cc_wrapup_codes;
+await pool.query(`DROP TABLE IF EXISTS app_settings,cc_queue_wrapup_codes,cc_wrapup_codes;
   CREATE TABLE app_settings(id text PRIMARY KEY,cc_settings jsonb);
-  CREATE TABLE cc_wrapup_codes(id text PRIMARY KEY,name text);
+  CREATE TABLE cc_wrapup_codes(id text PRIMARY KEY,name text,is_active boolean DEFAULT true);
+  CREATE TABLE cc_queue_wrapup_codes(queue_id text,wrapup_code_id text);
   INSERT INTO app_settings VALUES('default','{}');`);
 after(async()=>{clearSagaDeadlineWakeups();await pool.end();});
 
@@ -289,4 +290,17 @@ test('provider size rejection is visible as safe actionable evidence and keeps t
   assert.equal(message.status,'failed');assert.equal(message.sendError.code,'10015');assert.equal(message.sendError.httpStatus,422);
   assert.match(message.sendError.message,/internal size limit/);assert(!message.sendError.message.includes('Kafka'));
   assert.equal(message.provider_error,undefined);assert.equal(after.drafts.find(d=>d.id===id).content.text,f.content.text);
+});
+
+test('supervisor draft rows and attachment URLs distinguish the same draft ID on two devices',async()=>{
+ const f=await fixture();
+ for(const draftScope of ['web','mobile'])await saveEmailDraft(pool,{...f.identity,draftScope,expectedVersion:'0',content:{...f.content,text:draftScope,
+   attachments:[{filename:'notes.txt',content:Buffer.from(draftScope).toString('base64'),content_type:'text/plain'}]}});
+ const view=await snapshot(f);assert.equal(new Set(view.snapshot.drafts.map(d=>d.id)).size,2);
+ const work=await authorizeInteractionRead(pool,f.work.id,f.scope.user,{supervisor:true});
+ for(const draft of view.snapshot.drafts){
+   const url=new URL(draft.attachments[0].url,'https://example.invalid');
+   const attachment=await readSupervisorDraftAttachment(pool,work,{agentId:f.agentId,index:0,version:url.searchParams.get('version'),draftScope:url.searchParams.get('draftScope')});
+   assert.equal(attachment.bytes.toString(),draft.body);
+ }
 });

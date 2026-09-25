@@ -389,6 +389,17 @@ test("report counts full cohorts, attributes transferred work to participants an
     );
   }
   const result = await readInteractionReport(pool, { ...scope, queueId: q });
+  assert.ok(result.totals.avgHandlingSeconds >= 10);
+  assert.ok(result.totals.totalTalkSeconds >= 18);
+  assert.equal(result.channels.find(c => c.channel === "voice").handlingCount, 1);
+  const emailTiming = await readInteractionReport(pool, { ...scope, queueId: q, channel: "email", agentId });
+  assert.ok(emailTiming.totals.avgHandlingSeconds >= 10);
+  assert.equal(emailTiming.totals.totalTalkSeconds, null);
+  const emptyTiming = await readInteractionReport(pool, {
+    ...scope, queueId: q, from: "2000-01-01T00:00:00Z", to: "2000-01-02T00:00:00Z",
+  });
+  assert.equal(emptyTiming.totals.avgHandlingSeconds, null);
+  assert.equal(emptyTiming.totals.totalTalkSeconds, 0);
   assert.equal(result.totals.closed, RELEASED_CHANNELS.length);
   assert.equal(result.totals.received, RELEASED_CHANNELS.length);
   assert.equal(

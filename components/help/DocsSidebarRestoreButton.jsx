@@ -1,7 +1,7 @@
 "use client";
 
 import { IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
-import { useSidebar } from "fumadocs-ui/layouts/the internal documentation";
+import { useSidebar } from "fumadocs-ui/layouts/docs/slots/sidebar";
 
 export function DocsSidebarRestoreButton() {
   const { collapsed, setCollapsed } = useSidebar();

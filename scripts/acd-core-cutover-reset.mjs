@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+// These two must stay the first imports and stay in this order: the flag has
+// to be set before `dotenv/config` is evaluated, and .env has to be loaded
+// before any import that reads process.env while being evaluated. The flag
+// module explains both. `dotenv/config` rather than a config() call so that
+// DOTENV_CONFIG_PATH still selects which .env is read.
+import "./lib/dotenv-quiet-flag.mjs";
 import "dotenv/config";
 
 import { createHash } from "node:crypto";

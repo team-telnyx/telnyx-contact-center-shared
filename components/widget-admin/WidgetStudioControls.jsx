@@ -525,6 +525,7 @@ export default function WidgetStudioControls({
     general: ["General", "Widget identity, language and session behavior."],
     channels: ["Channels & routing", "Choose channels for this visual configuration and bind their runtime resources."],
     callbacks: ["Callbacks", "Configure the callback form and scheduling experience published with this widget revision."],
+    cobrowse: ["Co-browsing", "Page sharing, optional visitor-approved assistance and source privacy rules."],
     dimensions: ["Dimensions", "Control the widget, header, footer, launcher and its position on the page."],
     theme: ["Theme", "Brand colors, typography and shared component geometry."],
     launcher: ["Launcher / FAB", "Appearance and behavior of the button used to open the widget."],
@@ -584,6 +585,33 @@ export default function WidgetStudioControls({
             {config.channels.messaging.assistantId && config.channels.voice.assistantId && config.channels.messaging.assistantId !== config.channels.voice.assistantId && <p role="alert" className="text-xs text-destructive">Select the Widget AI assistant to replace the previous per-channel assignments.</p>}
             {inventoryError && <p role="alert" className="rounded-lg border border-destructive p-3 text-xs text-destructive">{inventoryError}</p>}
           </Section>
+        )}
+
+        {section === "cobrowse" && (
+          <div className="space-y-6">
+            <Section title="Availability" description="Off by default. Co-browsing shares only the visitor&apos;s current browser tab after explicit consent.">
+              <ToggleField label="Enable co-browsing" checked={config.cobrowse.enabled} onChange={value => set(["cobrowse", "enabled"], value)} />
+              <ToggleField label="Allow in-session requests" checked={config.cobrowse.entryPoints.inSession} onChange={value => set(["cobrowse", "entryPoints", "inSession"], value)} />
+              <ToggleField label="Allow visitor-generated pairing codes" checked={config.cobrowse.entryPoints.pairingCode} onChange={value => set(["cobrowse", "entryPoints", "pairingCode"], value)} />
+              <NumberField label="Pairing code lifetime" value={config.cobrowse.pairing.seconds} min={60} max={300} suffix="seconds" onChange={value => set(["cobrowse", "pairing", "seconds"], value)} />
+            </Section>
+            <Section title="Assisted control" description="Off by default. The agent must request control during an active sharing session, and the visitor must approve it separately. The visitor can revoke control at any time.">
+              <ToggleField label="Allow agent to request control" checked={config.cobrowse.control.maxLevel === "assist"} onChange={value => set(["cobrowse", "control", "maxLevel"], value ? "assist" : "observe")} />
+              <p className="text-xs text-muted-foreground">Links, safe buttons and fields require <code>data-cobrowse-control</code> on the source element. Password, payment, hidden, disabled, read-only and privacy-masked fields stay blocked. Submit controls are blocked; site owners must opt in only buttons with safe actions.</p>
+            </Section>
+            <Section title="Visitor consent" description="Every sharing session requires a fresh decision. Assisted control, when enabled, requires an additional decision. Recording remains unavailable.">
+              <Field label="Consent text"><Textarea rows={4} value={config.cobrowse.consent.text} onChange={event => set(["cobrowse", "consent", "text"], event.target.value)} /></Field>
+              <Field label="Policy version"><Input value={config.cobrowse.consent.policyVersion} onChange={event => set(["cobrowse", "consent", "policyVersion"], event.target.value)} /></Field>
+              <Field label="Persistent page banner"><Input value={config.cobrowse.indicator.text} onChange={event => set(["cobrowse", "indicator", "text"], event.target.value)} /></Field>
+            </Section>
+            <Section title="Source privacy" description="Masking is best-effort and happens before transmission. Payment data rendered as ordinary text needs an explicit rule. Test every customer page before enabling.">
+              <SelectField label="Privacy preset" value={config.cobrowse.privacy.preset} onChange={value => set(["cobrowse", "privacy", "preset"], value)} options={[{ value: "balanced", label: "Balanced — mask selected text" }, { value: "strict", label: "Strict — mask all text" }]} />
+              <p className="text-sm">All input values remain masked in the replay, including fields the visitor permits the agent to fill.</p>
+              <Field label="Additional text mask selectors" hint="One simple selector per line. Tags, classes, IDs, attributes, descendants and > are supported."><Textarea rows={4} value={config.cobrowse.privacy.maskSelectors.join("\n")} onChange={event => set(["cobrowse", "privacy", "maskSelectors"], event.target.value.split("\n").map(value => value.trim()).filter(Boolean))} /></Field>
+              <Field label="Additional blocked subtree selectors" hint="Blocked elements are not captured at all."><Textarea rows={4} value={config.cobrowse.privacy.blockSelectors.join("\n")} onChange={event => set(["cobrowse", "privacy", "blockSelectors"], event.target.value.split("\n").map(value => value.trim()).filter(Boolean))} /></Field>
+              <p className="text-xs text-muted-foreground">Open the test page to verify masks and customer-site CSP. The hosted page must allow this widget&apos;s script and WebSocket endpoints.</p>
+            </Section>
+          </div>
         )}
 
         {section === "callbacks" && (

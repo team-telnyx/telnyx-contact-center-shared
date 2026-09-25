@@ -54,8 +54,11 @@ test("streaming websocket server exposes HTTP health endpoint for load balancer 
   assert.match(source, /createServer/);
   assert.match(source, /\/api\/health/);
   assert.match(source, /status:\s*"healthy"/);
+  assert.match(source, /cobrowse:\s*\{\s*ready:\s*cobrowseReady/);
   assert.match(source, /server\.listen\(port/);
-  assert.match(source, /new WebSocketServer\(\{\s*server\s*\}\)/);
+  assert.match(source, /new WebSocketServer\(\{\s*noServer:\s*true\s*\}\)/);
+  assert.match(source, /cobrowseWss = new WebSocketServer\(\{\s*noServer:\s*true,\s*maxPayload:/);
+  assert.match(source, /server\.on\("upgrade"/);
 });
 
 test("streaming websocket server can shutdown and rebind the same port", async () => {
@@ -88,6 +91,27 @@ test("streaming websocket server can shutdown and rebind the same port", async (
   assert.equal(secondHealth.port, port);
 
   await shutdownStreamingWSServer({ reason: "test_cleanup" });
+});
+
+test("co-browsing replica guard does not fail shared voice WebSocket health", async () => {
+  const port = await getFreePort();
+  const previous = process.env.COBROWSE_RELAY_REPLICAS;
+  const moduleUrl = new URL(`../lib/streaming-ws-handler.mjs?test=cobrowse-health-${Date.now()}`, import.meta.url);
+  const { initStreamingWSServer, shutdownStreamingWSServer, waitForStreamingWSServerReady } = await import(moduleUrl);
+  process.env.COBROWSE_RELAY_REPLICAS = "2";
+  try {
+    initStreamingWSServer({ port, registerProcessHandlers: false });
+    await waitForStreamingWSServerReady(READY_TIMEOUT_MS);
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+    assert.equal(response.status, 200);
+    const health = await response.json();
+    assert.equal(health.status, "healthy");
+    assert.equal(health.cobrowse.ready, false);
+  } finally {
+    await shutdownStreamingWSServer({ reason: "test_cleanup" });
+    if (previous === undefined) delete process.env.COBROWSE_RELAY_REPLICAS;
+    else process.env.COBROWSE_RELAY_REPLICAS = previous;
+  }
 });
 
 test("streaming websocket shutdown has a deadline for connected clients", async () => {
@@ -170,8 +194,8 @@ test("streaming websocket shutdown stops accepting sockets before draining clien
     "utf8",
   );
 
-  const stopAcceptingIndex = source.indexOf("wss.close(() => {");
-  const snapshotIndex = source.indexOf("const clients = Array.from(wss.clients || []);");
+  const stopAcceptingIndex = source.indexOf("instance.close(() => {");
+  const snapshotIndex = source.indexOf("const clients = Array.from(instance.clients || []);");
   assert.ok(stopAcceptingIndex > -1, "shutdown should close the WebSocket server");
   assert.ok(snapshotIndex > -1, "shutdown should snapshot existing WebSocket clients");
   assert.ok(

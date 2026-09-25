@@ -12,9 +12,10 @@ import { readConversationSnapshot } from '../lib/acd/conversation-preview.mjs';
 import { clearSagaDeadlineWakeups } from '../lib/acd/saga-engine.mjs';
 
 const db=await prepareAcdTestPool('acd_core_test_email_preview');
-await db.query(`DROP TABLE IF EXISTS app_settings,cc_wrapup_codes;
+await db.query(`DROP TABLE IF EXISTS app_settings,cc_queue_wrapup_codes,cc_wrapup_codes;
   CREATE TABLE app_settings(id text PRIMARY KEY,cc_settings jsonb);
-  CREATE TABLE cc_wrapup_codes(id text PRIMARY KEY,name text);`);
+  CREATE TABLE cc_wrapup_codes(id text PRIMARY KEY,name text,is_active boolean DEFAULT true);
+  CREATE TABLE cc_queue_wrapup_codes(queue_id text,wrapup_code_id text);`);
 after(async()=>{clearSagaDeadlineWakeups();await db.end();});
 beforeEach(async()=>{
   await db.query(`DELETE FROM app_settings; DELETE FROM cc_email_audit;

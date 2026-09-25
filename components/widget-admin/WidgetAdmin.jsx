@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Accessibility, AudioWaveform, Bot, Braces, CalendarClock, Check, ChevronsUpDown, Copy, Languages, Video,
+  Accessibility, AudioWaveform, Bot, Braces, CalendarClock, Check, ChevronsUpDown, Copy, Languages, Monitor, Video,
   GitBranch, LayoutGrid, Loader2, LogIn, Maximize2, MessageCircleMore, MessagesSquare,
   FlaskConical, MousePointerClick, Palette, PanelTop, Paperclip, Pencil, Plus, Send, Settings2, Target,
   UserRound, UserRoundCheck, Zap,
@@ -28,6 +28,7 @@ const NAV_GROUPS = [
   { label: "Setup", items: [
     { id: "general", label: "General", icon: Settings2 },
     { id: "channels", label: "Channels", icon: LayoutGrid },
+    { id: "cobrowse", label: "Co-browsing", icon: Monitor },
     { id: "callbacks", label: "Callbacks", icon: CalendarClock },
     { id: "dimensions", label: "Dimensions", icon: Maximize2 },
   ] },
@@ -540,6 +541,7 @@ export default function WidgetAdmin({ embedded = false, inventory = null, onPubl
         next.preview = defaults.preview;
       }
       if (targetSection === "callbacks") next.callbacks = defaults.callbacks;
+      if (targetSection === "cobrowse") next.cobrowse = defaults.cobrowse;
       // Video keeps its channel switch and queue; the look and playlist reset.
       if (targetSection === "video") next.channels.video = { ...defaults.channels.video, enabled: current.channels.video.enabled, routing: current.channels.video.routing };
       if (targetSection === "theme") next.theme = defaults.theme;

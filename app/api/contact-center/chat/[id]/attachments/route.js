@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { receiveTextAttachment } from "@/lib/widgets/attachments";
 import { withPermission } from "@/lib/authz/guard";
 
-async function POST_handler(request, context){
-  const user=await getAuthenticatedUser();if(!user)return NextResponse.json({error:"Unauthorized"},{status:401});
+async function POST_handler(request, context, authz){
+  const user=authz.user;
   const pool=getPostgresPool();if(!pool)return NextResponse.json({error:"Service unavailable"},{status:503});
   try{
     const {id}=await context.params;

@@ -1,5 +1,6 @@
 "use client";
 
+import { voiceFetch } from "@/lib/telephony/endpoint-client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -265,7 +266,7 @@ export function AgentAssist({ interactionId, interaction }) {
 
       const workItemId = interactionId || interaction?.id;
       const mediaUrl = `/api/contact-center/interactions/${encodeURIComponent(workItemId)}/media`;
-      const response = await fetch(mediaUrl, {
+      const response = await voiceFetch(mediaUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

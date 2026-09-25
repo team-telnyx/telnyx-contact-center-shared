@@ -43,7 +43,13 @@ async function GET_handler(request, _context, authz) {
       }
     }
 
-    return NextResponse.json({ ok: true, skills });
+    // Resolve only this user's assigned skills; no admin catalogue permission is needed.
+    const ids = Object.keys(skills);
+    const items = ids.length ? (await pool.query(
+      "SELECT id, name, description, category FROM skills WHERE id::text = ANY($1::text[]) ORDER BY name",
+      [ids],
+    )).rows.map(item => ({ ...item, level: skills[String(item.id)] })) : [];
+    return NextResponse.json({ ok: true, skills, items });
   } catch (err) {
     platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(

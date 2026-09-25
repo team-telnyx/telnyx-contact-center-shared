@@ -343,8 +343,8 @@ export const TRANSCRIPTION_PROVIDERS = [
     model_name: "soniox/stt-rt-v4",
     // Soniox STT supports automatic language detection by default and 60+ ISO
     // language codes for hints, per:
-    // https://soniox.com/the internal documentation
-    // https://soniox.com/the internal documentation
+    // https://soniox.com/docs/stt/concepts/supported-languages
+    // https://soniox.com/docs/stt/concepts/language-hints
     languages: [
       "auto",
       "af",

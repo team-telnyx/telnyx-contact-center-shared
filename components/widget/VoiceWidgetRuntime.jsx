@@ -16,6 +16,7 @@ import { TtsExpressionMarkdown } from "@/components/tts-expression-text";
 import AudioWaveform from "./AudioWaveform";
 import HandoffTimeline from "./HandoffTimeline";
 import WidgetIcon from "./WidgetIcon";
+import CobrowseVisitorConsent from "./CobrowseVisitorConsent";
 import { safeImageUrl } from "@/lib/security/display-url.mjs";
 
 function Avatar({ spec, color, textColor, size = 36 }) {
@@ -121,6 +122,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState("");
   const [sessionToken, setSessionToken] = useState(null);
+  const [cobrowseTabKey, setCobrowseTabKey] = useState(null);
   const [handoff, setHandoff] = useState(null);
   const [clientEpoch, setClientEpoch] = useState(0);
   const [voiceClient, setVoiceClient] = useState(null);
@@ -344,6 +346,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
     setConversation(null);
     setHandoff(null);
     setSessionToken(null);
+    setCobrowseTabKey(null);
     sessionTokenRef.current = null;
     setMuted(false);
     setConnectionStatus("starting");
@@ -357,6 +360,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
         await clientConnectPromiseRef.current;
       }
       await waitForAgentReady(client);
+      const clientKey = crypto.randomUUID();
       const response = await fetch(`/api/widgets/${encodeURIComponent(widget.id)}/sessions`, {
         method: "POST",
         headers: {
@@ -365,7 +369,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
         },
         body: JSON.stringify({
           channel: "voice",
-          clientKey: crypto.randomUUID(),
+          clientKey,
           context: freshWidget.decisionContext || widget.decisionContext || {},
         }),
       });
@@ -374,6 +378,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
       token = result.sessionToken;
       sessionTokenRef.current = token;
       setSessionToken(token);
+      setCobrowseTabKey(clientKey);
       if (attempt !== callAttemptRef.current) {
         await reportVoiceState(token, { status: "failed" });
         return;
@@ -823,6 +828,7 @@ avatarEnabled ? (
           </form>
         </footer>
       )}
+      <CobrowseVisitorConsent config={config} sessionToken={sessionToken} tabKey={cobrowseTabKey} preview={preview} />
     </main>
   );
 }

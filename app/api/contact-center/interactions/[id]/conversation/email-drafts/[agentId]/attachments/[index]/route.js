@@ -14,7 +14,7 @@ async function GET_handler(request, context, authz) {
     const supervisor = Boolean(authz.elevated) && (await workItemInScope(pool, authz.scope, id));
     const work = await authorizeInteractionRead(pool, id, user, { supervisor });
     const attachment = await readSupervisorDraftAttachment(pool, work, {
-      agentId, index, draftId: new URL(request.url).searchParams.get('draftId')||'legacy', version: new URL(request.url).searchParams.get('version'),
+      agentId, index, draftScope: new URL(request.url).searchParams.get('draftScope')||'legacy', draftId: new URL(request.url).searchParams.get('draftId')||'legacy', version: new URL(request.url).searchParams.get('version'),
     });
     return await emailAttachmentResponse(request, attachment);
   } catch (error) {

@@ -36,6 +36,7 @@ import { AgentDashboard } from "./AgentDashboard";
 import { AgentDataSources } from "./AgentDataSources";
 import { isOwnedQueueTransferContinuation } from "@/lib/contact-center/queue-transfer-continuation";
 import { channelDefinition, usesNativeLifecycle } from "@/lib/acd/channel-registry.mjs";
+import CobrowseInteractionWorkspace from "./CobrowseInteractionWorkspace";
 
 const AGENT_RAIL_ITEMS = [
   { id: "desktop", label: "Desktop", icon: IconDeviceDesktop, description: "Live interaction workspace" },
@@ -57,19 +58,6 @@ const DATA_SOURCE_VIEW_LABELS = {
 
 const END_STATUSES = new Set(["ended", "hangup", "completed", "terminated", "destroy", "failed", "idle"]);
 
-async function updateAgentStatus(nextStatus) {
-  try {
-    const res = await fetch("/api/contact-center/agent/status", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to update agent status");
-    }
-  } catch (_) {}
-}
 
 function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial }) {
   if (!assignment) return null;
@@ -119,6 +107,7 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
 export function AgentDesktop() {
   const [chatComposerStore]=useState(createChatComposerStore);
   const [selectedInteraction, setSelectedInteraction] = useState(null);
+  const [cobrowseFocusId, setCobrowseFocusId] = useState(null);
   const [voiceInteractions, setInteractions] = useState([]);
   const chat = useChatInteractions();
   useEffect(()=>{
@@ -217,15 +206,6 @@ export function AgentDesktop() {
 
       // Filter out timeout re-enqueued interactions from database interactions
       const filteredDbInteractions = dbInteractions.filter((interaction) => {
-        if (
-          !isQueueTransferContinuation(interaction) &&
-          isRecentlyDisconnectedInteraction(
-            disconnectedInteractionKeysRef.current,
-            interaction,
-          )
-        ) {
-          return false;
-        }
         const metadata = interaction.metadata || {};
         const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
         const isReEnqueued =
@@ -291,7 +271,7 @@ export function AgentDesktop() {
                   ? storeCall.fromNumber
                   : null),
             queue_name: storeCall.queueName || interaction.queue_name,
-            state: storeCall.status || interaction.state,
+            state: interaction.state || storeCall.status,
           };
         }
         return interaction;
@@ -512,26 +492,21 @@ export function AgentDesktop() {
   // Load interactions from database on mount and via SSE-triggered refreshes
   // No polling - SSE handles all real-time updates
   useEffect(() => {
+    let disposed = false;
+    let readSequence = 0;
     const loadInteractions = async () => {
+      const sequence = ++readSequence;
       try {
         const res = await fetch(
           "/api/contact-center/agent/interactions?limit=50&activeOnly=true",
           { cache: "no-store" },
         );
         const data = await res.json();
+        if (disposed || sequence !== readSequence) return;
         if (data.ok && Array.isArray(data.interactions)) {
           // Filter out timeout re-enqueued interactions on the client side as well
           const filtered = data.interactions.filter((interaction) => {
             if (usesNativeLifecycle(interaction.channel) || usesNativeLifecycle(interaction.interaction_type)) return false;
-            if (
-              !isQueueTransferContinuation(interaction) &&
-              isRecentlyDisconnectedInteraction(
-                disconnectedInteractionKeysRef.current,
-                interaction,
-              )
-            ) {
-              return false;
-            }
             const metadata = interaction.metadata || {};
             const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
             const isReEnqueued =
@@ -591,76 +566,17 @@ export function AgentDesktop() {
       handleSSEEvent,
     );
 
-    // Also listen for call disconnect events to IMMEDIATELY remove the interaction
+    // SDK disconnect means this browser's leg ended, not the assigned work item.
+    // Only the authoritative activeOnly response may remove a server-owned row.
+    // Tombstones apply solely to optimistic SDK-only entries until reconciliation.
     const handleCallDisconnected = (event) => {
-      const {
-        interactionId,
-        callControlId,
-        rejectedBeforeAnswer,
-        wasAnswered,
-      } = event.detail || {};
-
-      // A delayed activeOnly read can still contain the just-ended call. Keep
-      // a short client-side tombstone so that stale response cannot reinsert
-      // and auto-select it between WebRTC disconnect and the Core wrap-up
-      // snapshot. A pre-answer rejection may be immediately re-offered and
-      // must not be suppressed this way.
-      if (
-        !rejectedBeforeAnswer &&
-        wasAnswered !== false
-      ) {
-        rememberDisconnectedInteraction(
-          disconnectedInteractionKeysRef.current,
-          { interactionId, callControlId },
-        );
+      const { interactionId, callControlId, rejectedBeforeAnswer, wasAnswered } = event.detail || {};
+      if (!rejectedBeforeAnswer && wasAnswered !== false) {
+        rememberDisconnectedInteraction(disconnectedInteractionKeysRef.current, { interactionId, callControlId });
       }
-
-      // IMMEDIATELY remove the interaction from local state
-      // This ensures the UI clears instantly, even before database refresh
-      if (interactionId || callControlId) {
-        setDbInteractions((current) => {
-          const filtered = current.filter((interaction) => {
-            const matchesId = interaction.id === interactionId;
-            const matchesCallControlId =
-              Boolean(callControlId && interaction.call_control_id === callControlId);
-            if (matchesId || matchesCallControlId) {
-              console.log(
-                `[AgentDesktop] Immediately removing disconnected interaction: ${
-                  interactionId || callControlId
-                }`,
-              );
-              return false;
-            }
-            return true;
-          });
-          return filtered;
-        });
-
-        // Also remove from calls store immediately
-        if (callControlId) {
-          useCallsStore.getState().removeCall(callControlId);
-        }
-        if (interactionId) {
-          useCallsStore.getState().removeCall(interactionId);
-        }
-
-        // Clear selected interaction if it's the one that disconnected
-        setSelectedInteraction((current) => {
-          if (
-            current &&
-            (current.id === interactionId ||
-              Boolean(callControlId && current.call_control_id === callControlId))
-          ) {
-            return null;
-          }
-          return current;
-        });
-      }
-
-      // Then refresh from database after a short delay to ensure consistency
-      setTimeout(() => {
-        loadInteractions();
-      }, 300);
+      if (callControlId) useCallsStore.getState().removeCall(callControlId);
+      if (interactionId) useCallsStore.getState().removeCall(interactionId);
+      void loadInteractions();
     };
 
     window.addEventListener(
@@ -673,6 +589,8 @@ export function AgentDesktop() {
     );
 
     return () => {
+      disposed = true;
+      readSequence++;
       window.removeEventListener(
         "contact-center:refresh-interactions",
         handleSSEEvent,
@@ -916,6 +834,18 @@ export function AgentDesktop() {
   }, [callStatus, disconnectedTime]);
 
   const [activeView, setActiveView] = useState("desktop");
+  useEffect(() => {
+    const openCobrowse = (event) => {
+      if (!event.detail?.open) return;
+      const interaction = interactions.find((item) => String(item.id) === String(event.detail.workItemId));
+      if (!interaction) return;
+      setSelectedInteraction(interaction);
+      setCobrowseFocusId(interaction.id);
+      setActiveView("desktop");
+    };
+    window.addEventListener("contact-center:cobrowse-changed", openCobrowse);
+    return () => window.removeEventListener("contact-center:cobrowse-changed", openCobrowse);
+  }, [interactions]);
   const [isHydrated, setIsHydrated] = useState(false);
   const previousInteractionsRef = useRef([]);
   const hasRestoredStateRef = useRef(false);
@@ -1175,6 +1105,9 @@ export function AgentDesktop() {
       : DATA_SOURCE_VIEW_LABELS[activeView] || "Interaction Details";
   const DetailIcon =
     AGENT_RAIL_ITEMS.find((item) => item.id === activeView)?.icon || Info;
+  const selectedDefinition = selectedInteraction
+    ? channelDefinition(selectedInteraction.channel || selectedInteraction.interaction_type || "voice")
+    : null;
 
   return (
     <>
@@ -1198,6 +1131,7 @@ export function AgentDesktop() {
           selectedId={selectedInteraction?.id}
           onSelect={(interaction) => {
             setSelectedInteraction(interaction);
+            setCobrowseFocusId(null);
             setActiveView("desktop");
             savedSelectedInteractionIdRef.current = null;
           }}
@@ -1241,14 +1175,19 @@ export function AgentDesktop() {
             <AgentDashboard className="p-4 lg:p-5" refreshKey={interactions.map(item=>`${item.id}:${item.state}:${item.version||0}`).join("|")} onOpenInteraction={item=>{ const existing=interactions.find(row=>String(row.id)===String(item.id)); if(existing){setSelectedInteraction(existing);setActiveView("desktop");} }} />
           </div>
         ) : activeView === "desktop" ? (
-          selectedInteraction ? (
-            channelDefinition(selectedInteraction.channel).viewer === "messages"
+          selectedInteraction ? (selectedDefinition.capabilities?.cobrowse
+            ? <CobrowseInteractionWorkspace key={selectedInteraction.id} interaction={selectedInteraction} autoOpen={cobrowseFocusId === selectedInteraction.id}>
+              {selectedDefinition.viewer === "messages"
               ? <ChatInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} composeStore={chatComposerStore} />
-              : channelDefinition(selectedInteraction.channel).viewer === "email"
+              : selectedDefinition.viewer === "email"
                 ? <EmailInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} />
-                : channelDefinition(selectedInteraction.channel).viewer === "video"
+                : selectedDefinition.viewer === "video"
                   ? <VideoInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} />
-                  : <InteractionDetail interaction={selectedInteraction} />
+                  : <InteractionDetail interaction={selectedInteraction} />}
+            </CobrowseInteractionWorkspace>
+            : selectedDefinition.viewer === "email"
+              ? <EmailInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} />
+              : <InteractionDetail interaction={selectedInteraction} />
           ) : campaignAssignment ? (
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <OutboundCampaignRecord

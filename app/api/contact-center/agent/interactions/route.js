@@ -1,6 +1,9 @@
+import { mobilePaging, mobileInbox } from "@/lib/acd/mobile-monitor-pages.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { listAgentInteractionViews } from "@/lib/acd/work-item-repository.mjs";
+import { readTextInteractions } from "@/lib/acd/text-desktop.mjs";
+import { NATIVE_LIFECYCLE_CHANNELS } from "@/lib/acd/channel-registry.mjs";
 import { withPermission } from "@/lib/authz/guard";
 
 /**
@@ -24,13 +27,21 @@ async function GET_handler(request, _context, authz) {
       );
     }
 
-    const interactions = await listAgentInteractionViews(pool, user.id, {
+    let interactions = await listAgentInteractionViews(pool, user.id, {
       state,
       activeOnly,
-      limit,
+      limit: mobilePaging(searchParams) ? null : limit,
     });
 
-    return NextResponse.json({ ok: true, interactions });
+    if (activeOnly) {
+      // Native messaging assignments include offers and wrap-up, including a
+      // terminal work item whose agent still owes disposition.
+      const text = await readTextInteractions(pool, String(user.id));
+      interactions = [...interactions.filter(row => !NATIVE_LIFECYCLE_CHANNELS.includes(row.channel)),
+        ...text.interactions.filter(row => !state || row.state === state)];
+      if (!mobilePaging(searchParams)) interactions = interactions.slice(0, Math.min(100, Math.max(1, limit || 50)));
+    }
+    return NextResponse.json(mobilePaging(searchParams) ? mobileInbox(interactions, searchParams) : { ok: true, interactions }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: "Server error" },

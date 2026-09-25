@@ -357,6 +357,7 @@ export const authOptions = {
       return token;
     },
     async session({ session, token, trigger }) {
+      session.authTrackingSessionId = token?.authTrackingSessionId || null;
       if (token?.id) {
         session.user.id = token.id;
       }

@@ -17,6 +17,7 @@ import DocumentPreview from "@/components/documents/DocumentPreview";
 import { documentPreviewKind } from "@/lib/documents/preview-types.mjs";
 import { attachmentAccept, isAttachmentTypeAllowed } from "@/lib/widgets/attachment-types.mjs";
 import { safeImageUrl } from "@/lib/security/display-url.mjs";
+import CobrowseVisitorConsent from "./CobrowseVisitorConsent";
 
 const QUICK_EMOJI = ["😀", "😊", "👍", "❤️", "🎉", "🙏", "👋", "🤔"];
 
@@ -761,6 +762,15 @@ function HomeSurface({ config, callbacks, surfaces, onSelect, edgeInsets }) {
       title: callbacks?.copy?.buttonLabel,
       description: callbacks?.copy?.title,
     },
+    surfaces.includes("cobrowse") && {
+      key: "cobrowse",
+      icon: "monitor",
+      fallback: "monitor",
+      background: colors.primary,
+      foreground: colors.onPrimary,
+      title: "Share this page",
+      description: "Get a code to read to your support agent",
+    },
   ].filter(Boolean);
   return (
     <div className="grid gap-3">
@@ -833,6 +843,7 @@ export default function WidgetFrame({
     config?.channels.voice.enabled && "voice",
     config?.channels.video?.enabled && "video",
     payload?.widget?.callbacks?.enabled && "callbacks",
+    config?.cobrowse?.enabled && config.cobrowse.entryPoints.pairingCode && "cobrowse",
   ].filter(Boolean);
   const activeSurface = (previewWidget ? null : runtimeSurface) || payload?.mode;
   const mode = activeSurface === "callbacks" ? "messaging" : activeSurface || "messaging";
@@ -904,7 +915,8 @@ export default function WidgetFrame({
       return;
     }
     startedRef.current = true;
-    clientKeyRef.current ||= crypto.randomUUID();
+    clientKeyRef.current ||= window.sessionStorage.getItem(`${sessionStorageKey}:tab`) || crypto.randomUUID();
+    window.sessionStorage.setItem(`${sessionStorageKey}:tab`, clientKeyRef.current);
     let cancelled = false;
     const storageKey = sessionStorageKey;
     const persisted = widget.config.behavior.persistSession && widget.config.behavior.reopenBehavior === "resume"
@@ -1129,6 +1141,10 @@ export default function WidgetFrame({
   };
 
   const openSurface = (surface) => {
+    if (surface === "cobrowse" && !previewWidget) {
+      window.parent.postMessage({ type: "telnyx-cobrowse-pair" }, parentTargetOrigin());
+      return;
+    }
     setRuntimeSurface(surface);
     setCallbackOpen(surface === "callbacks");
   };
@@ -1220,6 +1236,7 @@ export default function WidgetFrame({
     if (sessionStorageKey) window.localStorage.removeItem(sessionStorageKey);
     startedRef.current = false;
     clientKeyRef.current = null;
+    if (sessionStorageKey) window.sessionStorage.removeItem(`${sessionStorageKey}:tab`);
     unreadRef.current = 0;
     customerTypingLastSentRef.current = 0;
     setHandoff(null);
@@ -1613,6 +1630,7 @@ export default function WidgetFrame({
         expanded={expandPreviewOverPage}
         onClose={() => setPreviewedAttachment(null)}
       />
+      <CobrowseVisitorConsent config={config} sessionToken={sessionToken} tabKey={clientKeyRef.current} preview={Boolean(previewWidget)} />
     </main>
   );
 }

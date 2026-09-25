@@ -1,5 +1,6 @@
 "use client";
 
+import { ensureVoiceEndpoint, voiceFetch, refreshVoiceEndpoints, voiceEndpointRegistration } from "@/lib/telephony/endpoint-client";
 import {
   createContext,
   useCallback,
@@ -14,6 +15,7 @@ import useActiveCallStore from "@/lib/stores/active-call-store";
 import { createCallRecovery } from "@/lib/telephony/call-recovery.mjs";
 import { notify } from "@/components/ToastNotify";
 import { useAuth } from "@/components/auth-provider";
+import { subscribeCoreSnapshot } from "@/lib/status-stream-client";
 
 // Grants that come with a WebRTC softphone: agent work, or call supervision
 // (RBAC Phase 5). Users without them get no token and no heartbeat.
@@ -181,17 +183,28 @@ export function TelephonyProvider({ children }) {
 
   const [status, setStatus] = useState("disconnected");
 
+  // Device selection is committed to the ACD outbox. Its SSE snapshot must
+  // invalidate the voice selector too; the 15-second heartbeat is only backup.
+  useEffect(() => {
+    if (!agentHeartbeat) return undefined;
+    return subscribeCoreSnapshot(() => {
+      refreshVoiceEndpoints().catch(() => {});
+    });
+  }, [agentHeartbeat]);
+
   const acdSessionId = useRef(null);
   useEffect(() => {
     // The ACD session heartbeat belongs to agent work only.
     if (!agentHeartbeat) return undefined;
-    acdSessionId.current ||= crypto.randomUUID();
-    const publish = (offline = false) => fetch("/api/contact-center/agent/session", {
+    const registration=voiceEndpointRegistration();
+    if (!registration) return undefined;
+    acdSessionId.current = registration.id;
+    const publish = (offline = false) => voiceFetch("/api/contact-center/agent/session", {
       method: "PUT", headers: { "Content-Type": "application/json" }, keepalive: offline,
-      body: JSON.stringify({ sessionId: acdSessionId.current, voiceReady: status === "connected", offline }),
-    }).catch(() => {});
+      body: JSON.stringify({ sessionId: acdSessionId.current, voiceReady: status === "connected", ready: { video: true }, offline }),
+    }).then(() => refreshVoiceEndpoints()).catch(() => {});
     publish();
-    const timer = setInterval(() => publish(), 15000);
+    const timer = setInterval(() => { publish(); }, 15000);
     const leave = () => publish(true);
     window.addEventListener("pagehide", leave);
     return () => { clearInterval(timer); window.removeEventListener("pagehide", leave); };
@@ -257,39 +270,21 @@ export function TelephonyProvider({ children }) {
       if (profileResponse.ok && profile.data?.voice_enabled === false) {
         clearTokenCache();
         setStatus("disconnected");
+        setError("Voice is disabled for this account.");
         return;
       }
+      await ensureVoiceEndpoint();
       let token = null;
       const currentEnv = getCurrentEnvironment();
       const forceRefresh = shouldForceTokenRefresh();
 
-      try {
-        const cached = JSON.parse(
-          localStorage.getItem("webrtc.token.cache") || "null"
-        );
-
-        // Check if cached token is valid and from the same environment
-        if (
-          cached &&
-          cached.token &&
-          cached.expMs &&
-          cached.env === currentEnv &&
-          cached.version === CACHE_VERSION
-        ) {
-          const now = Date.now();
-          if (!forceRefresh && now + SKEW_MS < Number(cached.expMs)) {
-            token = String(cached.token);
-            tokenRef.current = token;
-            tokenFetchedAtRef.current = Number(cached.ts || now);
-          }
-        }
-      } catch (_) {
-        // Cache parse error, fetching fresh token
-      }
+      // Voice credentials are scoped to this tab's endpoint. Never reuse the old
+      // user-wide localStorage cache across devices or authentication sessions.
+      clearTokenCache();
 
       if (!token) {
         // Try to refresh access token if we get a 401/403
-        let resp = await fetch("/api/voice/token", {
+        let resp = await voiceFetch("/api/voice/token", {
           method: "POST",
           credentials: "include",
           cache: "no-store",
@@ -311,7 +306,7 @@ export function TelephonyProvider({ children }) {
             });
             if (refreshResp.ok) {
               // Retry voice token request after refresh
-              resp = await fetch("/api/voice/token", {
+              resp = await voiceFetch("/api/voice/token", {
                 method: "POST",
                 credentials: "include",
                 cache: "no-store",
@@ -360,19 +355,7 @@ export function TelephonyProvider({ children }) {
         const expMs =
           decodeJwtExpMs(token) || tokenFetchedAtRef.current + 15 * 60 * 1000; // fallback 15m
 
-        // Store token with environment and version info
-        try {
-          localStorage.setItem(
-            "webrtc.token.cache",
-            JSON.stringify({
-              token,
-              ts: tokenFetchedAtRef.current,
-              expMs,
-              env: currentEnv,
-              version: CACHE_VERSION,
-            })
-          );
-        } catch (_) {}
+
       }
 
       cleanupClient();
@@ -508,7 +491,11 @@ export function TelephonyProvider({ children }) {
         (retryAttemptRef.current || 0) + 1,
         10
       );
-      scheduleReconnect(false);
+      // scheduleReconnect deliberately ignores in-flight attempts. Release this
+      // attempt before scheduling recovery, otherwise initial failures never retry.
+      // Conflicts and permission failures need a user action, not an automatic loop.
+      connectingRef.current = false;
+      if (!err.status || err.status >= 500) scheduleReconnect(false);
     } finally {
       connectingRef.current = false;
     }

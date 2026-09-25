@@ -124,3 +124,29 @@ test("a supervisor who steps back to monitor leaves the view; stale-stream error
   assert.equal(snapshots.some((s) => s.error), false);
   await controller.leave();
 });
+
+test("playback uses permitted individual tracks, never the room-wide supervisor mix", async () => {
+  const fake = fakeSdk(); const snapshots = [];
+  fake.state.mixedAudioTrack = { enabled: true };
+  fake.addParticipant("me", { role: "customer" });
+  fake.addParticipant("agent", { role: "agent" });
+  fake.addParticipant("supervisor", { role: "supervisor" });
+  fake.publish("agent"); fake.publish("supervisor");
+  let mode = "whisper";
+  const controller = await joinVideoRoom({ roomId: "r", token: "t", sdk: fake.sdk, onChange: s => snapshots.push(s),
+    shouldSubscribe: ({role}) => role !== "supervisor" || mode === "barge" });
+  await flush();
+  const supervisorTrack = [...fake.state.streams.values()].find(s => s.participantId === "supervisor").audioTrack;
+  assert.equal(fake.state.mixedAudioTrack.enabled, false);
+  assert.equal(snapshots.at(-1).mixedAudioTrack, null);
+  assert.deepEqual(snapshots.at(-1).audioTracks.map(s => s.id), ["agent/self"]);
+  assert.equal(supervisorTrack.enabled, false);
+  mode = "barge"; await controller.applySubscriptions(); await flush();
+  assert.equal(supervisorTrack.enabled, true);
+  assert.equal(snapshots.at(-1).audioTracks.length, 2);
+  mode = "whisper"; await controller.applySubscriptions(); await flush();
+  assert.equal(supervisorTrack.enabled, false);
+  assert.equal(snapshots.at(-1).audioTracks.length, 1);
+  assert.equal(fake.state.mixedAudioTrack.enabled, false);
+  await controller.leave();
+});

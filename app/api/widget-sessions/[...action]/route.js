@@ -5,11 +5,18 @@ import { bearerToken,verifyAttachmentAccessToken,widgetSessionToken } from "@/li
 import { getWidgetSession,readWidgetConversation,actAsWidgetCustomer } from "@/lib/widgets/sessions";
 import { attachmentResponse,receiveTextAttachment } from "@/lib/widgets/attachments";
 import { videoWidgetJoin,videoWidgetLeave,videoWidgetRefreshToken,videoWidgetState } from "@/lib/widgets/video-sessions";
+import { consentWidgetCobrowse,readWidgetCobrowse } from "@/lib/cobrowse/lifecycle.mjs";
 
 async function handle(request,context){
   const pool=getPostgresPool();if(!pool)return NextResponse.json({error:"Service unavailable"},{status:503});
   try{
     const {action}=await context.params;const path=action.join("/");const token=bearerToken(request);
+    if(path==="cobrowse-state"&&request.method==="GET")return NextResponse.json({session:await readWidgetCobrowse(pool,{token,clientKey:request.headers.get("x-cobrowse-tab")})},{headers:{"Cache-Control":"no-store"}});
+    if(path==="cobrowse/consent"&&request.method==="POST"){
+      const body=await request.json().catch(()=>({}));
+      if(typeof body.accepted!=="boolean")return NextResponse.json({error:"Decision required"},{status:400});
+      return NextResponse.json(await consentWidgetCobrowse(pool,{token,clientKey:request.headers.get("x-cobrowse-tab"),accepted:body.accepted}),{headers:{"Cache-Control":"no-store"}});
+    }
     if(path === "voice-state" && ["GET","POST"].includes(request.method)) {
       return NextResponse.json(await updateWidgetVoiceState(pool,token,request.method === "POST" ? await request.json() : null),{headers:{"Cache-Control":"no-store"}});
     }

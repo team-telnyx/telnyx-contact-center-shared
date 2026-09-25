@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { pexelsSearch, pexelsDownload, pexelsConfigured } from "@/lib/pexels.mjs";
 import { withPermission } from "@/lib/authz/guard";
 
 // Agent-facing Pexels proxy: search royalty-free photos and fetch one as an
 // image the composer attaches like any other file. Requires a signed-in user.
 async function GET_handler(request){
-  const user=await getAuthenticatedUser();if(!user)return NextResponse.json({error:"Unauthorized"},{status:401});
   const params=new URL(request.url).searchParams;
   try{
     if(params.has("photoId")){

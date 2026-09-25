@@ -50,9 +50,12 @@ cd telnyx-contact-center
 
 First run installs the wizard's own isolated Node dependency tree
 (`deploy/cli/node_modules`, via `npm install` — never touches the main app's
-`yarn.lock`), then launches the wizard. Requires Node.js >= 22, matching the
-Node 22 production image and every CI workflow (Node 20 reached end of life on
-2026-04-30).
+`yarn.lock`), then launches the wizard. Requires Node.js `^22.13.0 || >=23.5.0`, which
+`deploy/cli/package.json` declares so npm enforces it: `@inquirer/prompts` and
+its packages ask for `>=23.5.0 || ^22.13.0 || ^20.17.0`, so the 22 line is
+supported only from 22.13 onward and 23.0 through 23.4 are excluded entirely.
+That still matches the Node 22 production image and every CI workflow (Node 20
+reached end of life on 2026-04-30).
 
 ---
 

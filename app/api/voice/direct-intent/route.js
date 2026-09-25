@@ -70,5 +70,5 @@ async function DELETE_handler(request, _context, authz) {
 }
 
 // Phase 2 migration: every export goes through the permission guard (the internal documentation).
-export const POST = withPermission("agent:self", POST_handler, { route: "/api/voice/direct-intent" });
-export const DELETE = withPermission("agent:self", DELETE_handler, { route: "/api/voice/direct-intent" });
+export const POST = withPermission("agent:self", POST_handler, { voiceControl: true, route: "/api/voice/direct-intent" });
+export const DELETE = withPermission("agent:self", DELETE_handler, { voiceControl: true, route: "/api/voice/direct-intent" });

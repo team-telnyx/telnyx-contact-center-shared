@@ -6,6 +6,8 @@ import ts from "typescript";
 import { guardStubFromDeps } from "./authz-harness.mjs";
 import * as campaignConfigurationModule from "../../lib/outbound-dialer/configuration-authorization.mjs";
 import * as publicUserModule from "../../lib/users/public-user.mjs";
+import * as mobilePagesModule from "../../lib/acd/mobile-monitor-pages.mjs";
+import * as providerStatusModule from "../../lib/provider-http-status.mjs";
 import * as scopeModule from "../../lib/authz/scope.mjs";
 
 export async function loadRoute(path, dependencies) {
@@ -31,6 +33,8 @@ export async function loadRoute(path, dependencies) {
   const key = `__route_test_${randomUUID()}`;
   const deps = {
     "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) } },
+    "@/lib/acd/mobile-monitor-pages.mjs": mobilePagesModule,
+    "@/lib/provider-http-status.mjs": providerStatusModule,
     "@/lib/users/public-user.mjs": publicUserModule,
     "@/lib/outbound-dialer/configuration-authorization.mjs": campaignConfigurationModule,
     ...dependencies,

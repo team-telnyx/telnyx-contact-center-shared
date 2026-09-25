@@ -1,3 +1,4 @@
+import { mobileInteractions } from "@/lib/acd/mobile-monitor-pages.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { readLiveInteractions } from "@/lib/acd/live-interactions.mjs";
@@ -14,7 +15,7 @@ async function GET_handler(request, _context, authz) {
     const result = await readLiveInteractions(db, { channel: new URL(request.url).searchParams.get("channel") || "all" });
     await db.query("COMMIT");
     if (authz.scope.restricted) restrictLiveInteractions(result, authz.scope);
-    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(mobileInteractions(result, new URL(request.url).searchParams), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (db) await db.query("ROLLBACK");
     if (error.status !== 400) contactCenterRuntimeLogger.error("live_interactions_read_failed", { error: error.message });

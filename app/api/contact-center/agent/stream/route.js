@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { replaceSseClient, removeSseClient } from "@/lib/sse";
+import { addSseClient, removeSseClient } from "@/lib/sse";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { readAgentStream } from "@/lib/acd/stream.mjs";
 import { withPermission } from "@/lib/authz/guard";
@@ -70,13 +70,8 @@ async function GET_handler(request, _context, authz) {
         };
 
         const proxyWriter = { write };
-        // One live connection per agent expected here — evict any stale writer
-        // under the same key instead of leaving both registered. Through a
-        // tunnel (cloudflared/ngrok), a silent client reconnect can otherwise
-        // leave an old, undetected-dead writer receiving broadcasts for up to
-        // 15s (until the ping-failure cleanup), causing the same event to be
-        // delivered twice and rendered as a duplicate transcription bubble.
-        replaceSseClient(sseKey, proxyWriter);
+        // Each authorized application has an independent writer and replay cursor.
+        addSseClient(sseKey, proxyWriter);
 
         const poll = async (snapshot = false) => {
           if (closed || polling) return;
@@ -128,6 +123,7 @@ async function GET_handler(request, _context, authz) {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (err) {

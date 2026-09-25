@@ -20,4 +20,4 @@ async function POST_handler(request, { params }, authz) {
 }
 
 // Phase 2 migration: every export goes through the permission guard (the internal documentation).
-export const POST = withPermission(["agent:self", "interactions:annotate"], POST_handler, { route: "/api/contact-center/interactions/[id]/media" });
+export const POST = withPermission(["agent:self", "interactions:annotate"], POST_handler, { voiceControl: true, route: "/api/contact-center/interactions/[id]/media" });

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { attachmentResponse } from "@/lib/widgets/attachments";
 import { withPermission } from "@/lib/authz/guard";
 
-async function GET_handler(request, context){
-  const user=await getAuthenticatedUser();if(!user)return NextResponse.json({error:"Unauthorized"},{status:401});
+async function GET_handler(request, context, authz){
+  const user=authz.user;
   const pool=getPostgresPool();if(!pool)return NextResponse.json({error:"Service unavailable"},{status:503});
   const {id,attachmentId}=await context.params;
   const file=(await pool.query(`SELECT f.* FROM acd_text_attachments f JOIN acd_work_items w ON w.conversation_id=f.conversation_id

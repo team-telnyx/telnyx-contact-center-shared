@@ -156,6 +156,7 @@ test('live endpoint authorizes supervisors and admins, rejects other roles and i
     '@/lib/role-utils': { isSupervisorOrAdmin: user => user.roles?.some(role => ['supervisor', 'admin'].includes(role)) },
     '@/lib/postgres.mjs': { getPostgresPool: () => ({ connect: () => { connects++; return pool.connect(); } }) },
     '@/lib/acd/live-interactions.mjs': { readLiveInteractions },
+    '@/lib/acd/mobile-monitor-pages.mjs': await import('../lib/acd/mobile-monitor-pages.mjs'),
     '@/lib/runtime-logging.mjs': { contactCenterRuntimeLogger: { error() {} } },
   });
   const request = channel => new Request(`https://cc.example.test/api/contact-center/monitor/interactions?channel=${channel}`);
@@ -166,4 +167,11 @@ test('live endpoint authorizes supervisors and admins, rejects other roles and i
   assert.equal((await route.GET(request('invalid'))).status, 400);
   assert.equal((await route.GET(request('chat'))).status, 200);
   identity.roles = ['admin']; assert.equal((await route.GET(request('voice'))).status, 200);
+  const paged = await route.GET(new Request('https://cc.example.test/api/contact-center/monitor/interactions?channel=all&mobilePageSize=25'));
+  assert.equal(paged.status, 200);
+  const payload = paged.body;
+  assert.equal(payload.pagination.pageSize, 25);
+  assert.ok(payload.interactions.filter(row => !row.parentInteractionId).length <= 25);
+  identity = null;
+  assert.equal((await route.GET(new Request('https://cc.example.test/api/contact-center/monitor/interactions?mobilePageSize=25'))).status, 401);
 });

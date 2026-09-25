@@ -48,6 +48,12 @@ function Tile({ track, label, cameraOff, cameraOffLabel, mirror = false, muted =
 /**
  * tiles: [{ id, role, kind: "camera" | "screen", self, track, label, cameraOff, cameraOffLabel, mirror, muted }]
  */
+function RemoteAudio({ track, muted }) {
+  const ref = useRef(null);
+  useTrackElement(ref, track, { muted });
+  return <audio ref={ref} autoPlay playsInline className="hidden" />;
+}
+
 export function VideoStage({
   scene = "pip",
   tiles = [],
@@ -56,6 +62,7 @@ export function VideoStage({
   fill = false,
   frameAspect = 4 / 3,
   mixedAudioTrack = null,
+  audioTracks = [],
   audioMuted = false,
   radius = 12,
   gap = 8,
@@ -108,6 +115,7 @@ export function VideoStage({
         })()}
         {corner && <div className="absolute right-2 top-2 z-30">{corner}</div>}
         <audio ref={audioRef} autoPlay playsInline className="hidden" />
+      {audioTracks.map(({ id, track }) => <RemoteAudio key={id} track={track} muted={audioMuted} />)}
       </div>
     </div>
   );

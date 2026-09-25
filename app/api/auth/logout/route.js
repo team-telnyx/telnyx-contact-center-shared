@@ -1,7 +1,9 @@
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { revokeAuthVoiceEndpoints } from "@/lib/acd/voice-endpoints.mjs";
+import { mutateRefreshSession } from "@/lib/auth-refresh-sessions.mjs";
 import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
-import { PgDb } from "@/lib/pgdb";
 import { authErrorPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
 import {
   completeTrackedLogout,
@@ -60,8 +62,13 @@ export async function POST(request) {
       });
     }
 
-    let userId = null;
-    if (accessCookie) {
+    const bearerRefresh = headerMatch?.[1] || null;
+    const bearerPayload = bearerRefresh ? await verifyRefreshToken(bearerRefresh) : null;
+    if (bearerRefresh && !bearerPayload?.sub) {
+      return NextResponse.json({ error: "Invalid refresh token" }, { status: 401 });
+    }
+    let userId = bearerPayload?.sub || null;
+    if (!userId && accessCookie) {
       const p = await verifyAccessToken(accessCookie);
       if (p?.sub) userId = p.sub;
     }
@@ -71,7 +78,7 @@ export async function POST(request) {
     }
     if (!userId && nextAuthToken?.id) userId = String(nextAuthToken.id);
     const email = nextAuthToken?.email || null;
-    const refreshToRevoke = refreshCookie || headerMatch?.[1] || null;
+    const refreshToRevoke = bearerRefresh || refreshCookie || null;
     let revokedRefreshToken = false;
     let trackedSessionClosed = false;
     await logAuthEvent("info", "logout_attempt", {
@@ -82,17 +89,16 @@ export async function POST(request) {
     });
 
     const user = await resolveTrackedAuthUser({ userId, email });
+    if (user) {
+      const refreshPayload = bearerPayload || (refreshToRevoke ? await verifyRefreshToken(refreshToRevoke) : null);
+      await revokeAuthVoiceEndpoints(getPostgresPool(), user, refreshPayload?.sid || (!bearerRefresh ? nextAuthToken?.authTrackingSessionId : null));
+    }
     if (user && refreshToRevoke) {
-      const list = Array.isArray(user?.refresh_tokens)
-        ? user.refresh_tokens
-        : [];
-      const hashed = await hashToken(refreshToRevoke);
-      const newList = list.filter((t) => t?.refreshToken !== hashed);
-      await PgDb.updateUserById(String(user.id), { refresh_tokens: newList });
-      revokedRefreshToken = newList.length !== list.length;
+      const result = await mutateRefreshSession(String(user.id), { revoke: await hashToken(refreshToRevoke) });
+      revokedRefreshToken = result.revoked;
     }
 
-    if (user) {
+    if (user && nextAuthToken?.authTrackingSessionId && !bearerRefresh) {
       try {
         const trackingResult = await completeTrackedLogout({
           userId: String(user.id),
@@ -119,6 +125,7 @@ export async function POST(request) {
     });
   } catch (error) {
     await logAuthEvent("warn", "logout_failed", { source: "api", ...authErrorPayload(error) });
+    return NextResponse.json({ error: "Could not revoke session. Please retry." }, { status: error.status || 503 });
   }
 
   expireAuthCookies(request, res);

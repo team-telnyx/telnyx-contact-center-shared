@@ -1,3 +1,4 @@
+import { withVideoDevice, withWrapupDevice, mediaDevicePresentation } from "@/lib/acd/media-device-control.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { actOnTextWork } from "@/lib/acd/text-lifecycle.mjs";
@@ -12,13 +13,22 @@ async function handle(request,context,authz){
   const user=authz.user;const pool=getPostgresPool();if(!pool)return NextResponse.json({error:"Database unavailable"},{status:503});
   try{
     const {id}=await context.params;const agentId=String(user.id);
-    if(request.method==="GET")return NextResponse.json(await readVideoDetail(pool,{workItemId:id,agentId}),{headers:{"Cache-Control":"no-store"}});
+    if(request.method==="GET") {
+      const detail=await readVideoDetail(pool,{workItemId:id,agentId});
+      return NextResponse.json({...detail,deviceControl:await mediaDevicePresentation(pool,user,request,
+        {workItemId:id,wrapup:detail.assignmentState==='wrapup'})},{headers:{"Cache-Control":"no-store"}});
+    }
     const body=await request.json();
+    const execute=async()=>{
     if(body.action==="transfer")return NextResponse.json(await transferTextWork(pool,{...body,workItemId:id,agentId,channel:"video"}));
     if(["send","draft","typing","wait","complete"].includes(body.action))return NextResponse.json({error:"Unsupported video action"},{status:400});
     const result=await actOnTextWork(pool,{...body,workItemId:id,agentId,channel:"video"});
     if(body.action==="disconnect"&&result?.ok)await endVideoRoom(pool,{workItemId:id,actor:agentId,reason:"agent_ended"}).catch(()=>undefined);
     return NextResponse.json(result);
+    };
+    return body.action==='wrapup'
+      ? await withWrapupDevice(pool,user,request,{workItemId:id,ownerVersion:body.ownerVersion},execute)
+      : await withVideoDevice(pool,user,request,id,execute);
   }catch(error){return NextResponse.json({error:error.status?error.message:"Video operation failed"},{status:error.status||500});}
 }
 export const GET = withPermission("agent:self", handle, { route: "/api/contact-center/video/[id]" });

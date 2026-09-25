@@ -285,3 +285,35 @@ test("higher chat cost revalidates every pending offer before retaining the olde
   const live=(await pool.query("SELECT work_item_id,weight FROM acd_reservations WHERE agent_id=$1 AND state<>'released'",[f.agentId])).rows;
   assert.equal(live.length,1);assert.equal(live[0].work_item_id,first.id);assert.equal(Number(live[0].weight),0.6);
 });
+
+test('web and mobile drafts are isolated while both sessions append to the same conversation',async()=>{
+ const {saveTextDraft}=await import('../lib/acd/text-desktop.mjs');
+ const {messagingDraftScope}=await import('../lib/acd/draft-scope.mjs');
+ const f=await fixture(),work=await f.create();await routeOne(pool,work.id);await act(work,f.agentId,'accept');
+ await pool.query(`CREATE TABLE IF NOT EXISTS cc_wrapup_codes(id TEXT PRIMARY KEY,name TEXT,is_active BOOLEAN DEFAULT true); CREATE TABLE IF NOT EXISTS cc_queue_wrapup_codes(queue_id TEXT,wrapup_code_id TEXT); INSERT INTO cc_wrapup_codes(id,name) VALUES('unified-test','Resolved') ON CONFLICT DO NOTHING`);
+ const identity={workItemId:work.id,agentId:f.agentId};
+ const web=messagingDraftScope({authSessionId:'web-'+f.agentId}),mobile=messagingDraftScope({authSessionId:'ios-'+f.agentId});
+ const a=await saveTextDraft(pool,{...identity,draftScope:web,body:'Web reply',expectedVersion:'0'});
+ const b=await saveTextDraft(pool,{...identity,draftScope:mobile,body:'iPhone reply',expectedVersion:'0'});
+ await act(work,f.agentId,'send',{body:'iPhone reply',draftScope:mobile,draftVersion:b.version});
+ assert.equal((await readTextDetail(pool,{...identity,draftScope:web})).draft.body,'Web reply');
+ await act(work,f.agentId,'send',{body:'Web reply',draftScope:web,draftVersion:a.version});
+ for(const draftScope of [web,mobile]){
+   const detail=await readTextDetail(pool,{...identity,draftScope});
+   assert.equal(detail.draft.body,'');
+   assert.deepEqual(detail.messages.map(m=>m.body),['iPhone reply','Web reply']);
+ }
+ await assert.rejects(saveTextDraft(pool,{...identity,draftScope:web,body:'stale tab',expectedVersion:a.version}),e=>e.status===409);
+});
+
+test('messaging wrap-up queues Break without changing another active interaction to Available',async()=>{
+ const f=await fixture(),a=await f.create(),b=await f.create();
+ await routeOne(pool,a.id);await act(a,f.agentId,'accept');
+ await routeOne(pool,b.id);await act(b,f.agentId,'accept');
+ await act(a,f.agentId,'disconnect');
+ const code=(await pool.query('SELECT id FROM cc_wrapup_codes WHERE is_active=true LIMIT 1')).rows[0];
+ await act(a,f.agentId,'wrapup',{codeId:code.id,nextStatus:'Break'});
+ const agent=(await pool.query('SELECT manual_status,workflow_state FROM acd_agent_state WHERE agent_id=$1',[f.agentId])).rows[0];
+ assert.equal(agent.manual_status,'Break');assert.equal(agent.workflow_state,'handling');
+ assert.equal((await pool.query('SELECT state FROM acd_text_assignments WHERE work_item_id=$1',[b.id])).rows[0].state,'active');
+});

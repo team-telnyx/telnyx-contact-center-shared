@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^22.13.0 || >=23.5.0"
+  },
   "description": "Interactive deployment wizard for Telnyx Contact Center (local + cloud). Kept isolated from the main app's dependency tree.",
   "bin": {
     "cc-deploy": "cc.mjs"

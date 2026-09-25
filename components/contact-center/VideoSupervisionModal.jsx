@@ -131,7 +131,7 @@ export default function VideoSupervisionModal({ open, onOpenChange, interaction 
             <VideoLayoutSwitch layout={room.layout} onChange={(next) => room.setLayout(next, { broadcast: false })} labels={LAYOUT_LABELS} size={28} iconSize={14}
               buttonStyle={{ borderRadius: 6, borderColor: "rgba(255,255,255,0.25)", backgroundColor: "transparent", color: "#fff" }} activeStyle={{ backgroundColor: "rgba(245,158,11,0.35)" }} />
           </div>
-          <VideoStage scene={room.layout} tiles={visibleTiles} viewerRole="supervisor" orientation="row" fill mixedAudioTrack={room.mixedAudioTrack} radius={10} hiddenLabel={(hidden) => `+${hidden.length} more`} className="min-h-[280px]" />
+          <VideoStage scene={room.layout} tiles={visibleTiles} viewerRole="supervisor" orientation="row" fill audioTracks={room.audioTracks} radius={10} hiddenLabel={(hidden) => `+${hidden.length} more`} className="min-h-[280px]" />
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Button type="button" variant={room.micOn ? "outline" : "secondary"} size="icon" className="size-11 rounded-full" disabled={!connected || mode === "monitor"} aria-label={room.micOn ? "Mute" : "Unmute"} onClick={() => room.toggleMic()}>{room.micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}</Button>

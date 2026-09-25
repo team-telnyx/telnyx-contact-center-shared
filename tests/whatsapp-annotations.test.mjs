@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { staticMapLayout, lngLatToTile, mapLink, googleMapsLink, googleMapsEmbedUrl, googleMapsApiKey, parseLatitude, parseLongitude, mapTileTemplate } from "../lib/contact-center/maps.mjs";
 import { geocodeSearch, normalizeGeocodeResult, clearGeocodeCache, geocoderUserAgent } from "../lib/contact-center/geocoding.mjs";
 import { foldWhatsAppAnnotations } from "../lib/whatsapp/annotations.mjs";
-import { normalizeWhatsAppLocation, buildWhatsAppLocationMessage, whatsappContactCard, summarizeWhatsAppContacts, buildWhatsAppContactsMessage, buildWhatsAppReactionMessage, describeWhatsAppContent, WHATSAPP_MAX_CONTACTS } from "../lib/whatsapp/policy.mjs";
+import { normalizeWhatsAppDeviceContacts, normalizeWhatsAppLocation, buildWhatsAppLocationMessage, whatsappContactCard, summarizeWhatsAppContacts, buildWhatsAppContactsMessage, buildWhatsAppReactionMessage, describeWhatsAppContent, WHATSAPP_MAX_CONTACTS } from "../lib/whatsapp/policy.mjs";
 
 test("map tiles: projection matches the XYZ convention and the mosaic covers the viewport around the pin", () => {
   assert.deepEqual([Math.floor(lngLatToTile(0, 0, 1).x), Math.floor(lngLatToTile(0, 0, 1).y)], [1, 1]);
@@ -96,4 +96,21 @@ test("annotations fold reactions onto the message they refer to and resolve quot
   assert.deepEqual(folded[1].delivery.quoted, { message_id: "m1", sender_role: "agent", body: "So what is your problem?", kind: "text" });
   assert.deepEqual(folded[1].delivery.reactions, [], "the agent removed their reaction");
   assert.equal(folded[2].delivery.orphan_reaction, true);
+});
+
+
+test("device contact cards validate size and types and never forward private fields", () => {
+  const [card] = normalizeWhatsAppDeviceContacts([{ display_name: "Ada", mobile: "+48 111 222 333", phone: "600 111 222",
+    email_address_1: "ada@example.test", company_name: "Support", identifier: "iphone-secret", notes: "private note", photo: "private photo" }]);
+  assert.equal(card.name.formatted_name, "Ada");
+  assert.equal(card.phones[0].phone, "+48111222333");
+  assert.equal(card.phones[1].phone, "600 111 222");
+  assert.equal(card.phones[1].wa_id, undefined);
+  assert.equal(JSON.stringify(card).includes("private"), false);
+  assert.equal(JSON.stringify(card).includes("iphone-secret"), false);
+  assert.throws(() => normalizeWhatsAppDeviceContacts([]), /between/);
+  assert.throws(() => normalizeWhatsAppDeviceContacts(Array(6).fill({ display_name: "Ada" })), /between/);
+  assert.throws(() => normalizeWhatsAppDeviceContacts([{ display_name: "x".repeat(121) }]), /Invalid/);
+  assert.throws(() => normalizeWhatsAppDeviceContacts([{ display_name: {} }]), /Invalid/);
+  assert.throws(() => normalizeWhatsAppDeviceContacts([{ mobile: "+48111222333" }]), /no name/);
 });

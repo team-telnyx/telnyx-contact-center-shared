@@ -719,19 +719,18 @@ test('self-initiated dialing while Away preserves queue and occupancy guards', a
   assert.equal(await tx(t => tryReserveCapacity(t, { agentId:a.id })), null);
   const intent = await reserveDirectVoice(pool, { agentId:a.id, target:'+15550002222' });
   assert.ok(intent.id);
-  await assert.rejects(reserveDirectVoice(pool, { agentId:a.id, target:'+15550003333' }), /no available voice capacity/);
+  await assert.rejects(reserveDirectVoice(pool, { agentId:a.id, target:'+15550003333' }), /voice or video call is already in progress or the phone is not ready/);
   assert.equal((await state(a.id)).manual_status, 'Away');
   assert.equal((await state(a.id)).routability, 'not_routable');
 });
 
-test('manual dialing still requires online voice capability and idle workflow', async () => {
-  for (const restriction of ['offline', 'no_voice', 'wrapup']) {
+test('manual dialing still requires online voice capability', async () => {
+  for (const restriction of ['offline', 'no_voice']) {
     const a = await agent();
     await pool.query("UPDATE acd_agent_state SET manual_status='Away', routability='not_routable' WHERE agent_id=$1", [a.id]);
     if (restriction === 'offline') await pool.query("UPDATE acd_agent_state SET presence='offline' WHERE agent_id=$1", [a.id]);
     if (restriction === 'no_voice') await pool.query("UPDATE acd_agent_sessions SET capabilities='{}' WHERE agent_id=$1", [a.id]);
-    if (restriction === 'wrapup') await pool.query("UPDATE acd_agent_state SET workflow_state='wrapup' WHERE agent_id=$1", [a.id]);
-    await assert.rejects(reserveDirectVoice(pool, { agentId:a.id, target:'+15550002222' }), /no available voice capacity/);
+    await assert.rejects(reserveDirectVoice(pool, { agentId:a.id, target:'+15550002222' }), /voice or video call is already in progress or the phone is not ready/);
   }
 });
 
@@ -989,4 +988,84 @@ test('the reconciler settles a direct intent from leg evidence when no handler c
   const alarmedBefore=(await pool.query(`SELECT COUNT(*)::int AS n FROM acd_events WHERE agent_id=$1 AND type='manual_intervention_required'`,[a.id])).rows[0].n;
   await alarmUnconfirmedDirectIntents(pool);
   assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM acd_events WHERE agent_id=$1 AND type='manual_intervention_required'`,[a.id])).rows[0].n,alarmedBefore);
+});
+
+async function messagingOccupancy(agentId) {
+  return tx(async t => {
+    const work = await createWorkItem(t, { channel: 'whatsapp', direction: 'inbound' });
+    const reservationId = randomUUID();
+    await t.query(`INSERT INTO acd_reservations (id,agent_id,work_item_id,channel,weight,state,purpose)
+      VALUES ($1,$2,$3,'whatsapp',1,'active','queue')`, [reservationId, agentId, work.id]);
+    await setWorkflowState(t, agentId, 'handling', { workItemId: work.id });
+    return { work, reservationId };
+  });
+}
+
+test('manual outbound and every supervision role bypass messaging budget while retaining voice occupancy', async () => {
+  for (const role of [null, 'monitor', 'whisper', 'barge']) {
+    const a = await agent();
+    const messaging = await messagingOccupancy(a.id);
+    await pool.query('INSERT INTO cc_agent_utilization(agent_id,budget) VALUES($1,0.1)', [a.id]);
+    await pool.query(`INSERT INTO cc_agent_channel_policies(agent_id,channel,enabled,max_concurrent,weight)
+      VALUES($1,'voice',false,1,1)`, [a.id]);
+    assert.equal(await tx(t => tryReserveCapacity(t, { agentId: a.id })), null, 'queue admission stays blocked');
+    const intent = role
+      ? await reserveSupervisionVoice(pool, { agentId: a.id, target: 'sip:test@sip.telnyx.com', supervisedCallControlId: 'v3:test', role })
+      : await reserveDirectVoice(pool, { agentId: a.id, target: '+15550002222' });
+    assert.ok(intent.reservation_id);
+    assert.equal((await state(a.id)).workflow_state, 'handling');
+    await assert.rejects(reserveDirectVoice(pool, { agentId: a.id, target: '+15550003333' }), { status: 409 });
+    await assert.rejects(reserveSupervisionVoice(pool, { agentId: a.id, target: 'sip:other@sip.telnyx.com', supervisedCallControlId: 'v3:other', role: 'monitor' }), { status: 409 });
+    assert.equal(await tx(t => tryReserveCapacity(t, { agentId: a.id })), null);
+    const payload = { to: intent.target, call_control_id: `v3:manual-${randomUUID()}`,
+      direction: role ? 'incoming' : 'outgoing', custom_headers: [{ name: 'X-CC-Direct-Intent-Id', value: intent.id }] };
+    await applyDirectCapacityEvent(pool, { eventType: 'call.initiated', payload });
+    await applyDirectCapacityEvent(pool, { eventType: 'call.hangup', payload });
+    assert.equal((await pool.query('SELECT state FROM acd_reservations WHERE id=$1', [messaging.reservationId])).rows[0].state, 'active');
+    assert.equal((await state(a.id)).workflow_state, 'handling', 'messaging still owns Busy after voice ends');
+    assert.equal((await state(a.id)).workflow_work_item_id, messaging.work.id);
+  }
+});
+
+test('manual and supervisory attempts serialize under messaging load', async () => {
+  const a = await agent();
+  await messagingOccupancy(a.id);
+  const results = await Promise.allSettled([
+    reserveDirectVoice(pool, { agentId: a.id, target: '+15550002222' }),
+    reserveSupervisionVoice(pool, { agentId: a.id, target: 'sip:test@sip.telnyx.com', supervisedCallControlId: 'v3:test', role: 'monitor' }),
+  ]);
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM acd_reservations
+    WHERE agent_id=$1 AND channel='voice' AND state<>'released'`, [a.id])).rows[0].n, 1);
+});
+
+test('manual voice excludes an outstanding queue offer and unreserved live media', async () => {
+  const a = await agent();
+  assert.ok(await tx(t => tryReserveCapacity(t, { agentId: a.id })));
+  await assert.rejects(reserveDirectVoice(pool, { agentId: a.id, target: '+15550002222' }), { status: 409 });
+  const b = await agent();
+  const work = await tx(t => createWorkItem(t, { channel: 'voice', direction: 'inbound' }));
+  await pool.query(`INSERT INTO acd_legs(id,work_item_id,agent_id,role,provider_call_id,state)
+    VALUES($1,$2,$3,'agent_device',$4,'answered')`, [randomUUID(), work.id, b.id, `v3:orphan-${randomUUID()}`]);
+  await assert.rejects(reserveDirectVoice(pool, { agentId: b.id, target: '+15550002222' }), { status: 409 });
+});
+
+test('completed voice wrapup does not block manual voice but still blocks queue admission', async () => {
+  const a = await agent();
+  await pool.query("UPDATE acd_agent_state SET workflow_state='wrapup',routability='not_routable' WHERE agent_id=$1", [a.id]);
+  assert.equal(await tx(t => tryReserveCapacity(t, { agentId: a.id })), null);
+  assert.ok((await reserveDirectVoice(pool, { agentId: a.id, target: '+15550002222' })).id);
+});
+
+
+test('manual voice and supervision cannot overlap an offered or active video session', async () => {
+  for (const reservationState of ['reserved', 'active']) {
+    const a = await agent();
+    const work = await tx(t => createWorkItem(t, { channel: 'video', direction: 'inbound' }));
+    await pool.query(`INSERT INTO acd_reservations (id,agent_id,work_item_id,channel,weight,state,purpose,lease_expires_at)
+      VALUES ($1,$2,$3,'video',1,$4,'queue',now()+interval '1 minute')`, [randomUUID(), a.id, work.id, reservationState]);
+    await assert.rejects(reserveDirectVoice(pool, { agentId: a.id, target: '+15550002222' }), { status: 409 });
+    await assert.rejects(reserveSupervisionVoice(pool, { agentId: a.id, target: 'sip:test@sip.telnyx.com', supervisedCallControlId: 'v3:test', role: 'monitor' }), { status: 409 });
+    assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM acd_reservations WHERE agent_id=$1 AND channel='voice'", [a.id])).rows[0].n, 0);
+  }
 });

@@ -137,7 +137,7 @@ resource "google_compute_firewall" "allow_app_ports" {
 # Google's published, stable source ranges for HTTP(S) Load Balancer health
 # checks AND the actual proxied traffic from the LB to backends (both the
 # classic and Envoy-based proxy paths use these two ranges) — see
-# https://cloud.google.com/load-balancing/the internal documentation
+# https://cloud.google.com/load-balancing/docs/health-check-concepts#ip-ranges.
 # Opening these (not 0.0.0.0/0) is what makes the LB reachable while keeping
 # the instance's app ports closed to the public internet directly, the GCP
 # equivalent of the AWS root's ALB security group being the only thing

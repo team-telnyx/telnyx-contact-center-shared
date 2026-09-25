@@ -1,3 +1,4 @@
+import { withWrapupDevice } from "@/lib/acd/media-device-control.mjs";
 import { submitOutboundDisposition } from "@/lib/acd/outbound-disposition.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
@@ -50,7 +51,10 @@ async function POST_handler(request, _context, authz) {
     if (!attemptId) return NextResponse.json({ ok: false, error: "Attempt ID is required" }, { status: 400 });
     if (!dispositionCodeId) return NextResponse.json({ ok: false, error: "Disposition code is required" }, { status: 400 });
 
-    const coreResult = await submitOutboundDisposition(pool, { attemptId, agentId: String(user.id), dispositionCodeId, callbackAt, notes });
+    const work = (await pool.query('SELECT id FROM acd_work_items WHERE outbound_attempt_id=$1',[attemptId])).rows[0];
+    const submit = () => submitOutboundDisposition(pool, { attemptId, agentId: String(user.id), dispositionCodeId, callbackAt, notes });
+    const coreResult = work ? await withWrapupDevice(pool,user,request,
+      {workItemId:work.id,ownerVersion:body.ownerVersion},submit) : await submit();
     if (coreResult) return NextResponse.json(coreResult);
 
     const attemptResult = await pool.query(

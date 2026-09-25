@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
+import { DeviceHandoff } from "./DeviceHandoff";
 import { AgentAssist } from "./AgentAssist";
 import { AgentAssistWorkflow } from "./AgentAssistWorkflow";
 import { AgentFormsView } from "./AgentFormsView";
@@ -22,29 +23,19 @@ import { Sparkles } from "lucide-react";
  * 2. Default: KB Articles mode
  */
 export function InteractionDetail({ interaction }) {
-  const [assistConfig, setAssistConfig] = useState(null);
-
-  // Determine assist configuration from interaction metadata
-  useEffect(() => {
-    if (!interaction) {
-      setAssistConfig(null);
-      return;
-    }
-
-    // Check interaction metadata for agent_assist_config (set by call flow node)
-    const metadataConfig = interaction.metadata?.agent_assist_config;
-    if (metadataConfig) {
-      setAssistConfig(metadataConfig);
-      return;
-    }
-    // Default: KB Articles mode
-    setAssistConfig({
-      enabled: true,
-      assist_type: "kb_articles",
-      kb_auto_suggest: true,
-      kb_max_suggestions: 3,
-    });
-  }, [interaction]);
+  const activeVoice=interaction && ['voice','call'].includes(interaction.channel || interaction.interaction_type || 'voice')
+    && ['active','connected','answered','held'].includes(interaction.state || interaction.status)
+    && !interaction.completed_at && !interaction.abandoned_at;
+  return <div className="flex h-full min-h-0 flex-col">
+    {activeVoice && <div className="shrink-0 p-3"><DeviceHandoff key={interaction.id} interactionId={interaction.id}/></div>}
+    <div className="min-h-0 flex-1"><InteractionAssistDetail interaction={interaction}/></div>
+  </div>;
+}
+function InteractionAssistDetail({ interaction }) {
+  const assistConfig = useMemo(() => interaction
+    ? interaction.metadata?.agent_assist_config || {
+      enabled: true, assist_type: "kb_articles", kb_auto_suggest: true, kb_max_suggestions: 3,
+    } : null, [interaction]);
 
   if (!interaction) {
     return (

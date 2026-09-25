@@ -1,21 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { authLogger, securityErrorPayload, securityUserPayload } from "@/lib/security-logging.mjs";
 import { withPermission } from "@/lib/authz/guard";
 
-async function GET_handler() {
+async function GET_handler(request, _context, authz) {
   try {
-    // Get session
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Find user in users table
-    const user = await PgDb.findUserByUsername(session.user.email);
+    const user = await PgDb.findUserById(String(authz.user.id));
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -29,7 +20,7 @@ async function GET_handler() {
     // Find auth_users record by email
     const authUserResult = await pool.query(
       "SELECT id FROM auth_users WHERE email=$1 LIMIT 1",
-      [session.user.email]
+      [user.username]
     );
     const authUser = authUserResult.rows?.[0];
 
@@ -58,7 +49,7 @@ async function GET_handler() {
       hasFacebook,
     });
   } catch (error) {
-    authLogger.error("auth_methods_load_failed", { ...securityErrorPayload(error), ...securityUserPayload(null, session?.user?.email) });
+    authLogger.error("auth_methods_load_failed", { ...securityErrorPayload(error), ...securityUserPayload(null, authz.user?.username) });
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

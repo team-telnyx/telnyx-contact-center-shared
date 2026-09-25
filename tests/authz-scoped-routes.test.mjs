@@ -199,6 +199,7 @@ test("admin users list narrows to agents of the scoped queues and the user detai
   assert.equal(response.status, 200, JSON.stringify(response.body));
   const rowsQuery = pool.calls.find((c) => c.text.startsWith("SELECT u.id, u.username"));
   assert.match(rowsQuery.text, /u\.id = ANY\(\$1::text\[\]\)/);
+  assert.match(rowsQuery.text, /u\.profile_picture_uri/, "user lists include the assigned profile photo");
   assert.deepEqual(rowsQuery.params[0], ["agent-sales", "lead-1"]);
 
   const detail = await loadRoute("app/api/admin/users/[id]/route.js", deps(lead, pool, shared));

@@ -1,3 +1,4 @@
+import { mobilePaging, mobileReport } from "@/lib/acd/mobile-monitor-pages.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { resolveReportingScope } from "@/lib/acd/reporting-scope.mjs";
@@ -23,10 +24,12 @@ async function GET_handler(request, _context, authz) {
       throw Object.assign(new Error("Unknown report"), { status: 400 });
     const scope = await resolveReportingScope(db, params, authz.scope);
     const report = await readInteractionReport(db, scope, section);
+    if (!mobilePaging(params)) {
     report.workload = await readLiveWorkload(db, scope.agentId);
     if (authz.scope.restricted) {
       report.workload.interactions = report.workload.interactions.filter((item) =>
         interactionInScope(authz.scope, { channel: item.channel, queueIds: [item.queue_id], agentIds: [item.agent_id] }));
+    }
     }
     const queueVals = [];
     const queueWhere = queueScopeSql(authz.scope, "id", queueVals);
@@ -39,7 +42,7 @@ async function GET_handler(request, _context, authz) {
       ).rows,
     };
     await db.query("COMMIT");
-    return NextResponse.json(report, {
+    return NextResponse.json(mobileReport(report, params), {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

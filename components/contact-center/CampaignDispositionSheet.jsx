@@ -1,4 +1,5 @@
 "use client";
+import { voiceFetch } from "@/lib/telephony/endpoint-client";
 
 import { useEffect, useState } from "react";
 import { IconChecklist } from "@tabler/icons-react";
@@ -81,11 +82,12 @@ export default function CampaignDispositionSheet({ assignment, open, onClose, on
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/contact-center/agent/campaigns/disposition", {
+      const res = await voiceFetch("/api/contact-center/agent/campaigns/disposition", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           attemptId: assignment.id,
+          ownerVersion: assignment.ownerVersion,
           dispositionCodeId: selectedCode,
           callback_at: callbackAt ? new Date(callbackAt).toISOString() : null,
           notes,

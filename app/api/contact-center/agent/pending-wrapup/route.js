@@ -1,3 +1,4 @@
+import { mediaDevicePresentation } from "@/lib/acd/media-device-control.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { findPendingAcdWrapupForAgent } from "@/lib/acd/wrapup-context.mjs";
@@ -23,6 +24,7 @@ async function GET_handler(request, _context, authz) {
       ok: true,
       pendingWrapup: segment
         ? {
+            deviceControl: await mediaDevicePresentation(pool,user,request,{workItemId:segment.work_item_id,segmentId:segment.id,wrapup:true}),
             interactionId: segment.interaction_id,
             workItemId: segment.work_item_id,
             segmentId: segment.id,
