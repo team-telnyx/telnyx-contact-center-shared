@@ -11441,16 +11441,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-easy-crop@npm:^5.5.6":
-  version: 5.5.6
-  resolution: "react-easy-crop@npm:5.5.6"
+"react-easy-crop@npm:^6.2.3":
+  version: 6.2.3
+  resolution: "react-easy-crop@npm:6.2.3"
   dependencies:
     normalize-wheel: "npm:^1.0.1"
-    tslib: "npm:^2.0.1"
   peerDependencies:
     react: ">=16.4.0"
     react-dom: ">=16.4.0"
-  checksum: 10c0/ce623791d31559fc46f210ece7b22c0f659710d5de219ef9fb05650940f50445d5e6573ed229b66fad06dfda9651ae458c0f5efb8e1cabdf01511dc32942cdc8
+  checksum: 10c0/ca55a03eb9396c9cf9354aceaa0da585171a94cd86eabdd1aec482c96128cffade1438cbc2d8e221dc50f50c70d84538441f928bf4c3d7bc951d4c2b60a0be7e
   languageName: node
   linkType: hard
 
@@ -13002,7 +13001,7 @@ __metadata:
     react: "npm:19.3.0"
     react-day-picker: "npm:^10.0.1"
     react-dom: "npm:19.3.0"
-    react-easy-crop: "npm:^5.5.6"
+    react-easy-crop: "npm:^6.2.3"
     react-markdown: "npm:^10.1.0"
     react-syntax-highlighter: "npm:^16.1.1"
     reactflow: "npm:^11.11.4"
@@ -13135,7 +13134,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:2.8.1, tslib@npm:^2.0.0, tslib@npm:^2.0.1, tslib@npm:^2.1.0, tslib@npm:^2.2.0, tslib@npm:^2.4.0, tslib@npm:^2.6.2, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
+"tslib@npm:2.8.1, tslib@npm:^2.0.0, tslib@npm:^2.1.0, tslib@npm:^2.2.0, tslib@npm:^2.4.0, tslib@npm:^2.6.2, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
   version: 2.8.1
   resolution: "tslib@npm:2.8.1"
   checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62
