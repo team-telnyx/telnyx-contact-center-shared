@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo } from "react";
 import {
@@ -139,6 +141,7 @@ export default function TranscriptionSheet({
   playbackPlaying = false,
   onSeekRecording = null,
 }) {
+  const tUi = useUiText();
   const messages = useMemo(() => {
     return parseTranscription(transcriptionText, transcriptionSegments);
   }, [transcriptionText, transcriptionSegments]);
@@ -151,18 +154,16 @@ export default function TranscriptionSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-2xl">
+      <SheetContent side="end" className="flex w-full flex-col p-0 sm:max-w-2xl">
         <SheetHeader className="border-b border-border/60 px-6 py-4">
           <SheetTitle className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300">
               <IconMessages className="h-4.5 w-4.5" />
-            </span>
-            Call Transcription
-          </SheetTitle>
+            </span>{tUi("Call Transcription")}</SheetTitle>
           <SheetDescription>
             {hasSpeakerTurns
-              ? "Diarized conversation with speaker turns and timestamps."
-              : "Conversation reconstructed from transcription segments."}
+              ? tUi("Diarized conversation with speaker turns and timestamps.")
+              : tUi("Conversation reconstructed from transcription segments.")}
           </SheetDescription>
           <div className="flex flex-wrap gap-1.5 pt-1">
             {details?.model && (
@@ -172,12 +173,10 @@ export default function TranscriptionSheet({
             )}
             {hasSpeakerTurns && (
               <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300">
-                {speakerCount} speakers · {speakerTurns.length} turns
-              </Badge>
+                {speakerCount}{tUi(" speakers · ")}{speakerTurns.length}{tUi(" turns")}</Badge>
             )}
             {confidenceLabel && (
-              <Badge variant="outline" className="border-border/70 bg-muted/40 text-[10px]">
-                Confidence {confidenceLabel}
+              <Badge variant="outline" className="border-border/70 bg-muted/40 text-[10px]">{tUi("Confidence ")}{confidenceLabel}
               </Badge>
             )}
           </div>
@@ -188,9 +187,7 @@ export default function TranscriptionSheet({
             <Card className="mx-0 border-border/70 bg-muted/20">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                  <IconClipboard className="h-4 w-4 text-violet-500" />
-                  Call Summary
-                </CardTitle>
+                  <IconClipboard className="h-4 w-4 text-violet-500" />{tUi("Call Summary")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">
@@ -205,7 +202,7 @@ export default function TranscriptionSheet({
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                 <IconFileText className="h-4 w-4 text-violet-500" />
-                {hasSpeakerTurns ? "Speaker Timeline" : "Transcription"}
+                {hasSpeakerTurns ? tUi("Speaker Timeline") : tUi("Transcription")}
               </CardTitle>
             </CardHeader>
             <CardContent className="min-h-0 flex-1 p-0">
@@ -218,9 +215,7 @@ export default function TranscriptionSheet({
                     onSeek={onSeekRecording}
                   />
                 ) : messages.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">
-                    No transcription available
-                  </div>
+                  <div className="p-4 text-center text-sm text-muted-foreground">{tUi("No transcription available")}</div>
                 ) : (
                   <div className="px-4 pb-4">
                     <Conversation>
@@ -267,9 +262,7 @@ export default function TranscriptionSheet({
         </div>
 
         <SheetFooter className="flex flex-row justify-end gap-2 border-t px-6 py-4">
-          <Button onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
+          <Button onClick={() => onOpenChange(false)}>{tUi("Close")}</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>

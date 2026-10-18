@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 export const SECTION_RAIL_WIDTH = "100px";
 export const SECTION_RAIL_PAGE_GRID_CLASS = "grid flex-1 min-h-0 gap-3 p-3";
@@ -10,6 +11,7 @@ export const SECTION_RAIL_GRID_COLUMN = `${SECTION_RAIL_WIDTH}_minmax(0,1fr)`;
 export const SECTION_RAIL_GRID_COLUMN_WITH_PANEL = `${SECTION_RAIL_WIDTH}_320px_minmax(0,1fr)_360px`;
 
 function RailItem({ item, activeId, onSelect }) {
+  const tUi = useUiText();
   const { id, label, icon: Icon, description, tone } = item;
   const isActive = activeId === id;
   const toneClass = tone === "exit"
@@ -22,8 +24,9 @@ function RailItem({ item, activeId, onSelect }) {
     <button
       key={id}
       type="button"
+      data-section-id={id}
       onClick={() => onSelect?.(id)}
-      title={description || label}
+      title={tUi(description || label)}
       aria-current={isActive ? "page" : undefined}
       className={`group flex min-h-[68px] w-full flex-col items-center justify-center rounded-[1rem] px-1 py-2 text-center transition-all duration-200 ${toneClass}`}
     >
@@ -38,7 +41,7 @@ function RailItem({ item, activeId, onSelect }) {
           }`}
         />
       ) : null}
-      <span className="mt-1.5 max-w-full text-wrap break-words text-[10px] font-medium leading-tight tracking-tight">{label}</span>
+      <span className="mt-1.5 max-w-full text-wrap break-words text-[10px] font-medium leading-tight tracking-tight">{tUi(label)}</span>
     </button>
   );
 }
@@ -59,6 +62,7 @@ export function railItemScreen(item, screenGroup) {
  * selected so the page never shows a section the user may not open.
  */
 export function SectionRail({ items = [], fixedItems = [], activeId, onSelect, ariaLabel = "Sections", className = "", screenGroup = null }) {
+  const tUi = useUiText();
   const { canScreen, loaded } = useAuth();
   const gated = Boolean(screenGroup) || items.some((item) => item?.screen);
   const visibleItems = useMemo(() => {
@@ -75,9 +79,10 @@ export function SectionRail({ items = [], fixedItems = [], activeId, onSelect, a
   }, [activeHidden, firstVisibleId, onSelect]);
   return (
     <aside
+      data-testid="section-rail"
       className={`min-h-0 overflow-hidden rounded-[1.25rem] border bg-card/95 p-2 shadow-sm backdrop-blur ${className}`}
     >
-      <nav className="flex h-full min-h-0 flex-col" aria-label={ariaLabel}>
+      <nav className="flex h-full min-h-0 flex-col" aria-label={tUi(ariaLabel)}>
         {fixedItems.length ? (
           <div className="shrink-0 border-b pb-2.5">
             {fixedItems.map((item) => <RailItem key={item.id} item={item} activeId={activeId} onSelect={onSelect} />)}

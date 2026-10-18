@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState } from "react";
 import { IconX } from "@tabler/icons-react";
@@ -10,6 +12,7 @@ import { cn } from "@/lib/utils";
 const MODE_LABELS = { all: "All", list: "Selected", own: "Own" };
 
 function ModeSwitch({ anchor, value, onChange, disabled }) {
+  const tUi = useUiText();
   const modes = anchor.own ? ["all", "list", "own"] : ["all", "list"];
   return (
     <div className="inline-flex overflow-hidden rounded-md border">
@@ -26,7 +29,7 @@ function ModeSwitch({ anchor, value, onChange, disabled }) {
             disabled && "cursor-not-allowed opacity-60",
           )}
         >
-          {MODE_LABELS[mode]}
+          {tUi(MODE_LABELS[mode])}
         </button>
       ))}
     </div>
@@ -34,20 +37,20 @@ function ModeSwitch({ anchor, value, onChange, disabled }) {
 }
 
 function Picker({ anchor, options, selectedIds, onAdd, disabled }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const remaining = options.filter((option) => !selectedIds.includes(option.id));
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" size="sm" variant="outline" className="h-7 rounded-full border-dashed text-xs" disabled={disabled || !remaining.length}>
-          + add {anchor.label.toLowerCase()}
+        <Button type="button" size="sm" variant="outline" className="h-7 rounded-full border-dashed text-xs" disabled={disabled || !remaining.length}>{tUi("Add: {value0}", { value0: tUi(anchor.label) })}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
         <Command>
-          <CommandInput placeholder={`Search ${anchor.label.toLowerCase()}…`} />
+          <CommandInput placeholder={tUi("Search {value0}…", { value0: tUi(anchor.label) })} />
           <CommandList>
-            <CommandEmpty>Nothing to add.</CommandEmpty>
+            <CommandEmpty>{tUi("Nothing to add.")}</CommandEmpty>
             {remaining.map((option) => (
               <CommandItem
                 key={option.id}
@@ -68,14 +71,14 @@ function Picker({ anchor, options, selectedIds, onAdd, disabled }) {
   );
 }
 
-function describeMode(anchor, mode, hasOptions) {
-  if (mode === "all") return `Every ${anchor.label.toLowerCase().replace(/s$/, "")} in the system, including ones created later.`;
+function describeMode(anchor, mode, hasOptions, tUi) {
+  if (mode === "all") return tUi("All objects in this category, including ones created later.");
   if (mode === "own") {
-    if (anchor.id === "teams") return "Resolved from the assignee's teams at request time (Admin → Configuration → Teams). A team leader without a team contributes nothing to the OR and does not cancel the other anchors.";
-    return `Resolved from the assignee's ${anchor.label.toLowerCase()} at request time, so one role serves many people.`;
+    if (anchor.id === "teams") return tUi("Resolved from the assignee's teams at request time (Admin → Configuration → Teams). A team leader without a team contributes nothing to the OR and does not cancel the other anchors.");
+    return tUi("Resolved from the assignee’s membership at request time, so one role serves many people.");
   }
-  if (!hasOptions) return anchor.id === "teams" ? "No teams yet — create them in Admin → Configuration → Teams, or use All or Own." : "No options available yet.";
-  return "An explicit selection. Only these objects are visible; an empty selection grants nothing.";
+  if (!hasOptions) return anchor.id === "teams" ? tUi("No teams yet — create them in Admin → Configuration → Teams, or use All or Own.") : tUi("No options available yet.");
+  return tUi("An explicit selection. Only these objects are visible; an empty selection grants nothing.");
 }
 
 /**
@@ -83,6 +86,7 @@ function describeMode(anchor, mode, hasOptions) {
  * with OR; channels always narrow with AND.
  */
 export function ScopeEditor({ anchors = [], scopes, onChange, options = {}, readOnly = false }) {
+  const tUi = useUiText();
   function update(anchorId, patch) {
     onChange({ ...scopes, [anchorId]: { ...(scopes[anchorId] || { mode: "all" }), ...patch } });
   }
@@ -90,8 +94,7 @@ export function ScopeEditor({ anchors = [], scopes, onChange, options = {}, read
   return (
     <div>
       <p className="mb-2 text-xs text-muted-foreground">
-        <b>All</b> covers every object of that kind. <b>Selected</b> is an explicit list. <b>Own</b> resolves from the assignee&apos;s own queue, team or campaign membership at request time. Queues, teams and campaigns combine with OR; channels always narrow with AND.
-      </p>
+        <b>{tUi("All")}</b>{tUi(" covers every object of that kind. ")}<b>{tUi("Selected")}</b>{tUi(" is an explicit list. ")}<b>{tUi("Own")}</b>{tUi(" resolves from the assignee's own queue, team or campaign membership at request time. Queues, teams and campaigns combine with OR; channels always narrow with AND.")}</p>
       <div className="divide-y rounded-md border">
         {anchors.map((anchor) => {
           const value = scopes[anchor.id] || { mode: "all" };
@@ -100,7 +103,7 @@ export function ScopeEditor({ anchors = [], scopes, onChange, options = {}, read
           return (
             <div key={anchor.id} className="grid gap-3 px-3 py-3 md:grid-cols-[160px_minmax(0,1fr)]">
               <div>
-                <div className="font-medium">{anchor.label}</div>
+                <div className="font-medium">{tUi(anchor.label)}</div>
                 <div className="text-[11px] text-muted-foreground">{anchor.source}</div>
               </div>
               <div className="space-y-2">
@@ -111,7 +114,7 @@ export function ScopeEditor({ anchors = [], scopes, onChange, options = {}, read
                       <span key={id} className="inline-flex items-center gap-1 rounded-full border bg-muted px-2 py-0.5 text-xs">
                         {labelOf(id)}
                         {!readOnly ? (
-                          <button type="button" aria-label={`Remove ${labelOf(id)}`} className="text-muted-foreground hover:text-foreground" onClick={() => update(anchor.id, { ids: (value.ids || []).filter((x) => x !== id) })}>
+                          <button type="button" aria-label={tUi("Remove {value0}", { value0: labelOf(id) })} className="text-muted-foreground hover:text-foreground" onClick={() => update(anchor.id, { ids: (value.ids || []).filter((x) => x !== id) })}>
                             <IconX className="size-3" />
                           </button>
                         ) : null}
@@ -120,13 +123,13 @@ export function ScopeEditor({ anchors = [], scopes, onChange, options = {}, read
                     {!readOnly ? <Picker anchor={anchor} options={anchorOptions} selectedIds={value.ids || []} disabled={readOnly} onAdd={(id) => update(anchor.id, { ids: [...(value.ids || []), id] })} /> : null}
                   </div>
                 ) : null}
-                <p className={cn("text-[11px]", value.mode === "list" && !(value.ids || []).length ? "text-destructive" : "text-muted-foreground")}>{describeMode(anchor, value.mode, anchorOptions.length > 0)}</p>
+                <p className={cn("text-[11px]", value.mode === "list" && !(value.ids || []).length ? "text-destructive" : "text-muted-foreground")}>{describeMode(anchor, value.mode, anchorOptions.length > 0, tUi)}</p>
               </div>
             </div>
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">Per-object lists for call flows, assistants, mailboxes and similar resources arrive with the data-scoping phase; those resources are currently granted on all objects.</p>
+      <p className="mt-2 text-[11px] text-muted-foreground">{tUi("Per-object lists for call flows, assistants, mailboxes and similar resources arrive with the data-scoping phase; those resources are currently granted on all objects.")}</p>
     </div>
   );
 }

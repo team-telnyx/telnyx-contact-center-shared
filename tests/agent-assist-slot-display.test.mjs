@@ -44,7 +44,7 @@ test("AgentAssistWorkflow no longer gates the slot display on truthiness", async
   assert.match(cmp, /hasSlotValue, pickSlotValue, formatSlotDisplay/);
   // Also renders when only MCP candidate chips are pending (no slot value yet).
   assert.match(cmp, /\) : \(hasSlotValue\(slotValue\) \|\| hasAlternatives\) \? \(/);
-  assert.match(cmp, /\{formatSlotDisplay\(slotValue, item\.slot_type\)\}/);
+  assert.match(cmp, /\{formatSlotDisplay\(slotValue, item\.slot_type, tUi\)\}/);
   // The old truthiness gate must be gone.
   assert.doesNotMatch(cmp, /\) : slotValue \? \(/);
   assert.doesNotMatch(cmp, /status\.value \|\| status\.extracted_value \|\|/);

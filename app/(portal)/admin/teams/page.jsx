@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -22,6 +24,7 @@ import TeamEditSheet from "@/components/teams/EditSheet";
  * the `teams` scope anchor of roles (Phase 3a of the RBAC plan).
  */
 export default function AdminTeamsPage() {
+  const tUi = useUiText();
   const { can } = useAuth();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -67,7 +70,7 @@ export default function AdminTeamsPage() {
       const d = await r.json().catch(() => ({}));
       notify({
         title: "Team deleted",
-        description: `${d.removedFromUsers || 0} member${d.removedFromUsers === 1 ? "" : "s"} unassigned${d.rolesUpdated ? `, ${d.rolesUpdated} role scope${d.rolesUpdated === 1 ? "" : "s"} updated` : ""}.`,
+        description: tUi("Unassigned members: {value0}. Updated role scopes: {value1}.", {value0: d.removedFromUsers || 0, value1: d.rolesUpdated || 0}),
         variant: "success",
       });
       load();
@@ -84,34 +87,34 @@ export default function AdminTeamsPage() {
 
   const headerActions = (
     <>
-      <Button variant="secondary" onClick={() => setFilters({ active: "all", q: "" })}>Clear</Button>
-      <Button onClick={() => load()} disabled={loading}>{loading ? "Loading…" : "Refresh"}</Button>
+      <Button variant="secondary" onClick={() => setFilters({ active: "all", q: "" })}>{tUi("Clear")}</Button>
+      <Button onClick={() => load()} disabled={loading}>{loading ? tUi("Loading…") : tUi("Refresh")}</Button>
       {canCreate ? (
-        <Button onClick={() => { setEditTeamId(null); setShowEditSheet(true); }} variant="default">New Team</Button>
+        <Button onClick={() => { setEditTeamId(null); setShowEditSheet(true); }} variant="default">{tUi("New Team")}</Button>
       ) : null}
     </>
   );
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Teams" badges={<Badge variant="secondary">{total} teams</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Teams")} badges={<Badge variant="secondary">{total}{tUi(" teams")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="teams">
         <div className="space-y-4">
           <Card className="w-full">
             <CardContent className="space-y-4 pt-6">
               <div className="grid grid-cols-6 gap-2 items-end">
                 <div>
-                  <label className="text-xs">Name</label>
-                  <Input value={filters.q} onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))} placeholder="name, description…" />
+                  <label className="text-xs">{tUi("Name")}</label>
+                  <Input value={filters.q} onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))} placeholder={tUi("name, description…")} />
                 </div>
                 <div>
-                  <label className="text-xs">Active</label>
+                  <label className="text-xs">{tUi("Active")}</label>
                   <Select value={filters.active || "all"} onValueChange={(value) => setFilters((f) => ({ ...f, active: value }))}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={tUi("All")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="true">Yes</SelectItem>
-                      <SelectItem value="false">No</SelectItem>
+                      <SelectItem value="all">{tUi("All")}</SelectItem>
+                      <SelectItem value="true">{tUi("Yes")}</SelectItem>
+                      <SelectItem value="false">{tUi("No")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -127,11 +130,11 @@ export default function AdminTeamsPage() {
                   <Table className="table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="px-[10px]">Name</TableHead>
-                        <TableHead className="px-[10px] w-28">Members</TableHead>
-                        <TableHead className="px-[10px] w-24">Active</TableHead>
-                        <TableHead className="px-[10px]">Description</TableHead>
-                        <TableHead className="px-[10px] text-right w-28">Actions</TableHead>
+                        <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                        <TableHead className="px-[10px] w-28">{tUi("Members")}</TableHead>
+                        <TableHead className="px-[10px] w-24">{tUi("Active")}</TableHead>
+                        <TableHead className="px-[10px]">{tUi("Description")}</TableHead>
+                        <TableHead className="px-[10px] text-right w-28">{tUi("Actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -141,7 +144,7 @@ export default function AdminTeamsPage() {
                           <TableCell className="px-[10px] text-xs">{team.membersCount ?? 0}</TableCell>
                           <TableCell className="px-[10px] text-xs">
                             <Badge variant="outline" className={team.isActive ? "border-green-500 text-green-600 min-w-[56px] justify-center" : "border-red-500 text-red-600 min-w-[56px] justify-center"}>
-                              {team.isActive ? "YES" : "NO"}
+                              {team.isActive ? tUi("YES") : tUi("NO")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs max-w-md truncate">{team.description || "—"}</TableCell>
@@ -151,27 +154,26 @@ export default function AdminTeamsPage() {
                                 type="button"
                                 onClick={() => { setEditTeamId(team.id); setShowEditSheet(true); }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title={canUpdate ? "Edit team" : "View team"}
+                                title={canUpdate ? tUi("Edit team") : tUi("View team")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
                               {canDelete ? (
                                 <Dialog>
                                   <DialogTrigger asChild>
-                                    <button type="button" className="inline-flex items-center text-red-500" title="Delete team">
+                                    <button type="button" className="inline-flex items-center text-red-500" title={tUi("Delete team")}>
                                       <IconTrash className="size-4" />
                                     </button>
                                   </DialogTrigger>
                                   <DialogContent>
                                     <DialogHeader>
-                                      <DialogTitle>Delete team?</DialogTitle>
-                                      <DialogDescription>
-                                        Members are unassigned and the team is removed from every role scope that lists it. This action cannot be undone. Delete the team &quot;{team.name}&quot;?
+                                      <DialogTitle>{tUi("Delete team?")}</DialogTitle>
+                                      <DialogDescription>{tUi("Members are unassigned and the team is removed from every role scope that lists it. This action cannot be undone. Delete the team \"")}{team.name}&quot;?
                                       </DialogDescription>
                                     </DialogHeader>
                                     <div className="flex justify-end gap-2 pt-2">
-                                      <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                                      <DialogClose asChild><Button variant="destructive" onClick={() => onDelete(team.id)}>Delete</Button></DialogClose>
+                                      <DialogClose asChild><Button variant="outline">{tUi("Cancel")}</Button></DialogClose>
+                                      <DialogClose asChild><Button variant="destructive" onClick={() => onDelete(team.id)}>{tUi("Delete")}</Button></DialogClose>
                                     </div>
                                   </DialogContent>
                                 </Dialog>
@@ -182,9 +184,7 @@ export default function AdminTeamsPage() {
                       ))}
                       {items.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
-                            No teams yet. Create one to group agents for supervision and for the Teams scope of roles.
-                          </TableCell>
+                          <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">{tUi("No teams yet. Create one to group agents for supervision and for the Teams scope of roles.")}</TableCell>
                         </TableRow>
                       )}
                     </TableBody>
@@ -194,10 +194,10 @@ export default function AdminTeamsPage() {
             </CardContent>
             <div className="px-6 pb-6">
               <div className="flex items-center justify-between">
-                <div className="text-xs text-muted-foreground">Total: {total}</div>
+                <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
                 <div className="flex w-full items-center gap-8 lg:w-fit">
                   <div className="hidden items-center gap-2 lg:flex">
-                    <Label htmlFor="rows-per-page" className="text-sm font-medium">Rows per page</Label>
+                    <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                     <Select value={`${pageSize}`} onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}>
                       <SelectTrigger id="rows-per-page" className="w-[70px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -211,7 +211,7 @@ export default function AdminTeamsPage() {
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={page === 1}><IconChevronsLeft className="h-4 w-4" /></Button>
                     <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1}><IconChevronLeft className="h-4 w-4" /></Button>
-                    <span className="text-sm">Page {page} of {pageCount}</span>
+                    <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}</span>
                     <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= pageCount}><IconChevronRight className="h-4 w-4" /></Button>
                     <Button variant="outline" size="sm" onClick={() => setPage(pageCount)} disabled={page >= pageCount}><IconChevronsRight className="h-4 w-4" /></Button>
                   </div>

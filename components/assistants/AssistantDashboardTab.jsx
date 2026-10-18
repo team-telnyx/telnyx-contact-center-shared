@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +37,6 @@ const INTERACTION_RANGES = [
   { key: "30d", label: "30 days", days: 30, points: 30 },
 ];
 
-const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -46,13 +47,13 @@ function displayValue(value, fallback = "Not configured") {
   return String(value);
 }
 
-function summarizeInstructions(instructions) {
+function summarizeInstructions(instructions, tUi) {
   const text = String(instructions || "")
     .replace(/#+\s*/g, "")
     .replace(/\*\*/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!text) return "Add instructions to let the dashboard generate a sharper use-case review.";
+  if (!text) return tUi("Add instructions to let the dashboard generate a sharper use-case review.");
   return text.length > 260 ? `${text.slice(0, 257)}…` : text;
 }
 
@@ -168,7 +169,7 @@ function buildStats(conversations, latencySamplesByConversationId = {}) {
   return stats;
 }
 
-function buildInteractionTimeline(conversations, rangeKey) {
+function buildInteractionTimeline(conversations, rangeKey, locale) {
   const range = INTERACTION_RANGES.find((item) => item.key === rangeKey) || INTERACTION_RANGES[0];
   const now = new Date();
   const start = new Date(now.getTime() - range.days * 24 * 60 * 60 * 1000);
@@ -181,7 +182,7 @@ function buildInteractionTimeline(conversations, rangeKey) {
     date.setDate(start.getDate() + index + 1);
     return {
       key: date.toISOString().slice(0, 10),
-      label: `${date.getDate()} ${MONTH_LABELS[date.getMonth()]}`,
+      label: date.toLocaleDateString(locale, { day: "numeric", month: "short" }),
       count: 0,
     };
   });
@@ -202,29 +203,29 @@ function buildInteractionTimeline(conversations, rangeKey) {
 }
 
 function ConfigPill({ icon: Icon, label, value, accent = "text-telnyx-green" }) {
+  const tUi = useUiText();
   return (
     <div className="rounded-xl border bg-card p-3 shadow-sm transition-colors hover:bg-muted/30">
       <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <Icon className={`size-4 shrink-0 ${accent}`} />
         <span>{label}</span>
       </div>
-      <div className="mt-2 min-h-5 break-all text-sm font-semibold leading-snug" title={displayValue(value)}>
-        {displayValue(value)}
+      <div className="mt-2 min-h-5 break-all text-sm font-semibold leading-snug" title={displayValue(value, tUi("Not configured"))}>
+        {displayValue(value, tUi("Not configured"))}
       </div>
     </div>
   );
 }
 
 function StatTile({ icon: Icon, label, value, helper, className = "" }) {
+  const tUi = useUiText();
   return (
     <div className={`rounded-2xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/30 ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="rounded-xl bg-muted p-2 text-telnyx-green">
           <Icon className="size-5" />
         </div>
-        <Badge variant="outline" className="text-telnyx-green">
-          Live review
-        </Badge>
+        <Badge variant="outline" className="text-telnyx-green">{tUi("Live review")}</Badge>
       </div>
       <div className="mt-4 text-2xl font-semibold tracking-tight">{value}</div>
       <div className="mt-1 text-sm font-medium">{label}</div>
@@ -241,6 +242,7 @@ export default function AssistantDashboardTab({
   analyticsState,
   onAnalyticsStateChange,
 }) {
+  const tUi = useUiText();
   const [interactionRange, setInteractionRange] = useState("7d");
   const latencySamplesRequestRef = useRef(0);
   const attemptedAnalyticsLoadRef = useRef(null);
@@ -264,8 +266,8 @@ export default function AssistantDashboardTab({
   );
   const maxBucketCount = Math.max(1, ...stats.buckets.map((bucket) => bucket.count));
   const timeline = useMemo(
-    () => buildInteractionTimeline(conversations, interactionRange),
-    [conversations, interactionRange]
+    () => buildInteractionTimeline(conversations, interactionRange, tUi.locale),
+    [conversations, interactionRange, tUi.locale]
   );
   const maxTimelineCount = Math.max(1, ...timeline.map((point) => point.count));
   const summaryKey = assistantId || "draft";
@@ -437,7 +439,7 @@ export default function AssistantDashboardTab({
     loadSummary();
   }, [loadSummary]);
 
-  const fallbackSummary = values?.description || summarizeInstructions(values?.instructions);
+  const fallbackSummary = values?.description || summarizeInstructions(values?.instructions, tUi);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -446,8 +448,7 @@ export default function AssistantDashboardTab({
           <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_46rem] 2xl:items-stretch">
             <div className="flex h-full flex-col rounded-2xl border bg-background p-4 shadow-sm">
               <div className="flex items-center gap-2 text-sm font-semibold">
-                <IconBrain className="size-4 text-telnyx-green" /> Use case summary
-              </div>
+                <IconBrain className="size-4 text-telnyx-green" />{tUi(" Use case summary")}</div>
               <div className="mt-2 min-h-[9.75rem] flex-1 overflow-y-auto pr-2 text-sm leading-6 text-muted-foreground">
                 {summaryLoading ? (
                   <div className="space-y-2">
@@ -462,32 +463,31 @@ export default function AssistantDashboardTab({
                 )}
               </div>
               {summaryError && (
-                <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                  Telnyx summary unavailable, showing local configuration summary.
-                </div>
+                <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">{tUi("Telnyx summary unavailable, showing local configuration summary.")}</div>
               )}
             </div>
 
             <div className="grid h-full gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <ConfigPill icon={IconRobot} label="LLM model" value={values?.model} />
-              <ConfigPill icon={IconWaveSine} label="STT provider/model" value={values?.transcription?.model} accent="text-sky-500" />
-              <ConfigPill icon={IconSparkles} label="TTS voice" value={values?.voice} accent="text-fuchsia-500" />
-              <ConfigPill icon={IconBrain} label="Fallback model" value={values?.fallback_enabled ? values?.fallback_model : "Disabled"} accent="text-amber-500" />
-              <ConfigPill icon={IconChecklist} label="Enabled features" value={enabledFeatures.length ? enabledFeatures.join(", ") : "None"} accent="text-emerald-500" />
-              <ConfigPill icon={IconDatabase} label="Variables" value={dynamicVariablesCount} accent="text-amber-500" />
-              <ConfigPill icon={IconTool} label="Tools" value={tools.length} />
-              <ConfigPill icon={IconPlugConnected} label="Integrations" value={integrations.length} accent="text-fuchsia-500" />
-              <ConfigPill icon={IconServerCog} label="MCP servers" value={mcpServers.length} accent="text-sky-500" />
+              <ConfigPill icon={IconRobot} label={tUi("LLM model")} value={values?.model} />
+              <ConfigPill icon={IconWaveSine} label={tUi("STT provider/model")} value={values?.transcription?.model} accent="text-sky-500" />
+              <ConfigPill icon={IconSparkles} label={tUi("TTS voice")} value={values?.voice} accent="text-fuchsia-500" />
+              <ConfigPill icon={IconBrain} label={tUi("Fallback model")} value={values?.fallback_config?.model || values?.fallback_config?.external_llm?.model || tUi("Disabled")} accent="text-amber-500" />
+              <ConfigPill icon={IconChecklist} label={tUi("Enabled features")} value={enabledFeatures.length ? enabledFeatures.join(", ") : tUi("None")} accent="text-emerald-500" />
+              <ConfigPill icon={IconDatabase} label={tUi("Variables")} value={dynamicVariablesCount} accent="text-amber-500" />
+              <ConfigPill icon={IconTool} label={tUi("Tools")} value={tools.length} />
+              <ConfigPill icon={IconPlugConnected} label={tUi("Integrations")} value={integrations.length} accent="text-fuchsia-500" />
+              <ConfigPill icon={IconServerCog} label={tUi("MCP servers")} value={mcpServers.length} accent="text-sky-500" />
             </div>
           </div>
         </div>
       </div>
 
+      {Boolean(assistantId) && (conversationsLoading || (!analyticsState?.loaded && !analyticsState?.error)) ? <div className="space-y-4" aria-label={tUi("Loading conversation statistics")}><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="space-y-4 rounded-2xl border p-4"><Skeleton className="size-9 rounded-lg" /><Skeleton className="h-8 w-20" /><Skeleton className="h-4 w-36" /></div>)}</div><div className="grid gap-4 xl:grid-cols-2"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-80 rounded-xl" /></div></div> : analyticsState?.error ? <div role="alert" className="rounded-xl border p-5 text-sm text-muted-foreground">{tUi("Conversation statistics are currently unavailable.")}</div> : <>
       <div className="grid shrink-0 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatTile icon={IconActivity} label="Total interactions" value={conversationsLoading ? "…" : stats.total} helper="Latest 100 conversations" />
-        <StatTile icon={IconPhone} label="Voice calls" value={conversationsLoading ? "…" : stats.voice} helper="Phone/Voice channels" />
-        <StatTile icon={IconMessageCircle} label="SMS + Chat" value={conversationsLoading ? "…" : stats.sms + stats.chat} helper={`${stats.sms} SMS · ${stats.chat} chat`} />
-        <StatTile icon={IconWaveSine} label="Average latency" value={formatLatency(stats.avgLatencyMs)} helper={latencyDetailsLoading ? "Reading message latency…" : `${stats.latencySamples} measured samples`} />
+        <StatTile icon={IconActivity} label={tUi("Total interactions")} value={conversationsLoading ? "…" : stats.total} helper={tUi("Latest 100 conversations")} />
+        <StatTile icon={IconPhone} label={tUi("Voice calls")} value={conversationsLoading ? "…" : stats.voice} helper={tUi("Phone/Voice channels")} />
+        <StatTile icon={IconMessageCircle} label={tUi("SMS + Chat")} value={conversationsLoading ? "…" : stats.sms + stats.chat} helper={`${stats.sms} SMS · ${stats.chat} chat`} />
+        <StatTile icon={IconWaveSine} label={tUi("Average latency")} value={formatLatency(stats.avgLatencyMs)} helper={latencyDetailsLoading ? tUi("Reading message latency…") : tUi("Measured samples: {value0}", { value0: stats.latencySamples })} />
       </div>
 
       <div className="grid min-h-[20rem] flex-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -496,11 +496,8 @@ export default function AssistantDashboardTab({
             <div className="flex items-start justify-between gap-3 p-4">
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  <IconChartBar className="size-4 text-telnyx-green" /> Interactions over time
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Conversation volume from recent assistant history.
-                </p>
+                  <IconChartBar className="size-4 text-telnyx-green" />{tUi(" Interactions over time")}</div>
+                <p className="mt-1 text-xs text-muted-foreground">{tUi("Conversation volume from recent assistant history.")}</p>
               </div>
               <div className="flex rounded-lg border bg-background p-1">
                 {INTERACTION_RANGES.map((range) => (
@@ -512,7 +509,7 @@ export default function AssistantDashboardTab({
                     className="h-7 px-2 text-xs"
                     onClick={() => setInteractionRange(range.key)}
                   >
-                    {range.label}
+                    {tUi(range.label)}
                   </Button>
                 ))}
               </div>
@@ -527,7 +524,7 @@ export default function AssistantDashboardTab({
                         <div
                           className="w-full rounded-t-md bg-telnyx-green"
                           style={{ height }}
-                          title={`${point.label}: ${point.count} interactions`}
+                          title={tUi("{value0}: {value1} interactions", { value0: point.label, value1: point.count })}
                         />
                       </div>
                       <div className="truncate text-center text-[10px] text-muted-foreground">
@@ -538,9 +535,7 @@ export default function AssistantDashboardTab({
                 })}
               </div>
               {stats.total === 0 && (
-                <div className="mt-3 rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
-                  No interactions found for this assistant yet.
-                </div>
+                <div className="mt-3 rounded-xl border border-dashed p-3 text-xs text-muted-foreground">{tUi("No interactions found for this assistant yet.")}</div>
               )}
             </div>
           </CardContent>
@@ -550,11 +545,8 @@ export default function AssistantDashboardTab({
           <CardContent className="flex h-full flex-col p-0">
             <div className="p-4">
               <div className="flex items-center gap-2 text-sm font-semibold">
-                <IconChartBar className="size-4 text-telnyx-green" /> Latency distribution
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Buckets use conversation metadata and assistant message latency fields from recent calls.
-              </p>
+                <IconChartBar className="size-4 text-telnyx-green" />{tUi(" Latency distribution")}</div>
+              <p className="mt-1 text-xs text-muted-foreground">{tUi("Buckets use conversation metadata and assistant message latency fields from recent calls.")}</p>
             </div>
             <div className="flex-1 space-y-3 p-4">
               {stats.buckets.map((bucket) => {
@@ -562,7 +554,7 @@ export default function AssistantDashboardTab({
                 return (
                   <div key={bucket.key} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium">{bucket.label}</span>
+                      <span className="font-medium">{tUi(bucket.label)}</span>
                       <span className="text-muted-foreground">{bucket.count}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -574,14 +566,15 @@ export default function AssistantDashboardTab({
               {stats.latencySamples === 0 && (
                 <div className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
                   {latencyDetailsLoading
-                    ? "Reading message-level latency from conversation history…"
-                    : "No latency metadata found yet. Once conversations include response timing, this panel will render a real distribution."}
+                    ? tUi("Reading message-level latency from conversation history…")
+                    : tUi("No latency metadata found yet. Once conversations include response timing, this panel will render a real distribution.")}
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
       </div>
+      </>}
     </div>
   );
 }

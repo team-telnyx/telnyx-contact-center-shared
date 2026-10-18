@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
@@ -34,6 +37,7 @@ const address = (value) =>
       : String(value || "");
 const date = (value) => (value ? new Date(value).toLocaleString() : "—");
 function EmailMessage({ message, preview }) {
+  const tUi = useUiText();
   const [expanded, setExpanded] = useState(true);
   const draft=message.status==='draft';
   const agentName=[message.first_name,message.last_name].filter(Boolean).join(' ')||message.agent_username;
@@ -57,7 +61,7 @@ function EmailMessage({ message, preview }) {
         <span className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
           <EmailMessageStatus message={message}/>
           <time className="text-xs text-muted-foreground">
-            {draft?`Last saved ${date(message.updated_at)}`:date(message.created_at)}
+            {draft?tUi("Last saved {value0}", { value0: date(message.updated_at) }):date(message.created_at)}
           </time>
         </span>
         <ChevronDown
@@ -67,10 +71,10 @@ function EmailMessage({ message, preview }) {
       {expanded && (
         <div className="space-y-3 border-t p-3">
           <div className="space-y-1 break-words text-xs text-muted-foreground">
-            {draft&&message.envelope?.subject&&<p>Subject: {message.envelope.subject}</p>}
-            {message.envelope?.to && <p>To: {address(message.envelope.to)}</p>}
+            {draft&&message.envelope?.subject&&<p>{tUi("Subject: ")}{message.envelope.subject}</p>}
+            {message.envelope?.to && <p>{tUi("To: ")}{address(message.envelope.to)}</p>}
             {message.envelope?.cc?.length > 0 && (
-              <p>Cc: {address(message.envelope.cc)}</p>
+              <p>{tUi("Cc: ")}{address(message.envelope.cc)}</p>
             )}
           </div>
           <EmailBody message={message} settings={preview} />
@@ -78,14 +82,14 @@ function EmailMessage({ message, preview }) {
           {message.deliveries?.length > 0 && (
             <div
               className="flex flex-wrap gap-2"
-              aria-label="Delivery evidence"
+              aria-label={tUi("Delivery evidence")}
             >
               {message.deliveries.map((d, i) => (
                 <Badge variant="outline" key={i}>
                   {d.kind === "bcc"
-                    ? "Private recipient"
-                    : d.address || "Recipient"}
-                  : {d.status}
+                    ? tUi("Private recipient")
+                    : d.address || tUi("Recipient")}
+                  : {operationalStatusLabel(tUi, d.status)}
                 </Badge>
               ))}
             </div>
@@ -97,6 +101,7 @@ function EmailMessage({ message, preview }) {
 }
 
 export function ConversationReader({ workItemId, onSelectEpisode }) {
+  const tUi = useUiText();
   const [data, setData] = useState(null),
     [error, setError] = useState(null),
     [connected, setConnected] = useState(false);
@@ -207,15 +212,12 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
     return (
       <div className="flex min-h-72 flex-col gap-5 p-6">
         {error ? (
-          <div role="alert" className="rounded-xl border p-5 text-sm">
-            Conversation unavailable.{" "}
+          <div role="alert" className="rounded-xl border p-5 text-sm">{tUi("Conversation unavailable.")}{" "}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setRetry((v) => v + 1)}
-            >
-              Retry
-            </Button>
+            >{tUi("Retry")}</Button>
           </div>
         ) : (
           <>
@@ -243,17 +245,15 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
                 definition.label + " conversation"}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {definition.label} ·{" "}
-              {work.queue_display_name || work.queue_name || "No queue"}
+              {tUi(definition.label)} ·{" "}
+              {work.queue_display_name || work.queue_name || tUi("No queue")}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="gap-1.5">
-            <LockKeyhole className="size-3" />
-            Read only
-          </Badge>
-          <Badge variant="secondary">{work.state}</Badge>
+            <LockKeyhole className="size-3" />{tUi("Read only")}</Badge>
+          <Badge variant="secondary">{operationalStatusLabel(tUi, work.state)}</Badge>
           <InteractionSla sla={data.sla} />
           <Button
             variant="outline"
@@ -261,24 +261,20 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
             className="lg:hidden"
             aria-expanded={contextOpen}
             onClick={() => setContextOpen((v) => !v)}
-          >
-            Context
-          </Button>
+          >{tUi("Context")}</Button>
         </div>
       </header>
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_260px]">
         <section className="relative flex min-h-0 flex-col bg-muted/20">
           <div className="flex shrink-0 items-center justify-between border-b px-3 py-2 text-[11px] text-muted-foreground">
-            <span>
-              Conversation · {data.messages.length}
-              {data.hasMore ? "+" : ""} messages
-              {email&&data.drafts?.length>0&&` · ${data.drafts.length} draft`}
+            <span>{tUi("Conversation · ")}{data.messages.length}
+              {data.hasMore ? "+" : ""}{tUi(" messages")}{email&&data.drafts?.length>0&&tUi(" · {value0} draft", { value0: data.drafts.length })}
             </span>
             <span className="flex items-center gap-1.5">
               <Radio
                 className={`size-3 ${connected ? "text-emerald-600" : "text-amber-600"}`}
               />
-              {connected ? "Connected" : "Reconnecting"}
+              {connected ? tUi("Connected") : tUi("Reconnecting")}
             </span>
           </div>
           {error && (
@@ -310,15 +306,11 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
                   >
                     {olderLoading ? (
                       <RefreshCw className="mr-2 size-3 animate-spin" />
-                    ) : null}
-                    Earlier messages
-                  </Button>
+                    ) : null}{tUi("Earlier messages")}</Button>
                 </div>
               )}
               {!data.messages.length && (
-                <div className="py-16 text-center text-sm text-muted-foreground">
-                  No messages in this interaction yet.
-                </div>
+                <div className="py-16 text-center text-sm text-muted-foreground">{tUi("No messages in this interaction yet.")}</div>
               )}
               {data.messages.map((message, index) => (
                 <div key={message.id}>
@@ -329,7 +321,7 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
                       new Date(message.created_at).toDateString()) && (
                     <div className={`${email?'mb-3':'mb-5'} text-center text-[11px] font-medium text-muted-foreground`}>
                       {new Date(message.created_at).toLocaleDateString(
-                        undefined,
+                        tUi.locale,
                         { day: "numeric", month: "long", year: "numeric" },
                       )}
                     </div>
@@ -359,23 +351,20 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
               onClick={scrollEnd}
             >
               <ArrowDown className="mr-2 size-4" />
-              {newMessages} new messages
-            </Button>
+              {newMessages}{tUi(" new messages")}</Button>
           )}
         </section>
         <aside
           className={`${contextOpen ? "absolute inset-x-0 bottom-10 top-28 z-20 block" : "hidden"} space-y-6 overflow-y-auto border-l bg-card p-5 lg:static lg:block`}
         >
           <div>
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">
-              Interaction context
-            </p>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">{tUi("Interaction context")}</p>
             <div className="flex items-center gap-2 text-sm font-medium">
               <UserRound className="size-4 text-muted-foreground" />
-              {work.customer_name || "Customer"}
+              {work.customer_name || tUi("Customer")}
             </div>
             <p className="mt-2 break-all text-xs text-muted-foreground">
-              {work.customer_address || "Address unavailable"}
+              {work.customer_address || tUi("Address unavailable")}
             </p>
           </div>
           <dl className="space-y-4 text-xs">
@@ -384,23 +373,23 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
                 "Agent",
                 [work.first_name, work.last_name].filter(Boolean).join(" ") ||
                   work.agent_username ||
-                  "Unassigned",
+                  tUi("Unassigned"),
               ],
               [
                 "Queue",
-                work.queue_display_name || work.queue_name || "No queue",
+                work.queue_display_name || work.queue_name || tUi("No queue"),
               ],
               ["Direction", work.direction],
               ["Priority", work.priority ?? "—"],
               ["Started", date(work.created_at)],
               [
                 "Closed",
-                work.terminal_at ? date(work.terminal_at) : "In progress",
+                work.terminal_at ? date(work.terminal_at) : tUi("In progress"),
               ],
               ...(data.mailbox ? [["Mailbox", data.mailbox.address]] : []),
             ].map(([label, value]) => (
               <div key={label}>
-                <dt className="text-muted-foreground">{label}</dt>
+                <dt className="text-muted-foreground">{tUi(label)}</dt>
                 <dd className="mt-1 break-words font-medium">{value}</dd>
               </div>
             ))}
@@ -408,12 +397,8 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
           {data.episodes.length > 1 && (
             <div className="space-y-2">
               <p className="flex items-center gap-2 text-xs font-semibold">
-                <Clock3 className="size-3" />
-                Conversation episodes
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                Each episode has its own historical record.
-              </p>
+                <Clock3 className="size-3" />{tUi("Conversation episodes")}</p>
+              <p className="text-[11px] text-muted-foreground">{tUi("Each episode has its own historical record.")}</p>
               {data.episodes.map((episode) => (
                 <button
                   type="button"
@@ -424,8 +409,8 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
                 >
                   {date(episode.created_at)}
                   <span className="mt-1 block text-muted-foreground">
-                    {episode.id === work.id ? "Selected · " : ""}
-                    {episode.state}
+                    {episode.id === work.id ? tUi("Selected · ") : ""}
+                    {operationalStatusLabel(tUi, episode.state)}
                   </span>
                 </button>
               ))}
@@ -433,7 +418,7 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
           )}
           {!!data.journey?.length && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold">Interaction journey</p>
+              <p className="text-xs font-semibold">{tUi("Interaction journey")}</p>
               {data.journey.map((segment) => (
                 <div
                   key={segment.id}
@@ -449,8 +434,7 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
                     {date(segment.started_at)}
                   </p>
                   {segment.wrapup_code_id && (
-                    <p className="mt-1">
-                      Disposition:{" "}
+                    <p className="mt-1">{tUi("Disposition:")}{" "}
                       {segment.wrapup_code_name || segment.wrapup_code_id}
                     </p>
                   )}
@@ -459,18 +443,15 @@ export function ConversationReader({ workItemId, onSelectEpisode }) {
             </div>
           )}
           <details className="text-[10px] text-muted-foreground">
-            <summary className="cursor-pointer">Identifiers</summary>
-            <p className="mt-2 break-all">Interaction: {work.id}</p>
-            <p className="mt-2 break-all">
-              Conversation: {work.conversation_id}
+            <summary className="cursor-pointer">{tUi("Identifiers")}</summary>
+            <p className="mt-2 break-all">{tUi("Interaction: ")}{work.id}</p>
+            <p className="mt-2 break-all">{tUi("Conversation: ")}{work.conversation_id}
             </p>
           </details>
         </aside>
       </div>
       <footer className="flex shrink-0 items-center gap-2 border-t bg-card px-3 py-2 text-[11px] text-muted-foreground">
-        <LockKeyhole className="size-3" />
-        Observation only. Messages{email?', saved agent drafts':''} and delivery evidence refresh automatically.
-      </footer>
+        <LockKeyhole className="size-3" />{tUi("Observation only. Messages")}{email?tUi(", saved agent drafts"):''}{tUi(" and delivery evidence refresh automatically.")}</footer>
     </div>
   );
 }
@@ -479,6 +460,7 @@ export default function ConversationPreview({
   onOpenChange,
   interaction,
 }) {
+  const tUi = useUiText();
   const initialId =
     interaction?.workItemId || interaction?.work_item_id || interaction?.id;
   const [selection, setSelection] = useState(null);
@@ -494,10 +476,8 @@ export default function ConversationPreview({
       }}
     >
       <DialogContent className="flex h-[min(88dvh,900px)] w-[96vw] max-w-[1180px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1180px]">
-        <DialogTitle className="sr-only">Conversation preview</DialogTitle>
-        <DialogDescription className="sr-only">
-          Read-only conversation and interaction context with live updates.
-        </DialogDescription>
+        <DialogTitle className="sr-only">{tUi("Conversation preview")}</DialogTitle>
+        <DialogDescription className="sr-only">{tUi("Read-only conversation and interaction context with live updates.")}</DialogDescription>
         {open && episodeId && (
           <ConversationReader
             key={episodeId}

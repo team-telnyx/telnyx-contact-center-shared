@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { withdrawVoiceEndpoint } from "@/lib/telephony/endpoint-client";
 import { notify } from "@/components/ToastNotify";
@@ -65,6 +67,7 @@ function getUserInitials(user) {
 }
 
 export function NavUser({ user, hideExtras }) {
+  const tUi = useUiText();
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
@@ -155,23 +158,23 @@ export function NavUser({ user, hideExtras }) {
               <Avatar className="h-11 w-11 rounded-xl">
                 <AvatarImage
                   src={profilePictureSrc}
-                  alt={user?.name || "User"}
+                  alt={user?.name || tUi("User")}
                   className="object-cover"
                 />
                 <AvatarFallback className="rounded-xl">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
-              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+              <div className="grid min-w-0 flex-1 text-start text-sm leading-tight">
                 <span className="truncate font-medium">
-                  {user?.name || "User"}
+                  {user?.name || tUi("User")}
                 </span>
                 <span className="text-muted-foreground truncate text-xs">
                   {user?.email || ""}
                 </span>
                 <ApplicationVersionLabel />
               </div>
-              <IconDotsVertical className="ml-auto size-4" />
+              <IconDotsVertical className="ms-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -183,18 +186,18 @@ export function NavUser({ user, hideExtras }) {
           >
             {/* Status selector for authenticated users */}
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage
                     src={profilePictureSrc}
-                    alt={user?.name || "User"}
+                    alt={user?.name || tUi("User")}
                     className="object-cover"
                   />
                   <AvatarFallback className="rounded-lg">
                     {userInitials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid flex-1 text-start text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
                   <span className="text-muted-foreground truncate text-xs">
                     {user.email}
@@ -205,19 +208,15 @@ export function NavUser({ user, hideExtras }) {
             </DropdownMenuLabel>
             {!hideExtras && <DropdownMenuSeparator />}
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground">
-                Theme
-              </DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground">{tUi("Theme")}</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => {
                   updateThemeOnServer("light");
                   setTheme("light");
                 }}
               >
-                <Sun />
-                Light
-                {theme === "light" ? (
-                  <IconCheck className="ml-auto text-[#00C389]" />
+                <Sun />{tUi("Light")}{theme === "light" ? (
+                  <IconCheck className="ms-auto text-[#00C389]" />
                 ) : null}
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -226,10 +225,8 @@ export function NavUser({ user, hideExtras }) {
                   setTheme("dark");
                 }}
               >
-                <Moon />
-                Dark
-                {theme === "dark" ? (
-                  <IconCheck className="ml-auto text-[#00C389]" />
+                <Moon />{tUi("Dark")}{theme === "dark" ? (
+                  <IconCheck className="ms-auto text-[#00C389]" />
                 ) : null}
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -238,10 +235,8 @@ export function NavUser({ user, hideExtras }) {
                   setTheme("system");
                 }}
               >
-                <Monitor />
-                System
-                {theme === "system" ? (
-                  <IconCheck className="ml-auto text-[#00C389]" />
+                <Monitor />{tUi("System")}{theme === "system" ? (
+                  <IconCheck className="ms-auto text-[#00C389]" />
                 ) : null}
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -259,21 +254,15 @@ export function NavUser({ user, hideExtras }) {
                     } catch (_) {}
                   }}
                 >
-                  <IconUserCircle />
-                  User Profile
-                </DropdownMenuItem>
+                  <IconUserCircle />{tUi("User Profile")}</DropdownMenuItem>
               </>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setAboutOpen(true)}>
-              <Info />
-              About Contact Center
-            </DropdownMenuItem>
+              <Info />{tUi("About Contact Center")}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
-              <IconLogout />
-              Log out
-            </DropdownMenuItem>
+              <IconLogout />{tUi("Log out")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <ApplicationVersionDialog open={aboutOpen} onOpenChange={setAboutOpen} />

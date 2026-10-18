@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import { normalizeSteps, describeStep } from "../lib/call-generator/actions.mjs";
 import { normalizeTargets } from "../lib/call-generator/runner.mjs";
 import { analyzeFlowForWorkflowTesting } from "../lib/call-generator/workflow-testing.mjs";
@@ -284,7 +284,8 @@ describe("call generator actions & multi-target (T6)", () => {
     const sttHandler = await src("lib/telnyx-stt-handler.mjs");
     assert.match(sttHandler, /this\.interactionId = this\.clientState\.interaction_id \|\| this\.clientState\.interactionId \|\| null/);
     const workflowTesting = await src("lib/call-generator/workflow-testing.mjs");
-    assert.match(workflowTesting, /latest_agent_transcript/);
+    assert.match(workflowTesting, /buildCustomerReplyPrompt/);
+    assert.match(await src("lib/ai-operations/prompts/caller.mjs"), /latest_agent_transcript/);
     assert.match(workflowTesting, /actions\/speak/);
     assert.match(workflowTesting, /aa_workflows/);
   });

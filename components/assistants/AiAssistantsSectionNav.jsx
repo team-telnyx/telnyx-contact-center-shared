@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { useRouter } from "next/navigation";
 import { IconBook2, IconBrain, IconCalendar, IconRobot, IconServer, IconTools } from "@tabler/icons-react";
@@ -14,6 +15,7 @@ const AI_SECTION_ITEMS = [
 ];
 
 export function AiAssistantsSectionPage({ activeId, children }) {
+  const tUi = useUiText();
   const router = useRouter();
 
   function navigate(id) {
@@ -26,7 +28,7 @@ export function AiAssistantsSectionPage({ activeId, children }) {
       className="grid min-h-0 flex-1 gap-3 overflow-hidden p-3"
       style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}
     >
-      <SectionRail items={AI_SECTION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel="AI Assistants sections" screenGroup="admin.ai" />
+      <SectionRail items={AI_SECTION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel={tUi("AI Assistants sections")} screenGroup="admin.ai" />
       <section className="min-h-0 min-w-0 overflow-y-auto pr-1">{children}</section>
     </main>
   );

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 const liveStates = new Set(["pending_consent", "connecting", "active", "reconnecting"]);
 
 export default function CobrowseAgentModal({ interaction, onClose }) {
+  const tUi = useUiText();
   const [state, setState] = useState({ status: "loading", session: null, entryPoint: null, error: "" });
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,26 +59,26 @@ export default function CobrowseAgentModal({ interaction, onClose }) {
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
     <DialogContent className="z-[80] max-h-[min(90vh,560px)] overflow-y-auto sm:max-w-md" overlayClassName="z-[79]" showCloseButton={false}>
       <DialogHeader>
-        <DialogTitle>Co-browsing</DialogTitle>
-        <DialogDescription>Page viewing requires consent · control requires a second approval · no recording</DialogDescription>
+        <DialogTitle>{tUi("Co-browsing")}</DialogTitle>
+        <DialogDescription>{tUi("Page viewing requires consent · control requires a second approval · no recording")}</DialogDescription>
       </DialogHeader>
-      {state.status === "loading" ? <div role="status" aria-label="Loading co-browsing" className="grid gap-3 py-2"><Skeleton className="h-5 w-52"/><Skeleton className="h-10 w-full"/></div>
+      {state.status === "loading" ? <div role="status" aria-label={tUi("Loading co-browsing")} className="grid gap-3 py-2"><Skeleton className="h-5 w-52"/><Skeleton className="h-10 w-full"/></div>
         : state.status === "error" ? <p role="alert" className="text-sm text-destructive">{state.error}</p>
         : <div className="space-y-4 text-sm">
           {state.error && <p role="alert" className="text-destructive">{state.error}</p>}
           {live ? <>
-            <p>{state.session.state === "pending_consent" ? "The request was sent. Waiting for the visitor to accept." : "Page sharing is available in Interaction Details."}</p>
-            <button type="button" onClick={openDetail} className="w-full rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground">Open co-browsing tab</button>
+            <p>{state.session.state === "pending_consent" ? tUi("The request was sent. Waiting for the visitor to accept.") : tUi("Page sharing is available in Interaction Details.")}</p>
+            <button type="button" onClick={openDetail} className="w-full rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground">{tUi("Open co-browsing tab")}</button>
           </> : state.entryPoint?.kind === "inSession" ? <>
-            <p>This interaction is linked to an active widget session. The visitor must accept before any page content is shared.</p>
-            <button type="button" data-testid="cobrowse-request" disabled={busy} onClick={() => void act("request")} className="w-full rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-50">{busy ? "Sending request…" : "Request page sharing from visitor"}</button>
+            <p>{tUi("This interaction is linked to an active widget session. The visitor must accept before any page content is shared.")}</p>
+            <button type="button" data-testid="cobrowse-request" disabled={busy} onClick={() => void act("request")} className="w-full rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-50">{busy ? tUi("Sending request…") : tUi("Request page sharing from visitor")}</button>
           </> : state.entryPoint?.kind === "pairingCode" ? <>
-            <p>Ask the visitor to open the widget on the page they want to share, choose “Share this page”, and give you the six-digit code through this interaction. The code does not grant consent.</p>
-            <div className="flex gap-2"><input aria-label="Visitor pairing code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2" placeholder="Six-digit code"/>
-              <button type="button" data-testid="cobrowse-claim" disabled={busy || code.length !== 6} onClick={() => void act("claim")} className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-50">{busy ? "Claiming…" : "Claim code"}</button></div>
-          </> : <p>{state.entryPoint?.reason || "Co-browsing is unavailable for this interaction."}</p>}
+            <p>{tUi("Ask the visitor to open the widget on the page they want to share, choose “Share this page”, and give you the six-digit code through this interaction. The code does not grant consent.")}</p>
+            <div className="flex gap-2"><input aria-label={tUi("Visitor pairing code")} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-2" placeholder={tUi("Six-digit code")}/>
+              <button type="button" data-testid="cobrowse-claim" disabled={busy || code.length !== 6} onClick={() => void act("claim")} className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-50">{busy ? tUi("Claiming…") : tUi("Claim code")}</button></div>
+          </> : <p>{state.entryPoint?.reason || tUi("Co-browsing is unavailable for this interaction.")}</p>}
         </div>}
-      <DialogFooter><button type="button" data-testid="cobrowse-close" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Close</button></DialogFooter>
+      <DialogFooter><button type="button" data-testid="cobrowse-close" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">{tUi("Close")}</button></DialogFooter>
     </DialogContent>
   </Dialog>;
 }

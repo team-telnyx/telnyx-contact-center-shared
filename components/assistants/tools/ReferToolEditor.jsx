@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Input } from "@/components/ui/input";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
@@ -19,6 +21,7 @@ export default function ReferToolEditor({
   onChange,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const rf = value?.refer || {};
   const targets = Array.isArray(rf.targets) ? rf.targets : [];
   const sipHeaders = Array.isArray(rf.sip_headers) ? rf.sip_headers : [];
@@ -34,13 +37,13 @@ export default function ReferToolEditor({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="text-xs">Targets</div>
+        <div className="text-xs">{tUi("Targets")}</div>
         {targets.map((t, i) => (
           <div key={i} className="border rounded p-2 space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
               <Input
                 className="md:col-span-4"
-                placeholder="Name"
+                placeholder={tUi("Name")}
                 value={t?.name || ""}
                 onChange={(e) => {
                   const next = targets.map((x, idx) =>
@@ -51,7 +54,7 @@ export default function ReferToolEditor({
               />
               <div className="md:col-span-7">
                 <VariableInput
-                  placeholder="SIP Address (sip:user@domain)"
+                  placeholder={tUi("SIP Address (sip:user@domain)")}
                   value={t?.sip_address || ""}
                   availableVariables={availableVariables}
                   secrets={[]}
@@ -71,7 +74,7 @@ export default function ReferToolEditor({
                   onClick={() =>
                     update({ targets: targets.filter((_, idx) => idx !== i) })
                   }
-                  aria-label="Remove"
+                  aria-label={tUi("Remove")}
                 >
                   <IconTrash />
                 </Button>
@@ -81,7 +84,7 @@ export default function ReferToolEditor({
               <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
                 <div className="md:col-span-6">
                   <VariableInput
-                    placeholder="SIP Auth Username"
+                    placeholder={tUi("SIP Auth Username")}
                     value={t?.sip_auth_username || ""}
                     availableVariables={availableVariables}
                     secrets={[]}
@@ -98,7 +101,7 @@ export default function ReferToolEditor({
                 <div className="md:col-span-5">
                   <VariableInput
                     className="w-full"
-                    placeholder="SIP Auth Password"
+                    placeholder={tUi("SIP Auth Password")}
                     value={t?.sip_auth_password || ""}
                     availableVariables={availableVariables}
                     secrets={[]}
@@ -128,7 +131,7 @@ export default function ReferToolEditor({
             <div className="flex justify-between items-center">
               <div />
               <label className="inline-flex items-center gap-2 text-xs">
-                <span>Advanced options</span>
+                <span>{tUi("Advanced options")}</span>
                 <Switch
                   checked={Boolean(t?.__showAdvanced)}
                   onCheckedChange={(v) => {
@@ -148,15 +151,13 @@ export default function ReferToolEditor({
             onClick={() =>
               update({ targets: [...targets, { name: "", sip_address: "" }] })
             }
-          >
-            Add Target
-          </Button>
+          >{tUi("Add Target")}</Button>
           {/* Advanced options switch moved into each card */}
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs">SIP Headers (User-to-User or Diversion)</div>
+        <div className="text-xs">{tUi("SIP Headers (User-to-User or Diversion)")}</div>
         {sipHeaders.map((h, i) => (
           <div
             key={i}
@@ -175,13 +176,13 @@ export default function ReferToolEditor({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="User-to-User">User-to-User</SelectItem>
-                <SelectItem value="Diversion">Diversion</SelectItem>
+                <SelectItem value="User-to-User">{tUi("User-to-User")}</SelectItem>
+                <SelectItem value="Diversion">{tUi("Diversion")}</SelectItem>
               </SelectContent>
             </Select>
             <div className="md:col-span-6">
               <VariableInput
-                placeholder="Header value"
+                placeholder={tUi("Header value")}
                 value={h?.value || ""}
                 availableVariables={availableVariables}
                 secrets={[]}
@@ -213,7 +214,7 @@ export default function ReferToolEditor({
                     sip_headers: sipHeaders.filter((_, idx) => idx !== i),
                   })
                 }
-                aria-label="Remove"
+                aria-label={tUi("Remove")}
               >
                 <IconTrash />
               </Button>
@@ -227,13 +228,11 @@ export default function ReferToolEditor({
               sip_headers: [...sipHeaders, { name: "User-to-User", value: "" }],
             })
           }
-        >
-          Add SIP Header
-        </Button>
+        >{tUi("Add SIP Header")}</Button>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs">Custom Headers</div>
+        <div className="text-xs">{tUi("Custom Headers")}</div>
         {customHeaders.map((h, i) => (
           <div
             key={i}
@@ -241,7 +240,7 @@ export default function ReferToolEditor({
           >
             <Input
               className="md:col-span-4"
-              placeholder="Header name"
+              placeholder={tUi("Header name")}
               value={h?.name || ""}
               onChange={(e) => {
                 const next = customHeaders.map((x, idx) =>
@@ -252,7 +251,7 @@ export default function ReferToolEditor({
             />
             <div className="md:col-span-6">
               <VariableInput
-                placeholder="Header value"
+                placeholder={tUi("Header value")}
                 value={h?.value || ""}
                 availableVariables={availableVariables}
                 secrets={[]}
@@ -284,7 +283,7 @@ export default function ReferToolEditor({
                     custom_headers: customHeaders.filter((_, idx) => idx !== i),
                   })
                 }
-                aria-label="Remove"
+                aria-label={tUi("Remove")}
               >
                 <IconTrash />
               </Button>
@@ -298,9 +297,7 @@ export default function ReferToolEditor({
               custom_headers: [...customHeaders, { name: "", value: "" }],
             })
           }
-        >
-          Add Custom Header
-        </Button>
+        >{tUi("Add Custom Header")}</Button>
       </div>
     </div>
   );

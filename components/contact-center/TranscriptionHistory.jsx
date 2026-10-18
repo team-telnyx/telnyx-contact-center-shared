@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +16,7 @@ import {
   Frown,
   Minus,
 } from "lucide-react";
-import { getIntentLabel } from "@/lib/agent-assist/sentiment-analysis";
+import { getIntentLabel } from "@/lib/agent-assist/sentiment-display";
 
 function getSentimentBadgeColor(sentiment) {
   switch (sentiment) {
@@ -125,6 +128,7 @@ function calculateSummary(transcriptions) {
 }
 
 function TranscriptionBubble({ transcription }) {
+  const tUi = useUiText();
   const isInbound = transcription.track === "inbound";
   const sttConfidencePercent = formatSttConfidencePercent(transcription.confidence);
 
@@ -153,22 +157,21 @@ function TranscriptionBubble({ transcription }) {
               className="text-xs bg-purple-500/10 text-purple-500 border-purple-500/50"
             >
               <Target className="h-3 w-3 mr-1" />
-              {getIntentLabel(transcription.intent)}
+              {getIntentLabel(transcription.intent, tUi)}
             </Badge>
           )}
           {sttConfidencePercent !== null && (
             <Badge
               variant="outline"
               className="text-xs bg-cyan-500/10 text-cyan-500 border-cyan-500/50"
-              title="Speech-to-text recognition confidence from Telnyx Standalone STT"
+              title={tUi("Speech-to-text recognition confidence from Telnyx Standalone STT")}
             >
-              <Activity className="h-3 w-3 mr-1" />
-              STT {sttConfidencePercent}%
+              <Activity className="h-3 w-3 mr-1" />{tUi("STT ")}{sttConfidencePercent}%
             </Badge>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
             {transcription.timestamp
-              ? new Date(transcription.timestamp).toLocaleTimeString()
+              ? new Date(transcription.timestamp).toLocaleTimeString(tUi.locale)
               : "-"}
           </span>
         </div>
@@ -196,6 +199,7 @@ function TranscriptionBubble({ transcription }) {
 }
 
 export default function TranscriptionHistory({ transcriptions = [] }) {
+  const tUi = useUiText();
   const summary = calculateSummary(transcriptions);
 
   return (
@@ -203,7 +207,7 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
       <div className="grid gap-3 md:grid-cols-4">
         <Card className="border-2 border-border bg-card">
           <CardContent className="pl-5">
-            <h3 className="text-lg font-semibold mb-2">Current Sentiment</h3>
+            <h3 className="text-lg font-semibold mb-2">{tUi("Current Sentiment")}</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-blue-500/10">
                 <Activity className="h-7 w-7 text-blue-500" />
@@ -219,7 +223,7 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
                     summary.currentSentiment
                   )}`}
                 >
-                  {summary.currentSentiment}
+                  {operationalStatusLabel(tUi, summary.currentSentiment)}
                 </Badge>
               </div>
             </div>
@@ -228,7 +232,7 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
 
         <Card className="border-2 border-border bg-card">
           <CardContent className="pl-5">
-            <h3 className="text-lg font-semibold mb-2">Average Sentiment</h3>
+            <h3 className="text-lg font-semibold mb-2">{tUi("Average Sentiment")}</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-green-500/10">
                 <TrendingUp className="h-7 w-7 text-green-500" />
@@ -244,7 +248,7 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
                     summary.averageSentiment
                   )}`}
                 >
-                  {summary.averageSentiment}
+                  {operationalStatusLabel(tUi, summary.averageSentiment)}
                 </Badge>
               </div>
             </div>
@@ -253,17 +257,17 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
 
         <Card className="border-2 border-border bg-card">
           <CardContent className="pl-5">
-            <h3 className="text-lg font-semibold mb-2">Top Intent</h3>
+            <h3 className="text-lg font-semibold mb-2">{tUi("Top Intent")}</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-purple-500/10">
                 <Target className="h-7 w-7 text-purple-500" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold">
-                  {summary.topIntent ? getIntentLabel(summary.topIntent) : "—"}
+                  {summary.topIntent ? getIntentLabel(summary.topIntent, tUi) : "—"}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {summary.intentCount ? `${summary.intentCount} mentions` : ""}
+                  {summary.intentCount ? tUi("{value0} mentions", { value0: summary.intentCount }) : ""}
                 </div>
               </div>
             </div>
@@ -272,7 +276,7 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
 
         <Card className="border-2 border-border bg-card">
           <CardContent className="pl-5">
-            <h3 className="text-lg font-semibold mb-2">Top Tags</h3>
+            <h3 className="text-lg font-semibold mb-2">{tUi("Top Tags")}</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-amber-500/10">
                 <Hash className="h-7 w-7 text-amber-500" />
@@ -301,9 +305,7 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
         <CardContent className="p-0 flex flex-col h-full overflow-hidden">
           <div className="px-4 pb-6 border-b border-border flex-shrink-0">
             <h3 className="text-lg font-semibold flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-green-500" />
-              Transcription History
-              <Badge className="ml-auto text-xs bg-green-500/10 text-green-500 border-green-500/50">
+              <MessageSquare className="h-5 w-5 text-green-500" />{tUi("Transcription History")}<Badge className="ml-auto text-xs bg-green-500/10 text-green-500 border-green-500/50">
                 {transcriptions.length}
               </Badge>
             </h3>
@@ -313,7 +315,7 @@ export default function TranscriptionHistory({ transcriptions = [] }) {
               <div className="flex items-center justify-center py-8 px-3">
                 <div className="text-center text-muted-foreground">
                   <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">No transcription available.</p>
+                  <p className="text-xs">{tUi("No transcription available.")}</p>
                 </div>
               </div>
             ) : (

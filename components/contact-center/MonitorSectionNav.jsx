@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { useRouter } from "next/navigation";
 import {
@@ -35,6 +36,7 @@ export function persistMonitorSection(sectionId) {
 }
 
 export function MonitorSectionRailNav({ activeId = "dashboard" }) {
+  const tUi = useUiText();
   const router = useRouter();
   return (
     <SectionRail
@@ -44,7 +46,7 @@ export function MonitorSectionRailNav({ activeId = "dashboard" }) {
         persistMonitorSection(sectionId);
         router.push(`/supervisor/monitor?section=${encodeURIComponent(sectionId)}`);
       }}
-      ariaLabel="Supervisor monitor sections"
+      ariaLabel={tUi("Supervisor monitor sections")}
       screenGroup="supervisor.monitor"
     />
   );

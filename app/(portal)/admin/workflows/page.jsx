@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { AutomationsSectionPage } from "@/components/admin/AutomationsSectionNav";
@@ -50,6 +52,7 @@ import {
 import { Can } from "@/components/auth-provider";
 
 export default function AdminWorkflowsPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -242,7 +245,7 @@ export default function AdminWorkflowsPage() {
   function formatDate(dateStr) {
     if (!dateStr) return "—";
     const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", {
+    return d.toLocaleDateString(tUi.locale, {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -251,9 +254,7 @@ export default function AdminWorkflowsPage() {
 
   const headerActions = <>
     <Can permission="workflows:import"><Button variant="outline" onClick={handleImport}>
-      <IconUpload className="size-4 mr-1" />
-      Import
-    </Button></Can>
+      <IconUpload className="size-4 mr-1" />{tUi("Import")}</Button></Can>
     <Button
       variant="secondary"
       onClick={() =>
@@ -263,41 +264,37 @@ export default function AdminWorkflowsPage() {
           q: "",
         })
       }
-    >
-      Clear
-    </Button>
+    >{tUi("Clear")}</Button>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
     <Can permission="workflows:create"><Button
       onClick={() => router.push("/admin/workflows/new")}
       variant="default"
     >
-      <IconPlus className="size-4 mr-1" />
-      New Workflow
-    </Button></Can>
+      <IconPlus className="size-4 mr-1" />{tUi("New Workflow")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Workflows" badges={<Badge variant="secondary">{total} workflows</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Workflows")} badges={<Badge variant="secondary">{total}{tUi(" workflows")}</Badge>} actions={headerActions} />
       <AutomationsSectionPage activeId="workflows">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
-              <label className="text-xs">Name</label>
+              <label className="text-xs">{tUi("Name")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="name, description…"
+                placeholder={tUi("name, description…")}
               />
             </div>
             <div>
-              <label className="text-xs">Category</label>
+              <label className="text-xs">{tUi("Category")}</label>
               <Select
                 value={filters.category || "all"}
                 onValueChange={(value) =>
@@ -305,10 +302,10 @@ export default function AdminWorkflowsPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
                   {availableCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -318,7 +315,7 @@ export default function AdminWorkflowsPage() {
               </Select>
             </div>
             <div>
-              <label className="text-xs">Status</label>
+              <label className="text-xs">{tUi("Status")}</label>
               <Select
                 value={filters.active || "all"}
                 onValueChange={(value) =>
@@ -326,12 +323,12 @@ export default function AdminWorkflowsPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="true">Active</SelectItem>
-                  <SelectItem value="false">Inactive</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
+                  <SelectItem value="true">{tUi("Active")}</SelectItem>
+                  <SelectItem value="false">{tUi("Inactive")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -352,13 +349,13 @@ export default function AdminWorkflowsPage() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px] w-[200px]">Name</TableHead>
-                    <TableHead className="px-[10px] w-[120px]">Category</TableHead>
-                    <TableHead className="px-[10px] w-[80px] text-center">Stages</TableHead>
-                    <TableHead className="px-[10px] w-[80px] text-center">Items</TableHead>
-                    <TableHead className="px-[10px] w-[80px] text-center">Status</TableHead>
-                    <TableHead className="px-[10px] w-[120px]">Created</TableHead>
-                    <TableHead className="px-[10px] w-[120px] text-right">Actions</TableHead>
+                    <TableHead className="px-[10px] w-[200px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px] w-[120px]">{tUi("Category")}</TableHead>
+                    <TableHead className="px-[10px] w-[80px] text-center">{tUi("Stages")}</TableHead>
+                    <TableHead className="px-[10px] w-[80px] text-center">{tUi("Items")}</TableHead>
+                    <TableHead className="px-[10px] w-[80px] text-center">{tUi("Status")}</TableHead>
+                    <TableHead className="px-[10px] w-[120px]">{tUi("Created")}</TableHead>
+                    <TableHead className="px-[10px] w-[120px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -392,7 +389,7 @@ export default function AdminWorkflowsPage() {
                                   : "border-gray-400 text-gray-500"
                               }
                             >
-                              {workflow.is_active ? "Active" : "Inactive"}
+                              {workflow.is_active ? tUi("Active") : tUi("Inactive")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs text-muted-foreground">
@@ -406,7 +403,7 @@ export default function AdminWorkflowsPage() {
                                   router.push(`/admin/workflows/${workflow.id}`)
                                 }
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit workflow"
+                                title={tUi("Edit workflow")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -414,7 +411,7 @@ export default function AdminWorkflowsPage() {
                                 type="button"
                                 onClick={() => onDuplicate(workflow)}
                                 className="inline-flex items-center text-blue-500"
-                                title="Duplicate workflow"
+                                title={tUi("Duplicate workflow")}
                               >
                                 <IconCopy className="size-4" />
                               </button>
@@ -422,7 +419,7 @@ export default function AdminWorkflowsPage() {
                                 type="button"
                                 onClick={() => handleExport(workflow)}
                                 className="inline-flex items-center text-violet-500"
-                                title="Export workflow"
+                                title={tUi("Export workflow")}
                               >
                                 <IconDownload className="size-4" />
                               </button>
@@ -431,31 +428,25 @@ export default function AdminWorkflowsPage() {
                                   <Can permission="workflows:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete workflow"
+                                    title={tUi("Delete workflow")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete workflow?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the workflow "
-                                      {workflow.name}" and all its stages and items.
-                                    </DialogDescription>
+                                    <DialogTitle>{tUi("Delete workflow?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the workflow \"")}{workflow.name}{tUi("\" and all its stages and items.")}</DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(workflow.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -471,9 +462,7 @@ export default function AdminWorkflowsPage() {
                       <TableCell
                         colSpan={7}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No workflows found
-                      </TableCell>
+                      >{tUi("No workflows found")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -483,12 +472,10 @@ export default function AdminWorkflowsPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -524,8 +511,7 @@ export default function AdminWorkflowsPage() {
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm">
-                  Page {page} of {pageCount}
+                <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
                 </span>
                 <Button
                   variant="outline"

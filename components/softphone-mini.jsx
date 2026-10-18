@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { voiceFetch } from "@/lib/telephony/endpoint-client";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -29,6 +31,8 @@ import {
   UserCircle as IconContact,
 } from "lucide-react";
 import { TransferModal } from "@/components/contact-center/TransferModal";
+import { HandoffMoveButton } from "@/components/contact-center/handoff/HandoffEntry";
+import useDeviceHandoffStore from "@/lib/stores/device-handoff-store";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { VoiceRecoveryBadge } from "@/components/voice-recovery-badge";
 import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
@@ -84,6 +88,7 @@ function isValidDialTo(value) {
 }
 
 export default function SoftphoneMini() {
+  const tUi = useUiText();
   const { client, status: telephonyStatus } = useTelnyx();
   const { toggle } = usePhoneUi();
   const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
@@ -1427,6 +1432,16 @@ export default function SoftphoneMini() {
     }
   }
 
+  // "Answer here" in the Move call dialog: the mini phone owns the call's audio, so it answers.
+  const answerRequest = useDeviceHandoffStore((s) => s.answerRequest);
+  const answerRequested = useRef(answerRequest);
+  useEffect(() => {
+    if (answerRequest === answerRequested.current) return;
+    answerRequested.current = answerRequest;
+    handleAnswerCall();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answerRequest]);
+
   function handleAnswerCall() {
     try {
       if (!activeCall) {
@@ -1646,11 +1661,11 @@ export default function SoftphoneMini() {
       }`}
     >
       <audio data-testid="voice-remote-audio" ref={audioRef} autoPlay playsInline className="hidden" />
-      <VoiceRecoveryBadge />
+      <VoiceRecoveryBadge promptForDevice />
       {experimentalFeaturesEnabled ? <HeadsetStatusBadge /> : null}
       <button
         className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white hover:bg-zinc-700"
-        data-testid="voice-number-select" title="Select number from contacts"
+        data-testid="voice-number-select" title={tUi("Select number from contacts")}
         onClick={() => setShowNumberModal(true)}
       >
         <IconContact className="h-4 w-4" />
@@ -1670,7 +1685,7 @@ export default function SoftphoneMini() {
             setShowNumberModal(true);
           }
         }}
-        title={isIncomingCall && incomingCallerDisplay ? `From: ${incomingCallerDisplay}` : "Click to select number"}
+        title={isIncomingCall && incomingCallerDisplay ? tUi("From: {value0}", { value0: incomingCallerDisplay }) : tUi("Click to select number")}
       >
         <span
           className={shouldMarqueeMiniInput ? "inline-block whitespace-nowrap" : "block truncate"}
@@ -1680,7 +1695,7 @@ export default function SoftphoneMini() {
               : undefined
           }
         >
-          {miniInputDisplay || "Phone number or SIP URI"}
+          {miniInputDisplay || tUi("Phone number or SIP URI")}
         </span>
       </button>
       <style jsx global>{`
@@ -1694,14 +1709,14 @@ export default function SoftphoneMini() {
         <>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-red-600 text-white"
-            data-testid="voice-reject" title="Reject"
+            data-testid="voice-reject" title={tUi("Reject")}
             onClick={() => handleRejectCall()}
           >
             <IconPhoneOff className="h-4 w-4" />
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-emerald-600 text-white"
-            data-testid="voice-answer" title="Answer"
+            data-testid="voice-answer" title={tUi("Answer")}
             onClick={() => handleAnswerCall()}
           >
             <IconPhone className="h-4 w-4" />
@@ -1712,7 +1727,7 @@ export default function SoftphoneMini() {
           {/* Show only disconnect button for outbound calls in progress (dialing/ringing) */}
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-red-600 text-white"
-            data-testid="voice-disconnect" title="Disconnect"
+            data-testid="voice-disconnect" title={tUi("Disconnect")}
             onClick={hangup}
           >
             <IconPhoneOff className="h-4 w-4" />
@@ -1723,7 +1738,7 @@ export default function SoftphoneMini() {
           {/* Show CTI buttons when call is connected/answered */}
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white"
-            data-testid="voice-mute" title={callUI.isMuted ? "Unmute" : "Mute"}
+            data-testid="voice-mute" title={callUI.isMuted ? tUi("Unmute") : tUi("Mute")}
             onClick={toggleMute}
           >
             {callUI.isMuted ? (
@@ -1734,14 +1749,14 @@ export default function SoftphoneMini() {
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-red-600 text-white"
-            data-testid="voice-hangup" title="Hang up"
+            data-testid="voice-hangup" title={tUi("Hang up")}
             onClick={hangup}
           >
             <IconPhoneOff className="h-4 w-4" />
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white"
-            data-testid="voice-hold" title={callUI.isHeld ? "Unhold" : "Hold"}
+            data-testid="voice-hold" title={callUI.isHeld ? tUi("Unhold") : tUi("Hold", undefined, "phone action")}
             onClick={toggleHold}
           >
             {callUI.isHeld ? (
@@ -1752,11 +1767,12 @@ export default function SoftphoneMini() {
           </button>
           <button
             className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white"
-            data-testid="voice-transfer" title="Transfer"
+            data-testid="voice-transfer" title={tUi("Transfer")}
             onClick={() => {setCardTransferInteraction(null);setShowTransfer(true);}}
           >
             <IconPhoneForwarded className="h-4 w-4" />
           </button>
+          <HandoffMoveButton callInteractionId={useActiveCallStore.getState().contactCenter?.interactionId ?? null} />
         </>
       ) : (
         <>
@@ -1767,7 +1783,7 @@ export default function SoftphoneMini() {
                 ? "bg-emerald-600 text-white"
                 : "bg-zinc-700/70 text-white/70"
             }`}
-            data-testid="voice-dial" title="Call"
+            data-testid="voice-dial" title={tUi("Call", undefined, "phone action")}
             onClick={startCall}
             disabled={!canCall}
           >
@@ -1777,7 +1793,7 @@ export default function SoftphoneMini() {
       )}
       <button
         className="ml-1 h-7 w-7 rounded-full bg-zinc-700/70 text-white grid place-items-center"
-        data-testid="voice-expand" title="Show phone"
+        data-testid="voice-expand" title={tUi("Show phone")}
         onClick={toggle}
       >
         <IconChevronDown className="h-4 w-4" />

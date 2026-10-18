@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ToastNotify";
 import { voiceFetch } from "@/lib/telephony/endpoint-client";
@@ -36,6 +38,7 @@ function pendingWrapupFromSnapshot(snapshot) {
  * without a second status projection or a best-effort companion event.
  */
 export function GlobalWrapupSheet() {
+  const tUi = useUiText();
   const { open, interactionId, segmentId, transcriptions, closeWrapup } = useWrapupSheetStore();
   const callTranscriptions = useActiveCallStore((state) => state?.transcriptions || []);
   const latestTranscriptionsRef = useRef([]);
@@ -130,7 +133,7 @@ export function GlobalWrapupSheet() {
   if (open && (!contextReady || contextKey !== `${interactionId}:${segmentId}`)) return null;
   if (open && deviceControl?.canControl === false) return (
     <aside role="status" className="fixed bottom-5 right-5 z-40 flex max-w-sm flex-col gap-3 rounded-2xl border bg-background/95 p-4 shadow-lg backdrop-blur">
-      <p className="text-sm">Wrap-up on {deviceControl.label}. Both apps stay synchronized.</p>
+      <p className="text-sm">{tUi("Wrap-up on ")}{deviceControl.label}{tUi(". Both apps stay synchronized.")}</p>
       {deviceControl.canTakeOver && <Button variant="outline" disabled={takingOver} onClick={async()=>{
         setTakingOver(true);
         try {
@@ -141,7 +144,7 @@ export function GlobalWrapupSheet() {
           window.dispatchEvent(new CustomEvent('contact-center:refresh-interactions'));
         } catch(error) { notify({title:'Wrap-up',description:error.message,variant:'error'}); }
         finally {setTakingOver(false);}
-      }}>{takingOver?'Taking over…':'Take over wrap-up'}</Button>}
+      }}>{takingOver?tUi("Taking over…"):tUi("Take over wrap-up")}</Button>}
     </aside>
   );
   if (campaignAssignment) {

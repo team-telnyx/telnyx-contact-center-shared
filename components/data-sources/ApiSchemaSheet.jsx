@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import {
   Sheet,
@@ -35,6 +37,7 @@ export default function ApiSchemaSheet({
   open,
   onOpenChange,
 }) {
+  const tUi = useUiText();
   // Format entity name for display (convert snake_case to Title Case)
   const formatEntityName = (id) => {
     return id
@@ -575,13 +578,12 @@ export default function ApiSchemaSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-[700px] sm:w-[700px] md:w-[800px] flex flex-col p-0 h-full"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconApi className="size-5" />
-            API Schema — {entityName}
+            <IconApi className="size-5" />{tUi("API Schema — ")}{entityName}
           </SheetTitle>
         </SheetHeader>
 
@@ -591,32 +593,24 @@ export default function ApiSchemaSheet({
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <IconBook className="size-4" />
-                  Base Information
-                </CardTitle>
+                  <IconBook className="size-4" />{tUi("Base Information")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">
-                    Entity ID
-                  </div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("Entity ID")}</div>
                   <code className="text-sm bg-muted px-2 py-1 rounded">
                     {entityId}
                   </code>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">
-                    Base Path
-                  </div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("Base Path")}</div>
                   <code className="text-sm bg-muted px-2 py-1 rounded break-all">
                     {baseUrl}
                     {basePath}
                   </code>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">
-                    Database Table
-                  </div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("Database Table")}</div>
                   <code className="text-sm bg-muted px-2 py-1 rounded">
                     {dbTable}
                   </code>
@@ -628,9 +622,7 @@ export default function ApiSchemaSheet({
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <IconApi className="size-4" />
-                  Available Endpoints
-                </CardTitle>
+                  <IconApi className="size-4" />{tUi("Available Endpoints")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {endpoints.map((action) => {
@@ -652,7 +644,7 @@ export default function ApiSchemaSheet({
                             >
                               {action.method}
                             </Badge>
-                            <span className="font-medium">{action.label}</span>
+                            <span className="font-medium">{tUi(action.label)}</span>
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {action.description}
@@ -661,9 +653,7 @@ export default function ApiSchemaSheet({
                       </div>
 
                       <div className="space-y-2">
-                        <div className="text-xs font-medium text-muted-foreground">
-                          Endpoint URL
-                        </div>
+                        <div className="text-xs font-medium text-muted-foreground">{tUi("Endpoint URL")}</div>
                         <code className="text-xs bg-muted px-3 py-2 rounded block break-all">
                           {fullUrl}
                         </code>
@@ -672,9 +662,7 @@ export default function ApiSchemaSheet({
                       {/* Path Parameters */}
                       {action.pathParams && action.pathParams.length > 0 && (
                         <div className="space-y-2">
-                          <div className="text-xs font-medium text-muted-foreground">
-                            Path Parameters
-                          </div>
+                          <div className="text-xs font-medium text-muted-foreground">{tUi("Path Parameters")}</div>
                           <div className="space-y-1.5">
                             {action.pathParams.map((param) => (
                               <div
@@ -687,9 +675,7 @@ export default function ApiSchemaSheet({
                                 >
                                   {param}
                                 </Badge>
-                                <span className="text-muted-foreground">
-                                  - string
-                                </span>
+                                <span className="text-muted-foreground">{tUi("- string")}</span>
                               </div>
                             ))}
                           </div>
@@ -699,14 +685,9 @@ export default function ApiSchemaSheet({
                       {/* Query Parameters */}
                       {action.queryParams && action.queryParams.length > 0 && (
                         <div className="space-y-2">
-                          <div className="text-xs font-medium text-muted-foreground">
-                            Query Parameters
-                          </div>
+                          <div className="text-xs font-medium text-muted-foreground">{tUi("Query Parameters")}</div>
                           {action.queryParams[0] === "*" ? (
-                            <div className="text-sm text-muted-foreground">
-                              All entity fields are available as query
-                              parameters for filtering
-                            </div>
+                            <div className="text-sm text-muted-foreground">{tUi("All entity fields are available as query parameters for filtering")}</div>
                           ) : (
                             <div className="space-y-1.5">
                               {action.queryParams.map((param) => (
@@ -720,9 +701,7 @@ export default function ApiSchemaSheet({
                                   >
                                     {param}
                                   </Badge>
-                                  <span className="text-muted-foreground">
-                                    - string (optional)
-                                  </span>
+                                  <span className="text-muted-foreground">{tUi("- string (optional)")}</span>
                                 </div>
                               ))}
                             </div>
@@ -740,9 +719,7 @@ export default function ApiSchemaSheet({
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <IconTable className="size-4" />
-                    Data Schema
-                  </CardTitle>
+                    <IconTable className="size-4" />{tUi("Data Schema")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {Object.entries(entitySchema).map(([fieldName, fieldDef]) => (
@@ -769,25 +746,19 @@ export default function ApiSchemaSheet({
                                 variant="outline"
                                 className="text-xs bg-red-500/10 text-red-700 dark:text-red-400"
                               >
-                                <IconCheck className="size-3 mr-1" />
-                                Required
-                              </Badge>
+                                <IconCheck className="size-3 mr-1" />{tUi("Required")}</Badge>
                             ) : (
                               <Badge
                                 variant="outline"
                                 className="text-xs bg-gray-500/10 text-gray-700 dark:text-gray-400"
                               >
-                                <IconX className="size-3 mr-1" />
-                                Optional
-                              </Badge>
+                                <IconX className="size-3 mr-1" />{tUi("Optional")}</Badge>
                             )}
                             {fieldDef.autoGenerate && (
                               <Badge
                                 variant="outline"
                                 className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                              >
-                                Auto-generated
-                              </Badge>
+                              >{tUi("Auto-generated")}</Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground mt-1.5">
@@ -795,9 +766,7 @@ export default function ApiSchemaSheet({
                           </p>
                           {fieldDef.enum && Array.isArray(fieldDef.enum) && (
                             <div className="mt-2">
-                              <div className="text-xs font-medium text-muted-foreground mb-1">
-                                Allowed values:
-                              </div>
+                              <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("Allowed values:")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {fieldDef.enum.map((value) => (
                                   <Badge
@@ -823,9 +792,7 @@ export default function ApiSchemaSheet({
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <IconSearch className="size-4" />
-                  Query Parameters
-                </CardTitle>
+                  <IconSearch className="size-4" />{tUi("Query Parameters")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {getQueryParametersInfo(entityId).map((param) => (
@@ -850,27 +817,21 @@ export default function ApiSchemaSheet({
                               variant="outline"
                               className="text-xs bg-red-500/10 text-red-700 dark:text-red-400"
                             >
-                              <IconCheck className="size-3 mr-1" />
-                              Required
-                            </Badge>
+                              <IconCheck className="size-3 mr-1" />{tUi("Required")}</Badge>
                           ) : (
                             <Badge
                               variant="outline"
                               className="text-xs bg-gray-500/10 text-gray-700 dark:text-gray-400"
                             >
-                              <IconX className="size-3 mr-1" />
-                              Optional
-                            </Badge>
+                              <IconX className="size-3 mr-1" />{tUi("Optional")}</Badge>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1.5">
-                          {param.description}
+                          {tUi(param.description)}
                         </p>
                         {param.searches && (
                           <div className="mt-2">
-                            <div className="text-xs font-medium text-muted-foreground mb-1">
-                              Searches in fields:
-                            </div>
+                            <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("Searches in fields:")}</div>
                             <div className="flex flex-wrap gap-1.5">
                               {param.searches.map((field) => (
                                 <Badge
@@ -886,9 +847,7 @@ export default function ApiSchemaSheet({
                         )}
                         {param.examples && param.examples.length > 0 && (
                           <div className="mt-2">
-                            <div className="text-xs font-medium text-muted-foreground mb-1">
-                              Examples:
-                            </div>
+                            <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("Examples:")}</div>
                             <div className="space-y-1">
                               {param.examples.map((example, idx) => (
                                 <code
@@ -911,33 +870,22 @@ export default function ApiSchemaSheet({
             {/* Authentication */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Authentication</CardTitle>
+                <CardTitle className="text-base">{tUi("Authentication")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">
-                    API Key (Optional)
-                  </div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("API Key (Optional)")}</div>
                   <code className="text-sm bg-muted px-2 py-1 rounded">
                     telnyx-ai-api-key
                   </code>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Optional header for API key authentication
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{tUi("Optional header for API key authentication")}</p>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">
-                    Session
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    All endpoints require an authenticated user session. Admin
-                    role is required for most operations. The{" "}
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{tUi("Session")}</div>
+                  <p className="text-sm text-muted-foreground">{tUi("All endpoints require an authenticated user session. Admin role is required for most operations. The")}{" "}
                     <code className="text-xs bg-muted px-1 py-0.5 rounded">
                       created_by
-                    </code>{" "}
-                    field is automatically populated from the session when
-                    creating records.
-                  </p>
+                    </code>{" "}{tUi("field is automatically populated from the session when creating records.")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -945,13 +893,11 @@ export default function ApiSchemaSheet({
             {/* Response Format */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Response Format</CardTitle>
+                <CardTitle className="text-base">{tUi("Response Format")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2">
-                    Success Response (200/201)
-                  </div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">{tUi("Success Response (200/201)")}</div>
                   <pre className="text-xs bg-muted p-3 rounded overflow-x-auto">
                     {entityId === "kb_articles"
                       ? JSON.stringify(
@@ -1002,9 +948,7 @@ export default function ApiSchemaSheet({
                   </pre>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2">
-                    Error Response (4xx/5xx)
-                  </div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">{tUi("Error Response (4xx/5xx)")}</div>
                   <pre className="text-xs bg-muted p-3 rounded overflow-x-auto">
                     {JSON.stringify(
                       {

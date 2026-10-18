@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { useRouter } from "next/navigation";
 import {
@@ -37,6 +38,7 @@ const CONFIGURATION_ITEMS = [
 export { CONFIGURATION_ITEMS };
 
 export function ConfigurationSectionPage({ activeId, children }) {
+  const tUi = useUiText();
   const router = useRouter();
 
   function navigate(id) {
@@ -49,7 +51,7 @@ export function ConfigurationSectionPage({ activeId, children }) {
       className="grid min-h-0 flex-1 gap-3 overflow-hidden p-3"
       style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}
     >
-      <SectionRail items={CONFIGURATION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel="Configuration sections" screenGroup="admin.configuration" />
+      <SectionRail items={CONFIGURATION_ITEMS} activeId={activeId} onSelect={navigate} ariaLabel={tUi("Configuration sections")} screenGroup="admin.configuration" />
       <section className="min-h-0 min-w-0 overflow-y-auto pr-1">{children}</section>
     </main>
   );

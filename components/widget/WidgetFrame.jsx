@@ -1,4 +1,5 @@
 "use client";
+import { useAiChatImages, AiChatImageDrafts } from "./AiChatImages";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -348,7 +349,7 @@ function AttachmentCard({ attachment, config, ui, onOpen }) {
   // clicking through to a larger copy of the same controls would be pointless.
   if (displayUrl && kind === "image") {
     return (
-      <button type="button" onClick={() => onOpen?.(attachment)} className="block w-full min-w-48 overflow-hidden border p-1.5 text-start text-xs hover:brightness-95" style={surface}>
+      <button type="button" disabled={attachment.pending} aria-busy={attachment.pending || undefined} onClick={() => onOpen?.(attachment)} className="block w-full min-w-48 overflow-hidden border p-1.5 text-start text-xs enabled:hover:brightness-95" style={surface}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={displayUrl} alt={name} className="mb-1.5 block max-h-44 w-full object-cover" style={{ borderRadius: Math.max(4, component.radius - 4) }} />
         {caption}
@@ -802,6 +803,7 @@ export default function WidgetFrame({
   onPreviewClose,
   onPreviewHome,
 }) {
+  const imageDraft = useAiChatImages();
   const [runtimePayload, setRuntimePayload] = useState(null);
   const [sessionToken, setSessionToken] = useState(null);
   const pendingCustomerMessageRef = useRef(null);
@@ -1176,16 +1178,20 @@ export default function WidgetFrame({
     event.preventDefault();
     const content = input.trim();
     const chatReady = Boolean(previewWidget) || (chatStatus === "ready" && !conversationEnded);
-    if (!content || !chatReady) return;
+    if ((!content && !imageDraft.images.length) || !chatReady) return;
+    const localPreview = Boolean(previewWidget || !sessionToken);
     restoreMessageInputFocusRef.current = true;
-    const optimisticId = pendingCustomerMessageRef.current?.content === content ? pendingCustomerMessageRef.current.id : crypto.randomUUID();
-    pendingCustomerMessageRef.current = {id:optimisticId,content};
+    const imageKey = imageDraft.images.map(i => i.id).join(",");
+    const optimisticId = pendingCustomerMessageRef.current?.content === content && pendingCustomerMessageRef.current?.imageKey === imageKey ? pendingCustomerMessageRef.current.id : crypto.randomUUID();
+    pendingCustomerMessageRef.current = {id:optimisticId,content,imageKey};
     setInput("");
     setMessages((current) => [
       ...current,
-      { id: optimisticId, role: "user", content, createdAt: new Date().toISOString() },
+      { id: optimisticId, role: "user", content, createdAt: new Date().toISOString(), deliveryStatus: localPreview ? "delivered" : "pending", attachments: imageDraft.images.map(image => ({ id: image.id, url: image.url, filename: image.file.name, mediaType: image.file.type, size: image.file.size, pending: !localPreview })) },
     ]);
-    if (previewWidget || !sessionToken) {
+    if (localPreview) {
+      pendingCustomerMessageRef.current = null;
+      imageDraft.clear({ preserveObjectUrls: true });
       window.requestAnimationFrame(() => {
         messageInputRef.current?.focus({ preventScroll: true });
         restoreMessageInputFocusRef.current = false;
@@ -1195,13 +1201,14 @@ export default function WidgetFrame({
     setChatStatus("sending");
     setChatError("");
     try {
-      const response = await fetch("/api/widget-sessions/messages", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content, messageId: optimisticId }),
+      const hasImages = imageDraft.images.length > 0;
+      let body = JSON.stringify({ content, messageId: optimisticId });
+      if (hasImages) {
+        body = new FormData(); body.append("message", JSON.stringify({content, messageId: optimisticId}));
+        for (const image of imageDraft.images) body.append("file", image.file);
+      }
+      const response = await fetch(hasImages ? "/api/widget-sessions/image-messages" : "/api/widget-sessions/messages", {
+        method: "POST", headers: { Authorization: `Bearer ${sessionToken}`, ...(hasImages ? {} : {"Content-Type":"application/json"}) }, body,
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -1209,9 +1216,12 @@ export default function WidgetFrame({
         throw new Error(result.error || "Nie udało się wysłać wiadomości");
       }
       pendingCustomerMessageRef.current=null;
+      imageDraft.clear();
       setMessages(current=>current.map(message=>message.id===optimisticId?{...message,deliveryStatus:result.pendingReply?"pending":"delivered"}:message));
       if (result.handoff) setHandoff(result.handoff);
-      if (result.message?.content) {
+      if (Array.isArray(result.messages)) {
+        setMessages(result.messages);
+      } else if (result.message?.content) {
         setMessages((current) => [...current, result.message]);
       } else if (!result.handoff) {
         const historyResponse = await fetch("/api/widget-sessions/messages", {
@@ -1222,10 +1232,10 @@ export default function WidgetFrame({
         if (historyResponse.ok && Array.isArray(history.messages)) setMessages(history.messages);
       }
       setChatStatus("ready");
-    } catch {
+    } catch (error) {
       setMessages((current) => current.filter((message) => message.id !== optimisticId));
       setInput(content);
-      setChatError(config.content.sendFailedMessage);
+      setChatError(error.message || config.content.sendFailedMessage);
       setChatStatus("ready");
     }
   };
@@ -1241,6 +1251,7 @@ export default function WidgetFrame({
     customerTypingLastSentRef.current = 0;
     setHandoff(null);
     setMessages([]);
+    imageDraft.clear();
     setGreeting("");
     setInput("");
     setChatError("");
@@ -1255,10 +1266,12 @@ export default function WidgetFrame({
   // conversation reached a human agent.
   const handoffAcceptsFiles = !conversationEnded
     && ["waiting", "assigned", "connected"].includes(handoff?.status);
+  const aiImagesEnabled = config.channels.messaging.aiImages && !handoffAcceptsFiles;
   const attachmentsReady = previewWidget
     ? true
-    : chatStatus === "ready" && handoffAcceptsFiles && !uploading
-      && config.features.attachmentPolicy.inboundMimeTypes.length > 0;
+    : chatStatus === "ready" && !conversationEnded && !uploading
+      && (aiImagesEnabled || handoffAcceptsFiles && config.features.attachmentPolicy.inboundMimeTypes.length > 0);
+  const addImages = files => { try { imageDraft.add(files); setChatError(""); } catch (error) { setChatError(error.message); } };
 
   const uploadAttachment = async (file) => {
     if (!file || !sessionToken) return;
@@ -1549,21 +1562,26 @@ export default function WidgetFrame({
               </div>
             </div>
           )}
-          <form className="flex items-center" onSubmit={sendMessage}>
-            {(config.features.attachmentsAfterHandoff || config.features.emoji) && (
+          <AiChatImageDrafts images={chatStatus === "sending" ? [] : imageDraft.images} remove={imageDraft.remove} busy={!chatReady} />
+          <form className="flex items-center" onSubmit={sendMessage}
+            onDragOver={event => { if(aiImagesEnabled && chatReady) event.preventDefault(); }}
+            onDrop={event => { if(aiImagesEnabled && chatReady) { event.preventDefault(); addImages(event.dataTransfer.files); } }}
+            onPaste={event => { if(aiImagesEnabled && chatReady && event.clipboardData.files.length) { event.preventDefault(); addImages(event.clipboardData.files); } }}>
+            {(config.features.attachmentsAfterHandoff || aiImagesEnabled || config.features.emoji) && (
                   <div className="flex shrink-0 items-center" style={{ gap: footer.utilityButtonGap, marginInlineEnd: footer.utilityInputGap }}>
-                {config.features.attachmentsAfterHandoff && (
+                {(config.features.attachmentsAfterHandoff || aiImagesEnabled) && (
                   <>
                     {!previewWidget && (
                       <input
                         ref={fileInputRef}
                         type="file"
                         className="hidden"
-                        accept={attachmentAccept(config.features.attachmentPolicy.inboundMimeTypes)}
+                        multiple={aiImagesEnabled}
+                        accept={aiImagesEnabled ? "image/png,image/jpeg,image/webp" : attachmentAccept(config.features.attachmentPolicy.inboundMimeTypes)}
                         onChange={(event) => {
-                          const file = event.target.files?.[0];
+                          const files = Array.from(event.target.files || []);
                           event.target.value = "";
-                          void uploadAttachment(file);
+                          if (aiImagesEnabled) addImages(files); else void uploadAttachment(files[0]);
                         }}
                       />
                     )}
@@ -1576,7 +1594,7 @@ export default function WidgetFrame({
                       className="grid shrink-0 place-items-center rounded-full transition-colors hover:bg-black/5 disabled:opacity-35"
                       style={{ width: footer.buttonSize, height: footer.buttonSize }}
                       aria-label={ui.aria.attachFile}
-                      title={previewWidget || handoffAcceptsFiles ? ui.aria.attachFile : ui.aria.attachmentUnavailable}
+                      title={previewWidget || handoffAcceptsFiles || aiImagesEnabled ? ui.aria.attachFile : ui.aria.attachmentUnavailable}
                     >
                       <WidgetIcon name={uploading ? "sparkles" : footer.attachmentIcon} fallback="paperclip" size={footer.iconSize} className={uploading ? "motion-safe:animate-spin" : undefined} />
                     </button>
@@ -1609,7 +1627,7 @@ export default function WidgetFrame({
               aria-label={config.content.inputPlaceholder}
             />
             <button
-              disabled={mode !== "messaging" || !chatReady || !input.trim()}
+              disabled={mode !== "messaging" || !chatReady || (!input.trim() && !imageDraft.images.length)}
               type="submit"
               className="grid place-items-center disabled:opacity-50"
                   style={{ width: footer.buttonSize, height: footer.buttonSize, marginInlineStart: footer.inputSendGap, backgroundColor: footer.buttonBackgroundColor, color: footer.buttonTextColor, borderRadius: config.theme.shape.buttonRadius }}

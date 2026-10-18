@@ -11,28 +11,18 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
 import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
-import { isReadBackItem } from "@/lib/agent-assist/readback.mjs";
-import { isAccumulatingSlot, accumulateSlotValue } from "@/lib/agent-assist/slot-accumulate.mjs";
+import { planTestWorkflowAnalysis, applyTestWorkflowAnalysis } from "@/lib/agent-assist/test-workflow-analysis.mjs";
 
 import { withPermission } from "@/lib/authz/guard";
+import { resolveTestModel } from "@/lib/agent-assist/test-model-override.mjs";
+import { resolveOperationModel } from "@/lib/ai-operations/runtime.mjs";
+import { chatCopilotCatalog } from "@/lib/contact-center/chat-copilot";
 function normalizeConfidenceThreshold(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1) {
     return 0.95;
   }
   return Math.round(numericValue * 100) / 100;
-}
-
-function normalizeSpeakerType(speaker) {
-  if (speaker === "inbound" || speaker === "customer") return "customer";
-  if (speaker === "outbound" || speaker === "agent") return "agent";
-  return null;
-}
-
-function hasMeaningfulExtractedValue(value) {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  return true;
 }
 
 // POST /api/admin/workflows/[id]/analyze-test
@@ -75,8 +65,16 @@ async function POST_handler(request, { params }) {
       );
     }
 
-    const llmModel = workflow.llm_model || "openai/gpt-4o";
-    const fallbackModel = workflow.llm_fallback_model || "openai/gpt-5.6-luna";
+    // Per-test override (Test AI Agent model picker) > workflow model > the
+    // Admin → AI Copilot "Workflow analysis" default > built-in default. The
+    // last two are resolved by the analyzer through the AI operation runtime.
+    const override = await resolveTestModel(body.model, { workflowModel: workflow.llm_model, loadCatalog: chatCopilotCatalog });
+    const analysisModel = await resolveOperationModel("workflow-analysis", {
+      preferredModel: override.model || workflow.llm_model,
+      preferredSource: override.source === "test" ? "test" : "workflow",
+    });
+    const llmModel = analysisModel.model;
+    const fallbackModel = workflow.llm_fallback_model || null;
     const reasoningEnabled = workflow.llm_reasoning_enabled === true;
     const maxOutputTokens = Number.isInteger(workflow.llm_max_output_tokens)
       ? workflow.llm_max_output_tokens
@@ -102,45 +100,18 @@ async function POST_handler(request, { params }) {
       items = rows;
     }
 
-    // Build pending items (not yet completed)
-    const completedIds = new Set(
-      Object.entries(itemStatuses)
-        .filter(([, s]) => s?.status === "completed")
-        .map(([id]) => id)
-    );
-
-    // Slot items default to "customer" - customer provides the value; others default to "agent"
-    const getDefaultCompletionTrigger = (type) =>
-      type === "slot" ? "customer" : "agent";
-
-    const toAnalyzerItem = (item, current_status) => ({
-      item_id: item.id,
-      type: item.type,
-      label: item.label,
-      prompt_hint: item.prompt_hint,
-      hints: item.hints,
-      slot_name: item.slot_name,
-      slot_type: item.slot_type,
-      slot_validation: item.slot_validation,
-      completion_trigger: item.completion_trigger || getDefaultCompletionTrigger(item.type),
-      stage_name: item.stage_name,
-      stage_order: item.stage_order,
-      current_status,
+    // Which items the analyzer sees: open items, completed notes slots, and
+    // completed slots as correction candidates at read-back or behind an
+    // explicit correction (mirrors the live analyze route, an earlier fix).
+    const plan = planTestWorkflowAnalysis({
+      items,
+      itemStatuses,
+      slotsFilled,
+      transcript,
+      recentContext,
     });
 
-    const pendingItems = items
-      .filter((item) => !completedIds.has(item.id))
-      .map((item) => toAnalyzerItem(item, "pending"));
-
-    // Completed notes slots stay analyzable so multi-utterance notes accumulate
-    // (mirrors the live analyze route).
-    const completedNotesItems = items
-      .filter((item) => completedIds.has(item.id) && item.type === "slot" && isAccumulatingSlot(item))
-      .map((item) => toAnalyzerItem(item, "completed"));
-
-    const analyzerItems = [...pendingItems, ...completedNotesItems];
-
-    if (analyzerItems.length === 0) {
+    if (plan.analyzerItems.length === 0) {
       return NextResponse.json({
         ok: true,
         message: "All items completed",
@@ -149,18 +120,13 @@ async function POST_handler(request, { params }) {
       });
     }
 
-    // The slot currently being collected (earliest open slot) — mirrors the live
-    // analyze route so tests exercise the same current-target disambiguation.
-    const currentTargetItem = pendingItems.find((i) => i.type === "slot");
-    const currentTarget = currentTargetItem
-      ? { label: currentTargetItem.label, slotName: currentTargetItem.slot_name }
-      : null;
+    const { currentTarget, isReadBackStage, allowCorrections, correctionInProgress } = plan;
 
     // Call same LLM analyzer as live agent desktop (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
       transcript,
       speaker: speaker || "unknown",
-      pendingItems: analyzerItems,
+      pendingItems: plan.analyzerItems,
       slotsFilled: { ...slotsFilled },
       model: llmModel,
       fallbackModel,
@@ -168,98 +134,36 @@ async function POST_handler(request, { params }) {
       maxOutputTokens,
       confidenceThreshold,
       currentTarget,
+      isReadBackStage,
+      allowCorrections,
+      correctionInProgress,
       recentContext: Array.isArray(recentContext) ? recentContext.slice(-6) : [],
     });
 
-    // Apply completion_trigger and confidence threshold (same logic as live API)
-    const speakerType = normalizeSpeakerType(speaker);
-
-    const updates = [];
-    const newSlotsFilled = { ...slotsFilled };
-
-    for (const completed of analysisResult.completed_items || []) {
-      const item = analyzerItems.find((p) => p.item_id === completed.item_id);
-      if (!item) continue;
-
-      const completionTrigger = item.completion_trigger || getDefaultCompletionTrigger(item.type);
-      const shouldComplete =
-        Boolean(speakerType) &&
-        (completionTrigger === "either" ||
-          (completionTrigger === "customer" && speakerType === "customer") ||
-          (completionTrigger === "agent" && speakerType === "agent"));
-      const hasExtractedSlotValue = item.type !== "slot" || hasMeaningfulExtractedValue(completed.extracted_value);
-
-      if (!shouldComplete || !hasExtractedSlotValue) {
-        continue;
-      }
-
-      // Keep the final read-back / "confirm all" item open until every slot is
-      // collected and confirmed (mirrors the live route).
-      const hasUnconfirmedSlot = pendingItems.some((p) => p.type === "slot");
-      if (
-        item.type !== "slot" &&
-        hasUnconfirmedSlot &&
-        isReadBackItem({ itemType: item.type, itemLabel: item.label, itemPromptHint: item.prompt_hint, itemHints: item.hints })
-      ) {
-        continue;
-      }
-
-      // Already-completed notes slot re-analyzed → append the new fragment.
-      if (item.current_status === "completed" && item.type === "slot" && isAccumulatingSlot(item)) {
-        if (completed.confidence < confidenceThreshold) {
-          continue;
-        }
-        const accumulated = accumulateSlotValue(newSlotsFilled[item.slot_name], completed.extracted_value);
-        if (accumulated !== (newSlotsFilled[item.slot_name] ?? "")) {
-          newSlotsFilled[item.slot_name] = accumulated;
-          updates.push({
-            item_id: completed.item_id,
-            status: "completed",
-            confidence: completed.confidence,
-            extracted_value: accumulated,
-            source_text: completed.source_text,
-          });
-        }
-        continue;
-      }
-
-      if (completed.confidence >= confidenceThreshold) {
-        updates.push({
-          item_id: completed.item_id,
-          status: "completed",
-          confidence: completed.confidence,
-          extracted_value: completed.extracted_value,
-          source_text: completed.source_text,
-        });
-        if (item.slot_name && completed.extracted_value) {
-          newSlotsFilled[item.slot_name] = isAccumulatingSlot(item)
-            ? accumulateSlotValue(newSlotsFilled[item.slot_name], completed.extracted_value)
-            : completed.extracted_value;
-        }
-      } else {
-        updates.push({
-          item_id: completed.item_id,
-          status: "suggested",
-          confidence: completed.confidence,
-          extracted_value: completed.extracted_value,
-          source_text: completed.source_text,
-          alternatives: Array.isArray(completed.alternatives) ? completed.alternatives : [],
-          low_confidence: shouldComplete && completed.confidence < confidenceThreshold,
-          confidence_threshold: confidenceThreshold,
-        });
-      }
-    }
+    // A correction comes back "suggested" with is_correction; slotsFilled keeps
+    // the old value until it is confirmed.
+    const { updates, slotsFilled: newSlotsFilled } = applyTestWorkflowAnalysis({
+      plan,
+      analysisResult,
+      speaker,
+      slotsFilled,
+      itemStatuses,
+      confidenceThreshold,
+      transcript,
+    });
 
     return NextResponse.json({
       ok: true,
       updates,
       slotsFilled: newSlotsFilled,
+      model: llmModel,
+      modelSource: analysisModel.source,
     });
   } catch (error) {
     workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to analyze transcript" },
-      { status: 500 }
+      { status: error?.status === 400 ? 400 : 500 }
     );
   }
 }

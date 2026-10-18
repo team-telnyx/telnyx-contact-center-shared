@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
@@ -52,6 +54,7 @@ export default function HttpRequestNodeEditor({
   globalVariables = {},
   selectedNodeId = null,
 }) {
+  const tUi = useUiText();
   const url = config?.url || "";
   const method = config?.method || "GET";
   const headers = config?.headers || {};
@@ -220,7 +223,7 @@ export default function HttpRequestNodeEditor({
   return (
     <div className="space-y-4">
       <div>
-        <Label className="text-xs">URL</Label>
+        <Label className="text-xs">{tUi("URL")}</Label>
         <VariableInput
           value={url}
           onChange={(value) => handleChange("url", value)}
@@ -229,14 +232,12 @@ export default function HttpRequestNodeEditor({
           placeholder="https://api.example.com/endpoint"
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          API endpoint URL (supports variable substitution)
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("API endpoint URL (supports variable substitution)")}</p>
       </div>
 
       {/* Method Selector - Full Width */}
       <div>
-        <Label className="text-xs">Method</Label>
+        <Label className="text-xs">{tUi("Method")}</Label>
         <Select
           value={method}
           onValueChange={(value) => handleChange("method", value)}
@@ -245,11 +246,11 @@ export default function HttpRequestNodeEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="w-full">
-            <SelectItem value="GET">GET</SelectItem>
-            <SelectItem value="POST">POST</SelectItem>
-            <SelectItem value="PUT">PUT</SelectItem>
-            <SelectItem value="DELETE">DELETE</SelectItem>
-            <SelectItem value="PATCH">PATCH</SelectItem>
+            <SelectItem value="GET">{tUi("GET")}</SelectItem>
+            <SelectItem value="POST">{tUi("POST")}</SelectItem>
+            <SelectItem value="PUT">{tUi("PUT")}</SelectItem>
+            <SelectItem value="DELETE">{tUi("DELETE")}</SelectItem>
+            <SelectItem value="PATCH">{tUi("PATCH")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -267,9 +268,7 @@ export default function HttpRequestNodeEditor({
                 headersExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Headers
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Headers")}</Label>
             {headerEntries.length > 0 && (
               <span className="text-xs text-muted-foreground">
                 ({headerEntries.length})
@@ -297,7 +296,7 @@ export default function HttpRequestNodeEditor({
                       onChange={(newValue) => updateHeaderValue(key, newValue)}
                       availableVariables={availableVariables}
                       availableSecrets={availableSecrets}
-                      placeholder="Header value"
+                      placeholder={tUi("Header value")}
                       className="text-xs"
                     />
                   </div>
@@ -321,7 +320,7 @@ export default function HttpRequestNodeEditor({
               <Input
                 value={newHeaderKey}
                 onChange={(e) => setNewHeaderKey(e.target.value)}
-                placeholder="Header name"
+                placeholder={tUi("Header name")}
                 className="text-xs"
               />
               <VariableInput
@@ -329,7 +328,7 @@ export default function HttpRequestNodeEditor({
                 onChange={setNewHeaderValue}
                 availableVariables={availableVariables}
                 availableSecrets={availableSecrets}
-                placeholder="Header value"
+                placeholder={tUi("Header value")}
                 className="text-xs"
               />
             </div>
@@ -342,9 +341,7 @@ export default function HttpRequestNodeEditor({
                 disabled={!newHeaderKey}
                 className="flex-shrink-0"
               >
-                <IconPlus className="h-4 w-4 mr-1" />
-                Add Header
-              </Button>
+                <IconPlus className="h-4 w-4 mr-1" />{tUi("Add Header")}</Button>
             </div>
           </div>
         </CollapsibleContent>
@@ -363,9 +360,7 @@ export default function HttpRequestNodeEditor({
                 pathParamsExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Path Parameters
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Path Parameters")}</Label>
             {pathParamEntries.length > 0 && (
               <span className="text-xs text-muted-foreground">
                 ({pathParamEntries.length})
@@ -395,7 +390,7 @@ export default function HttpRequestNodeEditor({
                       }
                       availableVariables={availableVariables}
                       availableSecrets={availableSecrets}
-                      placeholder="Path value"
+                      placeholder={tUi("Path value")}
                       className="text-xs"
                     />
                   </div>
@@ -417,7 +412,7 @@ export default function HttpRequestNodeEditor({
               <Input
                 value={newPathParamKey}
                 onChange={(e) => setNewPathParamKey(e.target.value)}
-                placeholder="Parameter name"
+                placeholder={tUi("Parameter name")}
                 className="text-xs"
               />
               <VariableInput
@@ -425,7 +420,7 @@ export default function HttpRequestNodeEditor({
                 onChange={setNewPathParamValue}
                 availableVariables={availableVariables}
                 availableSecrets={availableSecrets}
-                placeholder="Parameter value"
+                placeholder={tUi("Parameter value")}
                 className="text-xs"
               />
             </div>
@@ -438,9 +433,7 @@ export default function HttpRequestNodeEditor({
                 disabled={!newPathParamKey}
                 className="flex-shrink-0"
               >
-                <IconPlus className="h-4 w-4 mr-1" />
-                Add Parameter
-              </Button>
+                <IconPlus className="h-4 w-4 mr-1" />{tUi("Add Parameter")}</Button>
             </div>
           </div>
         </CollapsibleContent>
@@ -459,9 +452,7 @@ export default function HttpRequestNodeEditor({
                 queryParamsExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Query Parameters
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Query Parameters")}</Label>
             {queryParamEntries.length > 0 && (
               <span className="text-xs text-muted-foreground">
                 ({queryParamEntries.length})
@@ -491,7 +482,7 @@ export default function HttpRequestNodeEditor({
                       }
                       availableVariables={availableVariables}
                       availableSecrets={availableSecrets}
-                      placeholder="Query value"
+                      placeholder={tUi("Query value")}
                       className="text-xs"
                     />
                   </div>
@@ -513,7 +504,7 @@ export default function HttpRequestNodeEditor({
               <Input
                 value={newQueryKey}
                 onChange={(e) => setNewQueryKey(e.target.value)}
-                placeholder="Parameter name"
+                placeholder={tUi("Parameter name")}
                 className="text-xs"
               />
               <VariableInput
@@ -521,7 +512,7 @@ export default function HttpRequestNodeEditor({
                 onChange={setNewQueryValue}
                 availableVariables={availableVariables}
                 availableSecrets={availableSecrets}
-                placeholder="Parameter value"
+                placeholder={tUi("Parameter value")}
                 className="text-xs"
               />
             </div>
@@ -534,9 +525,7 @@ export default function HttpRequestNodeEditor({
                 disabled={!newQueryKey}
                 className="flex-shrink-0"
               >
-                <IconPlus className="h-4 w-4 mr-1" />
-                Add Parameter
-              </Button>
+                <IconPlus className="h-4 w-4 mr-1" />{tUi("Add Parameter")}</Button>
             </div>
           </div>
         </CollapsibleContent>
@@ -559,13 +548,10 @@ export default function HttpRequestNodeEditor({
                   bodyParamsExpanded ? "rotate-90" : ""
                 }`}
               />
-              <Label className="text-xs font-semibold cursor-pointer">
-                Request Body
-              </Label>
+              <Label className="text-xs font-semibold cursor-pointer">{tUi("Request Body")}</Label>
               {bodyType === "params" && bodyParamEntries.length > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  ({bodyParamEntries.length} params)
-                </span>
+                  ({bodyParamEntries.length}{tUi(" params)")}</span>
               )}
             </div>
           </CollapsibleTrigger>
@@ -578,18 +564,14 @@ export default function HttpRequestNodeEditor({
                 variant={bodyType === "json" ? "secondary" : "outline"}
                 onClick={() => handleChange("bodyType", "json")}
                 className="h-7"
-              >
-                JSON
-              </Button>
+              >{tUi("JSON")}</Button>
               <Button
                 type="button"
                 size="sm"
                 variant={bodyType === "params" ? "secondary" : "outline"}
                 onClick={() => handleChange("bodyType", "params")}
                 className="h-7"
-              >
-                Parameters
-              </Button>
+              >{tUi("Parameters")}</Button>
             </div>
 
             {/* JSON Body */}
@@ -600,13 +582,11 @@ export default function HttpRequestNodeEditor({
                   onChange={(value) => handleChange("body", value)}
                   availableVariables={availableVariables}
                   availableSecrets={availableSecrets}
-                  placeholder='{"key": "{{value}}"}'
+                  placeholder={tUi("{\"key\": \"{{value}}\"}")}
                   rows={6}
                   className="font-mono text-xs"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Raw JSON body (supports variable substitution)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Raw JSON body (supports variable substitution)")}</p>
               </div>
             )}
 
@@ -634,7 +614,7 @@ export default function HttpRequestNodeEditor({
                             }
                             availableVariables={availableVariables}
                             availableSecrets={availableSecrets}
-                            placeholder="Parameter value"
+                            placeholder={tUi("Parameter value")}
                             className="text-xs"
                           />
                         </div>
@@ -656,7 +636,7 @@ export default function HttpRequestNodeEditor({
                     <Input
                       value={newBodyParamKey}
                       onChange={(e) => setNewBodyParamKey(e.target.value)}
-                      placeholder="Parameter name"
+                      placeholder={tUi("Parameter name")}
                       className="text-xs"
                     />
                     <VariableInput
@@ -664,7 +644,7 @@ export default function HttpRequestNodeEditor({
                       onChange={setNewBodyParamValue}
                       availableVariables={availableVariables}
                       availableSecrets={availableSecrets}
-                      placeholder="Parameter value"
+                      placeholder={tUi("Parameter value")}
                       className="text-xs"
                     />
                   </div>
@@ -677,14 +657,10 @@ export default function HttpRequestNodeEditor({
                       disabled={!newBodyParamKey}
                       className="flex-shrink-0"
                     >
-                      <IconPlus className="h-4 w-4 mr-1" />
-                      Add Parameter
-                    </Button>
+                      <IconPlus className="h-4 w-4 mr-1" />{tUi("Add Parameter")}</Button>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Will be sent as JSON object
-                </p>
+                <p className="text-xs text-muted-foreground">{tUi("Will be sent as JSON object")}</p>
               </div>
             )}
           </CollapsibleContent>
@@ -692,7 +668,7 @@ export default function HttpRequestNodeEditor({
       )}
 
       <div>
-        <Label className="text-xs">Timeout (ms)</Label>
+        <Label className="text-xs">{tUi("Timeout (ms)")}</Label>
         <Input
           type="number"
           value={timeout}
@@ -700,24 +676,22 @@ export default function HttpRequestNodeEditor({
           placeholder="30000"
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Request timeout in milliseconds
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Request timeout in milliseconds")}</p>
       </div>
 
       <div>
-        <Label className="text-xs">Response Variable Name</Label>
+        <Label className="text-xs">{tUi("Response Variable Name")}</Label>
         <Input
           value={config?.responseVariable || "http_response"}
           onChange={(e) => handleChange("responseVariable", e.target.value)}
-          placeholder="http_response"
+          placeholder={tUi("http_response")}
           className={`mt-1 ${
             config?.responseVariable &&
             checkDuplicateVariableName(
               config.responseVariable,
               { nodes, edges, globalVariables },
               { type: "http_request", id: selectedNodeId }
-            ).isDuplicate
+            , tUi).isDuplicate
               ? "border-yellow-500"
               : ""
           }`}
@@ -727,7 +701,7 @@ export default function HttpRequestNodeEditor({
             config.responseVariable,
             { nodes, edges, globalVariables },
             { type: "http_request", id: selectedNodeId }
-          ).isDuplicate && (
+          , tUi).isDuplicate && (
             <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1 flex items-center gap-1">
               <IconAlertCircle className="h-3 w-3" />
               {
@@ -735,7 +709,7 @@ export default function HttpRequestNodeEditor({
                   config.responseVariable,
                   { nodes, edges, globalVariables },
                   { type: "http_request", id: selectedNodeId }
-                ).message
+                , tUi).message
               }
             </p>
           )}
@@ -743,10 +717,8 @@ export default function HttpRequestNodeEditor({
           config?.responseVariable || "http_response",
           { nodes, edges, globalVariables },
           { type: "http_request", id: selectedNodeId }
-        ).isDuplicate && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Variable name to store the response data
-          </p>
+        , tUi).isDuplicate && (
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Variable name to store the response data")}</p>
         )}
       </div>
 
@@ -759,12 +731,8 @@ export default function HttpRequestNodeEditor({
           variant="outline"
           className="w-full"
         >
-          <IconExternalLink className="h-4 w-4 mr-2" />
-          Test Request
-        </Button>
-        <p className="text-xs text-muted-foreground mt-1">
-          Open test modal to provide variable values and test the request
-        </p>
+          <IconExternalLink className="h-4 w-4 mr-2" />{tUi("Test Request")}</Button>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Open test modal to provide variable values and test the request")}</p>
       </div>
 
       {/* Test Modal */}

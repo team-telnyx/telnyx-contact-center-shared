@@ -48,7 +48,7 @@ describe("reading a registration", () => {
       /bundleIdentifier is required/,
       "Debug and Release are different apps with different push credentials",
     );
-    assert.throws(() => readRegistration(registration({ kind: "android" })), /kind must be one of/);
+    assert.throws(() => readRegistration(registration({ kind: "unknown" })), /kind must be one of/);
   });
 
   it("refuses a token that is not hex, rather than storing one that can only fail", () => {
@@ -69,6 +69,24 @@ describe("reading a registration", () => {
     // phone from ringing, with nothing on screen to say why.
     const parsed = readRegistration(registration({ environment: "staging" }));
     assert.equal(parsed.environment, "staging");
+  });
+
+  it("accepts Android FCM credentials without APNs fields and preserves case", () => {
+    const parsed = readRegistration(registration({ kind: "android", platform: "android", voipToken: null, fcmToken: "Firebase:Opaque-ABC_123" }));
+    assert.equal(parsed.platform, "android");
+    assert.equal(parsed.fcmToken, "Firebase:Opaque-ABC_123");
+    assert.equal(parsed.voipToken, null);
+    assert.equal(parsed.alertToken, null);
+    assert.equal(readRegistration(registration()).platform, null);
+    assert.equal(readRegistration(registration()).fcmToken, null);
+  });
+
+  it("rejects malformed FCM credentials without echoing them", () => {
+    for (const value of [123, {}, "a b", "x".repeat(4097)]) {
+      assert.throws(() => readRegistration(registration({ kind: "android", fcmToken: value })), /fcmToken must/);
+    }
+    assert.throws(() => readRegistration(registration({ platform: "android" })), /platform must match/);
+    assert.throws(() => readRegistration(registration({ fcmToken: "wrong-platform-token" })), /fcmToken must belong/);
   });
 });
 
@@ -154,6 +172,24 @@ describe("the device register", () => {
     assert.equal((await listDevices("user-5", pool)).length, 1);
     assert.equal(await removeDevice("user-5", "d-5", pool), true);
     assert.deepEqual(await listDevices("user-5", pool), []);
+  });
+
+  withDb("Android storage, rotation, eligibility and deletion keep tokens server-side", async () => {
+    const input = readRegistration(registration({ deviceId: "android-device", kind: "android", platform: "android", voipToken: null, fcmToken: "FCM:opaqueToken" }));
+    const device = await upsertDevice("android-user", { ...input, authSessionId: "android-login" }, pool);
+    assert.equal(device.canReceiveCalls, true);
+    assert.equal(device.canReceiveAlerts, true);
+    assert.equal(device.platform, "android");
+    assert.ok(!JSON.stringify(device).includes(input.fcmToken));
+    const row = (await pool.query("SELECT * FROM cc_mobile_devices WHERE device_id=$1", [input.deviceId])).rows[0];
+    assert.equal(row.fcm_token, input.fcmToken);
+    assert.equal(row.auth_session_id, "android-login");
+    assert.equal((await ringableDevices("android-user", DEV_BUNDLE, pool)).length, 1);
+    await upsertDevice("android-user", { ...input, fcmToken: null }, pool);
+    assert.equal((await listDevices("android-user", pool))[0].canReceiveAlerts, false);
+    assert.deepEqual(await ringableDevices("android-user", DEV_BUNDLE, pool), []);
+    assert.equal(await removeDevice("another-user", input.deviceId, pool), false);
+    assert.equal(await removeDevice("android-user", input.deviceId, pool), true);
   });
 });
 

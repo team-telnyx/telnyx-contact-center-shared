@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Focus, Hand, MonitorX, MousePointer2, MousePointerClick, Scan, TextCursorInput, ZoomIn, ZoomOut } from "lucide-react";
@@ -17,6 +19,7 @@ function capturedViewport(events) {
 }
 
 export default function CobrowseAgentViewer({ interaction, session, onChanged }) {
+  const tUi = useUiText();
   const [streamStatus, setStreamStatus] = useState("Waiting for visitor consent");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -265,52 +268,52 @@ export default function CobrowseAgentViewer({ interaction, session, onChanged })
 
   return <div className="flex min-h-0 flex-1 flex-col gap-3 bg-muted/20 p-3" data-testid="cobrowse-interaction-viewer">
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
-      <div><p className="font-semibold">Live page view</p><p className="text-xs text-muted-foreground">{controlActive ? "Visitor-approved assistance · no recording" : "View only · no recording"}</p></div>
-      <InteractionActionGroup label="Co-browsing session actions">
-        <InteractionActionButton label="End sharing" description="Stop sharing the visitor's page and end this co-browsing session." icon={MonitorX} tone="negative" disabled={busy} busy={busy} onClick={() => void endSharing()} />
+      <div><p className="font-semibold">{tUi("Live page view")}</p><p className="text-xs text-muted-foreground">{controlActive ? tUi("Visitor-approved assistance · no recording") : tUi("View only · no recording")}</p></div>
+      <InteractionActionGroup label={tUi("Co-browsing session actions")}>
+        <InteractionActionButton label={tUi("End sharing")} description={tUi("Stop sharing the visitor's page and end this co-browsing session.")} icon={MonitorX} tone="negative" disabled={busy} busy={busy} onClick={() => void endSharing()} />
       </InteractionActionGroup>
     </div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {controlError && <p role="alert" className="text-sm text-destructive">{controlError}</p>}
     {sessionId && session?.controlAvailable && <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background px-3 py-2 text-xs">
       {controlActive ? <>
-        <span className="font-medium text-emerald-700">Visitor allowed control</span>
-        <InteractionActionGroup label="Visitor-approved page controls" className="ml-0">
-          <InteractionActionButton label={controlMode ? "Return to pan" : "Control page"} description={controlMode ? "Stop sending clicks to the visitor's page and drag the local view instead." : "Send clicks only to site-approved elements on the visitor's page. Shift-drag still pans your view."} icon={controlMode ? Hand : MousePointer2} aria-pressed={controlMode} onClick={() => { setSelectedFieldId(null); setControlMode((current) => !current); }} />
+        <span className="font-medium text-emerald-700">{tUi("Visitor allowed control")}</span>
+        <InteractionActionGroup label={tUi("Visitor-approved page controls")} className="ml-0">
+          <InteractionActionButton label={controlMode ? tUi("Return to pan") : tUi("Control page")} description={controlMode ? tUi("Stop sending clicks to the visitor's page and drag the local view instead.") : tUi("Send clicks only to site-approved elements on the visitor's page. Shift-drag still pans your view.")} icon={controlMode ? Hand : MousePointer2} aria-pressed={controlMode} onClick={() => { setSelectedFieldId(null); setControlMode((current) => !current); }} />
           {controlMode && <>
-            <InteractionActionButton label="Scroll visitor page up" description="Move the visitor's page up by one step; your local zoom does not change." icon={ArrowUp} onClick={() => sendControl("scroll", { deltaX: 0, deltaY: -400 })} />
-            <InteractionActionButton label="Scroll visitor page down" description="Move the visitor's page down by one step; your local zoom does not change." icon={ArrowDown} onClick={() => sendControl("scroll", { deltaX: 0, deltaY: 400 })} />
-            <InteractionActionButton label="Fill selected field" description="Send the typed text to the site-approved field you selected. Sensitive fields stay blocked." icon={TextCursorInput} disabled={!selectedFieldId} onClick={() => selectedFieldId && sendControl("fill", { selectionId: selectedFieldId, value: controlText })} />
+            <InteractionActionButton label={tUi("Scroll visitor page up")} description={tUi("Move the visitor's page up by one step; your local zoom does not change.")} icon={ArrowUp} onClick={() => sendControl("scroll", { deltaX: 0, deltaY: -400 })} />
+            <InteractionActionButton label={tUi("Scroll visitor page down")} description={tUi("Move the visitor's page down by one step; your local zoom does not change.")} icon={ArrowDown} onClick={() => sendControl("scroll", { deltaX: 0, deltaY: 400 })} />
+            <InteractionActionButton label={tUi("Fill selected field")} description={tUi("Send the typed text to the site-approved field you selected. Sensitive fields stay blocked.")} icon={TextCursorInput} disabled={!selectedFieldId} onClick={() => selectedFieldId && sendControl("fill", { selectionId: selectedFieldId, value: controlText })} />
           </>}
         </InteractionActionGroup>
-        {controlMode && <input type="text" autoComplete="off" maxLength={500} aria-label="Text for an allowed customer field" placeholder="Text for selected field" value={controlText} onChange={(event) => setControlText(event.target.value)} className="min-w-40 rounded-md border bg-background px-2.5 py-1.5" />}
-      </> : session?.controlRequestedAt ? <span>Waiting for visitor to approve control</span>
-        : session?.canControl ? <InteractionActionGroup label="Request page control" className="ml-0">
-          <InteractionActionButton label="Request control" description="Ask the visitor for separate permission to navigate and fill allowed fields." icon={MousePointerClick} disabled={controlBusy || session.state !== "active"} busy={controlBusy} onClick={() => void requestControl()} />
+        {controlMode && <input type="text" autoComplete="off" maxLength={500} aria-label={tUi("Text for an allowed customer field")} placeholder={tUi("Text for selected field")} value={controlText} onChange={(event) => setControlText(event.target.value)} className="min-w-40 rounded-md border bg-background px-2.5 py-1.5" />}
+      </> : session?.controlRequestedAt ? <span>{tUi("Waiting for visitor to approve control")}</span>
+        : session?.canControl ? <InteractionActionGroup label={tUi("Request page control")} className="ml-0">
+          <InteractionActionButton label={tUi("Request control")} description={tUi("Ask the visitor for separate permission to navigate and fill allowed fields.")} icon={MousePointerClick} disabled={controlBusy || session.state !== "active"} busy={controlBusy} onClick={() => void requestControl()} />
         </InteractionActionGroup>
-          : <span>Assisted control requires the co-browsing control permission</span>}
+          : <span>{tUi("Assisted control requires the co-browsing control permission")}</span>}
       {controlFeedback && <span role="status" className="text-muted-foreground">{controlFeedback}</span>}
     </div>}
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-      <p role="status" className="text-muted-foreground">{session.state === "pending_consent" ? "Waiting for visitor consent" : streamStatus}</p>
-      {sessionId && <p className="text-xs text-muted-foreground">{controlActive && controlMode ? "Click to assist · Shift-drag to pan" : "Drag to pan · scroll to explore"}</p>}
+      <p role="status" className="text-muted-foreground">{session.state === "pending_consent" ? tUi("Waiting for visitor consent") : streamStatus}</p>
+      {sessionId && <p className="text-xs text-muted-foreground">{controlActive && controlMode ? tUi("Click to assist · Shift-drag to pan") : tUi("Drag to pan · scroll to explore")}</p>}
       {sessionId && <div className="flex items-center gap-2">
-        <span aria-live="polite" aria-label="Current zoom" className="min-w-12 text-center text-xs font-medium tabular-nums text-foreground">{Math.round(zoom * 100)}%</span>
-        <InteractionActionGroup label="Co-browsing view controls" className="ml-0">
-          <InteractionActionButton label="Fit width" description="Fit the visitor's full page width into this panel." icon={Scan} aria-pressed={zoomMode === "fit"} onClick={() => setZoomMode("fit")} />
-          <InteractionActionButton label="Zoom out" description="Make the page smaller in your view only; the visitor's page is unchanged." icon={ZoomOut} disabled={zoom <= MIN_ZOOM} onClick={() => changeZoom(zoom - 0.25)} />
-          <InteractionActionButton label="Zoom in" description="Make the page larger in your view only; the visitor's page is unchanged." icon={ZoomIn} disabled={zoom >= MAX_ZOOM} onClick={() => changeZoom(zoom + 0.25)} />
-          <InteractionActionButton label="Actual size" description="Show the visitor's page at 100% in your view." icon={Focus} aria-pressed={zoomMode === "manual" && zoom === 1} onClick={() => changeZoom(1)} />
+        <span aria-live="polite" aria-label={tUi("Current zoom")} className="min-w-12 text-center text-xs font-medium tabular-nums text-foreground">{Math.round(zoom * 100)}%</span>
+        <InteractionActionGroup label={tUi("Co-browsing view controls")} className="ml-0">
+          <InteractionActionButton label={tUi("Fit width")} description={tUi("Fit the visitor's full page width into this panel.")} icon={Scan} aria-pressed={zoomMode === "fit"} onClick={() => setZoomMode("fit")} />
+          <InteractionActionButton label={tUi("Zoom out")} description={tUi("Make the page smaller in your view only; the visitor's page is unchanged.")} icon={ZoomOut} disabled={zoom <= MIN_ZOOM} onClick={() => changeZoom(zoom - 0.25)} />
+          <InteractionActionButton label={tUi("Zoom in")} description={tUi("Make the page larger in your view only; the visitor's page is unchanged.")} icon={ZoomIn} disabled={zoom >= MAX_ZOOM} onClick={() => changeZoom(zoom + 0.25)} />
+          <InteractionActionButton label={tUi("Actual size")} description={tUi("Show the visitor's page at 100% in your view.")} icon={Focus} aria-pressed={zoomMode === "manual" && zoom === 1} onClick={() => changeZoom(1)} />
         </InteractionActionGroup>
       </div>}
     </div>
-    {sessionId ? <div ref={viewport} role="region" aria-label="Scrollable co-browsing page view" tabIndex={0} onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onClick={controlClick}
+    {sessionId ? <div ref={viewport} role="region" aria-label={tUi("Scrollable co-browsing page view")} tabIndex={0} onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onClick={controlClick}
         className={`min-h-0 w-full flex-1 overflow-auto rounded-lg border bg-white ${controlActive && controlMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}>
         <div className="relative" style={{ width: sourceWidth * zoom, height: sourceHeight * zoom }}>
-          <iframe key={sessionId} ref={frame} title="Isolated co-browsing replay" src="/cobrowse/replay" sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer"
+          <iframe key={sessionId} ref={frame} title={tUi("Isolated co-browsing replay")} src="/cobrowse/replay" sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer"
             className="pointer-events-none absolute left-0 top-0 border-0 bg-white" style={{ width: sourceWidth, height: sourceHeight, transform: `scale(${zoom})`, transformOrigin: "top left" }} />
         </div>
       </div>
-      : <div className="grid min-h-0 flex-1 place-items-center rounded-lg border bg-background p-6 text-center text-sm text-muted-foreground">The visitor has not shared their page yet.</div>}
+      : <div className="grid min-h-0 flex-1 place-items-center rounded-lg border bg-background p-6 text-center text-sm text-muted-foreground">{tUi("The visitor has not shared their page yet.")}</div>}
   </div>;
 }

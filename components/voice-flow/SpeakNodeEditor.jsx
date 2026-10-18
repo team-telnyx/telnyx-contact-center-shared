@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -102,6 +104,7 @@ export default function SpeakNodeEditor({
   onChange,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const [isPlaying, setIsPlaying] = useState(false);
   const [audio, setAudio] = useState(null);
   const [providers, setProviders] = useState([]);
@@ -450,29 +453,24 @@ export default function SpeakNodeEditor({
     <div className="space-y-4">
       {/* Text to Speak */}
       <div>
-        <Label htmlFor="payload">
-          Text to Speak <span className="text-red-500">*</span>
+        <Label htmlFor="payload">{tUi("Text to Speak ")}<span className="text-red-500">*</span>
         </Label>
         <VariableTextarea
           id="payload"
           value={config.payload || ""}
           onChange={(value) => onChange?.({ ...config, payload: value })}
           availableVariables={availableVariables}
-          placeholder="Hello, welcome to our service"
+          placeholder={tUi("Hello, welcome to our service")}
           rows={4}
           maxLength={3000}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          The text or SSML to be converted into speech (supports variable
-          substitution, 3,000 character limit)
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("The text or SSML to be converted into speech (supports variable substitution, 3,000 character limit)")}</p>
       </div>
 
       {/* Provider */}
       <div>
-        <Label>
-          Provider <span className="text-red-500">*</span>
+        <Label>{tUi("Provider ")}<span className="text-red-500">*</span>
         </Label>
         <Select
           value={provider}
@@ -481,14 +479,12 @@ export default function SpeakNodeEditor({
         >
           <SelectTrigger className="w-full mt-1">
             <SelectValue
-              placeholder={loading ? "Loading providers..." : "Select provider"}
+              placeholder={loading ? tUi("Loading providers...") : tUi("Select provider")}
             />
           </SelectTrigger>
           <SelectContent>
             {providers.length === 0 && !loading ? (
-              <div className="p-2 text-sm text-muted-foreground">
-                No providers available
-              </div>
+              <div className="p-2 text-sm text-muted-foreground">{tUi("No providers available")}</div>
             ) : (
               providers
                 .map((p) => {
@@ -513,8 +509,7 @@ export default function SpeakNodeEditor({
       {/* Model (if provider has models) */}
       {models.length > 0 && (
         <div>
-          <Label>
-            Model <span className="text-red-500">*</span>
+          <Label>{tUi("Model ")}<span className="text-red-500">*</span>
           </Label>
           <Select
             value={model === "" ? "__default__" : model}
@@ -522,12 +517,12 @@ export default function SpeakNodeEditor({
             disabled={loading}
           >
             <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select model" />
+              <SelectValue placeholder={tUi("Select model")} />
             </SelectTrigger>
             <SelectContent>
               {/* Show "Default" option if some models have no ID */}
               {selectedProvider?.models?.some((m) => !m?.id && !m) && (
-                <SelectItem value="__default__">Default</SelectItem>
+                <SelectItem value="__default__">{tUi("Default")}</SelectItem>
               )}
               {models
                 .map((m) => {
@@ -550,7 +545,7 @@ export default function SpeakNodeEditor({
       {/* Language Filter (only show if languages are available) */}
       {(languageOptions.length > 0 || languageFilter) && (
         <div>
-          <Label>Language Filter</Label>
+          <Label>{tUi("Language Filter")}</Label>
           <Popover
             open={languagePopoverOpen}
             onOpenChange={setLanguagePopoverOpen}
@@ -571,7 +566,7 @@ export default function SpeakNodeEditor({
                   ) : (
                     <>
                       <IconWorld className="h-4 w-4" />
-                      <span>All languages</span>
+                      <span>{tUi("All languages")}</span>
                     </>
                   )}
                 </div>
@@ -580,12 +575,12 @@ export default function SpeakNodeEditor({
             <PopoverContent className="w-[300px] p-0" align="start">
               <Command>
                 <CommandInput
-                  placeholder="Search languages..."
+                  placeholder={tUi("Search languages...")}
                   value={languageSearch}
                   onValueChange={setLanguageSearch}
                   className="h-9"
                 />
-                <CommandEmpty>No language found.</CommandEmpty>
+                <CommandEmpty>{tUi("No language found.")}</CommandEmpty>
                 <CommandGroup className="max-h-[300px] overflow-auto">
                   <CommandItem
                     value="__any__"
@@ -597,7 +592,7 @@ export default function SpeakNodeEditor({
                       }`}
                     />
                     <IconWorld className="size-4 mr-2" />
-                    <span>Any</span>
+                    <span>{tUi("Any")}</span>
                   </CommandItem>
                   {filteredLanguageOptions.map((opt) => (
                     <CommandItem
@@ -620,17 +615,13 @@ export default function SpeakNodeEditor({
               </Command>
             </PopoverContent>
           </Popover>
-          <p className="text-xs text-muted-foreground mt-1">
-            Filter voices by language ({languageOptions.length} language
-            {languageOptions.length !== 1 ? "s" : ""} available)
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Filter voices by language (available languages: {value0})", {value0: languageOptions.length})}</p>
         </div>
       )}
 
       {/* Voice */}
       <div>
-        <Label>
-          Voice <span className="text-red-500">*</span>
+        <Label>{tUi("Voice ")}<span className="text-red-500">*</span>
         </Label>
         <Combobox
           value={voiceName}
@@ -652,22 +643,18 @@ export default function SpeakNodeEditor({
               }
               return acc;
             }, [])}
-          placeholder="Select voice"
-          searchPlaceholder="Search voices..."
+          placeholder={tUi("Select voice")}
+          searchPlaceholder={tUi("Search voices...")}
           emptyText={
             languageFilter
-              ? `No voices found for ${
-                  selectedLanguageInfo?.label || languageFilter
-                }`
-              : "No voices found"
+              ? tUi("No voices found for {value0}", { value0: selectedLanguageInfo?.label || languageFilter })
+              : tUi("No voices found")
           }
           triggerClassName="w-full mt-1"
           disabled={loading}
         />
         {languageFilter && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Showing {voices.length} voice{voices.length !== 1 ? "s" : ""} for{" "}
-            {selectedLanguageInfo?.label || languageFilter}
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Voices for {value0}: {value1}", {value0: selectedLanguageInfo?.label || languageFilter, value1: voices.length})}
           </p>
         )}
       </div>
@@ -675,8 +662,7 @@ export default function SpeakNodeEditor({
       {/* Voice API Key (ElevenLabs only) */}
       {provider === "ElevenLabs" && (
         <div>
-          <Label>
-            ElevenLabs API Key <span className="text-red-500">*</span>
+          <Label>{tUi("ElevenLabs API Key ")}<span className="text-red-500">*</span>
           </Label>
           <Select
             value={config.voice_api_key_ref || "__none__"}
@@ -693,16 +679,14 @@ export default function SpeakNodeEditor({
             }}
           >
             <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select API key" />
+              <SelectValue placeholder={tUi("Select API key")} />
             </SelectTrigger>
             <SelectContent>
               {secrets.length === 0 ? (
-                <div className="p-2 text-sm text-muted-foreground">
-                  No ElevenLabs API keys found. Add one in Integration Secrets.
-                </div>
+                <div className="p-2 text-sm text-muted-foreground">{tUi("No ElevenLabs API keys found. Add one in Integration Secrets.")}</div>
               ) : (
                 <>
-                  <SelectItem value="__none__">Select an API key</SelectItem>
+                  <SelectItem value="__none__">{tUi("Select an API key")}</SelectItem>
                   {secrets
                     .map((s) => {
                       // Ensure s.id is valid and non-empty
@@ -720,9 +704,7 @@ export default function SpeakNodeEditor({
               )}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Select an ElevenLabs API key from your integration secrets
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Select an ElevenLabs API key from your integration secrets")}</p>
         </div>
       )}
 
@@ -744,14 +726,10 @@ export default function SpeakNodeEditor({
         >
           {isPlaying ? (
             <>
-              <IconPlayerStop className="w-4 h-4 mr-2" />
-              Stop Test
-            </>
+              <IconPlayerStop className="w-4 h-4 mr-2" />{tUi("Stop Test")}</>
           ) : (
             <>
-              <IconPlayerPlay className="w-4 h-4 mr-2" />
-              Test Voice
-            </>
+              <IconPlayerPlay className="w-4 h-4 mr-2" />{tUi("Test Voice")}</>
           )}
         </Button>
       </div>

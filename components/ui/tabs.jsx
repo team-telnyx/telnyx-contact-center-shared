@@ -5,6 +5,16 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 
 import { cn } from "@/lib/utils";
 
+// Platform tab style: underline tabs with a Telnyx-green indicator, the same
+// as the AI Assistant configuration pages (AssistantSectionTabs). Every tab
+// switcher uses these classes; pass className only for spacing or size.
+export const tabsListClass =
+  "flex w-full shrink-0 items-center gap-6 overflow-x-auto border-b border-border";
+export const tabsTriggerClass =
+  "-mb-px inline-flex min-h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap border-b-[3px] border-transparent bg-transparent px-0 pb-3 pt-1 text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:border-telnyx-green data-[state=active]:text-emerald-700 dark:data-[state=active]:text-telnyx-green [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+// Compact size for tabs inside forms and narrow panels.
+export const tabsTriggerCompactClass = "min-h-8 pb-2 text-xs";
+
 function Tabs({ className, ...props }) {
   return (
     <TabsPrimitive.Root
@@ -19,10 +29,7 @@ function TabsList({ className, ...props }) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn(
-        "bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
-        className
-      )}
+      className={cn(tabsListClass, className)}
       {...props}
     />
   );
@@ -32,10 +39,7 @@ function TabsTrigger({ className, ...props }) {
   return (
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
-      className={cn(
-        "data-[state=active]:bg-background dark:data-[state=active]:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring dark:data-[state=active]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm data-[state=active]:border-brand-primary [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className
-      )}
+      className={cn(tabsTriggerClass, className)}
       {...props}
     />
   );

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,7 @@ import { notify } from "@/components/ToastNotify";
 import { AgentDataSourcePagination } from "./AgentDataSourcePagination";
 
 export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }) {
+  const tUi = useUiText();
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedItem, setExpandedItem] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
@@ -175,7 +178,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
               setSearchQuery(e.target.value);
               setPage(1);
             }}
-            placeholder="Search articles..."
+            placeholder={tUi("Search articles...")}
             className="pl-8 pr-8"
           />
           {searchQuery && (
@@ -186,7 +189,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                 setPage(1);
               }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-muted transition-colors"
-              aria-label="Clear search"
+              aria-label={tUi("Clear search")}
             >
               <IconX className="h-3 w-3 text-muted-foreground" />
             </button>
@@ -203,9 +206,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
               ))}
             </div>
           ) : items.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8 text-sm">
-              No articles found
-            </div>
+            <div className="text-center text-muted-foreground py-8 text-sm">{tUi("No articles found")}</div>
           ) : (
             <Accordion
               type="single"
@@ -235,7 +236,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                               className={statusBadgeColor(article.status)}
                               variant="outline"
                             >
-                              {article.status || "Draft"}
+                              {article.status || tUi("Draft")}
                             </Badge>
                             {article.category && (
                               <span className="text-xs text-muted-foreground">
@@ -243,8 +244,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                               </span>
                             )}
                             {article.author_name && (
-                              <span className="text-xs text-muted-foreground">
-                                by {article.author_name}
+                              <span className="text-xs text-muted-foreground">{tUi("by ")}{article.author_name}
                               </span>
                             )}
                           </div>
@@ -256,9 +256,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                         {/* Summary */}
                         {article.summary && (
                           <div className="space-y-2">
-                            <div className="text-xs font-medium text-muted-foreground">
-                              Summary
-                            </div>
+                            <div className="text-xs font-medium text-muted-foreground">{tUi("Summary")}</div>
                             <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">
                               {article.summary}
                             </div>
@@ -268,9 +266,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                         {/* Content */}
                         {article.content && (
                           <div className="space-y-2">
-                            <div className="text-xs font-medium text-muted-foreground">
-                              Content
-                            </div>
+                            <div className="text-xs font-medium text-muted-foreground">{tUi("Content")}</div>
                             <div
                               className="text-xs text-muted-foreground prose prose-sm max-w-none bg-muted/50 p-2 rounded-md"
                               dangerouslySetInnerHTML={{
@@ -284,9 +280,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                         {(article.category || article.subcategory) && (
                           <div className="space-y-2">
                             <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                              <IconTag className="h-3 w-3" />
-                              Category
-                            </div>
+                              <IconTag className="h-3 w-3" />{tUi("Category")}</div>
                             <div className="flex flex-wrap gap-1.5">
                               {article.category && (
                                 <Badge
@@ -314,9 +308,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                           article.tags.length > 0 && (
                             <div className="space-y-2">
                               <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                                <IconTag className="h-3 w-3" />
-                                Tags
-                              </div>
+                                <IconTag className="h-3 w-3" />{tUi("Tags")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {article.tags.map((tag, idx) => (
                                   <Badge
@@ -337,9 +329,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                           article.updated_at) && (
                           <div className="space-y-2">
                             <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                              <IconUser className="h-3 w-3" />
-                              Metadata
-                            </div>
+                              <IconUser className="h-3 w-3" />{tUi("Metadata")}</div>
                             <div className="flex flex-wrap gap-1.5">
                               {article.author_name && (
                                 <Badge
@@ -355,9 +345,8 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                                   variant="outline"
                                   className="bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600"
                                 >
-                                  <IconClock className="h-3 w-3 mr-1" />
-                                  Created:{" "}
-                                  {new Date(article.created_at).toLocaleDateString()}
+                                  <IconClock className="h-3 w-3 mr-1" />{tUi("Created:")}{" "}
+                                  {new Date(article.created_at).toLocaleDateString(tUi.locale)}
                                 </Badge>
                               )}
                               {article.updated_at && (
@@ -365,9 +354,8 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                                   variant="outline"
                                   className="bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600"
                                 >
-                                  <IconCalendar className="h-3 w-3 mr-1" />
-                                  Updated:{" "}
-                                  {new Date(article.updated_at).toLocaleDateString()}
+                                  <IconCalendar className="h-3 w-3 mr-1" />{tUi("Updated:")}{" "}
+                                  {new Date(article.updated_at).toLocaleDateString(tUi.locale)}
                                 </Badge>
                               )}
                             </div>

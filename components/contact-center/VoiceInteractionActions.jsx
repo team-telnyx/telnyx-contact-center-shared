@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect,useRef,useState } from "react";
 import { ArrowRightLeft,Monitor,Phone,PhoneOff,PhoneForwarded } from "lucide-react";
@@ -12,6 +14,7 @@ const actions={answer:{label:"Answer",icon:Phone,tone:"positive"},reject:{label:
   transfer:{label:"Transfer call",icon:ArrowRightLeft},hangup:{label:"Hang up",icon:PhoneOff,tone:"negative"},cancel:{label:"Cancel call",icon:PhoneOff,tone:"negative"}};
 
 export default function VoiceInteractionActions({interaction,callState}){
+  const tUi = useUiText();
   const [pending,setPending]=useState(null),inFlight=useRef(false);
   const [cobrowseOpen,setCobrowseOpen]=useState(false);
   const matched=matchesInteractionCall(interaction,callState),phase=voiceInteractionPhase(interaction,callState);
@@ -28,15 +31,16 @@ export default function VoiceInteractionActions({interaction,callState}){
   const available=voiceInteractionActions(interaction,callState);
 
   const unavailable=callState?.consultInProgress&&matched?"Use the phone panel to manage the ongoing consultation.":!matched?"Waiting for this call to connect to the phone.":undefined;
-  return <><InteractionActionGroup label="Voice interaction controls">
+  return <><InteractionActionGroup label={tUi("Voice interaction controls")}>
     <VoiceTakeoverAction interaction={interaction}/>
-    {available.map(action=><InteractionActionButton key={action} {...actions[action]}
-    description={unavailable} disabled={Boolean(busy||unavailable)} busy={busy===action} onClick={()=>void run(action)}/>)}
-    {interaction.state === "active" && <InteractionActionButton label="Co-browse" icon={Monitor} disabled={Boolean(unavailable)} onClick={()=>setCobrowseOpen(true)}/>}
+    {available.map(action=><InteractionActionButton key={action} {...actions[action]} label={tUi(actions[action].label)}
+    description={tUi(unavailable)} disabled={Boolean(busy||unavailable)} busy={busy===action} onClick={()=>void run(action)}/>)}
+    {interaction.state === "active" && <InteractionActionButton label={tUi("Co-browse")} icon={Monitor} disabled={Boolean(unavailable)} onClick={()=>setCobrowseOpen(true)}/>}
   </InteractionActionGroup>{cobrowseOpen&&<CobrowseAgentModal interaction={interaction} onClose={()=>setCobrowseOpen(false)}/>}</>;
 }
 
 function VoiceTakeoverAction({interaction}) {
+  const tUi = useUiText();
   const active = ["active","connected","answered","held","parked"].includes(interaction.state)
     && !interaction.completed_at && !interaction.abandoned_at;
   const {state,busy,error,pending,command}=useDeviceHandoff(active ? interaction.id : null);
@@ -44,9 +48,9 @@ function VoiceTakeoverAction({interaction}) {
   const remote=state?.active && state.ownerId!==state.currentEndpointId;
   if(!active || (!remote && !progress && !pending))return null;
   const canRetry=Boolean(pending);
-  return <InteractionActionButton label={canRetry?"Retry taking over call":"Take over call here"}
+  return <InteractionActionButton label={canRetry?tUi("Retry taking over call"):tUi("Take over call here")}
     icon={PhoneForwarded} tone="positive" busy={busy||progress}
     disabled={busy||progress||(!canRetry&&!state?.canTakeOver)}
-    description={error || (progress?"Taking over the call. Answer on this computer when it rings.":state?.unavailableReason || "Move this call to this computer. The iPhone stays connected until you answer.")}
+    description={error || (progress?tUi("Taking over the call. Answer on this computer when it rings."):state?.unavailableReason || tUi("Move this call to this computer. {value0} stays connected until you answer.", { value0: state?.ownerLabel || tUi("The other device") }))}
     onClick={()=>void command(pending || {action:"take_over",expectedOwnerId:state.ownerId,expectedVersion:state.ownerVersion,commandId:crypto.randomUUID()})}/>;
 }

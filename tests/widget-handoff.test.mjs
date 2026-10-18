@@ -180,6 +180,14 @@ test("AI handoff preserves the thread, transcript and summary; concurrent retrie
   const next=await actAsWidgetCustomer(pool,{token:f.started.sessionToken,action:"send",messageId:"second",content:"Still waiting",provider:{send:()=>assert.fail("AI must not be called")}});
   assert.equal(next.messages.length,3);
 });
+test("an omitted chat-channel enum permits authenticated handoff without weakening session checks",async()=>{
+  const f=await fixture();
+  const {telnyx_conversation_channel: _channel,...body}=f.body;
+  await assert.rejects(handoffWidgetChat(pool,{body,sessionToken:widgetHandoffToken(randomUUID())}),error=>error.status===401);
+  const result=await handoffWidgetChat(pool,{body,sessionToken:widgetHandoffToken(f.session.id)});
+  assert.equal(result.ok,true);
+  assert.equal((await getWidgetSession(pool,f.started.sessionToken)).runtime_kind,"human");
+});
 test("in-flight AI handoff suppresses late AI replies and tolerates a lost provider response after transfer",async()=>{
   for(const reject of [false,true]){
     const f=await fixture();

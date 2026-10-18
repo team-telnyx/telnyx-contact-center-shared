@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -65,6 +67,7 @@ function createEmptyItem() {
 }
 
 export default function PronunciationDictionariesPage() {
+  const tUi = useUiText();
   const [dicts, setDicts] = useState([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -411,7 +414,7 @@ export default function PronunciationDictionariesPage() {
   function formatDate(str) {
     if (!str) return "—";
     try {
-      return new Date(str).toLocaleDateString(undefined, {
+      return new Date(str).toLocaleDateString(tUi.locale, {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -424,14 +427,12 @@ export default function PronunciationDictionariesPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Pronunciation Dictionaries"
+        title={tUi("Pronunciation Dictionaries")}
         icon={IconBook2}
-        badges={<Badge variant="secondary">{total} dictionaries</Badge>}
+        badges={<Badge variant="secondary">{total}{tUi(" dictionaries")}</Badge>}
         actions={(
           <Can permission="pronunciation_dicts:create"><Button onClick={openCreate} className="shrink-0">
-            <IconPlus className="size-4" />
-            New Dictionary
-          </Button></Can>
+            <IconPlus className="size-4" />{tUi("New Dictionary")}</Button></Can>
         )}
       />
       <AiAssistantsSectionPage activeId="pronunciation-dictionaries">
@@ -442,33 +443,27 @@ export default function PronunciationDictionariesPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
             <IconLoader2 className="size-5 animate-spin" />
-            <span>Loading dictionaries…</span>
+            <span>{tUi("Loading dictionaries…")}</span>
           </div>
         ) : dicts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
             <IconBook2 className="size-10 text-muted-foreground/40" />
             <div>
-              <p className="font-medium text-muted-foreground">
-                No pronunciation dictionaries yet
-              </p>
-              <p className="text-sm text-muted-foreground/70 mt-1">
-                Create one to control how your AI assistant pronounces words.
-              </p>
+              <p className="font-medium text-muted-foreground">{tUi("No pronunciation dictionaries yet")}</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">{tUi("Create one to control how your AI assistant pronounces words.")}</p>
             </div>
             <Can permission="pronunciation_dicts:create"><Button onClick={openCreate} variant="outline" className="mt-2">
-              <IconPlus className="size-4 mr-1.5" />
-              New Dictionary
-            </Button></Can>
+              <IconPlus className="size-4 mr-1.5" />{tUi("New Dictionary")}</Button></Can>
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Created At</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{tUi("Name")}</TableHead>
+                <TableHead>{tUi("Items")}</TableHead>
+                <TableHead>{tUi("Version")}</TableHead>
+                <TableHead>{tUi("Created At")}</TableHead>
+                <TableHead className="text-right">{tUi("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -477,8 +472,7 @@ export default function PronunciationDictionariesPage() {
                   <TableCell className="font-medium">{dict.name}</TableCell>
                   <TableCell>
                     <Badge variant="secondary">
-                      {dict.items?.length ?? 0} item
-                      {(dict.items?.length ?? 0) !== 1 ? "s" : ""}
+                      {dict.items?.length ?? 0}{tUi(" item")}{(dict.items?.length ?? 0) !== 1 ? tUi("s") : ""}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
@@ -492,8 +486,8 @@ export default function PronunciationDictionariesPage() {
                       <button
                         type="button"
                         className="inline-flex items-center text-telnyx-green"
-                        title="Edit dictionary"
-                        aria-label={`Edit ${dict.name}`}
+                        title={tUi("Edit dictionary")}
+                        aria-label={tUi("Edit {value0}", { value0: dict.name })}
                         onClick={() => openEdit(dict.id)}
                       >
                         <IconPencil className="size-4" />
@@ -501,8 +495,8 @@ export default function PronunciationDictionariesPage() {
                       <Can permission="pronunciation_dicts:delete"><button
                         type="button"
                         className="inline-flex items-center text-red-500 hover:text-red-700"
-                        title="Delete dictionary"
-                        aria-label={`Delete ${dict.name}`}
+                        title={tUi("Delete dictionary")}
+                        aria-label={tUi("Delete {value0}", { value0: dict.name })}
                         onClick={() => setDeleteTarget(dict)}
                       >
                         <IconTrash className="size-4" />
@@ -519,9 +513,7 @@ export default function PronunciationDictionariesPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Page {page} of {totalPages} · {total} total
-          </span>
+          <span>{tUi("Page ")}{page}{tUi(" of ")}{totalPages} · {total}{tUi(" total")}</span>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -529,17 +521,13 @@ export default function PronunciationDictionariesPage() {
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              <IconChevronLeft className="size-4" />
-              Previous
-            </Button>
+              <IconChevronLeft className="size-4" />{tUi("Previous")}</Button>
             <Button
               variant="outline"
               size="sm"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Next
-              <IconChevronRight className="size-4" />
+            >{tUi("Next")}<IconChevronRight className="size-4" />
             </Button>
           </div>
         </div>
@@ -548,18 +536,18 @@ export default function PronunciationDictionariesPage() {
       {/* Create / Edit Sheet */}
       <Sheet open={sheetOpen} onOpenChange={(open) => !open && closeSheet()}>
         <SheetContent
-          side="right"
+          side="end"
           className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background"
         >
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
               <IconBook2 className="size-5" />
-              {editingId ? "Edit Dictionary" : "New Pronunciation Dictionary"}
+              {editingId ? tUi("Edit Dictionary") : tUi("New Pronunciation Dictionary")}
             </SheetTitle>
             <p className="text-xs text-muted-foreground">
               {editingId
-                ? "Update the name and pronunciation items."
-                : "Create a new dictionary to control how specific words are pronounced."}
+                ? tUi("Update the name and pronunciation items.")
+                : tUi("Create a new dictionary to control how specific words are pronounced.")}
             </p>
 
             {/* Tab switcher — only for new dictionaries */}
@@ -569,17 +557,13 @@ export default function PronunciationDictionariesPage() {
                   size="sm"
                   variant={sheetMode === "manual" ? "default" : "outline"}
                   onClick={() => setSheetMode("manual")}
-                >
-                  Add manually
-                </Button>
+                >{tUi("Add manually")}</Button>
                 <Button
                   size="sm"
                   variant={sheetMode === "upload" ? "default" : "outline"}
                   onClick={() => setSheetMode("upload")}
                 >
-                  <IconUpload className="size-3.5 mr-1.5" />
-                  Upload file
-                </Button>
+                  <IconUpload className="size-3.5 mr-1.5" />{tUi("Upload file")}</Button>
               </div>
             )}
           </SheetHeader>
@@ -590,17 +574,14 @@ export default function PronunciationDictionariesPage() {
             {/* Card 1: Dictionary Details — always visible */}
             <Card className="mx-5 mt-4 mb-2 border-muted-foreground/20 shrink-0">
               <CardContent className="p-4 space-y-3">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Dictionary Details
-                </div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Dictionary Details")}</div>
                 <div className="grid gap-2">
-                  <Label className="text-sm">
-                    Dictionary Name <span className="text-destructive">*</span>
+                  <Label className="text-sm">{tUi("Dictionary Name ")}<span className="text-destructive">*</span>
                   </Label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value.slice(0, 255))}
-                    placeholder="e.g., Technical Terms"
+                    placeholder={tUi("e.g., Technical Terms")}
                     maxLength={255}
                   />
                   <p className="text-xs text-muted-foreground text-right">
@@ -614,19 +595,15 @@ export default function PronunciationDictionariesPage() {
             {/* Card 2: Preview Settings — always visible */}
             <Card className="mx-5 mb-2 border-muted-foreground/20 shrink-0">
               <CardContent className="p-4 space-y-3">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Preview Settings
-                </div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Preview Settings")}</div>
                 {loadingVoices ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                    <IconLoader2 className="size-3.5 animate-spin" />
-                    Loading voices…
-                  </div>
+                    <IconLoader2 className="size-3.5 animate-spin" />{tUi("Loading voices…")}</div>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
                     {/* Provider */}
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">Provider</Label>
+                      <Label className="text-xs">{tUi("Provider")}</Label>
                       <Select
                         value={previewProvider}
                         onValueChange={(val) => {
@@ -636,7 +613,7 @@ export default function PronunciationDictionariesPage() {
                         }}
                       >
                         <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="Select provider…" />
+                          <SelectValue placeholder={tUi("Select provider…")} />
                         </SelectTrigger>
                         <SelectContent>
                           {previewProviders.map((p) => (
@@ -654,7 +631,7 @@ export default function PronunciationDictionariesPage() {
                       if (models.length <= 1) return null;
                       return (
                         <div className="grid gap-1.5">
-                          <Label className="text-xs">Model</Label>
+                          <Label className="text-xs">{tUi("Model")}</Label>
                           <Select
                             value={previewModel}
                             onValueChange={(val) => {
@@ -663,7 +640,7 @@ export default function PronunciationDictionariesPage() {
                             }}
                           >
                             <SelectTrigger className="text-sm">
-                              <SelectValue placeholder="Select model…" />
+                              <SelectValue placeholder={tUi("Select model…")} />
                             </SelectTrigger>
                             <SelectContent>
                               {models.map((m) => (
@@ -678,13 +655,13 @@ export default function PronunciationDictionariesPage() {
                     })()}
                     {/* Voice */}
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">Voice</Label>
+                      <Label className="text-xs">{tUi("Voice")}</Label>
                       <Select
                         value={previewVoiceName}
                         onValueChange={setPreviewVoiceName}
                       >
                         <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="Select voice…" />
+                          <SelectValue placeholder={tUi("Select voice…")} />
                         </SelectTrigger>
                         <SelectContent>
                           {(() => {
@@ -704,7 +681,7 @@ export default function PronunciationDictionariesPage() {
                     </div>
                     {/* Speed */}
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">Speed</Label>
+                      <Label className="text-xs">{tUi("Speed")}</Label>
                       <Input
                         type="number"
                         min={0.25}
@@ -719,7 +696,7 @@ export default function PronunciationDictionariesPage() {
                 )}
                 {previewVoiceString && (
                   <p className="text-xs text-muted-foreground font-mono truncate">
-                    <span className="text-muted-foreground/60">Voice ID: </span>{previewVoiceString}
+                    <span className="text-muted-foreground/60">{tUi("Voice ID: ")}</span>{previewVoiceString}
                   </p>
                 )}
               </CardContent>
@@ -734,12 +711,8 @@ export default function PronunciationDictionariesPage() {
                 {/* Section: Items (manual mode) or Upload (upload mode) */}
                 {sheetMode === "upload" ? (
                   <div className="space-y-4">
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Upload File
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Supported formats: plain text (.txt) and PLS/XML (.pls, .xml). Maximum file size 1 MB.
-                    </p>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Upload File")}</div>
+                    <p className="text-xs text-muted-foreground">{tUi("Supported formats: plain text (.txt) and PLS/XML (.pls, .xml). Maximum file size 1 MB.")}</p>
                     <div
                       className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
                         dragOver
@@ -763,11 +736,9 @@ export default function PronunciationDictionariesPage() {
                       <p className="text-sm text-muted-foreground">
                         {uploadFile
                           ? uploadFile.name
-                          : "Drag and drop a file here, or click to browse"}
+                          : tUi("Drag and drop a file here, or click to browse")}
                       </p>
-                      <p className="text-xs text-muted-foreground/60 mt-1">
-                        Supports .txt, .pls, and .xml files up to 1 MB
-                      </p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">{tUi("Supports .txt, .pls, and .xml files up to 1 MB")}</p>
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -798,25 +769,19 @@ export default function PronunciationDictionariesPage() {
                       </div>
                     )}
                     {uploadItems.length > 0 && (
-                      <p className="text-xs text-telnyx-green">
-                        ✓ Parsed {uploadItems.length} items from file
-                      </p>
+                      <p className="text-xs text-telnyx-green">{tUi("✓ Parsed ")}{uploadItems.length}{tUi(" items from file")}</p>
                     )}
                   </div>
                 ) : (
                   <>
                     {/* Section: Items */}
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">
-                      Pronunciation Items
-                      <span className="ml-2 normal-case font-normal text-muted-foreground">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">{tUi("Pronunciation Items")}<span className="ml-2 normal-case font-normal text-muted-foreground">
                         {items.length}/{MAX_ITEMS}
                       </span>
                     </div>
 
                     {items.length === 0 && (
-                      <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg">
-                        No items yet. Click &quot;Add item&quot; to get started.
-                      </p>
+                      <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg">{tUi("No items yet. Click \"Add item\" to get started.")}</p>
                     )}
 
                     <div className="space-y-3">
@@ -854,14 +819,14 @@ export default function PronunciationDictionariesPage() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="alias">Alias</SelectItem>
-                                  <SelectItem value="phoneme">Phoneme</SelectItem>
+                                  <SelectItem value="alias">{tUi("Alias")}</SelectItem>
+                                  <SelectItem value="phoneme">{tUi("Phoneme")}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
                             <Input
                               className="h-8 text-sm flex-1"
-                              placeholder="Word to match (max 200)"
+                              placeholder={tUi("Word to match (max 200)")}
                               value={item.text}
                               onChange={(e) =>
                                 updateItem(idx, "text", e.target.value.slice(0, 200))
@@ -880,10 +845,10 @@ export default function PronunciationDictionariesPage() {
                           </div>
                           {item.type === "alias" ? (
                             <div className="grid gap-1.5">
-                              <Label className="text-xs text-muted-foreground">Alias (spoken replacement)</Label>
+                              <Label className="text-xs text-muted-foreground">{tUi("Alias (spoken replacement)")}</Label>
                               <Input
                                 className="h-8 text-sm"
-                                placeholder="Replacement text (max 500)"
+                                placeholder={tUi("Replacement text (max 500)")}
                                 value={item.alias}
                                 onChange={(e) =>
                                   updateItem(idx, "alias", e.target.value.slice(0, 500))
@@ -893,11 +858,11 @@ export default function PronunciationDictionariesPage() {
                             </div>
                           ) : (
                             <div className="grid gap-1.5">
-                              <Label className="text-xs text-muted-foreground">Phoneme notation</Label>
+                              <Label className="text-xs text-muted-foreground">{tUi("Phoneme notation")}</Label>
                               <div className="flex gap-2">
                                 <Input
                                   className="h-8 text-sm flex-1"
-                                  placeholder="Phoneme notation (max 500)"
+                                  placeholder={tUi("Phoneme notation (max 500)")}
                                   value={item.phoneme}
                                   onChange={(e) =>
                                     updateItem(idx, "phoneme", e.target.value.slice(0, 500))
@@ -913,8 +878,8 @@ export default function PronunciationDictionariesPage() {
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="ipa">IPA</SelectItem>
-                                      <SelectItem value="x-sampa">X-SAMPA</SelectItem>
+                                      <SelectItem value="ipa">{tUi("IPA")}</SelectItem>
+                                      <SelectItem value="x-sampa">{tUi("X-SAMPA")}</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -933,9 +898,7 @@ export default function PronunciationDictionariesPage() {
                       disabled={items.length >= MAX_ITEMS}
                       className="w-full"
                     >
-                      <IconPlus className="size-3.5 mr-1.5" />
-                      Add item
-                    </Button>
+                      <IconPlus className="size-3.5 mr-1.5" />{tUi("Add item")}</Button>
                   </>
                 )}
 
@@ -946,12 +909,10 @@ export default function PronunciationDictionariesPage() {
 
           {/* Fixed Footer */}
           <SheetFooter className="px-6 py-4 border-t border-border flex flex-row justify-end gap-2">
-            <Button variant="outline" onClick={closeSheet} disabled={saving}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={closeSheet} disabled={saving}>{tUi("Cancel")}</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving && <IconLoader2 className="size-4 mr-1.5 animate-spin" />}
-              {editingId ? "Save Changes" : "Create Dictionary"}
+              {editingId ? tUi("Save Changes") : tUi("Create Dictionary")}
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -964,21 +925,16 @@ export default function PronunciationDictionariesPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Dictionary</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete{" "}
-              <strong>&quot;{deleteTarget?.name}&quot;</strong>? This action
-              cannot be undone.
-            </DialogDescription>
+            <DialogTitle>{tUi("Delete Dictionary")}</DialogTitle>
+            <DialogDescription>{tUi("Are you sure you want to delete")}{" "}
+              <strong>&quot;{deleteTarget?.name}&quot;</strong>{tUi("? This action cannot be undone.")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setDeleteTarget(null)}
               disabled={deleting}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               variant="destructive"
               onClick={handleDelete}
@@ -986,9 +942,7 @@ export default function PronunciationDictionariesPage() {
             >
               {deleting && (
                 <IconLoader2 className="size-4 mr-1.5 animate-spin" />
-              )}
-              Delete
-            </Button>
+              )}{tUi("Delete")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

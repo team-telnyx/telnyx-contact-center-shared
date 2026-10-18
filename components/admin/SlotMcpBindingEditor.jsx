@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconPlus, IconTrash, IconLoader2 } from "@tabler/icons-react";
@@ -81,6 +83,7 @@ function fromRows(rows, schemaProperties = {}) {
 }
 
 function KeyValueRows({ rows, onChange, keyPlaceholder, valuePlaceholder, addLabel }) {
+  const tUi = useUiText();
   const [draftRows, setDraftRows] = useState(rows);
 
   // Blank rows are intentionally not persisted by fromRows(). Keep them local
@@ -127,7 +130,7 @@ function KeyValueRows({ rows, onChange, keyPlaceholder, valuePlaceholder, addLab
             variant="ghost"
             size="icon"
             className="shrink-0"
-            aria-label="Remove row"
+            aria-label={tUi("Remove row")}
             onClick={() => updateRows(draftRows.filter((_, i) => i !== index))}
           >
             <IconTrash className="size-4" />
@@ -141,7 +144,7 @@ function KeyValueRows({ rows, onChange, keyPlaceholder, valuePlaceholder, addLab
         onClick={() => setDraftRows((current) => [...current, { key: "", value: "" }])}
       >
         <IconPlus className="size-4 mr-1" />
-        {addLabel}
+        {tUi(addLabel)}
       </Button>
     </div>
   );
@@ -154,6 +157,7 @@ function KeyValueRows({ rows, onChange, keyPlaceholder, valuePlaceholder, addLab
  * this editor only has to produce it.
  */
 export default function SlotMcpBindingEditor({ value, onChange, slotName, itemId, availableSlots = [] }) {
+  const tUi = useUiText();
   const binding = value || null;
   const enabled = Boolean(binding);
 
@@ -257,10 +261,10 @@ export default function SlotMcpBindingEditor({ value, onChange, slotName, itemId
       <div className="space-y-3 border-t pt-4">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
-            <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">MCP Tool Binding</Label>
-            <p className="text-xs text-muted-foreground">Attach an MCP tool to this workflow slot.</p>
+            <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("MCP Tool Binding")}</Label>
+            <p className="text-xs text-muted-foreground">{tUi("Attach an MCP tool to this workflow slot.")}</p>
           </div>
-          <Switch checked={false} aria-label="Enable MCP tool binding" onCheckedChange={() => onChange({ server_id: "", tool_name: "", trigger: "on_fill", arguments: {}, outputs: {} })} />
+          <Switch checked={false} aria-label={tUi("Enable MCP tool binding")} onCheckedChange={() => onChange({ server_id: "", tool_name: "", trigger: "on_fill", arguments: {}, outputs: {} })} />
         </div>
       </div>
     );
@@ -270,32 +274,32 @@ export default function SlotMcpBindingEditor({ value, onChange, slotName, itemId
     <div className="space-y-4 border-t pt-4">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">MCP Tool Binding</Label>
-          <p className="text-xs text-muted-foreground">Runs during the interaction and can write explicitly mapped MCP-derived slots.</p>
+          <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("MCP Tool Binding")}</Label>
+          <p className="text-xs text-muted-foreground">{tUi("Runs during the interaction and can write explicitly mapped MCP-derived slots.")}</p>
         </div>
-        <Switch checked aria-label="Disable MCP tool binding" onCheckedChange={() => onChange(null)} />
+        <Switch checked aria-label={tUi("Disable MCP tool binding")} onCheckedChange={() => onChange(null)} />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="mcp-binding-server">MCP Server</Label>
+        <Label htmlFor="mcp-binding-server">{tUi("MCP Server")}</Label>
         <Select value={serverId || undefined} onValueChange={(id) => patch({ server_id: id, tool_name: "", arguments: {}, outputs: {} })}>
-          <SelectTrigger id="mcp-binding-server"><SelectValue placeholder={loadingServers ? "Loading servers…" : "Select MCP server"} /></SelectTrigger>
+          <SelectTrigger id="mcp-binding-server"><SelectValue placeholder={loadingServers ? tUi("Loading servers…") : tUi("Select MCP server")} /></SelectTrigger>
           <SelectContent>{servers.map((server) => <SelectItem key={server.id} value={server.id}>{server.name}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="mcp-binding-tool">Tool</Label>
+        <Label htmlFor="mcp-binding-tool">{tUi("Tool")}</Label>
         <Select value={toolName || undefined} onValueChange={selectTool} disabled={!serverId}>
-          <SelectTrigger id="mcp-binding-tool"><SelectValue placeholder={loadingTools ? "Loading tools…" : serverId ? "Select tool" : "Select a server first"} /></SelectTrigger>
+          <SelectTrigger id="mcp-binding-tool"><SelectValue placeholder={loadingTools ? tUi("Loading tools…") : serverId ? tUi("Select tool") : tUi("Select a server first")} /></SelectTrigger>
           <SelectContent>{tools.map((tool) => <SelectItem key={tool.name} value={tool.name}>{tool.name}</SelectItem>)}</SelectContent>
         </Select>
-        {loadingTools && <p className="text-xs text-muted-foreground flex items-center gap-1"><IconLoader2 className="size-3 animate-spin" /> Loading tools…</p>}
+        {loadingTools && <p className="text-xs text-muted-foreground flex items-center gap-1"><IconLoader2 className="size-3 animate-spin" />{tUi(" Loading tools…")}</p>}
         {selectedTool?.description && <p className="text-xs text-muted-foreground">{selectedTool.description}</p>}
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="mcp-binding-trigger">Run</Label>
+        <Label htmlFor="mcp-binding-trigger">{tUi("Run")}</Label>
         <Select
           value={binding?.trigger || "on_fill"}
           onValueChange={(trigger) => patch({
@@ -304,64 +308,64 @@ export default function SlotMcpBindingEditor({ value, onChange, slotName, itemId
           })}
         >
           <SelectTrigger id="mcp-binding-trigger"><SelectValue /></SelectTrigger>
-          <SelectContent>{TRIGGERS.map((trigger) => <SelectItem key={trigger.value} value={trigger.value}>{trigger.label}</SelectItem>)}</SelectContent>
+          <SelectContent>{TRIGGERS.map((trigger) => <SelectItem key={trigger.value} value={trigger.value}>{tUi(trigger.label)}</SelectItem>)}</SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{TRIGGERS.find((t) => t.value === (binding?.trigger || "on_fill"))?.hint}</p>
+        <p className="text-xs text-muted-foreground">{tUi(TRIGGERS.find((t) => t.value === (binding?.trigger || "on_fill"))?.hint)}</p>
       </div>
 
       {binding?.trigger === "on_result" && (
         <div className="space-y-2">
-          <Label htmlFor="mcp-binding-depends">Waits for result key</Label>
-          <Input id="mcp-binding-depends" className="font-mono text-xs" value={binding?.depends_on || ""} placeholder="pickup_lookup" onChange={(e) => patch({ depends_on: e.target.value })} />
-          <p className="text-xs text-muted-foreground">The <span className="font-mono">Result key</span> of the binding this one chains off.</p>
+          <Label htmlFor="mcp-binding-depends">{tUi("Waits for result key")}</Label>
+          <Input id="mcp-binding-depends" className="font-mono text-xs" value={binding?.depends_on || ""} placeholder={tUi("pickup_lookup")} onChange={(e) => patch({ depends_on: e.target.value })} />
+          <p className="text-xs text-muted-foreground">{tUi("The ")}<span className="font-mono">{tUi("Result key")}</span>{tUi(" of the binding this one chains off.")}</p>
         </div>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="mcp-binding-policy">Repeat behaviour</Label>
+        <Label htmlFor="mcp-binding-policy">{tUi("Repeat behaviour")}</Label>
         <Select
           value={binding?.execution_policy || (["on_complete", "manual_submit"].includes(binding?.trigger) ? "once_per_session" : "on_argument_change")}
           onValueChange={(execution_policy) => patch({ execution_policy })}
         >
           <SelectTrigger id="mcp-binding-policy"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="on_argument_change">Re-run when its inputs change</SelectItem>
-            <SelectItem value="once_per_session">Run once per call</SelectItem>
+            <SelectItem value="on_argument_change">{tUi("Re-run when its inputs change")}</SelectItem>
+            <SelectItem value="once_per_session">{tUi("Run once per call")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">Lookups should re-run when a value is corrected. Anything that submits or books should run once. An uncertain post-dispatch outcome is deliberately not retried automatically.</p>
+        <p className="text-xs text-muted-foreground">{tUi("Lookups should re-run when a value is corrected. Anything that submits or books should run once. An uncertain post-dispatch outcome is deliberately not retried automatically.")}</p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="mcp-binding-result-key">Result key</Label>
-        <Input id="mcp-binding-result-key" className="font-mono text-xs" value={binding?.result_key || ""} placeholder={toolName || "lookup_addresses"} onChange={(e) => patch({ result_key: e.target.value })} />
-        <p className="text-xs text-muted-foreground">Other bindings read this result as <span className="font-mono">{`{{mcp.${binding?.result_key || "key"}.0.field}}`}</span></p>
+        <Label htmlFor="mcp-binding-result-key">{tUi("Result key")}</Label>
+        <Input id="mcp-binding-result-key" className="font-mono text-xs" value={binding?.result_key || ""} placeholder={toolName || tUi("lookup_addresses")} onChange={(e) => patch({ result_key: e.target.value })} />
+        <p className="text-xs text-muted-foreground">{tUi("Other bindings read this result as ")}<span className="font-mono">{`{{mcp.${binding?.result_key || "key"}.0.field}}`}</span></p>
       </div>
 
       <div className="space-y-2">
-        <Label>Arguments</Label>
+        <Label>{tUi("Arguments")}</Label>
         <KeyValueRows key={rowEditorKey} rows={argumentRows} onChange={(rows) => patch({ arguments: fromRows(rows, schemaProperties) })} keyPlaceholder="userAddress" valuePlaceholder={`{{slots.${slotName || "slot_name"}}}`} addLabel="Add argument" />
-        <p className="text-xs text-muted-foreground"><span className="font-mono">{`{{slots.name}}`}</span> reads any filled slot, including values produced by an earlier MCP call. <span className="font-mono">{`{{mcp.key.0.field}}`}</span> reads the raw earlier MCP result. <span className="font-mono">systemId</span> is added automatically.</p>
+        <p className="text-xs text-muted-foreground"><span className="font-mono">{`{{slots.name}}`}</span>{tUi(" reads any filled slot, including values produced by an earlier MCP call. ")}<span className="font-mono">{`{{mcp.key.0.field}}`}</span>{tUi(" reads the raw earlier MCP result. ")}<span className="font-mono">{tUi("systemId")}</span>{tUi(" is added automatically.")}</p>
       </div>
 
       <div className="space-y-2">
-        <Label>Write results into slots</Label>
+        <Label>{tUi("Write results into slots")}</Label>
         <KeyValueRows key={rowEditorKey} rows={outputRows} onChange={(rows) => patch({ outputs: fromRows(rows) })} keyPlaceholder="pickup_facility_id" valuePlaceholder="0.facility_id" addLabel="Add output" />
-        <p className="text-xs text-muted-foreground">These mappings define the MCP-derived fields. MCP writes only the slot names listed on the left; other slots remain conversation/LLM-driven. Agents can still manually edit an MCP-derived field, and that manual value is protected from later MCP overwrites.{availableSlots.length > 0 && <> Slots in this workflow: <span className="font-mono">{availableSlots.slice(0, 8).join(", ")}</span>.</>}</p>
+        <p className="text-xs text-muted-foreground">{tUi("These mappings define the MCP-derived fields. MCP writes only the slot names listed on the left; other slots remain conversation/LLM-driven. Agents can still manually edit an MCP-derived field, and that manual value is protected from later MCP overwrites.")}{availableSlots.length > 0 && <>{tUi(" Slots in this workflow: ")}<span className="font-mono">{availableSlots.slice(0, 8).join(", ")}</span>.</>}</p>
       </div>
 
       <div className="space-y-2 rounded-md border p-3">
         <div className="flex items-center justify-between">
-          <Label className="text-xs">Let the agent choose between matches</Label>
-          <Switch checked={Boolean(binding?.alternatives)} aria-label="Toggle agent choice for multiple matches" onCheckedChange={(on) => patch({ alternatives: on ? { path: "$", label: "", value: "", target_slot: "" } : null })} />
+          <Label className="text-xs">{tUi("Let the agent choose between matches")}</Label>
+          <Switch checked={Boolean(binding?.alternatives)} aria-label={tUi("Toggle agent choice for multiple matches")} onCheckedChange={(on) => patch({ alternatives: on ? { path: "$", label: "", value: "", target_slot: "" } : null })} />
         </div>
-        <p className="text-xs text-muted-foreground">When the tool returns more than one candidate, show them as choices instead of guessing. No derived output is filled until the agent picks.</p>
+        <p className="text-xs text-muted-foreground">{tUi("When the tool returns more than one candidate, show them as choices instead of guessing. No derived output is filled until the agent picks.")}</p>
         {binding?.alternatives && (
           <div className="space-y-2 pt-1">
-            <Input className="font-mono text-xs" placeholder="Label template — {{facility_name}} - {{city}}, {{state}}" value={binding.alternatives.label || ""} onChange={(e) => patch({ alternatives: { ...binding.alternatives, label: e.target.value } })} />
-            <Input className="font-mono text-xs" placeholder="Value template — {{facility_id}}" value={binding.alternatives.value || ""} onChange={(e) => patch({ alternatives: { ...binding.alternatives, value: e.target.value } })} />
-            <Input className="font-mono text-xs" placeholder="Optional write target — pickup_facility_id" value={binding.alternatives.target_slot || ""} onChange={(e) => patch({ alternatives: { ...binding.alternatives, target_slot: e.target.value } })} />
-            <p className="text-xs text-muted-foreground">Leave target blank to display choices on this binding's item while writing only the declared output mappings. Set it only when the selected candidate value itself should populate a specific MCP field.</p>
+            <Input className="font-mono text-xs" placeholder={tUi("Label template — {{facility_name}} - {{city}}, {{state}}")} value={binding.alternatives.label || ""} onChange={(e) => patch({ alternatives: { ...binding.alternatives, label: e.target.value } })} />
+            <Input className="font-mono text-xs" placeholder={tUi("Value template — {{facility_id}}")} value={binding.alternatives.value || ""} onChange={(e) => patch({ alternatives: { ...binding.alternatives, value: e.target.value } })} />
+            <Input className="font-mono text-xs" placeholder={tUi("Optional write target — pickup_facility_id")} value={binding.alternatives.target_slot || ""} onChange={(e) => patch({ alternatives: { ...binding.alternatives, target_slot: e.target.value } })} />
+            <p className="text-xs text-muted-foreground">{tUi("Leave target blank to display choices on this binding's item while writing only the declared output mappings. Set it only when the selected candidate value itself should populate a specific MCP field.")}</p>
           </div>
         )}
       </div>

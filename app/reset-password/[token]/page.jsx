@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -11,6 +13,7 @@ import { AuthBrandLogo } from "@/components/auth-brand-logo";
 import { AuthRightImage } from "@/components/auth-right-image";
 
 export default function ResetPasswordPage() {
+  const tUi = useUiText();
   const params = useParams();
   const router = useRouter();
   const token = params.token;
@@ -90,9 +93,7 @@ export default function ResetPasswordPage() {
             <div className="flex justify-center w-full">
               <div className="flex flex-col items-center w-full justify-center">
                 <AuthBrandLogo />
-                <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
-                  Contact Center
-                </span>
+                <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">{tUi("Contact Center")}</span>
               </div>
             </div>
           </div>
@@ -100,14 +101,8 @@ export default function ResetPasswordPage() {
             <div className="w-full max-w-xs text-center">
               <div className="space-y-4">
                 <div className="text-6xl">✅</div>
-                <h1 className="text-2xl font-bold">
-                  Password Reset Successful
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  Your password has been updated successfully.
-                  <br />
-                  Redirecting you to sign in...
-                </p>
+                <h1 className="text-2xl font-bold">{tUi("Password Reset Successful")}</h1>
+                <p className="text-sm text-muted-foreground">{tUi("Your password has been updated successfully.")}<br />{tUi("Redirecting you to sign in...")}</p>
               </div>
             </div>
           </div>
@@ -126,21 +121,17 @@ export default function ResetPasswordPage() {
           <div className="flex justify-center w-full">
             <div className="flex flex-col items-center w-full justify-center">
               <AuthBrandLogo />
-              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
-                Contact Center
-              </span>
+              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">{tUi("Contact Center")}</span>
             </div>
           </div>
         </div>
         <div className="flex flex-1 mt-30 justify-center">
           <div className="w-full max-w-xs">
             <form onSubmit={onSubmit} className={cn("w-full space-y-4")}>
-              <h1 className="text-2xl font-bold">Reset Your Password</h1>
-              <p className="text-sm text-muted-foreground">
-                Enter your new password below
-              </p>
+              <h1 className="text-2xl font-bold">{tUi("Reset Your Password")}</h1>
+              <p className="text-sm text-muted-foreground">{tUi("Enter your new password below")}</p>
               <div className="grid gap-2">
-                <Label htmlFor="password">New Password</Label>
+                <Label htmlFor="password">{tUi("New Password")}</Label>
                 <Input
                   id="password"
                   name="password"
@@ -148,12 +139,10 @@ export default function ResetPasswordPage() {
                   required
                   disabled={loading}
                 />
-                <p className="text-xs text-muted-foreground">
-                  At least 8 chars, upper, lower, special
-                </p>
+                <p className="text-xs text-muted-foreground">{tUi("At least 8 chars, upper, lower, special")}</p>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Label htmlFor="confirmPassword">{tUi("Confirm Password")}</Label>
                 <Input
                   id="confirmPassword"
                   name="confirmPassword"
@@ -164,12 +153,10 @@ export default function ResetPasswordPage() {
               </div>
               {error && <p className="text-xs text-red-500">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Resetting..." : "Reset Password"}
+                {loading ? tUi("Resetting...") : tUi("Reset Password")}
               </Button>
               <p className="text-center text-sm">
-                <a href="/signin" className="underline underline-offset-4">
-                  Back to sign in
-                </a>
+                <a href="/signin" className="underline underline-offset-4">{tUi("Back to sign in")}</a>
               </p>
             </form>
           </div>

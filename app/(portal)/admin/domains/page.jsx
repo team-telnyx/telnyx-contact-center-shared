@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -47,6 +49,7 @@ import EditSheet from "@/components/domains/EditSheet";
 import { Can } from "@/components/auth-provider";
 
 export default function AdminDomainsPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -128,38 +131,34 @@ export default function AdminDomainsPage() {
           q: "",
         })
       }
-    >
-      Clear
-    </Button>
+    >{tUi("Clear")}</Button>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
     <Can permission="domains:create"><Button onClick={handleNewDomain} variant="default">
-      <IconPlus className="size-4 mr-2" />
-      New Domain
-    </Button></Can>
+      <IconPlus className="size-4 mr-2" />{tUi("New Domain")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Domains" badges={<Badge variant="secondary">{total} domains</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Domains")} badges={<Badge variant="secondary">{total}{tUi(" domains")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="domains">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
-              <label className="text-xs">Domain</label>
+              <label className="text-xs">{tUi("Domain")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="domain name…"
+                placeholder={tUi("domain name…")}
               />
             </div>
             <div>
-              <label className="text-xs">Active</label>
+              <label className="text-xs">{tUi("Active")}</label>
               <Select
                 value={filters.active || "all"}
                 onValueChange={(value) =>
@@ -167,12 +166,12 @@ export default function AdminDomainsPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="true">Yes</SelectItem>
-                  <SelectItem value="false">No</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
+                  <SelectItem value="true">{tUi("Yes")}</SelectItem>
+                  <SelectItem value="false">{tUi("No")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -194,13 +193,11 @@ export default function AdminDomainsPage() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Domain</TableHead>
-                    <TableHead className="px-[10px]">Active</TableHead>
-                    <TableHead className="px-[10px]">Created At</TableHead>
-                    <TableHead className="px-[10px]">Updated At</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px]">{tUi("Domain")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Active")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Created At")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Updated At")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -221,17 +218,17 @@ export default function AdminDomainsPage() {
                                   : "border-red-500 text-red-600 min-w-[56px] justify-center"
                               }
                             >
-                              {domain.active ? "YES" : "NO"}
+                              {domain.active ? tUi("YES") : tUi("NO")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
                             {domain.created_at
-                              ? new Date(domain.created_at).toLocaleDateString()
+                              ? new Date(domain.created_at).toLocaleDateString(tUi.locale)
                               : "—"}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
                             {domain.updated_at
-                              ? new Date(domain.updated_at).toLocaleDateString()
+                              ? new Date(domain.updated_at).toLocaleDateString(tUi.locale)
                               : "—"}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap text-right">
@@ -243,7 +240,7 @@ export default function AdminDomainsPage() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit domain"
+                                title={tUi("Edit domain")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -252,31 +249,26 @@ export default function AdminDomainsPage() {
                                   <Can permission="domains:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete domain"
+                                    title={tUi("Delete domain")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete domain?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the domain "
-                                      {domain.domain}".
+                                    <DialogTitle>{tUi("Delete domain?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the domain \"")}{domain.domain}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(domain.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -292,9 +284,7 @@ export default function AdminDomainsPage() {
                       <TableCell
                         colSpan={5}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No domains
-                      </TableCell>
+                      >{tUi("No domains")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -304,12 +294,10 @@ export default function AdminDomainsPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -345,8 +333,7 @@ export default function AdminDomainsPage() {
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm">
-                  Page {page} of {pageCount}
+                <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
                 </span>
                 <Button
                   variant="outline"

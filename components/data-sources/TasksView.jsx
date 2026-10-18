@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -64,6 +66,7 @@ const PRIORITY_OPTIONS = [
 ];
 
 export default function TasksView() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -193,7 +196,7 @@ export default function TasksView() {
   function formatDate(dateString) {
     if (!dateString) return "—";
     try {
-      return new Date(dateString).toLocaleDateString();
+      return new Date(dateString).toLocaleDateString(tUi.locale);
     } catch {
       return dateString;
     }
@@ -207,15 +210,11 @@ export default function TasksView() {
   }
 
   function formatStatus(status) {
-    if (!status) return "OPEN";
-    return String(status)
-      .replace(/_/g, " ")
-      .toUpperCase();
+    return STATUS_OPTIONS.find(option => option.value === (status || "open"))?.label || status;
   }
 
   function formatPriority(priority) {
-    if (!priority) return "MEDIUM";
-    return String(priority).toUpperCase();
+    return tUi(PRIORITY_OPTIONS.find(option => option.value === (priority || "medium"))?.label || priority);
   }
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -235,13 +234,10 @@ export default function TasksView() {
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold flex items-center gap-2">
-              <IconChecklist className="size-6 text-telnyx-green" /> Tasks
-            </div>
+              <IconChecklist className="size-6 text-telnyx-green" />{tUi(" Tasks")}</div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setShowApiSchema(true)}>
-                <IconCode className="size-4 mr-2" />
-                API Schema
-              </Button>
+                <IconCode className="size-4 mr-2" />{tUi("API Schema")}</Button>
               <Button
                 variant="secondary"
                 onClick={() =>
@@ -253,11 +249,9 @@ export default function TasksView() {
                     assigned_to: "all",
                   })
                 }
-              >
-                Clear
-              </Button>
+              >{tUi("Clear")}</Button>
               <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
+                {loading ? tUi("Loading…") : tUi("Refresh")}
               </Button>
               <Button
                 onClick={() => {
@@ -265,24 +259,22 @@ export default function TasksView() {
                   setShowEditSheet(true);
                 }}
               >
-                <IconPlus className="size-4 mr-2" />
-                New Task
-              </Button>
+                <IconPlus className="size-4 mr-2" />{tUi("New Task")}</Button>
             </div>
           </div>
           <div className="grid grid-cols-5 gap-2 items-end">
             <div>
-              <label className="text-xs">Search</label>
+              <label className="text-xs">{tUi("Search")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="title, description, caller…"
+                placeholder={tUi("title, description, caller…")}
               />
             </div>
             <div>
-              <label className="text-xs">Status</label>
+              <label className="text-xs">{tUi("Status")}</label>
               <Select
                 value={filters.status || "all"}
                 onValueChange={(value) =>
@@ -290,19 +282,19 @@ export default function TasksView() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
                   {STATUS_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                      {tUi(opt.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-xs">Task Type</label>
+              <label className="text-xs">{tUi("Task Type")}</label>
               <Select
                 value={filters.task_type || "all"}
                 onValueChange={(value) =>
@@ -310,10 +302,10 @@ export default function TasksView() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
                   {taskTypes.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type
@@ -325,7 +317,7 @@ export default function TasksView() {
               </Select>
             </div>
             <div>
-              <label className="text-xs">Priority</label>
+              <label className="text-xs">{tUi("Priority")}</label>
               <Select
                 value={filters.priority || "all"}
                 onValueChange={(value) =>
@@ -333,19 +325,19 @@ export default function TasksView() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
                   {PRIORITY_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                      {tUi(opt.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-xs">Assigned To</label>
+              <label className="text-xs">{tUi("Assigned To")}</label>
               <Select
                 value={filters.assigned_to || "all"}
                 onValueChange={(value) =>
@@ -353,10 +345,10 @@ export default function TasksView() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
                   {users.map((user) => {
                     const name = [user.first_name, user.last_name]
                       .filter(Boolean)
@@ -384,16 +376,14 @@ export default function TasksView() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px] w-[25%]">Title</TableHead>
-                    <TableHead className="px-[10px]">Type</TableHead>
-                    <TableHead className="px-[10px]">Status</TableHead>
-                    <TableHead className="px-[10px]">Priority</TableHead>
-                    <TableHead className="px-[10px]">Caller</TableHead>
-                    <TableHead className="px-[10px]">Assigned To</TableHead>
-                    <TableHead className="px-[10px]">Created</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px] w-[25%]">{tUi("Title")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Type")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Status")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Priority")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Caller")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Assigned To")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Created")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -430,7 +420,7 @@ export default function TasksView() {
                               }
                               variant="outline"
                             >
-                              {formatStatus(task.status)}
+                              {tUi(formatStatus(task.status))}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
@@ -467,7 +457,7 @@ export default function TasksView() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit task"
+                                title={tUi("Edit task")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -476,31 +466,27 @@ export default function TasksView() {
                                   <button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete task"
+                                    title={tUi("Delete task")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete task?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the task "{task.title}
-                                      ".
+                                    <DialogTitle>{tUi("Delete task?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the task \"")}{task.title}
+                                      &quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(task.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -516,9 +502,7 @@ export default function TasksView() {
                       <TableCell
                         colSpan={8}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No tasks
-                      </TableCell>
+                      >{tUi("No tasks")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -528,12 +512,10 @@ export default function TasksView() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -553,8 +535,7 @@ export default function TasksView() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium">
-                Page {page} of {pageCount}
+              <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
               </div>
               <div className="ml-auto flex items-center gap-2 lg:ml-0">
                 <Button
@@ -563,7 +544,7 @@ export default function TasksView() {
                   onClick={() => setPage(1)}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to first page</span>
+                  <span className="sr-only">{tUi("Go to first page")}</span>
                   <IconChevronsLeft />
                 </Button>
                 <Button
@@ -573,7 +554,7 @@ export default function TasksView() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to previous page</span>
+                  <span className="sr-only">{tUi("Go to previous page")}</span>
                   <IconChevronLeft />
                 </Button>
                 <Button
@@ -583,7 +564,7 @@ export default function TasksView() {
                   onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to next page</span>
+                  <span className="sr-only">{tUi("Go to next page")}</span>
                   <IconChevronRight />
                 </Button>
                 <Button
@@ -593,7 +574,7 @@ export default function TasksView() {
                   onClick={() => setPage(pageCount)}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to last page</span>
+                  <span className="sr-only">{tUi("Go to last page")}</span>
                   <IconChevronsRight />
                 </Button>
               </div>

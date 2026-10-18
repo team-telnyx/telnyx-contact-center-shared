@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFileSync } from "node:fs";
+import { readFileSync } from "./helpers/ui-source.mjs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,7 +16,7 @@ test("softphone mini owns the headset control trigger immediately before contact
   assert.match(softphoneMini, /HeadsetStatusBadge[\s\S]*?title="Select number from contacts"/);
 });
 
-test("headset UI uses the shared Jabra/EPOS service and a right-side sheet", () => {
+test("headset UI uses the shared Jabra/EPOS service and a direction-aware sheet", () => {
   const badge = src("components/headsets/HeadsetStatusBadge.jsx");
   const clientService = src("lib/headsets/client-headset-service.js");
   assert.match(badge, /initHeadsetControlService/);
@@ -24,7 +24,7 @@ test("headset UI uses the shared Jabra/EPOS service and a right-side sheet", () 
   assert.match(badge, /requestPermission\("jabra"\)/);
   assert.match(badge, /onDiagnostic/);
   assert.match(badge, /recordDiagnostic\(diagnostic\.message/);
-  assert.match(badge, /SheetContent[\s\S]*side="right"/);
+  assert.match(badge, /SheetContent[\s\S]*side="end"/);
   assert.doesNotMatch(badge, /DialogContent/);
   assert.match(clientService, /createJabraAdapter/);
   assert.match(clientService, /createEposAdapter/);

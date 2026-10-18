@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -91,6 +93,7 @@ export function RichEmailEditor({
   serializeHtml = value => value,
   toolbarExtra,
 }) {
+  const tUi = useUiText();
   const editorRef = useRef(null);
   // Start with a sentinel so externally supplied HTML is written into the
   // contentEditable element on its first mount (drafts and AI-generated mail).
@@ -127,13 +130,13 @@ export function RichEmailEditor({
   );
 
   const insertLink = useCallback(() => {
-    const url = window.prompt("Link URL", "https://");
+    const url = window.prompt(tUi("Link URL"), "https://");
     if (!url) return;
     if (/^https?:\/\//i.test(url)) command("createLink", url);
   }, [command]);
 
   const insertImage = useCallback(() => {
-    const url = window.prompt("Image URL", "https://");
+    const url = window.prompt(tUi("Image URL"), "https://");
     if (!url) return;
     if (/^https?:\/\//i.test(url)) command("insertImage", url);
   }, [command]);
@@ -189,38 +192,38 @@ export function RichEmailEditor({
           <SelectContent>
             {FONT_SIZES.map(([name, size]) => (
               <SelectItem key={size} value={size}>
-                {name}
+                {tUi(name)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <ToolbarDivider />
         <ToolbarButton
-          label="Undo"
+          label={tUi("Undo")}
           icon={IconArrowBackUp}
           onAction={() => command("undo")}
         />
         <ToolbarButton
-          label="Redo"
+          label={tUi("Redo")}
           icon={IconArrowForwardUp}
           onAction={() => command("redo")}
         />
         <ToolbarDivider />
-        <ToolbarButton label="Bold" icon={IconBold} onAction={() => command("bold")} />
-        <ToolbarButton label="Italic" icon={IconItalic} onAction={() => command("italic")} />
+        <ToolbarButton label={tUi("Bold")} icon={IconBold} onAction={() => command("bold")} />
+        <ToolbarButton label={tUi("Italic")} icon={IconItalic} onAction={() => command("italic")} />
         <ToolbarButton
-          label="Underline"
+          label={tUi("Underline")}
           icon={IconUnderline}
           onAction={() => command("underline")}
         />
         <ToolbarButton
-          label="Strikethrough"
+          label={tUi("Strikethrough")}
           icon={IconStrikethrough}
           onAction={() => command("strikeThrough")}
         />
         <label
           className="relative flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
-          title="Text color"
+          title={tUi("Text color")}
         >
           <IconHighlight className="size-4" />
           <input
@@ -232,7 +235,7 @@ export function RichEmailEditor({
         </label>
         <label
           className="relative flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
-          title="Highlight color"
+          title={tUi("Highlight color")}
         >
           <IconHighlight className="size-4 fill-amber-300/40" />
           <input
@@ -244,49 +247,49 @@ export function RichEmailEditor({
         </label>
         <ToolbarDivider />
         <ToolbarButton
-          label="Align left"
+          label={tUi("Align left")}
           icon={IconAlignLeft}
           onAction={() => command("justifyLeft")}
         />
         <ToolbarButton
-          label="Align center"
+          label={tUi("Align center")}
           icon={IconAlignCenter}
           onAction={() => command("justifyCenter")}
         />
         <ToolbarButton
-          label="Align right"
+          label={tUi("Align right")}
           icon={IconAlignRight}
           onAction={() => command("justifyRight")}
         />
         <ToolbarButton
-          label="Justify"
+          label={tUi("Justify")}
           icon={IconAlignJustified}
           onAction={() => command("justifyFull")}
         />
         <ToolbarDivider />
         <ToolbarButton
-          label="Bulleted list"
+          label={tUi("Bulleted list")}
           icon={IconList}
           onAction={() => command("insertUnorderedList")}
         />
         <ToolbarButton
-          label="Numbered list"
+          label={tUi("Numbered list")}
           icon={IconListNumbers}
           onAction={() => command("insertOrderedList")}
         />
         <ToolbarButton
-          label="Decrease indent"
+          label={tUi("Decrease indent")}
           icon={IconIndentDecrease}
           onAction={() => command("outdent")}
         />
         <ToolbarButton
-          label="Increase indent"
+          label={tUi("Increase indent")}
           icon={IconIndentIncrease}
           onAction={() => command("indent")}
         />
         <ToolbarDivider />
         <ToolbarButton
-          label="Heading 1"
+          label={tUi("Heading 1")}
           icon={IconH1}
           onAction={() => {
             setBlockType("h1");
@@ -294,7 +297,7 @@ export function RichEmailEditor({
           }}
         />
         <ToolbarButton
-          label="Heading 2"
+          label={tUi("Heading 2")}
           icon={IconH2}
           onAction={() => {
             setBlockType("h2");
@@ -302,22 +305,22 @@ export function RichEmailEditor({
           }}
         />
         <ToolbarButton
-          label="Quote"
+          label={tUi("Quote")}
           icon={IconBlockquote}
           onAction={() => {
             setBlockType("blockquote");
             command("formatBlock", "blockquote");
           }}
         />
-        <ToolbarButton label="Insert link" icon={IconLink} onAction={insertLink} />
-        <ToolbarButton label="Insert image" icon={IconPhoto} onAction={insertImage} />
+        <ToolbarButton label={tUi("Insert link")} icon={IconLink} onAction={insertLink} />
+        <ToolbarButton label={tUi("Insert image")} icon={IconPhoto} onAction={insertImage} />
         <ToolbarButton
-          label="Horizontal rule"
+          label={tUi("Horizontal rule")}
           icon={IconMinus}
           onAction={() => command("insertHorizontalRule")}
         />
         <ToolbarButton
-          label="Inline code"
+          label={tUi("Inline code")}
           icon={IconCode}
           onAction={() => {
             setBlockType("pre");
@@ -325,13 +328,13 @@ export function RichEmailEditor({
           }}
         />
         <ToolbarButton
-          label="Clear formatting"
+          label={tUi("Clear formatting")}
           icon={IconClearFormatting}
           onAction={() => command("removeFormat")}
         />
         <ToolbarDivider />
         <ToolbarButton
-          label={sourceMode ? "Visual editor" : "Edit HTML source"}
+          label={sourceMode ? tUi("Visual editor") : tUi("Edit HTML source")}
           icon={sourceMode ? IconBraces : IconCode}
           active={sourceMode}
           onAction={toggleSource}
@@ -348,13 +351,13 @@ export function RichEmailEditor({
           spellCheck={false}
           className="flex-1 resize-none rounded-none border-0 font-mono text-xs shadow-none focus-visible:ring-0"
           style={{ minHeight }}
-          aria-label="HTML source"
+          aria-label={tUi("HTML source")}
         />
       ) : (
         <div
           ref={editorRef}
           contentEditable={!disabled}
-          aria-label="Email reply body"
+          aria-label={tUi("Email reply body")}
           onPaste={(event) => { event.preventDefault(); command("insertText", event.clipboardData.getData("text/plain")); }}
           suppressContentEditableWarning
           role="textbox"
@@ -373,8 +376,8 @@ export function RichEmailEditor({
         />
       )}
       <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
-        <span>Rich HTML email</span>
-        <span>{blockType === "p" ? "Paragraph" : blockType.toUpperCase()}</span>
+        <span>{tUi("Rich HTML email")}</span>
+        <span>{blockType === "p" ? tUi("Paragraph") : blockType.toUpperCase()}</span>
       </div>
     </div>
   );

@@ -1,0 +1,8 @@
+# Semgrep scans this file list in addition to its defaults (.gitignore is
+# honoured automatically). Keep it to built artefacts and vendored bundles:
+# findings in them cannot be fixed at the flagged line.
+
+# esbuild bundle of src/cobrowse/capture.js plus rrweb. The recurring
+# postMessage("*") finding sits inside rrweb's inlined web worker; the source
+# of truth is src/cobrowse/ and node_modules/rrweb, not this output file.
+public/widget/v1/cobrowse.js

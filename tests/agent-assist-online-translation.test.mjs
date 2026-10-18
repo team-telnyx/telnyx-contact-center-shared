@@ -1,17 +1,21 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { readFileSync } from "./helpers/ui-source.mjs";
 import path from "node:path";
 import test from "node:test";
 
 const ROOT = process.cwd();
-const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "utf8");
+const read = (relativePath) => readFileSync(path.join(ROOT, relativePath), "utf8");
 
 test("online translation is implemented with Telnyx chat completions and workflow model", () => {
   const translationService = read("lib/agent-assist/translation-service.js");
   const router = read("lib/agent-assist-transcription-router.mjs");
 
   assert.match(translationService, /\/ai\/chat\/completions/);
-  assert.match(translationService, /model:\s*model \|\| DEFAULT_TRANSLATION_MODEL/);
+  // Workflow model (override) > AI Copilot "Live translation" > platform default; no model in code.
+  assert.match(translationService, /prepareAiOperation\("live-translation", request, \{ preferredModel: model \}\)/);
+  assert.match(translationService, /operationModel\("live-translation", model\)/);
+  assert.doesNotMatch(translationService, /DEFAULT_TRANSLATION_MODEL|openai\//);
   assert.match(translationService, /response_format\s*:\s*responseFormat \|\| \{\s*type:\s*["']json_object["']/);
   assert.match(translationService, /export async function detectLanguage/);
   assert.doesNotMatch(translationService, /GOOGLE_TRANSLATE|translation\.googleapis/);
@@ -63,7 +67,7 @@ test("profile exposes user language selector and saves users.language", () => {
   const userActions = read("app/actions/user.js");
 
   assert.match(profile, /from\s+["']@\/lib\/languages["']/);
-  assert.match(profile, /<Label htmlFor="language">Language<\/Label>/);
+  assert.match(profile, /<Label htmlFor="language">Agent speech language<\/Label>/);
   assert.match(profile, /<Select[\s\S]*value=\{form\.language/);
   assert.match(profile, /fd\.set\("language",\s*form\.language/);
   assert.match(profile, /languageOptions\.map/);

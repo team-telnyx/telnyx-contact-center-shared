@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { useCallback, useEffect, useState } from "react";
 import { Clock3, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +91,7 @@ export function useSlaSettings(queueId = null) {
 }
 
 export function SlaSettingsFields({ controller, queueId = null, compact = false, showSave = true }) {
+  const tUi = useUiText();
   const { data, draft, error, saving, saved, units, setUnits, load, setError, save, update } = controller;
   const Body = compact ? "div" : CardContent;
   return (
@@ -104,9 +107,7 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
               variant="ghost"
               size="sm"
               onClick={() => load().catch((e) => setError(e.message))}
-            >
-              Reload
-            </Button>
+            >{tUi("Reload")}</Button>
           </div>
         )}
         {!data && !error ? (
@@ -145,7 +146,7 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                   <InteractionChannel channel={channel} label />
                   {queueId ? (
                     <select
-                      aria-label={`${channel} SLA mode`}
+                      aria-label={tUi("{value0} SLA mode", { value0: channel })}
                       value={mode}
                       onChange={(e) =>
                         update(channel, {
@@ -162,9 +163,9 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                       }
                       className="rounded-lg border bg-background p-2 text-xs"
                     >
-                      <option value="inherit">Inherit global</option>
-                      <option value="override">Queue override</option>
-                      <option value="disabled">Disabled</option>
+                      <option value="inherit">{tUi("Inherit global")}</option>
+                      <option value="override">{tUi("Queue override")}</option>
+                      <option value="disabled">{tUi("Disabled")}</option>
                     </select>
                   ) : !entry ? (
                     <Button
@@ -172,9 +173,7 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                       size="sm"
                       variant="outline"
                       onClick={() => update(channel, initial())}
-                    >
-                      Configure target
-                    </Button>
+                    >{tUi("Configure target")}</Button>
                   ) : (
                     <label className="flex items-center gap-2 text-xs">
                       <input
@@ -183,18 +182,16 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                         onChange={(e) =>
                           changePolicy({ enabled: e.target.checked })
                         }
-                      />
-                      Enabled
-                    </label>
+                      />{tUi("Enabled")}</label>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {channelDefinition(channel).serviceEvent === "human_answer"
-                    ? "Human answer from queue entry"
+                    ? tUi("Human answer from queue entry")
                     : channelDefinition(channel).serviceEvent ===
                         "human_send_accepted"
-                      ? "First provider-accepted human reply"
-                      : "First persisted human reply"}
+                      ? tUi("First provider-accepted human reply")
+                      : tUi("First persisted human reply")}
                 </p>
                 {queueId && canEdit && (
                   <label className="flex items-center gap-2 text-xs">
@@ -204,18 +201,14 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                       onChange={(e) =>
                         changePolicy({ enabled: e.target.checked })
                       }
-                    />
-                    Enabled
-                  </label>
+                    />{tUi("Enabled")}</label>
                 )}
                 {canEdit ? (
                   <div className={compact ? "grid gap-3" : "grid gap-3 sm:grid-cols-3"}>
                     <div className="space-y-1 text-xs">
                       <label
                         htmlFor={`sla-threshold-${queueId || "global"}-${channel}`}
-                      >
-                        Response time
-                      </label>
+                      >{tUi("Response time")}</label>
                       <div className="flex gap-1">
                         <Input
                           id={`sla-threshold-${queueId || "global"}-${channel}`}
@@ -236,7 +229,7 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                           }
                         />
                         <select
-                          aria-label={`${channel} response time unit`}
+                          aria-label={tUi("{value0} response time unit", { value0: channel })}
                           className="rounded-lg border bg-background p-2"
                           value={units[channel] || 1}
                           onChange={(e) =>
@@ -246,9 +239,9 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                             }))
                           }
                         >
-                          <option value={1}>sec</option>
-                          <option value={60}>min</option>
-                          <option value={3600}>hours</option>
+                          <option value={1}>{tUi("sec")}</option>
+                          <option value={60}>{tUi("min")}</option>
+                          <option value={3600}>{tUi("hours")}</option>
                         </select>
                       </div>
                     </div>
@@ -257,7 +250,7 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                       ["warningPercentage", "Warn at (%)", 1, 99],
                     ].map(([key, label, min, max]) => (
                       <label key={key} className="space-y-1 text-xs">
-                        <span>{label}</span>
+                        <span>{tUi(label)}</span>
                         <Input
                           type="number"
                           min={min}
@@ -273,10 +266,10 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
                 ) : (
                   <p className="text-xs font-medium">
                     {mode === "disabled"
-                      ? "Measurement disabled"
+                      ? tUi("Measurement disabled")
                       : effective.status === "configured"
                         ? `${effective.targetPercentage}% within ${effective.thresholdSeconds}s · ${effective.source}`
-                        : "No target configured"}
+                        : tUi("No target configured")}
                   </p>
                 )}
               </div>
@@ -287,12 +280,12 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
               {saved
-                ? "Saved. Existing deadlines are unchanged."
-                : "SLA settings are saved separately."}
+                ? tUi("Saved. Existing deadlines are unchanged.")
+                : tUi("SLA settings are saved separately.")}
             </p>
             <Button type="button" size="sm" disabled={saving} onClick={save}>
               <Save className="mr-2 size-3" />
-              {saving ? "Saving…" : "Save SLA"}
+              {saving ? tUi("Saving…") : tUi("Save SLA")}
             </Button>
           </div>
         )}
@@ -301,11 +294,12 @@ export function SlaSettingsFields({ controller, queueId = null, compact = false,
 }
 
 export default function SlaSettings({ queueId = null }) {
+  const tUi = useUiText();
   const controller = useSlaSettings(queueId);
   return <Card>
     <CardHeader>
-      <CardTitle className="flex items-center gap-2 text-base"><Clock3 className="size-4" />{queueId ? "Queue SLA policies" : "Service level agreements"}</CardTitle>
-      <p className="text-xs text-muted-foreground">{queueId ? "Inherit a channel default, override it for this queue, or disable measurement." : "Set a separate response target for each released channel."} Changes apply to new measurements. Clock: 24×7.</p>
+      <CardTitle className="flex items-center gap-2 text-base"><Clock3 className="size-4" />{queueId ? tUi("Queue SLA policies") : tUi("Service level agreements")}</CardTitle>
+      <p className="text-xs text-muted-foreground">{queueId ? tUi("Inherit a channel default, override it for this queue, or disable measurement.") : tUi("Set a separate response target for each released channel.")}{tUi(" Changes apply to new measurements. Clock: 24×7.")}</p>
     </CardHeader>
     <SlaSettingsFields controller={controller} queueId={queueId} />
   </Card>;

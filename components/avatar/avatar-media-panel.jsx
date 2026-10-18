@@ -182,6 +182,7 @@ export function AvatarMediaPanel({
 
   useEffect(() => {
     if (!mediaSettings.avatarEnabled) return;
+    if (provider === "telnyx") return;
     const sdkPromise =
       provider === ANAM_AVATAR_PROVIDER
         ? import("@anam-ai/js-sdk")

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { VariableTextarea } from "@/components/voice-flow/VariableTextarea";
 
@@ -7,6 +9,7 @@ export default function HangupToolEditor({
   onChange,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const hp = value?.hangup || {};
   function update(partial) {
     onChange?.({
@@ -17,7 +20,7 @@ export default function HangupToolEditor({
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-xs">Description (optional)</label>
+        <label className="text-xs">{tUi("Description (optional)")}</label>
         <VariableTextarea
           rows={2}
           value={hp.description || ""}
@@ -27,19 +30,16 @@ export default function HangupToolEditor({
         />
       </div>
       <div>
-        <label className="text-xs">Hangup Message (optional)</label>
+        <label className="text-xs">{tUi("Hangup Message (optional)")}</label>
         <VariableTextarea
           rows={2}
-          placeholder="e.g., Thank you for your call! Goodbye!"
+          placeholder={tUi("e.g., Thank you for your call! Goodbye!")}
           value={hp.intent_message || ""}
           availableVariables={availableVariables}
           secrets={[]}
           onChange={(next) => update({ intent_message: next })}
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          The message that will be spoken to the user before hanging up the
-          call.
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("The message that will be spoken to the user before hanging up the call.")}</p>
       </div>
     </div>
   );

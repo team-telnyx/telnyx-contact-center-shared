@@ -26,7 +26,7 @@ export function useAvatarBridge() {
 // server failures to the same reasons the stages report to onUnavailable.
 export async function readAvatarSessionResponse(response) {
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data?.sessionToken) {
+  if (!response.ok || !(data?.sessionToken || (data?.provider === "telnyx" && typeof data.url === "string"))) {
     throw Object.assign(new Error(data?.error || "Avatar unavailable"), {
       reason: data?.reason || "provider_error",
     });

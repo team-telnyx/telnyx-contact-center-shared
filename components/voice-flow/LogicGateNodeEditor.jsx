@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Label } from "@/components/ui/label";
 import {
@@ -21,6 +23,7 @@ export default function LogicGateNodeEditor({
   onChange,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const operator = config.operator || "AND";
   const conditions = config.conditions || [];
 
@@ -61,7 +64,7 @@ export default function LogicGateNodeEditor({
   return (
     <div className="space-y-4">
       <div>
-        <Label className="text-xs">Operator</Label>
+        <Label className="text-xs">{tUi("Operator")}</Label>
         <Select
           value={operator}
           onValueChange={(value) => handleChange("operator", value)}
@@ -70,21 +73,17 @@ export default function LogicGateNodeEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="AND">
-              AND (all conditions must be true)
-            </SelectItem>
-            <SelectItem value="OR">OR (at least one must be true)</SelectItem>
-            <SelectItem value="NOT">NOT (invert condition)</SelectItem>
+            <SelectItem value="AND">{tUi("AND (all conditions must be true)")}</SelectItem>
+            <SelectItem value="OR">{tUi("OR (at least one must be true)")}</SelectItem>
+            <SelectItem value="NOT">{tUi("NOT (invert condition)")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          Logical operator to combine conditions
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Logical operator to combine conditions")}</p>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <Label className="text-xs">Conditions</Label>
+          <Label className="text-xs">{tUi("Conditions")}</Label>
           {operator !== "NOT" && (
             <Button
               type="button"
@@ -93,9 +92,7 @@ export default function LogicGateNodeEditor({
               onClick={addCondition}
               className="h-7 text-xs"
             >
-              <IconPlus className="h-3 w-3 mr-1" />
-              Add Condition
-            </Button>
+              <IconPlus className="h-3 w-3 mr-1" />{tUi("Add Condition")}</Button>
           )}
         </div>
 
@@ -107,9 +104,7 @@ export default function LogicGateNodeEditor({
             onClick={addCondition}
             className="w-full"
           >
-            <IconPlus className="h-3 w-3 mr-1" />
-            Add Condition
-          </Button>
+            <IconPlus className="h-3 w-3 mr-1" />{tUi("Add Condition")}</Button>
         )}
 
         <div className="space-y-3">
@@ -119,8 +114,7 @@ export default function LogicGateNodeEditor({
               className="p-3 border rounded-md bg-card space-y-2"
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium">
-                  Condition {index + 1}
+                <span className="text-xs font-medium">{tUi("Condition ")}{index + 1}
                 </span>
                 {(operator !== "NOT" || conditions.length > 1) && (
                   <Button
@@ -136,20 +130,20 @@ export default function LogicGateNodeEditor({
               </div>
 
               <div>
-                <Label className="text-xs">Left Operand</Label>
+                <Label className="text-xs">{tUi("Left Operand")}</Label>
                 <VariableInput
                   value={condition.leftOperand || ""}
                   onChange={(value) =>
                     handleConditionChange(index, "leftOperand", value)
                   }
                   availableVariables={availableVariables}
-                  placeholder="{{variable}} or value"
+                  placeholder={tUi("{{variable}} or value")}
                   className="mt-1"
                 />
               </div>
 
               <div>
-                <Label className="text-xs">Operator</Label>
+                <Label className="text-xs">{tUi("Operator")}</Label>
                 <Select
                   value={condition.operator || "==="}
                   onValueChange={(value) =>
@@ -160,34 +154,34 @@ export default function LogicGateNodeEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="===">Equals (===)</SelectItem>
-                    <SelectItem value="!==">Not Equals (!==)</SelectItem>
-                    <SelectItem value=">">Greater Than (&gt;)</SelectItem>
-                    <SelectItem value="<">Less Than (&lt;)</SelectItem>
-                    <SelectItem value=">=">Greater or Equal (&gt;=)</SelectItem>
-                    <SelectItem value="<=">Less or Equal (&lt;=)</SelectItem>
-                    <SelectItem value="contains">Contains</SelectItem>
-                    <SelectItem value="startsWith">Starts With</SelectItem>
-                    <SelectItem value="endsWith">Ends With</SelectItem>
+                    <SelectItem value="===">{tUi("Equals (===)")}</SelectItem>
+                    <SelectItem value="!==">{tUi("Not Equals (!==)")}</SelectItem>
+                    <SelectItem value=">">{tUi("Greater Than (>)")}</SelectItem>
+                    <SelectItem value="<">{tUi("Less Than (<)")}</SelectItem>
+                    <SelectItem value=">=">{tUi("Greater or Equal (>=)")}</SelectItem>
+                    <SelectItem value="<=">{tUi("Less or Equal (<=)")}</SelectItem>
+                    <SelectItem value="contains">{tUi("Contains")}</SelectItem>
+                    <SelectItem value="startsWith">{tUi("Starts With")}</SelectItem>
+                    <SelectItem value="endsWith">{tUi("Ends With")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label className="text-xs">Right Operand</Label>
+                <Label className="text-xs">{tUi("Right Operand")}</Label>
                 <VariableInput
                   value={condition.rightOperand || ""}
                   onChange={(value) =>
                     handleConditionChange(index, "rightOperand", value)
                   }
                   availableVariables={availableVariables}
-                  placeholder="{{variable}} or value"
+                  placeholder={tUi("{{variable}} or value")}
                   className="mt-1"
                 />
               </div>
 
               <div>
-                <Label className="text-xs">Data Type</Label>
+                <Label className="text-xs">{tUi("Data Type")}</Label>
                 <Select
                   value={condition.dataType || "string"}
                   onValueChange={(value) =>
@@ -198,9 +192,9 @@ export default function LogicGateNodeEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="string">String</SelectItem>
-                    <SelectItem value="number">Number</SelectItem>
-                    <SelectItem value="boolean">Boolean</SelectItem>
+                    <SelectItem value="string">{tUi("String")}</SelectItem>
+                    <SelectItem value="number">{tUi("Number")}</SelectItem>
+                    <SelectItem value="boolean">{tUi("Boolean")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -209,26 +203,20 @@ export default function LogicGateNodeEditor({
         </div>
 
         {conditions.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4 border rounded-md bg-muted/30">
-            No conditions defined. Add a condition to get started.
-          </p>
+          <p className="text-xs text-muted-foreground text-center py-4 border rounded-md bg-muted/30">{tUi("No conditions defined. Add a condition to get started.")}</p>
         )}
 
         {operator === "NOT" && conditions.length > 1 && (
-          <p className="text-xs text-yellow-600 mt-2">
-            ⚠ NOT operator typically uses only one condition. Additional
-            conditions will be ignored.
-          </p>
+          <p className="text-xs text-yellow-600 mt-2">{tUi("⚠ NOT operator typically uses only one condition. Additional conditions will be ignored.")}</p>
         )}
       </div>
 
       {conditions.length > 0 && (
         <div className="p-3 bg-muted rounded-md">
-          <p className="text-xs font-medium mb-2">Logic Preview:</p>
+          <p className="text-xs font-medium mb-2">{tUi("Logic Preview:")}</p>
           <div className="text-xs font-mono space-y-1">
             {operator === "NOT" && (
-              <div>
-                NOT ({conditions[0]?.leftOperand} {conditions[0]?.operator}{" "}
+              <div>{tUi("NOT (")}{conditions[0]?.leftOperand} {conditions[0]?.operator}{" "}
                 {conditions[0]?.rightOperand})
               </div>
             )}
@@ -236,7 +224,7 @@ export default function LogicGateNodeEditor({
               <div>
                 {conditions.map((c, i) => (
                   <div key={i}>
-                    {i > 0 && <span className="text-orange-600"> AND </span>}(
+                    {i > 0 && <span className="text-orange-600">{tUi(" AND ")}</span>}(
                     {c.leftOperand} {c.operator} {c.rightOperand})
                   </div>
                 ))}
@@ -246,16 +234,15 @@ export default function LogicGateNodeEditor({
               <div>
                 {conditions.map((c, i) => (
                   <div key={i}>
-                    {i > 0 && <span className="text-orange-600"> OR </span>}(
+                    {i > 0 && <span className="text-orange-600">{tUi(" OR ")}</span>}(
                     {c.leftOperand} {c.operator} {c.rightOperand})
                   </div>
                 ))}
               </div>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Routes to <strong>True</strong> if condition(s) met, else{" "}
-            <strong>False</strong>
+          <p className="text-xs text-muted-foreground mt-2">{tUi("Routes to ")}<strong>{tUi("True")}</strong>{tUi(" if condition(s) met, else")}{" "}
+            <strong>{tUi("False")}</strong>
           </p>
         </div>
       )}

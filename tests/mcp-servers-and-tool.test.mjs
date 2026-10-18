@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -328,7 +328,7 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(adminPage, /setToolDetails/, "clicking an expanded tool badge should open tool details");
   assert.match(adminPage, /toolsByName\.get\(toolName\)/, "tool badges should pass discovered tool metadata, not only the tool name");
   assert.match(adminPage, /View \$\{toolName\} tool details/, "tool badges should advertise the details action");
-  assert.match(toolDetailsSheet, /SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background"/, "tool details should use the standard right-side sheet shell");
+  assert.match(toolDetailsSheet, /SheetContent side="end" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background"/, "tool details should use the standard direction-aware sheet shell");
   assert.match(toolDetailsSheet, /CodeBlock/, "tool details should render schemas in a code viewer");
   assert.match(toolDetailsSheet, /Input Schema/, "tool details should show the input schema");
   assert.match(toolDetailsSheet, /Output Schema/, "tool details should show the output schema");

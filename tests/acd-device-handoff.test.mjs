@@ -17,7 +17,7 @@ async function fixture(channel='voice',parentType='connect') {
  const agentId=randomUUID();await seedAgent(pool,agentId);
  await pool.query(`INSERT INTO cc_agent_channel_policies(agent_id,channel,enabled,max_concurrent,weight) VALUES($1,'video',true,1,1) ON CONFLICT DO NOTHING`,[agentId]);
  const user={id:agentId,authSessionId:randomUUID()},other={id:agentId,authSessionId:randomUUID()};
- const reg=async(u,kind)=>(await registerVoiceEndpoint(pool,u,{kind,deviceId:randomUUID(),label:kind},async id=>({id,username:id}))).registration;
+ const reg=async(u,kind,extra={})=>(await registerVoiceEndpoint(pool,u,{kind,deviceId:randomUUID(),...extra},async id=>({id,username:id}))).registration;
  const a=await reg(user,'web'),b=await reg(other,'ios');
  for(const [u,r] of [[user,a],[other,b]]){const e=await authenticateVoiceEndpoint(pool,u,r.token);await heartbeatAgentSession(pool,{agentId,sessionId:r.id,voiceEndpoint:e,voiceReady:true,ready:{video:true}});}
  await chooseVoiceEndpoint(pool,user,{endpointId:a.id,expectedGeneration:'0'});
@@ -43,6 +43,50 @@ async function fixture(channel='voice',parentType='connect') {
  const owner=async()=>(await pool.query('SELECT media_endpoint_id FROM acd_segments WHERE id=$1',[segment.id])).rows[0].media_endpoint_id;
  return {work,agentId,user,other,a,b,segment,parent,provider,start,startBody,take,takeBody,command,owner};
 }
+
+test('a second iOS device is its own handoff target; the call moves iPhone → iPad, and a login of the same device never pulls from itself',async()=>{
+ const f=await fixture();
+ const third={id:f.agentId,authSessionId:randomUUID()};
+ const c=(await registerVoiceEndpoint(pool,third,{kind:'ios',deviceId:randomUUID(),formFactor:'tablet',label:''},async id=>({id,username:id}))).registration;
+ const cEndpoint=await authenticateVoiceEndpoint(pool,third,c.token);
+ await heartbeatAgentSession(pool,{agentId:f.agentId,sessionId:c.id,voiceEndpoint:cEndpoint,voiceReady:true,ready:{video:true}});
+ await pool.query('UPDATE acd_segments SET media_endpoint_id=$2 WHERE id=$1',[f.segment.id,f.b.id]);
+ const view=await readDeviceHandoff(pool,third,request(c),f.work.id);
+ assert.equal(view.ownerLabel,'iPhone');assert.equal(view.ownerKind,'ios');
+ assert.equal(view.canTakeOver,true,'same platform, different device: still a target');
+ assert.deepEqual(view.targets.map(t=>t.id).sort(),[f.a.id,c.id].sort(),'every other device is a target, the holder is not');
+ assert.equal(view.targets.find(t=>t.id===c.id).label,'iPad');
+ assert.equal(view.targets.find(t=>t.id===c.id).formFactor,'tablet');
+ const result=await commandDeviceHandoff(pool,third,request(c),f.work.id,{action:'take_over',expectedOwnerId:f.b.id,expectedVersion:view.ownerVersion,commandId:randomUUID()},{provider:f.provider});
+ assert.equal(result.handoff.sourceId,f.b.id);assert.equal(result.handoff.targetId,c.id);
+ assert.equal(result.handoff.targetLabel,'iPad');assert.equal(result.handoff.targetKind,'ios');
+ // A repeat login of the iPhone itself (same device id) is not a destination for its own call.
+ const again={id:f.agentId,authSessionId:randomUUID()};
+ const bDevice=(await pool.query('SELECT device_id FROM cc_voice_endpoints WHERE id=$1',[f.b.id])).rows[0].device_id;
+ const b2=(await registerVoiceEndpoint(pool,again,{kind:'ios',deviceId:bDevice,label:'Demo iPhone'},async id=>({id,username:id}))).registration;
+ const b2Endpoint=await authenticateVoiceEndpoint(pool,again,b2.token);
+ await heartbeatAgentSession(pool,{agentId:f.agentId,sessionId:b2.id,voiceEndpoint:b2Endpoint,voiceReady:true,ready:{video:true}});
+ const self=await readDeviceHandoff(pool,again,request(b2),f.work.id);
+ assert.equal(self.canTakeOver,false);
+ assert.ok(!self.targets.some(t=>t.id===b2.id));
+ assert.equal(self.ownerLabel,'iPhone','the registration holding the call names the owner');
+});
+
+test('every browser is the one computer: a second browser is never a target of, nor pulls from, the computer holding the call',async()=>{
+ const f=await fixture();
+ const second={id:f.agentId,authSessionId:randomUUID()};
+ const w2=(await registerVoiceEndpoint(pool,second,{kind:'web',deviceId:randomUUID(),label:'Computer'},async id=>({id,username:id}))).registration;
+ const w2Endpoint=await authenticateVoiceEndpoint(pool,second,w2.token);
+ await heartbeatAgentSession(pool,{agentId:f.agentId,sessionId:w2.id,voiceEndpoint:w2Endpoint,voiceReady:true,ready:{video:true}});
+ const fromOtherBrowser=await readDeviceHandoff(pool,second,request(w2),f.work.id);
+ assert.equal(fromOtherBrowser.canTakeOver,false);
+ assert.deepEqual(fromOtherBrowser.targets.map(t=>t.id),[f.b.id],'the phone is the only target; no second Computer');
+ await assert.rejects(f.command({action:'start',targetId:w2.id,commandId:randomUUID()}),{status:409});
+ // Seen from the phone, the computer is one target however many browsers registered it.
+ await pool.query('UPDATE acd_segments SET media_endpoint_id=$2 WHERE id=$1',[f.segment.id,f.b.id]);
+ const fromPhone=await readDeviceHandoff(pool,f.other,request(f.b),f.work.id);
+ assert.equal(fromPhone.targets.filter(t=>t.kind==='web').length,1);
+});
 for(const parentType of ['connect','manual_outbound'])test(`voice ${parentType}: keeps source until exact bridge evidence and preserves segment`,async()=>{
  const f=await fixture('voice',parentType);const result=await f.take();const id=result.handoff.id;
  assert.equal(result.handoff.step,'await_answer');assert.equal(await f.owner(),f.a.id);
@@ -96,6 +140,9 @@ test('video: target joins muted; only signed participant evidence permits cutove
  await assert.rejects(f.command({action:'join',id}),{status:409});
  const rooms={generateJoinToken:async()=>({token:'test',refreshToken:'refresh'})};
  const joining=await f.command({action:'join',id},f.other,f.b,{rooms});
+ assert.ok(joining.join.member.admissionId);
+ assert.equal(joining.join.context.admissionId,joining.join.member.admissionId,'device handoff preserves the admission used to authorize AI audio and Vision');
+ assert.equal(joining.join.context.bindingToken,undefined,'private binding capability is not published in room context');
  assert.ok(joining.join.context.handoffNonce);assert.equal(await f.owner(),f.a.id);
  await assert.rejects(f.command({action:'ready',id},f.other,f.b),{status:409});
  await pool.query(`UPDATE acd_video_sessions SET participants=participants||$2::jsonb WHERE work_item_id=$1`,[f.work.id,JSON.stringify([{participant_id:'new-video',role:'agent',handoff_nonce:joining.join.context.handoffNonce}])]);

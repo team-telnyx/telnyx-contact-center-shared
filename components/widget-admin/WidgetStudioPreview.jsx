@@ -1,10 +1,14 @@
 "use client";
+import { previewDeviceLabel } from "@/lib/i18n/preview-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, EyeOff, GitBranch, Monitor, Smartphone, Tablet, Timer } from "lucide-react";
 import WidgetFrame from "@/components/widget/WidgetFrame";
 import WidgetIcon from "@/components/widget/WidgetIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, tabsTriggerCompactClass } from "@/components/ui/tabs";
 import {
   getPreviewDevice,
   PREVIEW_DEVICES,
@@ -149,6 +153,7 @@ function HeadsUp({ config }) {
 }
 
 function HomePreview({ config, onSurfaceChange, edgeToEdge = false, edgeInsets = null }) {
+  const tUi = useUiText();
   const { colors, typography } = config.theme;
   const { header, launcher } = config.components;
   const insets = edgeToEdge && edgeInsets ? edgeInsets : { top: 0, right: 0, bottom: 0, left: 0 };
@@ -186,7 +191,7 @@ function HomePreview({ config, onSurfaceChange, edgeToEdge = false, edgeInsets =
           {header.showDescription && <p className="truncate opacity-70" style={{ fontSize: typography.descriptionSize }}>{config.content.messagingSubtitle}</p>}
         </div>
         {header.showClose && (
-          <button type="button" onClick={() => onSurfaceChange("launcher")} className="rounded-full p-2 hover:bg-black/5" aria-label="Close">
+          <button type="button" onClick={() => onSurfaceChange("launcher")} className="rounded-full p-2 hover:bg-black/5" aria-label={tUi("Close")}>
             <WidgetIcon name={header.closeIcon} fallback="x" size={19} />
           </button>
         )}
@@ -225,7 +230,7 @@ function HomePreview({ config, onSurfaceChange, edgeToEdge = false, edgeInsets =
             style={{ borderColor: colors.border, borderRadius: config.theme.shape.buttonRadius, backgroundColor: colors.surfaceMuted }}
           >
             <span className="grid size-10 place-items-center rounded-full" style={{ backgroundColor: colors.primary, color: colors.onPrimary }}><WidgetIcon name="calendar-clock" fallback="calendar" size={19} /></span>
-            <span><strong className="block">{config.callbacks.copy.buttonLabel}</strong><small className="opacity-65">Choose an available callback time</small></span>
+            <span><strong className="block">{config.callbacks.copy.buttonLabel}</strong><small className="opacity-65">{tUi("Choose an available callback time")}</small></span>
           </button>
         )}
       </div>
@@ -265,6 +270,7 @@ export function WidgetStudioPreviewToolbar({
   onDeviceChange,
   onOrientationChange,
 }) {
+  const tUi = useUiText();
   const availableSurfaces = availablePreviewSurfaces(config);
   const device = getPreviewDevice(config.preview.activeDeviceId);
   const viewport = previewViewport(device, config.preview.orientation);
@@ -274,12 +280,12 @@ export function WidgetStudioPreviewToolbar({
     <div className="shrink-0 space-y-2 border-b bg-background p-3">
       <div className="w-full">
         <Select value={device.id} onValueChange={onDeviceChange}>
-          <SelectTrigger className="h-14 w-full min-w-0 py-1.5" aria-label="Preview device">
+          <SelectTrigger className="h-14 w-full min-w-0 py-1.5" aria-label={tUi("Preview device")}>
             <div className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
               <DeviceIcon className="size-5 shrink-0" />
               <div className="min-w-0 leading-tight">
-                <span className="block truncate font-medium">{device.name}</span>
-                <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{device.detail}</span>
+                <span className="block truncate font-medium">{previewDeviceLabel(tUi, device)}</span>
+                <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{tUi(device.detail)}</span>
               </div>
             </div>
           </SelectTrigger>
@@ -287,30 +293,32 @@ export function WidgetStudioPreviewToolbar({
             {PREVIEW_DEVICES.map((item) => {
               const Icon = item.type === "desktop" ? Monitor : item.type === "tablet" ? Tablet : Smartphone;
               return <SelectItem key={item.id} value={item.id}>
-                <span className="flex items-center gap-2"><Icon className="size-4" /><span><span className="block">{item.name}</span><span className="block text-[10px] text-muted-foreground">{item.detail}</span></span></span>
+                <span className="flex items-center gap-2"><Icon className="size-4" /><span><span className="block">{previewDeviceLabel(tUi, item)}</span><span className="block text-[10px] text-muted-foreground">{tUi(item.detail)}</span></span></span>
               </SelectItem>;
             })}
           </SelectContent>
         </Select>
       </div>
       <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
-        <span className="capitalize">{viewport.orientation}</span>
-        <span className="tabular-nums">{viewport.width} × {viewport.height} CSS px · DPR {device.dpr}</span>
+        <span className="capitalize">{tUi(viewport.orientation)}</span>
+        <span className="tabular-nums">{viewport.width} × {viewport.height}{tUi(" CSS px · DPR ")}{device.dpr}</span>
         {device.orientations.length > 1 && (
           <button
             type="button"
             className="grid size-8 shrink-0 place-items-center rounded-md border bg-background hover:bg-muted"
             onClick={() => onOrientationChange(viewport.orientation === "portrait" ? "landscape" : "portrait")}
-            aria-label={`Switch to ${viewport.orientation === "portrait" ? "landscape" : "portrait"}`}
-            title={`Switch to ${viewport.orientation === "portrait" ? "landscape" : "portrait"}`}
+            aria-label={tUi("Switch to {value0}", { value0: viewport.orientation === "portrait" ? tUi("landscape") : tUi("portrait") })}
+            title={tUi("Switch to {value0}", { value0: viewport.orientation === "portrait" ? tUi("landscape") : tUi("portrait") })}
           ><OrientationSwitchIcon orientation={viewport.orientation} /></button>
         )}
       </div>
-      <div className="grid auto-cols-fr grid-flow-col rounded-lg border bg-muted/40 p-1 text-xs">
-        {availableSurfaces.map((item) => (
-          <button key={item} type="button" className={`rounded-md px-1.5 py-1.5 capitalize ${surface === item ? "bg-background shadow-sm" : "text-muted-foreground"}`} onClick={() => onSurfaceChange(item)}>{item}</button>
-        ))}
-      </div>
+      <Tabs value={surface} onValueChange={onSurfaceChange} className="gap-0">
+        <TabsList className="grid auto-cols-fr grid-flow-col gap-2">
+          {availableSurfaces.map((item) => (
+            <TabsTrigger key={item} value={item} className={`${tabsTriggerCompactClass} capitalize`}>{tUi(item)}</TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
     </div>
   );
 }
@@ -364,6 +372,7 @@ function previewSafeArea(device, orientation) {
 }
 
 function DeviceStatus({ device, orientation, textColor }) {
+  const tUi = useUiText();
   const landscape = orientation === "landscape";
   const statusInset = landscape && device.frame === "iphone-island" ? 52 : 20;
   return <>
@@ -373,7 +382,7 @@ function DeviceStatus({ device, orientation, textColor }) {
       aria-hidden="true"
     >
       <span className="tabular-nums">9:41</span>
-      <span className="flex items-center gap-1.5"><SignalBars /><span>5G</span><BatteryStatus /></span>
+      <span className="flex items-center gap-1.5"><SignalBars /><span>{tUi("5G")}</span><BatteryStatus /></span>
     </div>
     {device.type === "tablet" && <span className="pointer-events-none absolute left-1/2 top-[8px] z-50 size-2 -translate-x-1/2 rounded-full bg-black/90 ring-1 ring-white/20" aria-hidden="true" />}
     {device.frame === "iphone-island" && (landscape
@@ -387,6 +396,7 @@ function DeviceStatus({ device, orientation, textColor }) {
 }
 
 function DeviceFrame({ device, viewport, statusTextColor, homeIndicatorColor, children }) {
+  const tUi = useUiText();
   const [stageRef, stage] = useMeasuredSize();
   const phone = device.type === "phone";
   const framePadding = device.type === "tablet" ? 12 : 10;
@@ -404,7 +414,7 @@ function DeviceFrame({ device, viewport, statusTextColor, homeIndicatorColor, ch
         <div
           className="relative bg-gradient-to-br from-[#777b86] via-[#17191d] to-[#565b65] shadow-[0_35px_90px_rgba(15,23,42,.30),inset_0_0_0_1px_rgba(255,255,255,.35)]"
           style={{ width: frameWidth, height: frameHeight, padding: framePadding, borderRadius: outerRadius, transform: `scale(${scale})`, transformOrigin: "top left" }}
-          aria-label={`${device.name} ${viewport.orientation} device preview`}
+          aria-label={tUi("{value0} {value1} device preview", { value0: previewDeviceLabel(tUi, device), value1: tUi(viewport.orientation) })}
         >
           <div
             className="relative h-full w-full overflow-hidden bg-white ring-1 ring-black/60"
@@ -427,6 +437,7 @@ function DeviceFrame({ device, viewport, statusTextColor, homeIndicatorColor, ch
 }
 
 function DecisionPreviewState({ result, waiting = false }) {
+  const tUi = useUiText();
   const hidden = result?.visible === false;
   return (
     <div className="relative z-30 w-full max-w-[320px] overflow-hidden rounded-2xl border bg-white/95 text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,.18)] backdrop-blur">
@@ -435,16 +446,16 @@ function DecisionPreviewState({ result, waiting = false }) {
           {hidden ? <EyeOff className="size-5" /> : waiting ? <Timer className="size-5" /> : <CheckCircle2 className="size-5" />}
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Decision simulation</p>
-          <p className="mt-0.5 truncate text-sm font-semibold">{result?.matchedRule?.name || "Default behavior"}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{tUi("Decision simulation")}</p>
+          <p className="mt-0.5 truncate text-sm font-semibold">{result?.matchedRule?.name || tUi("Default behavior")}</p>
         </div>
       </div>
       <div className="border-t bg-slate-50/80 px-4 py-3 text-xs leading-relaxed text-slate-600">
         {hidden
-          ? "This context hides the launcher and widget panel."
+          ? tUi("This context hides the launcher and widget panel.")
           : waiting
-            ? `Waiting ${result?.launcherDelaySeconds || 0}s before showing the widget (compressed in preview).`
-            : "The selected rule is active in the preview."}
+            ? tUi("Waiting {value0}s before showing the widget (compressed in preview).", { value0: result?.launcherDelaySeconds || 0 })
+            : tUi("The selected rule is active in the preview.")}
       </div>
     </div>
   );
@@ -461,6 +472,7 @@ export default function WidgetStudioPreview({
   showDecisionOverlay = false,
   simulationRun = 0,
 }) {
+  const tUi = useUiText();
   const [completedSimulationRun, setCompletedSimulationRun] = useState(0);
   useEffect(() => {
     if (!simulationRun || !decisionResult?.visible || decisionResult.launcherDelaySeconds <= 0) return undefined;
@@ -544,8 +556,8 @@ export default function WidgetStudioPreview({
   const decisionSummary = showDecisionOverlay && decisionResult && decisionResult.visible && !simulationWaiting ? (
     <div className="pointer-events-none absolute left-4 top-4 z-30 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-full border border-emerald-200 bg-white/95 px-3 py-1.5 text-[11px] text-emerald-800 shadow-sm backdrop-blur">
       <GitBranch className="size-3.5 shrink-0" />
-      <span className="truncate font-medium">{decisionResult.matchedRule?.name || "Default behavior"}</span>
-      <span className="text-emerald-600">· {decisionResult.channels.join(" + ") || "hidden"}</span>
+      <span className="truncate font-medium">{decisionResult.matchedRule?.name || tUi("Default behavior")}</span>
+      <span className="text-emerald-600">· {decisionResult.channels.join(" + ") || tUi("hidden")}</span>
     </div>
   ) : null;
 
@@ -554,7 +566,7 @@ export default function WidgetStudioPreview({
       {device.type === "desktop" ? (
         <div
           className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#e9eaec]"
-          aria-label="Safari browser preview"
+          aria-label={tUi("Safari browser preview")}
         >
           <div className="flex h-12 shrink-0 items-center gap-3 border-b border-black/10 bg-[#f3f3f4] px-4 shadow-sm">
             <div className="flex shrink-0 gap-1.5" aria-hidden="true">
@@ -601,7 +613,7 @@ export default function WidgetStudioPreview({
               {background.overlayOpacity > 0 && <div className="pointer-events-none absolute inset-0 bg-white" style={{ opacity: background.overlayOpacity }} aria-hidden="true" />}
               {background.requestedImage && imageState !== "ready" && (
                 <div className="pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 rounded-lg border bg-white/95 px-3 py-2 text-center text-xs text-black/60 shadow-sm">
-                  {imageState === "empty" ? "No screenshot uploaded for this preview." : imageState === "error" ? "Screenshot could not be loaded. Upload an image or use a direct image URL, not a webpage URL." : "Loading screenshot…"}
+                  {imageState === "empty" ? tUi("No screenshot uploaded for this preview.") : imageState === "error" ? tUi("Screenshot could not be loaded. Upload an image or use a direct image URL, not a webpage URL.") : tUi("Loading screenshot…")}
                 </div>
               )}
               {decisionSummary}
@@ -632,7 +644,7 @@ export default function WidgetStudioPreview({
               <div className="space-y-4 p-6"><div className="h-6 w-2/3 rounded bg-black/[.06]" /><div className="h-3 w-4/5 rounded bg-black/[.04]" /><div className="grid grid-cols-2 gap-3 pt-4"><span className="h-24 rounded-xl border border-black/5 bg-white/65" /><span className="h-24 rounded-xl border border-black/5 bg-white/65" /></div></div>
             </div>}
             {background.overlayOpacity > 0 && <div className="pointer-events-none absolute inset-0 bg-white" style={{ opacity: background.overlayOpacity }} aria-hidden="true" />}
-            {background.requestedImage && imageState !== "ready" && <div className="pointer-events-none absolute inset-x-4 top-12 z-20 rounded-lg border bg-white/95 px-3 py-2 text-center text-xs text-black/60 shadow-sm">{imageState === "empty" ? "No screenshot uploaded for this device and orientation." : imageState === "error" ? "Screenshot could not be loaded for this device and orientation." : "Loading screenshot…"}</div>}
+            {background.requestedImage && imageState !== "ready" && <div className="pointer-events-none absolute inset-x-4 top-12 z-20 rounded-lg border bg-white/95 px-3 py-2 text-center text-xs text-black/60 shadow-sm">{imageState === "empty" ? tUi("No screenshot uploaded for this device and orientation.") : imageState === "error" ? tUi("Screenshot could not be loaded for this device and orientation.") : tUi("Loading screenshot…")}</div>}
             {decisionSummary}
             {simulatedPreviewElement}
           </div>

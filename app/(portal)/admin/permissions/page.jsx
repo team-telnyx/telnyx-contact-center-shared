@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -29,8 +31,9 @@ const SCOPE_FILTERS = [
 ];
 
 function Segmented({ value, options, onChange, ariaLabel }) {
+  const tUi = useUiText();
   return (
-    <div className="inline-flex overflow-hidden rounded-md border" role="group" aria-label={ariaLabel}>
+    <div className="inline-flex overflow-hidden rounded-md border" role="group" aria-label={tUi(ariaLabel)}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -39,7 +42,7 @@ function Segmented({ value, options, onChange, ariaLabel }) {
           onClick={() => onChange(option.value)}
           className={cn("border-r px-3 py-1.5 text-xs font-medium last:border-r-0", value === option.value ? "bg-foreground text-background" : "bg-background text-muted-foreground hover:bg-muted")}
         >
-          {option.label}
+          {tUi(option.label)}
         </button>
       ))}
     </div>
@@ -52,6 +55,7 @@ function isNarrowed(role) {
 }
 
 export default function PermissionsPage() {
+  const tUi = useUiText();
   const { can, wildcard } = useAuth();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,40 +100,35 @@ export default function PermissionsPage() {
       {canManage ? (
         <Button asChild size="sm" className="gap-2">
           <Link href="/admin/permissions/new">
-            <IconPlus className="size-4" /> Create role
-          </Link>
+            <IconPlus className="size-4" />{tUi(" Create role")}</Link>
         </Button>
       ) : null}
-      <Button variant="secondary" onClick={() => { setQuery(""); setType("all"); setScope("any"); }}>
-        Clear
-      </Button>
+      <Button variant="secondary" onClick={() => { setQuery(""); setType("all"); setScope("any"); }}>{tUi("Clear")}</Button>
       <Button onClick={load} disabled={loading}>
-        {loading ? "Loading…" : "Refresh"}
+        {loading ? tUi("Loading…") : tUi("Refresh")}
       </Button>
     </>
   );
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Permissions" badges={<Badge variant="secondary">{roles.length} roles</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Permissions")} badges={<Badge variant="secondary">{roles.length}{tUi(" roles")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="permissions">
         <div className="space-y-4">
           <Card className="w-full">
             <CardContent className="space-y-4 pt-6">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-56 flex-1">
-                  <label htmlFor="roles-search" className="text-xs">
-                    Name or key
-                  </label>
-                  <Input id="roles-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search roles" className="w-full" />
+                  <label htmlFor="roles-search" className="text-xs">{tUi("Name or key")}</label>
+                  <Input id="roles-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tUi("Search roles")} className="w-full" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs">Type</span>
-                  <Segmented value={type} options={TYPE_FILTERS} onChange={setType} ariaLabel="Role type" />
+                  <span className="text-xs">{tUi("Type")}</span>
+                  <Segmented value={type} options={TYPE_FILTERS} onChange={setType} ariaLabel={tUi("Role type")} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs">Scope</span>
-                  <Segmented value={scope} options={SCOPE_FILTERS} onChange={setScope} ariaLabel="Scope" />
+                  <span className="text-xs">{tUi("Scope")}</span>
+                  <Segmented value={scope} options={SCOPE_FILTERS} onChange={setScope} ariaLabel={tUi("Scope")} />
                 </div>
               </div>
 
@@ -143,9 +142,7 @@ export default function PermissionsPage() {
                 <RolesTable roles={visible} onChanged={load} canManage={canManage} />
               )}
 
-              <p className="text-xs text-muted-foreground">
-                System roles are read-only and always mean the same thing. Shipped roles are editable starting points for common positions; an <b>edited</b> marker shows that a shipped role differs from its defaults and can be restored. Deleting a role that is still assigned asks whether to remove it from those users. Roles add up: a person with several roles holds the union of their permissions.
-              </p>
+              <p className="text-xs text-muted-foreground">{tUi("System roles are read-only and always mean the same thing. Shipped roles are editable starting points for common positions; an ")}<b>{tUi("edited")}</b>{tUi(" marker shows that a shipped role differs from its defaults and can be restored. Deleting a role that is still assigned asks whether to remove it from those users. Roles add up: a person with several roles holds the union of their permissions.")}</p>
             </CardContent>
           </Card>
         </div>

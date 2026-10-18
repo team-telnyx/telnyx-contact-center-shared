@@ -1,0 +1,923 @@
+[
+  {
+    "file": "app/(portal)/admin/call-flows/[id]/page.jsx",
+    "expression": "details.result ? \"TRUE\" : \"FALSE\"",
+    "values": [
+      "TRUE",
+      "FALSE"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "app/(portal)/admin/call-flows/[id]/page.jsx",
+    "expression": "cond.result ? \"TRUE\" : \"FALSE\"",
+    "values": [
+      "TRUE",
+      "FALSE"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "app/(portal)/admin/call-flows/[id]/page.jsx",
+    "expression": "details.final_result ? \"TRUE\" : \"FALSE\"",
+    "values": [
+      "TRUE",
+      "FALSE"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "app/(portal)/admin/call-generator/page.jsx",
+    "expression": "DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT",
+    "values": [
+      "This is a neutral voice preview for workflow testing."
+    ],
+    "reason": "Test utterance content for voice preview, independently configured from UI locale."
+  },
+  {
+    "file": "app/(portal)/admin/logging/page.jsx",
+    "expression": "level",
+    "values": [
+      "trace",
+      "debug",
+      "info",
+      "warn",
+      "error",
+      "fatal"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "app/(portal)/admin/phones-provisioning/page.jsx",
+    "expression": "m",
+    "values": [
+      "VVX 101",
+      "VVX 150",
+      "VVX 201",
+      "VVX 250",
+      "VVX 300",
+      "VVX 301",
+      "VVX 310",
+      "VVX 311",
+      "VVX 350",
+      "VVX 400",
+      "VVX 401",
+      "VVX 410",
+      "VVX 411",
+      "VVX 450",
+      "VVX 500",
+      "VVX 501",
+      "VVX 600",
+      "VVX 601",
+      "CCX 350",
+      "CCX 400",
+      "CCX 500",
+      "CCX 505",
+      "CCX 600",
+      "CCX 700",
+      "Edge E100",
+      "Edge E220",
+      "Edge E300",
+      "Edge E320",
+      "Edge E350",
+      "Edge E400",
+      "Edge E450",
+      "Edge E500",
+      "Edge E550",
+      "Edge B10",
+      "Edge B20",
+      "Edge B30",
+      "Rove 20",
+      "Rove 30",
+      "Rove 40",
+      "T19",
+      "T19P",
+      "T19P E2",
+      "T20P",
+      "T21",
+      "T21P",
+      "T21P E2",
+      "T22P",
+      "T23P",
+      "T23G",
+      "T26P",
+      "T27P",
+      "T27G",
+      "T28P",
+      "T29G",
+      "T31P",
+      "T33G",
+      "T32G",
+      "T38G",
+      "T40P",
+      "T40G",
+      "T41P",
+      "T41S",
+      "T42G",
+      "T42S",
+      "T43U",
+      "T46G",
+      "T46S",
+      "T46U",
+      "T48G",
+      "T48S",
+      "T48U",
+      "T52S",
+      "T53",
+      "T53W",
+      "T54S",
+      "T54W",
+      "T56A",
+      "T57W",
+      "T58A",
+      "T58V",
+      "T58W",
+      "405HD",
+      "420HD",
+      "425HD",
+      "430HD",
+      "C430HD",
+      "440HD",
+      "445HD",
+      "450HD",
+      "C450HD"
+    ],
+    "reason": "Device/model product names are native identifiers. Only the generic Desktop choice is translated separately."
+  },
+  {
+    "file": "app/(portal)/profile/page.jsx",
+    "expression": "locale.name",
+    "values": [
+      "English",
+      "Deutsch",
+      "Nederlands",
+      "Español",
+      "Français",
+      "Português",
+      "Italiano",
+      "Polski"
+    ],
+    "reason": "Native language/region autonyms and locale identifiers remain recognizable in language selection."
+  },
+  {
+    "file": "components/admin/SlotMcpBindingEditor.jsx",
+    "expression": "keyPlaceholder",
+    "values": [
+      "userAddress",
+      "pickup_facility_id"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/AssistantWorkflowTab.jsx",
+    "expression": "operator",
+    "values": [
+      "contains",
+      "not_contains"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/IntegrationsSettingsPanel.jsx",
+    "expression": "method",
+    "values": [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/PrivacyTab.jsx",
+    "expression": "\"<PII:email_address/>\"",
+    "values": [
+      "<PII:email_address/>"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/VoicePicker.jsx",
+    "expression": "p.model_name",
+    "values": [
+      "distil-whisper/distil-large-v2",
+      "openai/whisper-large-v3-turbo",
+      "openai/whisper-tiny",
+      "deepgram/nova-2",
+      "deepgram/nova-3",
+      "deepgram/flux",
+      "speechmatics/standard",
+      "soniox/stt-rt-v4",
+      "assemblyai/universal-streaming",
+      "xai/grok-stt",
+      "nvidia/parakeet-v3",
+      "humain/realtime"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/VoiceSettingsPanel.jsx",
+    "expression": "item === \"auto\" ? tUi(\"Automatic\") : item",
+    "values": [
+      "auto",
+      "en",
+      "en-US",
+      "en-GB",
+      "es",
+      "fr",
+      "de",
+      "it",
+      "pt",
+      "pl",
+      "nl",
+      "sv",
+      "ja",
+      "ko",
+      "zh"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/WorkflowTranscriptionPicker.jsx",
+    "expression": "modelName",
+    "values": [
+      "deepgram/flux",
+      "deepgram/nova-3",
+      "deepgram/nova-2",
+      "speechmatics/standard",
+      "azure/fast",
+      "assemblyai/universal-streaming",
+      "xai/grok-stt",
+      "soniox/stt-rt-v4",
+      "nvidia/parakeet-v3",
+      "humain/realtime",
+      "distil-whisper/distil-large-v2",
+      "openai/whisper-large-v3-turbo"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/WorkflowTranscriptionPicker.jsx",
+    "expression": "region === \"latency\" ? tUi(\"Latency (auto-select closest region)\") : region",
+    "values": [
+      "latency",
+      "australiaeast",
+      "centralindia",
+      "eastus",
+      "northcentralus",
+      "westeurope",
+      "westus2"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/tools/ClientSideToolEditor.jsx",
+    "expression": "option.label",
+    "values": [
+      "string",
+      "enum",
+      "number",
+      "integer",
+      "boolean",
+      "array",
+      "array (string)",
+      "array (number)",
+      "array (boolean)"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/tools/VoiceApiCommandToolEditor.jsx",
+    "expression": "label",
+    "values": [
+      "MP3",
+      "WAV"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/assistants/tools/WebhookToolEditor.jsx",
+    "expression": "t",
+    "values": [
+      "string",
+      "enum",
+      "number",
+      "integer",
+      "boolean",
+      "array",
+      "array (string)",
+      "array (number)",
+      "array (boolean)"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/contact-center/ChatInteractionDetail.jsx",
+    "expression": "segments.encoding",
+    "values": [
+      "GSM-7",
+      "UCS-2"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/contact-center/LocationMapPreview.jsx",
+    "expression": "MAP_ATTRIBUTION",
+    "values": [
+      "© OpenStreetMap contributors"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/contact-center/TranscriptionStudioCard.jsx",
+    "expression": "item.label",
+    "values": [
+      "Deepgram Nova 3",
+      "Whisper Large v3 Turbo",
+      "Distil-Whisper Large v2"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/contact-center/VoiceQualityPanel.jsx",
+    "expression": "unit",
+    "values": [
+      "ms"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/data-sources/ApiSchemaSheet.jsx",
+    "expression": "action.method",
+    "values": [
+      "GET",
+      "POST",
+      "PATCH",
+      "DELETE"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/data-sources/ApiSchemaSheet.jsx",
+    "expression": "param.name",
+    "values": [
+      "phone",
+      "email",
+      "company",
+      "page",
+      "pageSize",
+      "status",
+      "category",
+      "task_type",
+      "priority",
+      "assigned_to",
+      "contact_id"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/data-sources/ApiSchemaSheet.jsx",
+    "expression": "param.type",
+    "values": [
+      "string",
+      "number"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/data-sources/ApiSchemaSheet.jsx",
+    "expression": "example",
+    "values": [
+      "?q=John",
+      "?q=Acme Corp",
+      "?q=Customer Service",
+      "?phone=+1234567890",
+      "?phone=123456789",
+      "?email=john@example.com",
+      "?company=Acme",
+      "?page=1",
+      "?page=2",
+      "?pageSize=20",
+      "?pageSize=50",
+      "?q=installation",
+      "?q=getting started",
+      "?q=troubleshooting",
+      "?status=Published",
+      "?status=Draft",
+      "?status=Archived",
+      "?category=Technical",
+      "?category=FAQ",
+      "?q=complaint",
+      "?q=John Doe",
+      "?q=urgent issue",
+      "?status=open",
+      "?status=in_progress",
+      "?status=resolved",
+      "?task_type=incident",
+      "?task_type=sales_query",
+      "?task_type=complaint",
+      "?priority=high",
+      "?priority=urgent",
+      "?priority=medium",
+      "?assigned_to=user-uuid",
+      "?contact_id=contact-uuid"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.loading",
+    "values": [
+      "Ładowanie podglądu dokumentu…",
+      "Dokumentvorschau wird geladen…",
+      "Chargement de l’aperçu…",
+      "Cargando vista previa…",
+      "Loading document preview…"
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.sheet",
+    "values": [
+      "Arkusz",
+      "Tabellenblatt",
+      "Feuille",
+      "Hoja",
+      "Sheet"
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.limited",
+    "values": [
+      "To jest ograniczony podgląd. Pobierz oryginał, aby zobaczyć cały plik.",
+      "Dies ist eine begrenzte Vorschau. Laden Sie das Original herunter, um die gesamte Datei zu sehen.",
+      "Cet aperçu est limité. Téléchargez l’original pour consulter le fichier complet.",
+      "Esta vista previa es limitada. Descarga el original para ver el archivo completo.",
+      "This is a limited preview. Download the original to see the complete file."
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.empty",
+    "values": [
+      "Ten dokument jest pusty.",
+      "Dieses Dokument ist leer.",
+      "Ce document est vide.",
+      "Este documento está vacío.",
+      "This document is empty."
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.rows",
+    "values": [
+      "Wiersze",
+      "Zeilen",
+      "Lignes",
+      "Filas",
+      "Rows"
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.of",
+    "values": [
+      "z",
+      "von",
+      "sur",
+      "de",
+      "of"
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.previous",
+    "values": [
+      "Poprzednie wiersze",
+      "Vorherige Zeilen",
+      "Lignes précédentes",
+      "Filas anteriores",
+      "Previous rows"
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.next",
+    "values": [
+      "Następne wiersze",
+      "Nächste Zeilen",
+      "Lignes suivantes",
+      "Filas siguientes",
+      "Next rows"
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.retry",
+    "values": [
+      "Spróbuj ponownie",
+      "Erneut versuchen",
+      "Réessayer",
+      "Reintentar",
+      "Try again"
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "state.data.omitted ? copy.word_omitted : copy.word_simplified",
+    "values": [
+      "Nie udało się wyświetlić części dokumentu. Pobierz oryginał, aby zobaczyć całą treść.",
+      "Einige Inhalte konnten nicht angezeigt werden. Laden Sie das vollständige Original herunter.",
+      "Certains éléments ne peuvent pas être affichés. Téléchargez le document original complet.",
+      "No se pudo mostrar parte del contenido. Descarga el documento original completo.",
+      "Some document content could not be shown. Download the original for the complete document.",
+      "Formatowanie jest uproszczone. Pobierz oryginał, aby zobaczyć pełny układ.",
+      "Die Formatierung ist vereinfacht. Laden Sie das Original für das vollständige Layout herunter.",
+      "La mise en forme est simplifiée. Téléchargez l’original pour la mise en page complète.",
+      "El formato está simplificado. Descarga el original para ver el diseño completo.",
+      "Formatting is simplified. Download the original for the full layout."
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/documents/DocumentPreview.jsx",
+    "expression": "copy.word_text",
+    "values": [
+      "Tekstowy podgląd Worda. Pobierz oryginał, aby zobaczyć formatowanie i obrazy.",
+      "Word-Vorschau als Text. Laden Sie das Original für Formatierung und Bilder herunter.",
+      "Aperçu Word en texte seul. Téléchargez l’original pour la mise en forme et les images.",
+      "Vista previa de Word solo como texto. Descarga el original para ver el formato y las imágenes.",
+      "معاينة Word نصية فقط. نزّل الملف الأصلي لعرض التنسيق والصور.",
+      "תצוגת Word כטקסט בלבד. הורד את המקור לצפייה בעיצוב ובתמונות.",
+      "Text-only Word preview. Download the original for formatting and images."
+    ],
+    "reason": "Already localized by documentPreviewCopy(locale), shared with the independently localized visitor widget."
+  },
+  {
+    "file": "components/email/EmailTemplateDesigner.jsx",
+    "expression": "'{{ variable_name }}'",
+    "values": [
+      "{{ variable_name }}"
+    ],
+    "reason": "Literal template syntax; variable names must not be translated."
+  },
+  {
+    "file": "components/email/RichEmailEditor.jsx",
+    "expression": "name",
+    "values": [
+      "Arial",
+      "Georgia",
+      "Tahoma",
+      "Times New Roman",
+      "Trebuchet",
+      "Verdana"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/forms/FormEditor.jsx",
+    "expression": "option",
+    "values": [
+      "sm",
+      "md",
+      "lg",
+      "xl"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/headsets/HeadsetStatusBadge.jsx",
+    "expression": "entry.name",
+    "values": [
+      "BTD 800 USB for Lync",
+      "MB Pro 2"
+    ],
+    "reason": "Device/model product names are native identifiers. Only the generic Desktop choice is translated separately."
+  },
+  {
+    "file": "components/headsets/HeadsetStatusBadge.jsx",
+    "expression": "activeCatalogEntry.name",
+    "values": [
+      "BTD 800 USB for Lync",
+      "MB Pro 2"
+    ],
+    "reason": "Device/model product names are native identifiers. Only the generic Desktop choice is translated separately."
+  },
+  {
+    "file": "components/sms/SmsTemplatesSection.jsx",
+    "expression": "'{{first_name}}'",
+    "values": [
+      "{{first_name}}"
+    ],
+    "reason": "Literal template syntax; variable names must not be translated."
+  },
+  {
+    "file": "components/sms/SmsTemplatesSection.jsx",
+    "expression": "'{{variable}}'",
+    "values": [
+      "{{variable}}"
+    ],
+    "reason": "Literal template syntax; variable names must not be translated."
+  },
+  {
+    "file": "components/voice-flow/AnswerNodeEditor.jsx",
+    "expression": "name",
+    "values": [
+      "User-to-User",
+      "Diversion"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/voice-flow/DataActionsNodeEditor.jsx",
+    "expression": "field",
+    "values": [
+      "first_name",
+      "last_name",
+      "display_name",
+      "company_name",
+      "notes",
+      "title",
+      "summary",
+      "content",
+      "category",
+      "description",
+      "caller_name",
+      "phone",
+      "mobile",
+      "business_phone_1",
+      "business_phone_2",
+      "home_phone_1",
+      "home_phone_2"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/voice-flow/DataActionsNodeEditor.jsx",
+    "expression": "example",
+    "values": [
+      "John",
+      "Acme Corp",
+      "Customer Service",
+      "installation",
+      "getting started",
+      "troubleshooting",
+      "complaint",
+      "John Doe",
+      "urgent issue"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/voice-flow/DialNodeEditor.jsx",
+    "expression": "name",
+    "values": [
+      "User-to-User",
+      "Diversion"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/voice-flow/ReferNodeEditor.jsx",
+    "expression": "name",
+    "values": [
+      "User-to-User",
+      "Diversion"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/web-pages/EditSheet.jsx",
+    "expression": "\"{{secret_name}}\"",
+    "values": [
+      "{{secret_name}}"
+    ],
+    "reason": "Literal template syntax; variable names must not be translated."
+  },
+  {
+    "file": "components/whatsapp/WhatsAppPhoneNumbersSection.jsx",
+    "expression": "l",
+    "values": [
+      "en_US",
+      "en_GB",
+      "pl_PL",
+      "de_DE",
+      "es_ES",
+      "fr_FR",
+      "it_IT",
+      "pt_BR"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/widget-admin/RulesDecisionBuilder.jsx",
+    "expression": "locale.language",
+    "values": [
+      "English",
+      "Polski",
+      "Deutsch",
+      "Français",
+      "Español"
+    ],
+    "reason": "Native language/region autonyms and locale identifiers remain recognizable in language selection."
+  },
+  {
+    "file": "components/widget-admin/RulesDecisionBuilder.jsx",
+    "expression": "locale.country",
+    "values": [
+      "United States",
+      "United Kingdom",
+      "Polska",
+      "Deutschland",
+      "France",
+      "España"
+    ],
+    "reason": "Native language/region autonyms and locale identifiers remain recognizable in language selection."
+  },
+  {
+    "file": "components/widget-admin/RulesDecisionBuilder.jsx",
+    "expression": "window.TelnyxWidgetContext =",
+    "values": [
+      "window.TelnyxWidgetContext ="
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/widget-admin/WidgetStudioControls.jsx",
+    "expression": "locale.language",
+    "values": [
+      "English",
+      "Polski",
+      "Deutsch",
+      "Français",
+      "Español"
+    ],
+    "reason": "Native language/region autonyms and locale identifiers remain recognizable in language selection."
+  },
+  {
+    "file": "components/widget-admin/WidgetStudioControls.jsx",
+    "expression": "locale.country",
+    "values": [
+      "United States",
+      "United Kingdom",
+      "Polska",
+      "Deutschland",
+      "France",
+      "España"
+    ],
+    "reason": "Native language/region autonyms and locale identifiers remain recognizable in language selection."
+  },
+  {
+    "file": "components/widget-admin/WidgetStudioControls.jsx",
+    "expression": "locale.id",
+    "values": [
+      "en-US",
+      "en-GB",
+      "pl-PL",
+      "de-DE",
+      "fr-FR",
+      "es-ES",
+      "ar-SA",
+      "he-IL"
+    ],
+    "reason": "Native language/region autonyms and locale identifiers remain recognizable in language selection."
+  },
+  {
+    "file": "components/widget-admin/WidgetStudioControls.jsx",
+    "expression": "mime",
+    "values": [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "application/pdf",
+      "text/plain",
+      "text/csv",
+      "text/markdown",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "audio/mpeg",
+      "audio/wav",
+      "video/mp4",
+      "application/zip"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/widget-admin/WidgetStudioControls.jsx",
+    "expression": "previewDevice.name",
+    "values": [
+      "Desktop",
+      "iPhone 16 Pro",
+      "iPhone SE",
+      "Google Pixel 9 Pro",
+      "Samsung Galaxy S24",
+      "iPad Air 11\"",
+      "Samsung Galaxy Tab S9"
+    ],
+    "reason": "Device/model product names are native identifiers. Only the generic Desktop choice is translated separately."
+  },
+  {
+    "file": "components/widget-admin/WidgetStudioPreview.jsx",
+    "expression": "device.name",
+    "values": [
+      "Desktop",
+      "iPhone 16 Pro",
+      "iPhone SE",
+      "Google Pixel 9 Pro",
+      "Samsung Galaxy S24",
+      "iPad Air 11\"",
+      "Samsung Galaxy Tab S9"
+    ],
+    "reason": "Device/model product names are native identifiers. Only the generic Desktop choice is translated separately."
+  },
+  {
+    "file": "components/widget-admin/WidgetStudioPreview.jsx",
+    "expression": "item.name",
+    "values": [
+      "Desktop",
+      "iPhone 16 Pro",
+      "iPhone SE",
+      "Google Pixel 9 Pro",
+      "Samsung Galaxy S24",
+      "iPad Air 11\"",
+      "Samsung Galaxy Tab S9"
+    ],
+    "reason": "Technical syntax, protocol/schema identifier, canonical code value, product name, unit, attribution, or example data; preserved literally."
+  },
+  {
+    "file": "components/widget-admin/WidgetTestHostPage.jsx",
+    "expression": "eyebrow",
+    "values": [
+      "Demo storefront",
+      "Catalog",
+      "Privacy fixture",
+      "Support center",
+      "Customer area"
+    ],
+    "reason": "Synthetic customer website content for co-browse/privacy testing; not application navigation or labels."
+  },
+  {
+    "file": "components/widget-admin/WidgetTestHostPage.jsx",
+    "expression": "title",
+    "values": [
+      "Browse products",
+      "Try a form",
+      "Visit support"
+    ],
+    "reason": "Synthetic customer website content for co-browse/privacy testing; not application navigation or labels."
+  },
+  {
+    "file": "components/widget-admin/WidgetTestHostPage.jsx",
+    "expression": "description",
+    "values": [
+      "Change filters, expand product details and watch the shared page update.",
+      "Enter synthetic contact and payment values to verify masking.",
+      "Inspect a same-origin iframe and an opaque-origin placeholder."
+    ],
+    "reason": "Synthetic customer website content for co-browse/privacy testing; not application navigation or labels."
+  },
+  {
+    "file": "components/widget-admin/WidgetTestHostPage.jsx",
+    "expression": "item.name",
+    "values": [
+      "Desk lamp",
+      "Travel bottle",
+      "Notebook set"
+    ],
+    "reason": "Synthetic customer website content for co-browse/privacy testing; not application navigation or labels."
+  },
+  {
+    "file": "components/widget-admin/WidgetTestHostPage.jsx",
+    "expression": "item.detail",
+    "values": [
+      "Warm light, adjustable arm, charcoal finish.",
+      "Insulated, reusable and easy to pack.",
+      "Three dot-grid notebooks with recycled covers."
+    ],
+    "reason": "Synthetic customer website content for co-browse/privacy testing; not application navigation or labels."
+  },
+  {
+    "file": "components/widget-admin/WidgetTestHostPage.jsx",
+    "expression": "question",
+    "values": [
+      "Where is my order?",
+      "Can I change my address?",
+      "How do returns work?"
+    ],
+    "reason": "Synthetic customer website content for co-browse/privacy testing; not application navigation or labels."
+  }
+]

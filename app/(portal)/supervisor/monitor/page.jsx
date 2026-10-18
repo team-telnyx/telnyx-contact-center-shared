@@ -1,8 +1,15 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { statusLabel, statusDescription } from "@/lib/i18n/status-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import MultichannelDashboard from "@/components/contact-center/MultichannelDashboard";
 import MonitoringFilters from "@/components/contact-center/MonitoringFilters";
 import LiveInteractionsView from "@/components/contact-center/LiveInteractionsView";
 import { realtimeDurations } from "@/lib/acd/realtime-display.mjs";
+import { subscribeStatusStream } from "@/lib/status-stream-client";
+import { patchCampaignActivations } from "@/lib/contact-center/campaign-assignment-sync.mjs";
+import { patchQueueActivations, patchAgentQueueCount } from "@/lib/contact-center/queue-assignment-sync.mjs";
 import { formatCapacityUtilization } from "@/lib/contact-center/capacity-display.mjs";
 
 import { AcdOperationsPanel } from "@/components/contact-center/AcdOperationsPanel";
@@ -101,20 +108,21 @@ const MONITOR_UI_STATE_STORAGE_KEYS = {
 
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 const CAMPAIGN_MODE_LABELS = {
-  preview: "PREVIEW",
-  progressive: "PROGRESSIVE",
+  preview: "Preview",
+  progressive: "Progressive",
 };
 
 function CampaignStatusIcon({ status }) {
+  const tUi = useUiText();
   const value = String(status || "").toLowerCase();
-  if (value === "running") return <IconPlayerPlay className="h-3.5 w-3.5 text-emerald-500" aria-label="Running" />;
-  if (value === "paused") return <IconPlayerPause className="h-3.5 w-3.5 text-amber-500" aria-label="Paused" />;
-  return <IconPlayerStop className="h-3.5 w-3.5 text-rose-500" aria-label="Stopped" />;
+  if (value === "running") return <IconPlayerPlay className="h-3.5 w-3.5 text-emerald-500" aria-label={tUi("Running")} />;
+  if (value === "paused") return <IconPlayerPause className="h-3.5 w-3.5 text-amber-500" aria-label={tUi("Paused")} />;
+  return <IconPlayerStop className="h-3.5 w-3.5 text-rose-500" aria-label={tUi("Stopped")} />;
 }
 
-function campaignModeLabel(mode) {
+function campaignModeLabel(tUi, mode) {
   const value = String(mode || "").toLowerCase();
-  return CAMPAIGN_MODE_LABELS[value] || value.toUpperCase();
+  return CAMPAIGN_MODE_LABELS[value] ? tUi(CAMPAIGN_MODE_LABELS[value]) : value.toUpperCase();
 }
 
 function CampaignPriorityBadge({ priority }) {
@@ -154,6 +162,7 @@ function CallPriorityIndicator({ priority }) {
 
 // Component to display skills with relaxation indicator
 function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed, skillNames = {} }) {
+  const tUi = useUiText();
   // Use relaxed skills if available, otherwise use original required skills
   const skillsToDisplay = relaxedSkills || requiredSkills;
 
@@ -163,7 +172,7 @@ function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed, skillNa
         <div className="flex items-center gap-2 cursor-pointer">
           <Badge variant="outline" className="text-xs">
             {Object.keys(requiredSkills).length}{" "}
-            {Object.keys(requiredSkills).length === 1 ? "skill" : "skills"}
+            {Object.keys(requiredSkills).length === 1 ? tUi("skill") : tUi("skills")}
           </Badge>
           <IconInfoCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
           {isRelaxed && (
@@ -174,7 +183,7 @@ function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed, skillNa
       <HoverCardContent className="w-80">
         <div className="space-y-2">
           <h4 className="text-sm font-semibold mb-3">
-            {isRelaxed ? "Required Skills (Relaxed)" : "Required Skills"}
+            {isRelaxed ? tUi("Required Skills (Relaxed)") : tUi("Required Skills")}
           </h4>
           {Object.entries(skillsToDisplay).map(([skillName, proficiency]) => {
             const originalProficiency = requiredSkills[skillName];
@@ -208,8 +217,7 @@ function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed, skillNa
                     );
                   })}
                   {isRelaxedSkill && (
-                    <span className="text-xs text-muted-foreground ml-1">
-                      (was {originalProficiency})
+                    <span className="text-xs text-muted-foreground ml-1">{tUi("(was ")}{originalProficiency})
                     </span>
                   )}
                 </div>
@@ -224,6 +232,7 @@ function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed, skillNa
 
 // Component to display agent skills on hover
 function AgentSkillsIndicator({ agentUserId }) {
+  const tUi = useUiText();
   const [agentSkills, setAgentSkills] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -268,7 +277,7 @@ function AgentSkillsIndicator({ agentUserId }) {
       </HoverCardTrigger>
       <HoverCardContent className="w-80">
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold mb-3">Agent Skills</h4>
+          <h4 className="text-sm font-semibold mb-3">{tUi("Agent Skills")}</h4>
           {loading ? (
             <div className="space-y-2 py-2">
               <Skeleton className="h-4 w-full" />
@@ -299,7 +308,7 @@ function AgentSkillsIndicator({ agentUserId }) {
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">No skills assigned</p>
+            <p className="text-sm text-muted-foreground">{tUi("No skills assigned")}</p>
           )}
         </div>
       </HoverCardContent>
@@ -411,6 +420,7 @@ export default function MonitorPage() {
   return <MonitorPageContent key={channel} channel={channel} onChannelChange={setChannel}/>;
 }
 function MonitorPageContent({channel,onChannelChange}) {
+  const tUi = useUiText();
   // Helper function to format idle time in seconds to human-readable format
   const formatIdleTime = (seconds) => {
     if (!seconds || seconds <= 0) return "—";
@@ -443,7 +453,16 @@ function MonitorPageContent({channel,onChannelChange}) {
   const [loadingQueues, setLoadingQueues] = useState(false);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [savingQueues, setSavingQueues] = useState(new Set());
+  const queueDialogAgentRef = useRef(null);
+  const queueRequestRef = useRef(0);
+  const queueLoadUpdatesRef = useRef(null);
+  const queueActivationHandlerRef = useRef(null);
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
+  const campaignDialogAgentRef = useRef(null);
+  const campaignRequestRef = useRef(0);
+  const campaignLoadUpdatesRef = useRef(null);
+  const campaignActivationHandlerRef = useRef(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [availableStatuses, setAvailableStatuses] = useState([]);
   const [highlightedCells, setHighlightedCells] = useState(new Set());
@@ -705,25 +724,7 @@ function MonitorPageContent({channel,onChannelChange}) {
           update.queueIds &&
           Array.isArray(update.queueIds)
         ) {
-          updateAgentQueues(
-            update.userId,
-            update.queueIds,
-            update.activated === true,
-          );
-
-          // If the queue dialog is open for this agent, update the local queue list
-          if (
-            selectedAgent &&
-            String(selectedAgent.userId) === String(update.userId)
-          ) {
-            setAgentQueues((prevQueues) =>
-              prevQueues.map((queue) =>
-                update.queueIds.includes(queue.id)
-                  ? { ...queue, isActivated: update.activated === true }
-                  : queue,
-              ),
-            );
-          }
+          queueActivationHandlerRef.current?.(update);
         }
       } catch (error) {
         console.error("[Monitor] Error handling queue change:", error);
@@ -733,14 +734,7 @@ function MonitorPageContent({channel,onChannelChange}) {
     eventSource.addEventListener("campaign_changed", (event) => {
       try {
         const update = JSON.parse(event.data);
-        if (update.userId && Array.isArray(update.campaignIds)) {
-          updateAgentCampaigns(update.userId, update.campaignIds);
-          if (selectedAgent && String(selectedAgent.userId) === String(update.userId)) {
-            loadAgentCampaigns(update.userId);
-          }
-        } else if (selectedAgent?.userId) {
-          loadAgentCampaigns(selectedAgent.userId);
-        }
+        campaignActivationHandlerRef.current?.(update);
       } catch (error) {
         console.error("[Monitor] Error handling campaign change:", error);
       }
@@ -934,20 +928,7 @@ function MonitorPageContent({channel,onChannelChange}) {
       const updatedStats = prevData.agents.stats.map((agent) => {
         const agentUserIdStr = String(agent.userId);
         if (agentUserIdStr === userIdStr) {
-          // Calculate new activeQueues count
-          const currentActiveQueues = agent.activeQueues || 0;
-          const change = activated ? queueIds.length : -queueIds.length;
-          const newActiveQueues = Math.max(0, currentActiveQueues + change);
-
-          return {
-            ...agent,
-            activeQueues: newActiveQueues,
-            activeQueueIds: activated
-              ? [...new Set([...(agent.activeQueueIds || []), ...queueIds])]
-              : (agent.activeQueueIds || []).filter(
-                  (id) => !queueIds.includes(id),
-                ),
-          };
+          return patchAgentQueueCount(agent, queueIds, activated);
         }
         return agent;
       });
@@ -983,24 +964,78 @@ function MonitorPageContent({channel,onChannelChange}) {
     });
   }
 
-  async function loadAgentCampaigns(userId) {
+  function updateOpenCampaignRows(transform) {
+    campaignLoadUpdatesRef.current?.push(transform);
+    setAgentCampaigns(transform);
+  }
+
+  function applyCampaignActivationEvent(update) {
+    if (!campaignDialogAgentRef.current || String(update?.userId) !== campaignDialogAgentRef.current) return;
+    if (!Array.isArray(update.campaignIds)) return;
+    updateOpenCampaignRows((rows) => patchCampaignActivations(rows, update.campaignIds));
+  }
+
+  useEffect(() => {
+    campaignActivationHandlerRef.current = (update) => {
+      if (update?.userId != null && Array.isArray(update.campaignIds)) {
+        updateAgentCampaigns(update.userId, update.campaignIds);
+        applyCampaignActivationEvent(update);
+      } else if (campaignDialogAgentRef.current) {
+        loadAgentCampaigns(campaignDialogAgentRef.current, { silent: true });
+      }
+    };
+  });
+
+  useEffect(() => subscribeStatusStream("campaign_changed", (update) => campaignActivationHandlerRef.current?.(update)), []);
+
+  useEffect(() => {
+    const agent = data?.agents?.stats?.find((row) => String(row.userId) === campaignDialogAgentRef.current);
+    if (Array.isArray(agent?.activeCampaignIds)) {
+      updateOpenCampaignRows((rows) => patchCampaignActivations(rows, agent.activeCampaignIds));
+    }
+  }, [data?.agents?.stats]);
+
+  useEffect(() => {
+    const userId = campaignDialogOpen && selectedAgent?.userId != null ? String(selectedAgent.userId) : null;
+    campaignDialogAgentRef.current = userId;
+    if (userId) loadAgentCampaigns(userId);
+    return () => {
+      campaignDialogAgentRef.current = null;
+      campaignRequestRef.current += 1;
+      campaignLoadUpdatesRef.current = null;
+    };
+  }, [campaignDialogOpen, selectedAgent?.userId]);
+
+  async function loadAgentCampaigns(userId, { silent = false } = {}) {
+    const requestId = ++campaignRequestRef.current;
+    const isCurrent = () => requestId === campaignRequestRef.current && campaignDialogAgentRef.current === String(userId);
+    campaignLoadUpdatesRef.current = [];
+    if (!silent) { setAgentCampaigns([]); setLoadingCampaigns(true); }
     try {
-      setLoadingCampaigns(true);
-      const res = await fetch(`/api/contact-center/agent/campaigns?userId=${userId}`, { cache: "no-store" });
+      const res = await fetch(`/api/contact-center/agent/campaigns?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load campaigns");
       const payload = await res.json();
-      setAgentCampaigns(payload.campaigns || []);
+      if (!isCurrent()) return;
+      // Apply events received during this request after its potentially older snapshot.
+      const rows = (campaignLoadUpdatesRef.current || []).reduce((rows, apply) => apply(rows), payload.campaigns || []);
+      setAgentCampaigns(rows);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("[Monitor] Error loading agent campaigns:", error);
       notify({ title: "Failed to load campaigns", description: error.message, variant: "error" });
     } finally {
-      setLoadingCampaigns(false);
+      if (isCurrent()) {
+        campaignLoadUpdatesRef.current = null;
+        setLoadingCampaigns(false);
+      }
     }
   }
 
   async function toggleCampaignActivation(campaignId, currentlyActivated) {
+    const userId = campaignDialogAgentRef.current;
+    const requestId = campaignRequestRef.current;
     try {
-      if (!selectedAgent) throw new Error("No agent selected");
+      if (!userId) throw new Error("No agent selected");
       const nextCampaigns = agentCampaigns.map((campaign) =>
         campaign.id === campaignId ? { ...campaign, activated: !currentlyActivated } : campaign,
       );
@@ -1008,43 +1043,89 @@ function MonitorPageContent({channel,onChannelChange}) {
       const res = await fetch("/api/contact-center/agent/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: selectedAgent.userId, campaignIds }),
+        body: JSON.stringify({ userId, campaignIds }),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to update campaigns");
       }
-      setAgentCampaigns(nextCampaigns);
-      updateAgentCampaigns(selectedAgent.userId, campaignIds);
+      if (campaignDialogAgentRef.current === userId && campaignRequestRef.current === requestId) {
+        await loadAgentCampaigns(userId, { silent: true });
+      }
     } catch (error) {
       console.error("[Monitor] Error toggling campaign:", error);
       notify({ title: "Update failed", description: error.message, variant: "error" });
     }
   }
 
-  async function loadAgentQueues(userId) {
-    try {
-      setLoadingQueues(true);
-      const res = await fetch(
-        `/api/contact-center/agent/queues/list?userId=${userId}`,
-        {
-          cache: "no-store",
-        },
-      );
-      if (!res.ok) {
-        throw new Error("Failed to load queues");
+  // Activation events use the shared user stream. Monitoring snapshots also
+  // reconcile the modal for supervisors without an agent-role subscription and
+  // after reconnects, without replacing the list with loading skeletons.
+  function updateOpenQueueRows(transform) {
+    queueLoadUpdatesRef.current?.push(transform);
+    setAgentQueues(transform);
+  }
+
+  function applyQueueActivationEvent(update) {
+    if (!queueDialogAgentRef.current || String(update?.userId) !== queueDialogAgentRef.current) return;
+    if (!Array.isArray(update.queueIds) || typeof update.activated !== "boolean") return;
+    updateOpenQueueRows((rows) => patchQueueActivations(rows, update.queueIds, update.activated));
+  }
+
+  useEffect(() => {
+    queueActivationHandlerRef.current = (update) => {
+      if (update?.userId != null && Array.isArray(update.queueIds) && typeof update.activated === "boolean") {
+        updateAgentQueues(update.userId, update.queueIds, update.activated);
+        applyQueueActivationEvent(update);
       }
-      const data = await res.json();
-      setAgentQueues(data.queues || []);
+    };
+  });
+
+  useEffect(() => subscribeStatusStream("queue_changed", (update) => queueActivationHandlerRef.current?.(update)), []);
+
+  useEffect(() => {
+    const agent = data?.agents?.stats?.find((row) => String(row.userId) === queueDialogAgentRef.current);
+    if (Array.isArray(agent?.activeQueueIds)) {
+      updateOpenQueueRows((rows) => patchQueueActivations(rows, agent.activeQueueIds, true, { replace: true }));
+    }
+  }, [data?.agents?.stats]);
+
+  useEffect(() => {
+    const userId = queueDialogOpen && selectedAgent?.userId != null ? String(selectedAgent.userId) : null;
+    queueDialogAgentRef.current = userId;
+    setSavingQueues(new Set());
+    if (userId) loadAgentQueues(userId);
+    return () => {
+      queueDialogAgentRef.current = null;
+      queueRequestRef.current += 1;
+      queueLoadUpdatesRef.current = null;
+    };
+  }, [queueDialogOpen, selectedAgent?.userId]);
+
+  async function loadAgentQueues(userId) {
+    const requestId = ++queueRequestRef.current;
+    const isCurrent = () => requestId === queueRequestRef.current && queueDialogAgentRef.current === String(userId);
+    queueLoadUpdatesRef.current = [];
+    setAgentQueues([]);
+    setLoadingQueues(true);
+    try {
+      const res = await fetch(`/api/contact-center/agent/queues/list?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load queues");
+      const payload = await res.json();
+      if (!isCurrent()) return;
+      // Replay SSE received during the request so a late HTTP response cannot
+      // undo a newer activation from the phone.
+      const rows = (queueLoadUpdatesRef.current || []).reduce((rows, apply) => apply(rows), payload.queues || []);
+      setAgentQueues(rows);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("[Monitor] Error loading agent queues:", error);
-      notify({
-        title: "Failed to load queues",
-        description: error.message,
-        variant: "error",
-      });
+      notify({ title: "Failed to load queues", description: error.message, variant: "error" });
     } finally {
-      setLoadingQueues(false);
+      if (isCurrent()) {
+        queueLoadUpdatesRef.current = null;
+        setLoadingQueues(false);
+      }
     }
   }
 
@@ -1229,45 +1310,38 @@ function MonitorPageContent({channel,onChannelChange}) {
   }, [expandedAgentId]);
 
   async function toggleQueueActivation(queueId, currentlyActivated) {
+    const userId = queueDialogAgentRef.current;
+    if (!userId || savingQueues.has(String(queueId))) return;
+    const requestId = queueRequestRef.current;
+    setSavingQueues((rows) => new Set([...rows, String(queueId)]));
     try {
-      if (!selectedAgent) {
-        throw new Error("No agent selected");
-      }
-
       const endpoint = currentlyActivated
         ? "/api/contact-center/agent/queues/deactivate"
         : "/api/contact-center/agent/queues/activate";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          queueIds: [queueId],
-          userId: selectedAgent.userId, // Pass the target user's ID
-        }),
+        body: JSON.stringify({ queueIds: [queueId], userId }),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to update queue");
       }
-
-      // Update only the specific queue in the local state instead of reloading
-      setAgentQueues((prevQueues) =>
-        prevQueues.map((queue) =>
-          queue.id === queueId
-            ? { ...queue, isActivated: !currentlyActivated }
-            : queue,
-        ),
-      );
-
-      // Update the agent's queue count in the main list
-      updateAgentQueues(selectedAgent?.userId, [queueId], !currentlyActivated);
+      if (queueRequestRef.current === requestId && queueDialogAgentRef.current === userId) {
+        applyQueueActivationEvent({ userId, queueIds: [queueId], activated: !currentlyActivated });
+      }
+      updateAgentQueues(userId, [queueId], !currentlyActivated);
     } catch (error) {
       console.error("[Monitor] Error toggling queue:", error);
-      notify({
-        title: "Update failed",
-        description: error.message,
-        variant: "error",
-      });
+      notify({ title: "Update failed", description: error.message, variant: "error" });
+    } finally {
+      if (queueRequestRef.current === requestId) {
+        setSavingQueues((rows) => {
+          const next = new Set(rows);
+          next.delete(String(queueId));
+          return next;
+        });
+      }
     }
   }
 
@@ -1297,8 +1371,8 @@ function MonitorPageContent({channel,onChannelChange}) {
       notify({
         title: data.pendingStatus ? "Status change pending" : "Status updated",
         description: data.pendingStatus
-          ? `${newStatus} applies after the agent's current interactions end. No new interactions will be offered.`
-          : `Agent status changed to ${newStatus}`,
+          ? tUi("{value0} applies after the agent's current interactions end. No new interactions will be offered.", { value0: statusLabel(tUi, newStatus) })
+          : tUi("Agent status changed to {value0}", { value0: statusLabel(tUi, newStatus) }),
         variant: "success",
       });
 
@@ -1515,18 +1589,14 @@ function MonitorPageContent({channel,onChannelChange}) {
       <div className="rounded-2xl border border-border/70 bg-muted/30 p-4 dark:bg-zinc-900/70" data-testid="queue-calls-accordion-panel">
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h4 className="text-sm font-semibold">Live interactions in this queue</h4>
-            <p className="text-xs text-muted-foreground">
-              Current work in this queue. Open an interaction to inspect its channel-specific details.
-            </p>
+            <h4 className="text-sm font-semibold">{tUi("Live interactions in this queue")}</h4>
+            <p className="text-xs text-muted-foreground">{tUi("Current work in this queue. Open an interaction to inspect its channel-specific details.")}</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
-              {queue.realtime?.waitingCalls || 0} waiting
-            </Badge>
+              {queue.realtime?.waitingCalls || 0}{tUi(" waiting")}</Badge>
             <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-              {queue.realtime?.activeCalls || 0} active
-            </Badge>
+              {queue.realtime?.activeCalls || 0}{tUi(" active")}</Badge>
           </div>
         </div>
 
@@ -1537,25 +1607,23 @@ function MonitorPageContent({channel,onChannelChange}) {
             <Skeleton className="h-10 w-full" />
           </div>
         ) : calls.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
-            No interactions found for this queue
-          </div>
+          <div className="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">{tUi("No interactions found for this queue")}</div>
         ) : (
           <div className="max-h-[360px] overflow-y-auto rounded-xl border border-border/60 bg-background/70 dark:bg-zinc-950/60">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur dark:bg-zinc-950/95">
                 <TableRow>
-                  <TableHead className="w-12">Channel</TableHead><TableHead>From</TableHead>
-                  <TableHead>To</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Required Skills</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Wait Time</TableHead>
-                  <TableHead>Handling elapsed</TableHead>
-                  <TableHead>Waiting Reason</TableHead>
-                  <TableHead>SLA</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="w-12">{tUi("Channel")}</TableHead><TableHead>{tUi("From")}</TableHead>
+                  <TableHead>{tUi("To")}</TableHead>
+                  <TableHead>{tUi("State")}</TableHead>
+                  <TableHead>{tUi("Agent")}</TableHead>
+                  <TableHead>{tUi("Required Skills")}</TableHead>
+                  <TableHead>{tUi("Priority")}</TableHead>
+                  <TableHead>{tUi("Wait Time")}</TableHead>
+                  <TableHead>{tUi("Handling elapsed")}</TableHead>
+                  <TableHead>{tUi("Waiting Reason")}</TableHead>
+                  <TableHead>{tUi("SLA")}</TableHead>
+                  <TableHead>{tUi("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1589,7 +1657,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                       <TableCell>{call.toNumber || "—"}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center rounded-md border bg-transparent px-2.5 py-0.5 text-xs font-medium ${stateColor}`}>
-                          {displayState || "unknown"}
+                          {operationalStatusLabel(tUi, displayState) || tUi("unknown")}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -1613,12 +1681,12 @@ function MonitorPageContent({channel,onChannelChange}) {
                       <TableCell>
                         {waitingReason ? (
                           <div className="flex items-center gap-2">
-                            <span>{waitingReason}</span>
+                            <span>{tUi(waitingReason)}</span>
                             {waitingReason === "Skills not matched" && (
                               <button
                                 onClick={() => openSkillMatchDetails(call, queue.queueId)}
                                 className="text-muted-foreground transition-colors hover:text-foreground"
-                                title="View skill matching details"
+                                title={tUi("View skill matching details")}
                               >
                                 <IconInfoCircle className="h-4 w-4" />
                               </button>
@@ -1643,8 +1711,7 @@ function MonitorPageContent({channel,onChannelChange}) {
         )}
         {calls.length > 10 && (
           <p className="mt-2 text-xs text-muted-foreground">
-            {calls.length} interactions. Scroll within this panel for operational triage.
-          </p>
+            {calls.length}{tUi(" interactions. Scroll within this panel for operational triage.")}</p>
         )}
       </div>
     );
@@ -1653,8 +1720,8 @@ function MonitorPageContent({channel,onChannelChange}) {
   return (
     <SupervisorPageShell>
         <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
-          <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" screenGroup="supervisor.monitor" />
-          <section className="h-full min-h-0 overflow-hidden" aria-label="Monitoring content">
+          <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel={tUi("Supervisor monitor sections")} screenGroup="supervisor.monitor" />
+          <section className="h-full min-h-0 overflow-hidden" aria-label={tUi("Monitoring content")}>
             {activeTab === "dashboard" ? (
               <div className="h-full overflow-y-auto"><MultichannelDashboard /></div>
             ) : activeTab === "interactions" ? (
@@ -1664,8 +1731,8 @@ function MonitorPageContent({channel,onChannelChange}) {
             ) : (
               <div className="h-full min-h-0 space-y-4 overflow-y-auto">
                 <MonitoringFilters channel={channel} onChannelChange={onChannelChange} onRefresh={() => { setLoading(true); loadDashboard(); }} loading={loading} status={connected ? "Connected" : "Disconnected"} />
-                {dashboardError && <div role="alert" className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive">{dashboardError}. {data ? "Showing the last successful snapshot." : "Use Refresh to retry."}</div>}
-                {activeTab === "overview" ? (loading && !data ? <div className="space-y-4" aria-label="Loading overview"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0,1,2,3].map(index => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-80" /></div> : data ? <OverviewDashboardView overall={overall} agents={allAgents} queues={queues} onSelectSection={selectMonitorSection} /> : null) : (
+                {dashboardError && <div role="alert" className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive">{dashboardError}. {data ? tUi("Showing the last successful snapshot.") : tUi("Use Refresh to retry.")}</div>}
+                {activeTab === "overview" ? (loading && !data ? <div className="space-y-4" aria-label={tUi("Loading overview")}><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0,1,2,3].map(index => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-80" /></div> : data ? <OverviewDashboardView overall={overall} agents={allAgents} queues={queues} onSelectSection={selectMonitorSection} /> : null) : (
           !loading && !data ? null : activeTab === "agents" ? (
 
             <>
@@ -1678,10 +1745,10 @@ function MonitorPageContent({channel,onChannelChange}) {
               ) : (
                 <div className="space-y-5">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <OverviewMetricCard icon={IconUsers} label="Roster coverage" value={formatShortNumber(filteredAgentMetrics.total)} detail={`${allAgents.length} total · ${selectedStatuses.length + selectedQueues.length + (agentNameFilter ? 1 : 0)} filters`} progress={pct(filteredAgentMetrics.total, Math.max(allAgents.length, 1))} chip="Filtered" tone="slate" />
-                      <OverviewMetricCard icon={IconCheck} label="Available now" value={formatShortNumber(filteredAgentMetrics.available)} detail={`${filteredAgentMetrics.availability}% ready to route`} progress={filteredAgentMetrics.availability} chip="Realtime" tone="emerald" />
-                      <OverviewMetricCard icon={IconPhone} label="Assigned interactions" value={formatShortNumber(filteredAgentMetrics.activeCalls)} detail={`${filteredAgentMetrics.occupancy}% global capacity used · ${filteredAgentMetrics.busy} busy`} progress={filteredAgentMetrics.occupancy} chip="Realtime" tone="sky" />
-                      <OverviewMetricCard icon={IconTrendingUp} label="Queue activations" value={formatShortNumber(filteredAgentMetrics.activeQueues)} detail={`${filteredAgentMetrics.completedToday} agent completions today`} progress={pct(filteredAgentMetrics.activeQueues, Math.max(filteredAgentMetrics.total * 3, 1))} chip="Today" tone="violet" />
+                      <OverviewMetricCard icon={IconUsers} label={tUi("Roster coverage")} value={formatShortNumber(filteredAgentMetrics.total)} detail={tUi("{value0} total · {value1} filters", { value0: allAgents.length, value1: selectedStatuses.length + selectedQueues.length + (agentNameFilter ? 1 : 0) })} progress={pct(filteredAgentMetrics.total, Math.max(allAgents.length, 1))} chip={tUi("Filtered")} tone="slate" />
+                      <OverviewMetricCard icon={IconCheck} label={tUi("Available now")} value={formatShortNumber(filteredAgentMetrics.available)} detail={tUi("{value0}% ready to route", { value0: filteredAgentMetrics.availability })} progress={filteredAgentMetrics.availability} chip={tUi("Realtime")} tone="emerald" />
+                      <OverviewMetricCard icon={IconPhone} label={tUi("Assigned interactions")} value={formatShortNumber(filteredAgentMetrics.activeCalls)} detail={tUi("{value0}% global capacity used · {value1} busy", { value0: filteredAgentMetrics.occupancy, value1: filteredAgentMetrics.busy })} progress={filteredAgentMetrics.occupancy} chip={tUi("Realtime")} tone="sky" />
+                      <OverviewMetricCard icon={IconTrendingUp} label={tUi("Queue activations")} value={formatShortNumber(filteredAgentMetrics.activeQueues)} detail={tUi("{value0} agent completions today", { value0: filteredAgentMetrics.completedToday })} progress={pct(filteredAgentMetrics.activeQueues, Math.max(filteredAgentMetrics.total * 3, 1))} chip={tUi("Today")} tone="violet" />
                   </div>
 
                   {/* Filters */}
@@ -1690,10 +1757,10 @@ function MonitorPageContent({channel,onChannelChange}) {
                       <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                       <IconFilter className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Filters:</span>
+                      <span className="text-sm font-medium">{tUi("Filters:")}</span>
                     </div>
                     <Input
-                      placeholder="Search by agent name..."
+                      placeholder={tUi("Search by agent name...")}
                       value={agentNameFilter}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -1706,9 +1773,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                     />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-9">
-                          Status
-                          {selectedStatuses.length > 0 && (
+                        <Button variant="outline" size="sm" className="h-9">{tUi("Status")}{selectedStatuses.length > 0 && (
                             <Badge
                               variant="secondary"
                               className="ml-2 h-5 min-w-5 px-1.5"
@@ -1719,7 +1784,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-56">
-                        <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+                        <DropdownMenuLabel>{tUi("Filter by Status")}</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {uniqueStatuses.map((status) => {
                           const statusInfo = statusMeta[status] || {};
@@ -1771,7 +1836,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                                       : undefined
                                   }
                                 />
-                                <span className="text-left">{status}</span>
+                                <span className="text-left">{statusLabel(tUi, status)}</span>
                               </div>
                               {selectedStatuses.includes(status) && (
                                 <IconCheck className="h-4 w-4 shrink-0 text-telnyx-green" />
@@ -1785,18 +1850,14 @@ function MonitorPageContent({channel,onChannelChange}) {
                             <DropdownMenuCheckboxItem
                               onCheckedChange={() => setSelectedStatuses([])}
                               checked={false}
-                            >
-                              Clear all
-                            </DropdownMenuCheckboxItem>
+                            >{tUi("Clear all")}</DropdownMenuCheckboxItem>
                           </>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-9">
-                          Active Queues
-                          {selectedQueues.length > 0 && (
+                        <Button variant="outline" size="sm" className="h-9">{tUi("Active Queues")}{selectedQueues.length > 0 && (
                             <Badge
                               variant="secondary"
                               className="ml-2 h-5 min-w-5 px-1.5"
@@ -1807,14 +1868,10 @@ function MonitorPageContent({channel,onChannelChange}) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-56">
-                        <DropdownMenuLabel>
-                          Filter by Active Queues
-                        </DropdownMenuLabel>
+                        <DropdownMenuLabel>{tUi("Filter by Active Queues")}</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {uniqueQueues.length === 0 ? (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                            No queues available
-                          </div>
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">{tUi("No queues available")}</div>
                         ) : (
                           uniqueQueues.map((queueId) => (
                             <DropdownMenuCheckboxItem
@@ -1843,9 +1900,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                             <DropdownMenuCheckboxItem
                               onCheckedChange={() => setSelectedQueues([])}
                               checked={false}
-                            >
-                              Clear all
-                            </DropdownMenuCheckboxItem>
+                            >{tUi("Clear all")}</DropdownMenuCheckboxItem>
                           </>
                         )}
                       </DropdownMenuContent>
@@ -1865,9 +1920,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                         selectedQueues.length === 0
                       }
                     >
-                      <IconX className="h-4 w-4 mr-1" />
-                      Clear filters
-                    </Button>
+                      <IconX className="h-4 w-4 mr-1" />{tUi("Clear filters")}</Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -1876,8 +1929,8 @@ function MonitorPageContent({channel,onChannelChange}) {
                   {agents.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       {allAgents.length === 0
-                        ? "No agents with activated queues"
-                        : "No agents match the selected filters"}
+                        ? tUi("No agents with activated queues")
+                        : tUi("No agents match the selected filters")}
                     </p>
                   ) : (
                     <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
@@ -1886,15 +1939,15 @@ function MonitorPageContent({channel,onChannelChange}) {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Agent</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Idle Time</TableHead>
-                            <TableHead>Active Queues</TableHead>
-                            <TableHead>Active Campaigns</TableHead>
-                            <TableHead>Current interactions</TableHead>
-                            <TableHead>Today: Total</TableHead>
-                            <TableHead>Today: Completed</TableHead>
-                            <TableHead>Avg handling</TableHead>
+                            <TableHead>{tUi("Agent")}</TableHead>
+                            <TableHead>{tUi("Status")}</TableHead>
+                            <TableHead>{tUi("Idle Time")}</TableHead>
+                            <TableHead>{tUi("Active Queues")}</TableHead>
+                            <TableHead>{tUi("Active Campaigns")}</TableHead>
+                            <TableHead>{tUi("Current interactions")}</TableHead>
+                            <TableHead>{tUi("Today: Total")}</TableHead>
+                            <TableHead>{tUi("Today: Completed")}</TableHead>
+                            <TableHead>{tUi("Avg handling")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1990,17 +2043,17 @@ function MonitorPageContent({channel,onChannelChange}) {
                                               : undefined
                                           }
                                         />
-                                        {agent.status}
+                                        {statusLabel(tUi, agent.status)}
                                       </span>
                                       {agent.pendingStatus && (
                                         <span
                                           data-testid="agent-pending-status"
                                           data-status={agent.pendingStatus}
-                                          title={`${agent.pendingStatus} applies after the agent's current interactions end. No new interactions are offered.`}
+                                          title={tUi("{value0} applies after the agent's current interactions end. No new interactions are offered.", { value0: statusLabel(tUi, agent.pendingStatus) })}
                                           className="inline-flex items-center gap-1 rounded-md border border-dashed border-amber-500/70 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
                                         >
                                           <IconClock className="h-3.5 w-3.5" aria-hidden="true" />
-                                          {agent.pendingStatus}
+                                          {statusLabel(tUi, agent.pendingStatus)}
                                         </span>
                                       )}
                                       <button
@@ -2010,7 +2063,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                                           setStatusDialogOpen(true);
                                         }}
                                         className="text-muted-foreground hover:text-foreground transition-colors"
-                                        title="Change status"
+                                        title={tUi("Change status")}
                                       >
                                         <IconInfoCircle className="h-4 w-4" />
                                       </button>
@@ -2059,10 +2112,9 @@ function MonitorPageContent({channel,onChannelChange}) {
                                           e.stopPropagation();
                                           setSelectedAgent(agent);
                                           setQueueDialogOpen(true);
-                                          loadAgentQueues(agent.userId);
                                         }}
                                         className="text-muted-foreground hover:text-foreground transition-colors"
-                                        title="View queue assignments"
+                                        title={tUi("View queue assignments")}
                                       >
                                         <IconInfoCircle className="h-4 w-4" />
                                       </button>
@@ -2084,10 +2136,9 @@ function MonitorPageContent({channel,onChannelChange}) {
                                           e.stopPropagation();
                                           setSelectedAgent(agent);
                                           setCampaignDialogOpen(true);
-                                          loadAgentCampaigns(agent.userId);
                                         }}
                                         className="text-muted-foreground hover:text-foreground transition-colors"
-                                        title="View campaign activations"
+                                        title={tUi("View campaign activations")}
                                       >
                                         <IconInfoCircle className="h-4 w-4" />
                                       </button>
@@ -2102,8 +2153,8 @@ function MonitorPageContent({channel,onChannelChange}) {
                                         : ""
                                     }
                                   >
-                                    <span className="block">{agent.currentInteractions ?? agent.currentCalls} interactions</span>
-                                    <span className="text-[10px] text-muted-foreground">{formatCapacityUtilization(agent.usedCapacity ?? 0, agent.capacityBudget ?? 1)} global capacity</span>
+                                    <span className="block">{agent.currentInteractions ?? agent.currentCalls}{tUi(" interactions")}</span>
+                                    <span className="text-[10px] text-muted-foreground">{formatCapacityUtilization(agent.usedCapacity ?? 0, agent.capacityBudget ?? 1)}{tUi(" global capacity")}</span>
                                   </TableCell>
                                   <TableCell>
                                     {agent.today?.totalCalls || 0}
@@ -2113,9 +2164,9 @@ function MonitorPageContent({channel,onChannelChange}) {
                                   </TableCell>
                                   <TableCell>
                                     {agent.today?.avgHandleTimeSeconds
-                                      ? `${Math.round(
+                                      ? tUi("{value0}s", { value0: Math.round(
                                           agent.today.avgHandleTimeSeconds,
-                                        )}s`
+                                        ) })
                                       : "—"}
                                   </TableCell>
                                 </TableRow>
@@ -2132,27 +2183,21 @@ function MonitorPageContent({channel,onChannelChange}) {
                                             <Skeleton className="h-10 w-full" />
                                           </div>
                                         ) : activeCalls.length === 0 ? (
-                                          <p className="text-sm text-muted-foreground text-center py-4">
-                                            No active interactions
-                                          </p>
+                                          <p className="text-sm text-muted-foreground text-center py-4">{tUi("No active interactions")}</p>
                                         ) : (
                                           <div className="overflow-x-auto">
                                             <Table>
                                               <TableHeader>
                                                 <TableRow>
-                                                  <TableHead className="w-12">Channel</TableHead><TableHead>From</TableHead>
-                                                  <TableHead>To</TableHead>
-                                                  <TableHead>State</TableHead>
-                                                  <TableHead>Queue</TableHead>
-                                                  <TableHead>
-                                                    Required Skills
-                                                  </TableHead>
-                                                  <TableHead>Priority</TableHead>
-                                                  <TableHead>
-                                                    Handling elapsed
-                                                  </TableHead>
-                                                  <TableHead>SLA</TableHead>
-                                                  <TableHead>Actions</TableHead>
+                                                  <TableHead className="w-12">{tUi("Channel")}</TableHead><TableHead>{tUi("From")}</TableHead>
+                                                  <TableHead>{tUi("To")}</TableHead>
+                                                  <TableHead>{tUi("State")}</TableHead>
+                                                  <TableHead>{tUi("Queue")}</TableHead>
+                                                  <TableHead>{tUi("Required Skills")}</TableHead>
+                                                  <TableHead>{tUi("Priority")}</TableHead>
+                                                  <TableHead>{tUi("Handling elapsed")}</TableHead>
+                                                  <TableHead>{tUi("SLA")}</TableHead>
+                                                  <TableHead>{tUi("Actions")}</TableHead>
                                                 </TableRow>
                                               </TableHeader>
                                               <TableBody>
@@ -2216,8 +2261,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                                                         <span
                                                           className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${stateColor} bg-transparent`}
                                                         >
-                                                          {displayState ||
-                                                            "unknown"}
+                                                          {operationalStatusLabel(tUi, displayState) || tUi("unknown")}
                                                         </span>
                                                       </TableCell>
                                                       <TableCell>
@@ -2253,9 +2297,9 @@ function MonitorPageContent({channel,onChannelChange}) {
                                                       </TableCell>
                                                       <TableCell>
                                                         {talkTimeSeconds > 0
-                                                          ? `${Math.round(
+                                                          ? tUi("{value0}s", { value0: Math.round(
                                                               talkTimeSeconds,
-                                                            )}s`
+                                                            ) })
                                                           : "—"}
                                                       </TableCell>
                                                       <TableCell>
@@ -2298,18 +2342,16 @@ function MonitorPageContent({channel,onChannelChange}) {
               ) : (
                 <div className="space-y-5">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-testid="queue-pressure-card">
-                      <OverviewMetricCard icon={IconTrendingUp} label="Queues monitored" value={formatShortNumber(queueViewMetrics.total)} detail={`${queueViewMetrics.availableAgents} available agents`} progress={pct(queueViewMetrics.total, Math.max(queues.length, 1))} chip="Realtime" tone="slate" />
-                      <OverviewMetricCard icon={IconClock} label="Waiting interactions" value={formatShortNumber(queueViewMetrics.waiting)} detail={`Longest wait ${formatDurationShort(queueViewMetrics.longestWait)}`} progress={queueViewMetrics.pressure} chip="Live" tone="amber" />
-                      <OverviewMetricCard icon={IconPhoneIncoming} label="Active interactions" value={formatShortNumber(queueViewMetrics.active)} detail={`${queueViewMetrics.busyAgents} busy agents`} progress={pct(queueViewMetrics.active, Math.max(queueViewMetrics.active + queueViewMetrics.waiting, 1))} chip="Realtime" tone="sky" />
-                      <OverviewMetricCard icon={IconCheck} label="Service level" value={queueViewMetrics.serviceLevel==null?"—":`${queueViewMetrics.serviceLevel}%`} detail={`${queueViewMetrics.slaMet} met · ${queueViewMetrics.slaBreached} breached/unserved · ${queueViewMetrics.slaPending} pending · ${queueViewMetrics.slaUnavailable} unavailable`} progress={queueViewMetrics.serviceLevel} chip="Today" tone="emerald" />
+                      <OverviewMetricCard icon={IconTrendingUp} label={tUi("Queues monitored")} value={formatShortNumber(queueViewMetrics.total)} detail={tUi("{value0} available agents", { value0: queueViewMetrics.availableAgents })} progress={pct(queueViewMetrics.total, Math.max(queues.length, 1))} chip={tUi("Realtime")} tone="slate" />
+                      <OverviewMetricCard icon={IconClock} label={tUi("Waiting interactions")} value={formatShortNumber(queueViewMetrics.waiting)} detail={tUi("Longest wait {value0}", { value0: formatDurationShort(queueViewMetrics.longestWait) })} progress={queueViewMetrics.pressure} chip={tUi("Live")} tone="amber" />
+                      <OverviewMetricCard icon={IconPhoneIncoming} label={tUi("Active interactions")} value={formatShortNumber(queueViewMetrics.active)} detail={tUi("{value0} busy agents", { value0: queueViewMetrics.busyAgents })} progress={pct(queueViewMetrics.active, Math.max(queueViewMetrics.active + queueViewMetrics.waiting, 1))} chip={tUi("Realtime")} tone="sky" />
+                      <OverviewMetricCard icon={IconCheck} label={tUi("Service level")} value={queueViewMetrics.serviceLevel==null?"—":`${queueViewMetrics.serviceLevel}%`} detail={tUi("{value0} met · {value1} breached/unserved · {value2} pending · {value3} unavailable", { value0: queueViewMetrics.slaMet, value1: queueViewMetrics.slaBreached, value2: queueViewMetrics.slaPending, value3: queueViewMetrics.slaUnavailable })} progress={queueViewMetrics.serviceLevel} chip={tUi("Today")} tone="emerald" />
                   </div>
 
                   {queues.length === 0 ? (
                     <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
                       <CardContent className="py-10">
-                        <p className="text-sm text-muted-foreground text-center">
-                          No queues configured or enabled
-                        </p>
+                        <p className="text-sm text-muted-foreground text-center">{tUi("No queues configured or enabled")}</p>
                       </CardContent>
                     </Card>
                   ) : (
@@ -2319,15 +2361,15 @@ function MonitorPageContent({channel,onChannelChange}) {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Queue Name</TableHead>
-                                <TableHead title="Waiting + active interactions">Total</TableHead>
-                                <TableHead>Waiting</TableHead>
-                                <TableHead>Active</TableHead>
-                                <TableHead>Agents</TableHead>
-                                <TableHead>Longest Wait</TableHead>
-                                <TableHead>Today: Total</TableHead>
-                                <TableHead>Today: Completed</TableHead>
-                                <TableHead>Service Level</TableHead>
+                                <TableHead>{tUi("Queue Name")}</TableHead>
+                                <TableHead title={tUi("Waiting + active interactions")}>{tUi("Total")}</TableHead>
+                                <TableHead>{tUi("Waiting")}</TableHead>
+                                <TableHead>{tUi("Active")}</TableHead>
+                                <TableHead>{tUi("Agents")}</TableHead>
+                                <TableHead>{tUi("Longest Wait")}</TableHead>
+                                <TableHead>{tUi("Today: Total")}</TableHead>
+                                <TableHead>{tUi("Today: Completed")}</TableHead>
+                                <TableHead>{tUi("Service Level")}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -2396,11 +2438,9 @@ function MonitorPageContent({channel,onChannelChange}) {
                                       <TableCell>
                                         <div className="grid gap-1 text-xs">
                                           <span className="text-green-600 dark:text-green-400">
-                                            {queue.agents?.available || 0} avail
-                                          </span>
+                                            {queue.agents?.available || 0}{tUi(" avail")}</span>
                                           <span className="text-orange-600 dark:text-orange-400">
-                                            {queue.agents?.busy || 0} busy
-                                          </span>
+                                            {queue.agents?.busy || 0}{tUi(" busy")}</span>
                                         </div>
                                       </TableCell>
                                       <TableCell>
@@ -2414,7 +2454,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                                       </TableCell>
                                       <TableCell>
                                         <div className="flex items-center gap-1">
-                                          {queue.today?.serviceLevelPercentage == null ? <span title={`${queue.sla?.pending || 0} pending; ${queue.sla?.unavailable || 0} without a recorded measurement; ${queue.sla?.not_configured || 0} not configured`}>—</span> : <Badge variant="outline" title={`${queue.sla?.met || 0} met / ${queue.sla?.denominator || 0} evaluated; ${queue.sla?.pending || 0} pending; ${queue.sla?.unavailable || 0} unavailable; per-channel policies apply`}>{Number(queue.today.serviceLevelPercentage).toFixed(1)}%</Badge>}
+                                          {queue.today?.serviceLevelPercentage == null ? <span title={tUi("{value0} pending; {value1} without a recorded measurement; {value2} not configured", { value0: queue.sla?.pending || 0, value1: queue.sla?.unavailable || 0, value2: queue.sla?.not_configured || 0 })}>—</span> : <Badge variant="outline" title={tUi("{value0} met / {value1} evaluated; {value2} pending; {value3} unavailable; per-channel policies apply", { value0: queue.sla?.met || 0, value1: queue.sla?.denominator || 0, value2: queue.sla?.pending || 0, value3: queue.sla?.unavailable || 0 })}>{Number(queue.today.serviceLevelPercentage).toFixed(1)}%</Badge>}
                                         </div>
                                       </TableCell>
                                     </TableRow>
@@ -2455,9 +2495,7 @@ function MonitorPageContent({channel,onChannelChange}) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>
-              Change Agent Status
-              {selectedAgent && (
+            <DialogTitle>{tUi("Change Agent Status")}{selectedAgent && (
                 <span className="text-sm font-normal text-muted-foreground ml-2">
                   {selectedAgent.firstName || selectedAgent.first_name
                     ? `${selectedAgent.firstName || selectedAgent.first_name} ${
@@ -2469,15 +2507,13 @@ function MonitorPageContent({channel,onChannelChange}) {
             </DialogTitle>
             <DialogDescription>
               {selectedAgent?.pendingStatus
-                ? `The agent is ${selectedAgent.status}. ${selectedAgent.pendingStatus} applies after their current interactions end; new interactions are not offered meanwhile. Choose Available to cancel it.`
-                : "Select a new status for this agent. A break chosen while the agent is busy applies after their current interactions end."}
+                ? tUi("The agent is {value0}. {value1} applies after their current interactions end; new interactions are not offered meanwhile. Choose Available to cancel it.", { value0: statusLabel(tUi, selectedAgent.status), value1: statusLabel(tUi, selectedAgent.pendingStatus) })
+                : tUi("Select a new status for this agent. A break chosen while the agent is busy applies after their current interactions end.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {availableStatuses.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Loading statuses...
-              </p>
+              <p className="text-sm text-muted-foreground text-center py-4">{tUi("Loading statuses...")}</p>
             ) : (
               <div className="space-y-2">
                 {availableStatuses.map((status) => {
@@ -2523,24 +2559,20 @@ function MonitorPageContent({channel,onChannelChange}) {
                           }
                         />
                         <div className="text-left">
-                          <div className="font-medium">{status.name}</div>
+                          <div className="font-medium">{statusLabel(tUi, status.name)}</div>
                           {status.description && (
                             <div className="text-xs text-muted-foreground">
-                              {status.description}
+                              {statusDescription(tUi, status.description)}
                             </div>
                           )}
                         </div>
                       </div>
                       {isCurrentStatus && (
-                        <Badge variant="outline" className="text-xs">
-                          Current
-                        </Badge>
+                        <Badge variant="outline" className="text-xs">{tUi("Current")}</Badge>
                       )}
                       {isPendingStatus && (
                         <Badge variant="outline" className="gap-1 text-xs">
-                          <IconClock className="h-3 w-3" aria-hidden="true" />
-                          Pending
-                        </Badge>
+                          <IconClock className="h-3 w-3" aria-hidden="true" />{tUi("Pending")}</Badge>
                       )}
                     </button></Can>
                   );
@@ -2562,9 +2594,7 @@ function MonitorPageContent({channel,onChannelChange}) {
           }}
         >
           <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle>
-              Queue Assignments
-              {selectedAgent && (
+            <DialogTitle>{tUi("Queue Assignments")}{selectedAgent && (
                 <span className="text-sm font-normal text-muted-foreground ml-2">
                   {selectedAgent.firstName || selectedAgent.first_name
                     ? `${selectedAgent.firstName || selectedAgent.first_name} ${
@@ -2574,10 +2604,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                 </span>
               )}
             </DialogTitle>
-            <DialogDescription>
-              Manage queue activations for this agent. Only activated queues
-              will receive interactions.
-            </DialogDescription>
+            <DialogDescription>{tUi("Manage queue activations for this agent. Only activated queues will receive interactions.")}</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0">
             <Card className="mx-5 my-4">
@@ -2589,9 +2616,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                     <div className="h-10 bg-muted animate-pulse rounded" />
                   </div>
                 ) : agentQueues.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No queues assigned to this agent
-                  </p>
+                  <p className="text-sm text-muted-foreground text-center py-4">{tUi("No queues assigned to this agent")}</p>
                 ) : (
                   <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
                     {agentQueues.map((queue) => (
@@ -2609,28 +2634,25 @@ function MonitorPageContent({channel,onChannelChange}) {
                                 variant="outline"
                                 className="text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                               >
-                                <IconCheck className="h-3 w-3 mr-1" />
-                                Active
-                              </Badge>
+                                <IconCheck className="h-3 w-3 mr-1" />{tUi("Active")}</Badge>
                             ) : (
                               <Badge
                                 variant="outline"
                                 className="text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400"
                               >
-                                <IconX className="h-3 w-3 mr-1" />
-                                Inactive
-                              </Badge>
+                                <IconX className="h-3 w-3 mr-1" />{tUi("Inactive")}</Badge>
                             )}
                           </div>
                           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                            <span>Type: {queue.routingType || "FIFO"}</span>
+                            <span>{tUi("Type: ")}{queue.routingType || tUi("FIFO")}</span>
                             {queue.priority !== null && (
-                              <span>Priority: {queue.priority}</span>
+                              <span>{tUi("Priority: ")}{queue.priority}</span>
                             )}
                           </div>
                         </div>
                         <Switch
                           checked={queue.isActivated}
+                          disabled={savingQueues.has(String(queue.id))}
                           onCheckedChange={() =>
                             toggleQueueActivation(queue.id, queue.isActivated)
                           }
@@ -2657,9 +2679,7 @@ function MonitorPageContent({channel,onChannelChange}) {
           }}
         >
           <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle>
-              Active Campaigns
-              {selectedAgent && (
+            <DialogTitle>{tUi("Active Campaigns")}{selectedAgent && (
                 <span className="text-sm font-normal text-muted-foreground ml-2">
                   {selectedAgent.firstName || selectedAgent.first_name
                     ? `${selectedAgent.firstName || selectedAgent.first_name} ${selectedAgent.lastName || selectedAgent.last_name || ""}`.trim()
@@ -2667,9 +2687,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                 </span>
               )}
             </DialogTitle>
-            <DialogDescription>
-              Manage Preview and Progressive campaign activations. Agents may be activated regardless of campaign status; records are served when the campaign is running.
-            </DialogDescription>
+            <DialogDescription>{tUi("Manage Preview and Progressive campaign activations. Agents may be activated regardless of campaign status; records are served when the campaign is running.")}</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0">
             <Card className="mx-5 my-4">
@@ -2681,7 +2699,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                     <div className="h-10 bg-muted animate-pulse rounded" />
                   </div>
                 ) : agentCampaigns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No Preview or Progressive campaigns available</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">{tUi("No Preview or Progressive campaigns available")}</p>
                 ) : (
                   <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
                     {agentCampaigns.map((campaign) => (
@@ -2693,7 +2711,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                             <CampaignStatusIcon status={campaign.status} />
                             <Badge variant="outline" className={`text-xs uppercase ${campaignModeBadgeClass(campaign.mode)}`}>
-                              {campaignModeLabel(campaign.mode)}
+                              {campaignModeLabel(tUi, campaign.mode)}
                             </Badge>
                             <CampaignPriorityBadge priority={campaign.priority} />
                           </div>
@@ -2729,21 +2747,17 @@ function MonitorPageContent({channel,onChannelChange}) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Skills Not Matched</DialogTitle>
-            <DialogDescription>
-              Required skills for this interaction and available agents&apos; skills
-            </DialogDescription>
+            <DialogTitle>{tUi("Skills Not Matched")}</DialogTitle>
+            <DialogDescription>{tUi("Required skills for this interaction and available agents' skills")}</DialogDescription>
           </DialogHeader>
           {selectedCallForSkills && (
             <div className="space-y-4 py-4">
               <div>
-                <h4 className="font-semibold mb-2">Required skills for interaction</h4>
+                <h4 className="font-semibold mb-2">{tUi("Required skills for interaction")}</h4>
                 <div className="space-y-1">
                   {Object.keys(selectedCallForSkills.requiredSkills || {})
                     .length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No required skills specified
-                    </p>
+                    <p className="text-sm text-muted-foreground">{tUi("No required skills specified")}</p>
                   ) : (
                     Object.entries(
                       selectedCallForSkills.requiredSkills || {},
@@ -2753,8 +2767,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                         className="flex items-center justify-between p-2 border rounded"
                       >
                         <span className="font-medium">{selectedCallForSkills.skillNames?.[skillName] || skillName}</span>
-                        <Badge variant="outline">
-                          Required: {requiredLevel}
+                        <Badge variant="outline">{tUi("Required: ")}{requiredLevel}
                         </Badge>
                       </div>
                     ))
@@ -2763,16 +2776,14 @@ function MonitorPageContent({channel,onChannelChange}) {
               </div>
 
               <div>
-                <h4 className="font-semibold mb-2">Available Agents</h4>
+                <h4 className="font-semibold mb-2">{tUi("Available Agents")}</h4>
                 {loadingAgentsForSkills ? (
                   <div className="space-y-2 py-4">
                     <Skeleton className="h-10 w-full" />
                     <Skeleton className="h-10 w-full" />
                   </div>
                 ) : availableAgentsForSkills.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No agents available in this queue
-                  </p>
+                  <p className="text-sm text-muted-foreground">{tUi("No agents available in this queue")}</p>
                 ) : (
                   <div className="space-y-3">
                     {availableAgentsForSkills.map((agent) => {
@@ -2808,7 +2819,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                           ? `${agent.firstName || ""} ${
                               agent.lastName || ""
                             }`.trim()
-                          : agent.username || "Unknown";
+                          : agent.username || tUi("Unknown");
 
                       return (
                         <div
@@ -2828,10 +2839,8 @@ function MonitorPageContent({channel,onChannelChange}) {
                               variant={hasAllSkills ? "default" : "destructive"}
                             >
                               {hasAllSkills
-                                ? "Has all skills"
-                                : `Missing ${missingSkills.length} skill${
-                                    missingSkills.length > 1 ? "s" : ""
-                                  }`}
+                                ? tUi("Has all skills")
+                                : tUi("Missing skills: {value0}", { value0: missingSkills.length })}
                             </Badge>
                           </div>
 
@@ -2852,8 +2861,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                                   )}
                                 </span>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">
-                                    Required: {skill.requiredLevel}
+                                  <span className="text-muted-foreground">{tUi("Required: ")}{skill.requiredLevel}
                                   </span>
                                   <span
                                     className={
@@ -2861,8 +2869,7 @@ function MonitorPageContent({channel,onChannelChange}) {
                                         ? "text-green-600 font-medium"
                                         : "text-red-600 font-medium"
                                     }
-                                  >
-                                    Agent: {skill.agentLevel}
+                                  >{tUi("Agent: ")}{skill.agentLevel}
                                   </span>
                                 </div>
                               </div>

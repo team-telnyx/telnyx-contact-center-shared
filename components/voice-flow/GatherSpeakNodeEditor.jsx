@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
@@ -103,6 +105,7 @@ export default function GatherSpeakNodeEditor({
   onChange,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const [isPlaying, setIsPlaying] = useState(false);
   const [audio, setAudio] = useState(null);
   const [providers, setProviders] = useState([]);
@@ -451,29 +454,24 @@ export default function GatherSpeakNodeEditor({
     <div className="space-y-4">
       {/* Text to Speak */}
       <div>
-        <Label htmlFor="payload">
-          Text to Speak <span className="text-red-500">*</span>
+        <Label htmlFor="payload">{tUi("Text to Speak ")}<span className="text-red-500">*</span>
         </Label>
         <VariableTextarea
           id="payload"
           value={config.payload || ""}
           onChange={(value) => onChange?.({ ...config, payload: value })}
           availableVariables={availableVariables}
-          placeholder="Press 1 for sales, 2 for support"
+          placeholder={tUi("Press 1 for sales, 2 for support")}
           rows={4}
           maxLength={3000}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          The text or SSML to be converted into speech (supports variable
-          substitution, 3,000 character limit)
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("The text or SSML to be converted into speech (supports variable substitution, 3,000 character limit)")}</p>
       </div>
 
       {/* Provider */}
       <div>
-        <Label>
-          Provider <span className="text-red-500">*</span>
+        <Label>{tUi("Provider ")}<span className="text-red-500">*</span>
         </Label>
         <Select
           value={provider}
@@ -482,14 +480,12 @@ export default function GatherSpeakNodeEditor({
         >
           <SelectTrigger className="w-full mt-1">
             <SelectValue
-              placeholder={loading ? "Loading providers..." : "Select provider"}
+              placeholder={loading ? tUi("Loading providers...") : tUi("Select provider")}
             />
           </SelectTrigger>
           <SelectContent>
             {providers.length === 0 && !loading ? (
-              <div className="p-2 text-sm text-muted-foreground">
-                No providers available
-              </div>
+              <div className="p-2 text-sm text-muted-foreground">{tUi("No providers available")}</div>
             ) : (
               providers
                 .map((p) => {
@@ -514,19 +510,19 @@ export default function GatherSpeakNodeEditor({
       {/* Model (if provider has models) */}
       {models.length > 0 && (
         <div>
-          <Label>Model</Label>
+          <Label>{tUi("Model")}</Label>
           <Select
             value={model === "" ? "__default__" : model}
             onValueChange={handleModelChange}
             disabled={loading}
           >
             <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select model" />
+              <SelectValue placeholder={tUi("Select model")} />
             </SelectTrigger>
             <SelectContent>
               {/* Show "Default" option if some models have no ID */}
               {selectedProvider?.models?.some((m) => !m?.id && !m) && (
-                <SelectItem value="__default__">Default</SelectItem>
+                <SelectItem value="__default__">{tUi("Default")}</SelectItem>
               )}
               {models
                 .map((m) => {
@@ -549,7 +545,7 @@ export default function GatherSpeakNodeEditor({
       {/* Language Filter (only show if languages are available) */}
       {(languageOptions.length > 0 || languageFilter) && (
         <div>
-          <Label>Language Filter</Label>
+          <Label>{tUi("Language Filter")}</Label>
           <Popover
             open={languagePopoverOpen}
             onOpenChange={setLanguagePopoverOpen}
@@ -570,7 +566,7 @@ export default function GatherSpeakNodeEditor({
                   ) : (
                     <>
                       <IconWorld className="h-4 w-4" />
-                      <span>All languages</span>
+                      <span>{tUi("All languages")}</span>
                     </>
                   )}
                 </div>
@@ -579,12 +575,12 @@ export default function GatherSpeakNodeEditor({
             <PopoverContent className="w-[300px] p-0" align="start">
               <Command>
                 <CommandInput
-                  placeholder="Search languages..."
+                  placeholder={tUi("Search languages...")}
                   value={languageSearch}
                   onValueChange={setLanguageSearch}
                   className="h-9"
                 />
-                <CommandEmpty>No language found.</CommandEmpty>
+                <CommandEmpty>{tUi("No language found.")}</CommandEmpty>
                 <CommandGroup className="max-h-[300px] overflow-auto">
                   <CommandItem
                     value="__any__"
@@ -596,7 +592,7 @@ export default function GatherSpeakNodeEditor({
                       }`}
                     />
                     <IconWorld className="size-4 mr-2" />
-                    <span>Any</span>
+                    <span>{tUi("Any")}</span>
                   </CommandItem>
                   {filteredLanguageOptions.map((opt) => (
                     <CommandItem
@@ -619,17 +615,13 @@ export default function GatherSpeakNodeEditor({
               </Command>
             </PopoverContent>
           </Popover>
-          <p className="text-xs text-muted-foreground mt-1">
-            Filter voices by language ({languageOptions.length} language
-            {languageOptions.length !== 1 ? "s" : ""} available)
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Filter voices by language (available languages: {value0})", {value0: languageOptions.length})}</p>
         </div>
       )}
 
       {/* Voice */}
       <div>
-        <Label>
-          Voice <span className="text-red-500">*</span>
+        <Label>{tUi("Voice ")}<span className="text-red-500">*</span>
         </Label>
         <Combobox
           value={voiceName}
@@ -651,22 +643,18 @@ export default function GatherSpeakNodeEditor({
               }
               return acc;
             }, [])}
-          placeholder="Select voice"
-          searchPlaceholder="Search voices..."
+          placeholder={tUi("Select voice")}
+          searchPlaceholder={tUi("Search voices...")}
           emptyText={
             languageFilter
-              ? `No voices found for ${
-                  selectedLanguageInfo?.label || languageFilter
-                }`
-              : "No voices found"
+              ? tUi("No voices found for {value0}", { value0: selectedLanguageInfo?.label || languageFilter })
+              : tUi("No voices found")
           }
           triggerClassName="w-full mt-1"
           disabled={loading}
         />
         {languageFilter && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Showing {voices.length} voice{voices.length !== 1 ? "s" : ""} for{" "}
-            {selectedLanguageInfo?.label || languageFilter}
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Voices for {value0}: {value1}", {value0: selectedLanguageInfo?.label || languageFilter, value1: voices.length})}
           </p>
         )}
       </div>
@@ -674,8 +662,7 @@ export default function GatherSpeakNodeEditor({
       {/* Voice API Key (ElevenLabs only) */}
       {provider === "ElevenLabs" && (
         <div>
-          <Label>
-            ElevenLabs API Key <span className="text-red-500">*</span>
+          <Label>{tUi("ElevenLabs API Key ")}<span className="text-red-500">*</span>
           </Label>
           <Select
             value={config.voice_api_key_ref || "__none__"}
@@ -692,16 +679,14 @@ export default function GatherSpeakNodeEditor({
             }}
           >
             <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select API key" />
+              <SelectValue placeholder={tUi("Select API key")} />
             </SelectTrigger>
             <SelectContent>
               {secrets.length === 0 ? (
-                <div className="p-2 text-sm text-muted-foreground">
-                  No ElevenLabs API keys found. Add one in Integration Secrets.
-                </div>
+                <div className="p-2 text-sm text-muted-foreground">{tUi("No ElevenLabs API keys found. Add one in Integration Secrets.")}</div>
               ) : (
                 <>
-                  <SelectItem value="__none__">Select an API key</SelectItem>
+                  <SelectItem value="__none__">{tUi("Select an API key")}</SelectItem>
                   {secrets
                     .map((s) => {
                       // Ensure s.id is valid and non-empty
@@ -719,9 +704,7 @@ export default function GatherSpeakNodeEditor({
               )}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Select an ElevenLabs API key from your integration secrets
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Select an ElevenLabs API key from your integration secrets")}</p>
         </div>
       )}
 
@@ -743,26 +726,22 @@ export default function GatherSpeakNodeEditor({
         >
           {isPlaying ? (
             <>
-              <IconPlayerStop className="w-4 h-4 mr-2" />
-              Stop Test
-            </>
+              <IconPlayerStop className="w-4 h-4 mr-2" />{tUi("Stop Test")}</>
           ) : (
             <>
-              <IconPlayerPlay className="w-4 h-4 mr-2" />
-              Test Voice
-            </>
+              <IconPlayerPlay className="w-4 h-4 mr-2" />{tUi("Test Voice")}</>
           )}
         </Button>
       </div>
 
       {/* Gather Configuration */}
       <div className="border-t pt-4">
-        <h4 className="text-sm font-semibold mb-3">DTMF Collection Settings</h4>
+        <h4 className="text-sm font-semibold mb-3">{tUi("DTMF Collection Settings")}</h4>
 
         <div className="space-y-3">
           {/* Valid Digits */}
           <div>
-            <Label htmlFor="valid_digits">Valid Digits</Label>
+            <Label htmlFor="valid_digits">{tUi("Valid Digits")}</Label>
             <Input
               id="valid_digits"
               type="text"
@@ -773,14 +752,12 @@ export default function GatherSpeakNodeEditor({
               placeholder="0123456789#*"
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              A list of all digits accepted as valid
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("A list of all digits accepted as valid")}</p>
           </div>
 
           {/* Minimum Digits */}
           <div>
-            <Label htmlFor="minimum_digits">Minimum Digits</Label>
+            <Label htmlFor="minimum_digits">{tUi("Minimum Digits")}</Label>
             <Input
               id="minimum_digits"
               type="number"
@@ -794,14 +771,12 @@ export default function GatherSpeakNodeEditor({
               }
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The minimum number of digits to fetch
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The minimum number of digits to fetch")}</p>
           </div>
 
           {/* Maximum Digits */}
           <div>
-            <Label htmlFor="maximum_digits">Maximum Digits</Label>
+            <Label htmlFor="maximum_digits">{tUi("Maximum Digits")}</Label>
             <Input
               id="maximum_digits"
               type="number"
@@ -815,14 +790,12 @@ export default function GatherSpeakNodeEditor({
               }
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The maximum number of digits to fetch (max: 128)
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The maximum number of digits to fetch (max: 128)")}</p>
           </div>
 
           {/* Terminating Digit */}
           <div>
-            <Label htmlFor="terminating_digit">Terminating Digit</Label>
+            <Label htmlFor="terminating_digit">{tUi("Terminating Digit")}</Label>
             <Input
               id="terminating_digit"
               type="text"
@@ -834,14 +807,12 @@ export default function GatherSpeakNodeEditor({
               placeholder="#"
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Digit used to terminate input
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Digit used to terminate input")}</p>
           </div>
 
           {/* Timeout */}
           <div>
-            <Label htmlFor="timeout_millis">Timeout (ms)</Label>
+            <Label htmlFor="timeout_millis">{tUi("Timeout (ms)")}</Label>
             <Input
               id="timeout_millis"
               type="number"
@@ -854,16 +825,12 @@ export default function GatherSpeakNodeEditor({
               }
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Milliseconds to wait for DTMF response after speech ends
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Milliseconds to wait for DTMF response after speech ends")}</p>
           </div>
 
           {/* Inter-digit Timeout */}
           <div>
-            <Label htmlFor="inter_digit_timeout_millis">
-              Inter-digit Timeout (ms)
-            </Label>
+            <Label htmlFor="inter_digit_timeout_millis">{tUi("Inter-digit Timeout (ms)")}</Label>
             <Input
               id="inter_digit_timeout_millis"
               type="number"
@@ -876,9 +843,7 @@ export default function GatherSpeakNodeEditor({
               }
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The number of milliseconds to wait for input between digits
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The number of milliseconds to wait for input between digits")}</p>
           </div>
         </div>
       </div>

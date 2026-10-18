@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { readFileSync } from "./helpers/ui-source.mjs";
 import { test } from "node:test";
 
 const detailPage = readFileSync("app/(portal)/supervisor/call-history/[id]/page.jsx", "utf8");
@@ -87,8 +87,8 @@ test("transcription sheet renders diarized chat bubbles via the shared synced co
 test("shared DiarizedTranscript syncs bubbles to recording playback", () => {
   assert.match(diarizedTranscript, /data-testid="diarized-transcript"/);
   assert.match(diarizedTranscript, /SPEAKER_TONES/);
-  assert.match(diarizedTranscript, /function formatSpeakerLabel\(speaker\)/);
-  assert.match(diarizedTranscript, /formatSpeakerLabel\(turn\.speaker\)/);
+  assert.match(diarizedTranscript, /function formatSpeakerLabel\(speaker, tUi = sourceText\)/);
+  assert.match(diarizedTranscript, /formatSpeakerLabel\(turn\.speaker, tUi\)/);
   assert.match(diarizedTranscript, /return speaker \|\| "Speaker"/);
   // Highlights the active turn, scrolls to it, and seeks on click
   assert.match(diarizedTranscript, /ring-2 ring-orange-500/);

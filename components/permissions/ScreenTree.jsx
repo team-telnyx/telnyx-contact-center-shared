@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo, useState } from "react";
 import { IconChevronDown, IconChevronRight, IconLock } from "@tabler/icons-react";
@@ -22,6 +24,7 @@ function collectGroupIds(nodes, out = []) {
  * Leaves outside `actorAccess` are locked (delegation rule).
  */
 export function ScreenTree({ tree = [], selected, onChange, readOnly = false, actorAccess = null }) {
+  const tUi = useUiText();
   const allGroups = useMemo(() => collectGroupIds(tree), [tree]);
   const [collapsed, setCollapsed] = useState(() => new Set(tree.map((node) => node.id)));
 
@@ -57,7 +60,7 @@ export function ScreenTree({ tree = [], selected, onChange, readOnly = false, ac
         >
           <button
             type="button"
-            aria-label={isGroup ? (isCollapsed ? "Expand" : "Collapse") : undefined}
+            aria-label={isGroup ? (isCollapsed ? tUi("Expand") : tUi("Collapse")) : undefined}
             className={cn("flex size-5 items-center justify-center text-muted-foreground", !isGroup && "invisible")}
             onClick={() => {
               if (!isGroup) return;
@@ -76,13 +79,13 @@ export function ScreenTree({ tree = [], selected, onChange, readOnly = false, ac
             checked={checked}
             disabled={readOnly || !grantable}
             onCheckedChange={(value) => toggleGroup(node, leaves, value === true)}
-            aria-label={`Grant ${node.label}`}
+            aria-label={tUi("Grant {value0}", { value0: node.label })}
           />
           <label htmlFor={checkboxId} className="flex min-w-0 flex-1 cursor-pointer items-baseline gap-2">
-            <span className="truncate">{node.label}</span>
+            <span className="truncate">{tUi(node.label)}</span>
             {node.path ? <span className="truncate text-[11px] text-muted-foreground">{node.path}</span> : null}
             {!grantable ? (
-              <span title="Outside your own access" className="text-muted-foreground">
+              <span title={tUi("Outside your own access")} className="text-muted-foreground">
                 <IconLock className="size-3.5" />
               </span>
             ) : null}
@@ -99,16 +102,10 @@ export function ScreenTree({ tree = [], selected, onChange, readOnly = false, ac
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          Tick a group to grant every screen below it, now and in future releases. Menu groups appear automatically when anything under them is granted.
-        </p>
+        <p className="text-xs text-muted-foreground">{tUi("Tick a group to grant every screen below it, now and in future releases. Menu groups appear automatically when anything under them is granted.")}</p>
         <div className="flex gap-1">
-          <Button type="button" size="sm" variant="outline" onClick={() => setCollapsed(new Set())}>
-            Expand all
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setCollapsed(new Set(allGroups))}>
-            Collapse
-          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setCollapsed(new Set())}>{tUi("Expand all")}</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setCollapsed(new Set(allGroups))}>{tUi("Collapse")}</Button>
         </div>
       </div>
       <div className="rounded-md border p-1">{tree.map((node) => renderNode(node, 0))}</div>

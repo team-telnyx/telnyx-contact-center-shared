@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +106,7 @@ function formatTime(value) {
 }
 
 export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
+  const tUi = useUiText();
   const [snapshot, setSnapshot] = useState(null);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -160,7 +164,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
       const data = await res.json();
       notify({
         title: action === "panic" ? "Panic stop executed" : "Run stopped",
-        description: action === "panic" ? `${data.stoppedCalls ?? 0} active calls were hung up.` : "The run has been stopped.",
+        description: action === "panic" ? tUi("{value0} active calls were hung up.", {value0: data.stoppedCalls ?? 0}) : "The run has been stopped.",
         variant: action === "panic" ? "warning" : "success",
       });
     } catch (err) {
@@ -203,7 +207,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
         throw new Error(data.error || "Disconnect all failed");
       }
       const data = await res.json();
-      notify({ title: "Calls disconnected", description: `${data.disconnected ?? 0} active calls were hung up.`, variant: "success" });
+      notify({ title: "Calls disconnected", description: tUi("{value0} active calls were hung up.", {value0: data.disconnected ?? 0}), variant: "success" });
     } catch (err) {
       notify({ title: "Disconnect all failed", description: err.message, variant: "error" });
     } finally {
@@ -235,33 +239,33 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
       <div className="flex items-center justify-between">
         <Badge variant="outline" className={connected ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"}>
           {connected ? <IconWifi className="mr-1 h-3.5 w-3.5" /> : <IconWifiOff className="mr-1 h-3.5 w-3.5" />}
-          {connected ? "Live" : "Reconnecting…"}
+          {connected ? tUi("Live") : tUi("Reconnecting…")}
         </Badge>
-        <span className="text-xs text-muted-foreground">Updates every 2s · {snapshot?.timestamp ? formatTime(snapshot.timestamp) : "—"}</span>
+        <span className="text-xs text-muted-foreground">{tUi("Updates every 2s · ")}{snapshot?.timestamp ? formatTime(snapshot.timestamp) : "—"}</span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={IconActivity} label="Active calls" value={totals.activeCalls} tone="emerald" />
-        <MetricCard icon={IconPhoneCall} label="Dialing" value={totals.dialing} tone="sky" />
-        <MetricCard icon={IconPhoneCall} label="Ringing" value={totals.ringing} tone="violet" />
-        <MetricCard icon={IconHeadphones} label="Answered" value={totals.answered} tone="amber" />
-        <MetricCard icon={IconActivity} label="Running runs" value={totals.runningRuns} tone="rose" />
+        <MetricCard icon={IconActivity} label={tUi("Active calls")} value={totals.activeCalls} tone="emerald" />
+        <MetricCard icon={IconPhoneCall} label={tUi("Dialing")} value={totals.dialing} tone="sky" />
+        <MetricCard icon={IconPhoneCall} label={tUi("Ringing")} value={totals.ringing} tone="violet" />
+        <MetricCard icon={IconHeadphones} label={tUi("Answered")} value={totals.answered} tone="amber" />
+        <MetricCard icon={IconActivity} label={tUi("Running runs")} value={totals.runningRuns} tone="rose" />
       </div>
 
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
-        <h4 className="text-sm font-semibold">Active runs</h4>
+        <h4 className="text-sm font-semibold">{tUi("Active runs")}</h4>
         {runs.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No active runs. Start one from the Scenarios section. Completed runs appear under Logs.</p>
+          <p className="mt-3 text-sm text-muted-foreground">{tUi("No active runs. Start one from the Scenarios section. Completed runs appear under Logs.")}</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Scenario</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{tUi("Scenario")}</TableHead>
+                  <TableHead>{tUi("Status")}</TableHead>
+                  <TableHead>{tUi("Progress")}</TableHead>
+                  <TableHead>{tUi("Started")}</TableHead>
+                  <TableHead className="text-right">{tUi("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -274,12 +278,12 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                     <TableRow key={run.id}>
                       <TableCell className="font-medium">{run.scenario_name || run.scenario_id}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={statusBadgeClass(run.status)}>{run.status}</Badge>
+                        <Badge variant="outline" className={statusBadgeClass(run.status)}>{operationalStatusLabel(tUi, run.status)}</Badge>
                       </TableCell>
                       <TableCell className="tabular-nums text-sm">
                         {done}/{total}
                         <span className="ml-2 text-xs text-muted-foreground">
-                          {stats.completed ? `✓${stats.completed} ` : ""}{stats.failed ? `✗${stats.failed} ` : ""}{stats.abandoned ? `⊘${stats.abandoned}` : ""}
+                          {stats.completed ? tUi("✓{value0} ", { value0: stats.completed }) : ""}{stats.failed ? tUi("✗{value0} ", { value0: stats.failed }) : ""}{stats.abandoned ? tUi("⊘{value0}", { value0: stats.abandoned }) : ""}
                         </span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatTime(run.started_at)}</TableCell>
@@ -288,16 +292,12 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                           {isRunning ? (
                             <>
                               <Button size="sm" variant="outline" disabled={actionBusy === `${run.id}:stop`} onClick={() => runAction(run.id, "stop")}>
-                                {actionBusy === `${run.id}:stop` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPlayerStop className="mr-1 h-3.5 w-3.5" />}
-                                Stop
-                              </Button>
+                                {actionBusy === `${run.id}:stop` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPlayerStop className="mr-1 h-3.5 w-3.5" />}{tUi("Stop")}</Button>
                               <Button size="sm" variant="destructive" disabled={actionBusy === `${run.id}:panic`} onClick={() => setConfirmPanic(run.id)}>
-                                {actionBusy === `${run.id}:panic` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />}
-                                Panic
-                              </Button>
+                                {actionBusy === `${run.id}:panic` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />}{tUi("Panic")}</Button>
                             </>
                           ) : (
-                            <span className="text-xs text-muted-foreground">Pending…</span>
+                            <span className="text-xs text-muted-foreground">{tUi("Pending…")}</span>
                           )}
                         </div>
                       </TableCell>
@@ -312,7 +312,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
 
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <h4 className="text-sm font-semibold">Recent calls</h4>
+          <h4 className="text-sm font-semibold">{tUi("Recent calls")}</h4>
           <Button
             size="sm"
             variant="outline"
@@ -321,25 +321,23 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
             onClick={() => setConfirmDisconnectAll(true)}
             data-testid="cg-disconnect-all"
           >
-            {disconnectBusy === "all" ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPhoneOff className="mr-1 h-3.5 w-3.5" />}
-            Disconnect all
-          </Button>
+            {disconnectBusy === "all" ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPhoneOff className="mr-1 h-3.5 w-3.5" />}{tUi("Disconnect all")}</Button>
         </div>
         {recentCalls.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No generated calls in the last 15 minutes.</p>
+          <p className="mt-3 text-sm text-muted-foreground">{tUi("No generated calls in the last 15 minutes.")}</p>
         ) : (
           <div className="mt-3 max-h-[420px] overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>To</TableHead>
-                  <TableHead>From</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Answered</TableHead>
-                  <TableHead>Duration / Max</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead className="text-right">Disconnect</TableHead>
+                  <TableHead>{tUi("To")}</TableHead>
+                  <TableHead>{tUi("From")}</TableHead>
+                  <TableHead>{tUi("Status")}</TableHead>
+                  <TableHead>{tUi("Started")}</TableHead>
+                  <TableHead>{tUi("Answered")}</TableHead>
+                  <TableHead>{tUi("Duration / Max")}</TableHead>
+                  <TableHead>{tUi("Result")}</TableHead>
+                  <TableHead className="text-right">{tUi("Disconnect")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -356,7 +354,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                       <TableCell className="font-mono text-xs">{call.to_number || "—"}</TableCell>
                       <TableCell className="font-mono text-xs">{call.from_number || "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={statusBadgeClass(call.status)}>{call.status}</Badge>
+                        <Badge variant="outline" className={statusBadgeClass(call.status)}>{operationalStatusLabel(tUi, call.status)}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatTime(call.started_at)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatTime(call.answered_at)}</TableCell>
@@ -377,7 +375,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7 rounded-full text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200"
-                            title="Disconnect call"
+                            title={tUi("Disconnect call")}
                             disabled={disconnectBusy === call.id}
                             onClick={() => disconnectCall(call)}
                             data-testid="cg-disconnect-call"
@@ -399,19 +397,15 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
       <AlertDialog open={confirmDisconnectAll} onOpenChange={(open) => { if (!open) setConfirmDisconnectAll(false); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect all active calls?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will immediately hang up all {totals.activeCalls} active generated call{totals.activeCalls === 1 ? "" : "s"}. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Disconnect all active calls?")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("All active generated calls ({value0}) will be hung up immediately. This action cannot be undone.", {value0: totals.activeCalls})}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { setConfirmDisconnectAll(false); disconnectAllCalls(); }}
-            >
-              Disconnect all
-            </AlertDialogAction>
+            >{tUi("Disconnect all")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -420,19 +414,15 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
       <AlertDialog open={confirmPanic !== null} onOpenChange={(open) => { if (!open) setConfirmPanic(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Panic stop this run?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This stops the run and hangs up ALL of its active generated calls immediately. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Panic stop this run?")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("This stops the run and hangs up ALL of its active generated calls immediately. This action cannot be undone.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { const runId = confirmPanic; setConfirmPanic(null); if (runId) runAction(runId, "panic"); }}
-            >
-              Panic stop
-            </AlertDialogAction>
+            >{tUi("Panic stop")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

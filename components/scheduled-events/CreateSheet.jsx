@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React from "react";
 import {
@@ -41,6 +43,7 @@ export default function CreateSheet({
   onSaveComplete,
   preselectedAssistantId = "",
 }) {
+  const tUi = useUiText();
   const { user } = useAuth();
   const [assistantId, setAssistantId] = React.useState(
     preselectedAssistantId || "",
@@ -207,14 +210,12 @@ export default function CreateSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconPlus className="size-5" />
-            Schedule New Event
-          </SheetTitle>
+            <IconPlus className="size-5" />{tUi("Schedule New Event")}</SheetTitle>
         </SheetHeader>
 
         {/* Scrollable Content Section */}
@@ -224,7 +225,7 @@ export default function CreateSheet({
               {/* Row 1: AI Assistant, Channel */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2 min-w-0">
-                  <Label className="text-sm">AI Assistant *</Label>
+                  <Label className="text-sm">{tUi("AI Assistant *")}</Label>
                   <Combobox
                     value={assistantId}
                     onChange={setAssistantId}
@@ -232,20 +233,20 @@ export default function CreateSheet({
                       value: a.id,
                       label: a.name || a.id,
                     }))}
-                    placeholder="Select an assistant"
+                    placeholder={tUi("Select an assistant")}
                     searchable={true}
                     triggerClassName="w-full"
                   />
                 </div>
                 <div className="grid gap-2 min-w-0">
-                  <Label className="text-sm">Channel *</Label>
+                  <Label className="text-sm">{tUi("Channel *")}</Label>
                   <Select value={channel} onValueChange={setChannel}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select channel" />
+                      <SelectValue placeholder={tUi("Select channel")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="phone_call">Call</SelectItem>
-                      <SelectItem value="sms_chat">SMS</SelectItem>
+                      <SelectItem value="phone_call">{tUi("Call")}</SelectItem>
+                      <SelectItem value="sms_chat">{tUi("SMS")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -254,7 +255,7 @@ export default function CreateSheet({
               {/* Row 2: From Number, To Number */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2 min-w-0">
-                  <Label className="text-sm">From Number *</Label>
+                  <Label className="text-sm">{tUi("From Number *")}</Label>
                   <Select
                     value={fromNumber}
                     onValueChange={setFromNumber}
@@ -264,10 +265,10 @@ export default function CreateSheet({
                       <SelectValue
                         placeholder={
                           loadingNumbers
-                            ? "Loading numbers..."
+                            ? tUi("Loading numbers...")
                             : phoneNumbers.length === 0
-                              ? "No numbers available"
-                              : "Select a number"
+                              ? tUi("No numbers available")
+                              : tUi("Select a number")
                         }
                       />
                     </SelectTrigger>
@@ -281,40 +282,36 @@ export default function CreateSheet({
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     {phoneNumbers.length === 0 && assistantId
-                      ? "No phone numbers assigned to this assistant"
-                      : "Phone numbers assigned to selected assistant"}
+                      ? tUi("No phone numbers assigned to this assistant")
+                      : tUi("Phone numbers assigned to selected assistant")}
                   </p>
                 </div>
                 <div className="grid gap-2 min-w-0">
-                  <Label className="text-sm">To Number *</Label>
+                  <Label className="text-sm">{tUi("To Number *")}</Label>
                   <Input
                     value={toNumber}
                     onChange={(e) => setToNumber(e.target.value)}
                     placeholder="+15559876543"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Phone number in E.164 format
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("Phone number in E.164 format")}</p>
                 </div>
               </div>
 
               {/* Row 3: Scheduled Date/Time */}
               <div className="grid gap-2">
-                <Label className="text-sm">Scheduled Date & Time *</Label>
+                <Label className="text-sm">{tUi("Scheduled Date & Time *")}</Label>
                 <Input
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={(e) => setScheduledAt(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Select the date and time when the event should be triggered
-                </p>
+                <p className="text-xs text-muted-foreground">{tUi("Select the date and time when the event should be triggered")}</p>
               </div>
 
               {/* Row 4: Retry Settings */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2 min-w-0">
-                  <Label className="text-sm">Max Client Error Retries</Label>
+                  <Label className="text-sm">{tUi("Max Client Error Retries")}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -324,12 +321,10 @@ export default function CreateSheet({
                     onChange={(e) => setMaxRetriesClientErrors(e.target.value)}
                     placeholder="0"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Retries on busy, no-answer, failed, or canceled calls (0-10)
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("Retries on busy, no-answer, failed, or canceled calls (0-10)")}</p>
                 </div>
                 <div className="grid gap-2 min-w-0">
-                  <Label className="text-sm">Retry Interval (seconds)</Label>
+                  <Label className="text-sm">{tUi("Retry Interval (seconds)")}</Label>
                   <Input
                     type="number"
                     min="60"
@@ -340,25 +335,21 @@ export default function CreateSheet({
                     placeholder="300"
                     disabled={Number(maxRetriesClientErrors || 0) === 0}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Delay between retry attempts, from 60 seconds to 24 hours
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("Delay between retry attempts, from 60 seconds to 24 hours")}</p>
                 </div>
               </div>
 
               {/* Row 5: Text (for SMS) */}
               {channel === "sms_chat" && (
                 <div className="grid gap-2">
-                  <Label className="text-sm">Message Text *</Label>
+                  <Label className="text-sm">{tUi("Message Text *")}</Label>
                   <Textarea
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    placeholder="Enter the SMS text message..."
+                    placeholder={tUi("Enter the SMS text message...")}
                     rows={4}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    The text message to send to the recipient (required for SMS)
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("The text message to send to the recipient (required for SMS)")}</p>
                 </div>
               )}
             </CardContent>
@@ -371,11 +362,9 @@ export default function CreateSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={onSave} disabled={saving}>
-            {saving ? "Scheduling..." : "Schedule Event"}
+            {saving ? tUi("Scheduling...") : tUi("Schedule Event")}
           </Button>
         </SheetFooter>
       </SheetContent>

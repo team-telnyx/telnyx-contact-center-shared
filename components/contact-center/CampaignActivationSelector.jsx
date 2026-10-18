@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
@@ -12,23 +14,25 @@ import { notify } from "@/components/ToastNotify";
 import { subscribeStatusStream } from "@/lib/status-stream-client";
 
 const CAMPAIGN_MODE_LABELS = {
-  preview: "PREVIEW",
-  progressive: "PROGRESSIVE",
+  preview: "Preview",
+  progressive: "Progressive",
 };
 
 function CampaignStatusIcon({ status }) {
+  const tUi = useUiText();
   const value = String(status || "").toLowerCase();
-  if (value === "running") return <IconPlayerPlay className="h-3.5 w-3.5 text-emerald-500" aria-label="Running" />;
-  if (value === "paused") return <IconPlayerPause className="h-3.5 w-3.5 text-amber-500" aria-label="Paused" />;
-  return <IconPlayerStop className="h-3.5 w-3.5 text-rose-500" aria-label="Stopped" />;
+  if (value === "running") return <IconPlayerPlay className="h-3.5 w-3.5 text-emerald-500" aria-label={tUi("Running")} />;
+  if (value === "paused") return <IconPlayerPause className="h-3.5 w-3.5 text-amber-500" aria-label={tUi("Paused")} />;
+  return <IconPlayerStop className="h-3.5 w-3.5 text-rose-500" aria-label={tUi("Stopped")} />;
 }
 
-function campaignModeLabel(mode) {
+function campaignModeLabel(tUi, mode) {
   const value = String(mode || "").toLowerCase();
-  return CAMPAIGN_MODE_LABELS[value] || value.toUpperCase();
+  return CAMPAIGN_MODE_LABELS[value] ? tUi(CAMPAIGN_MODE_LABELS[value]) : value.toUpperCase();
 }
 
 export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
+  const tUi = useUiText();
   const [saving, setSaving] = useState(false);
   const [localCampaigns, setLocalCampaigns] = useState(campaigns);
 
@@ -54,7 +58,7 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
     [localCampaigns],
   );
   const campaignIds = useMemo(() => activeCampaigns.map((campaign) => campaign.id), [activeCampaigns]);
-  const label = `Campaigns ${activeCampaigns.length}/${localCampaigns.length}`;
+  const label = tUi("Campaigns {value0}/{value1}", { value0: activeCampaigns.length, value1: localCampaigns.length });
 
   const updateCampaignIds = async (nextCampaignIds) => {
     setSaving(true);
@@ -96,9 +100,9 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
         className="w-[28rem] max-w-[calc(100vw-2rem)]"
       >
         <div className="space-y-3">
-          <div className="font-semibold">Campaign Activation</div>
+          <div className="font-semibold">{tUi("Campaign Activation")}</div>
           {localCampaigns.length === 0 ? (
-            <div className="py-4 text-center text-sm text-muted-foreground">No campaigns available</div>
+            <div className="py-4 text-center text-sm text-muted-foreground">{tUi("No campaigns available")}</div>
           ) : (
             localCampaigns.map((campaign) => {
               const checkboxId = `campaign-activation-${campaign.id}`;
@@ -122,7 +126,7 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
                   <div className="flex shrink-0 items-center gap-1.5">
                     <CampaignStatusIcon status={campaign.status} />
                     <Badge variant="outline" className={`text-xs uppercase ${campaignModeBadgeClass(campaign.mode)}`}>
-                      {campaignModeLabel(campaign.mode)}
+                      {campaignModeLabel(tUi, campaign.mode)}
                     </Badge>
                   </div>
                 </div>

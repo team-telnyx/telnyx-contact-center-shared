@@ -15,6 +15,9 @@
 
 # next.js
 /.next/
+# Local build verification output and caches must not be scanned as source.
+/.next-*/
+/tmp/
 /.next-chat-validation/
 /.next-document-preview-check/
 /out/
@@ -96,3 +99,6 @@ cc.tfplan
 
 # Waiting-playlist videos uploaded at runtime (served by /api/video/media/[id])
 public/media/video-*
+
+# Private conference recording fallback files (served only by authorized API).
+.data/video-recordings/

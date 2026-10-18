@@ -1,12 +1,13 @@
+import {candidatesForQueue,routeOne} from '../lib/acd/router.mjs';
 import test, {after} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {prepareAcdTestPool,seedAgent,makeTxRunner} from './helpers/acd-test-db.mjs';
+import {prepareAcdTestPool,seedAgent,seedQueue,makeTxRunner} from './helpers/acd-test-db.mjs';
 import {mutateRefreshSession,hasAuthSession} from '../lib/auth-refresh-sessions.mjs';
 import {registerVoiceEndpoint,chooseVoiceEndpoint,readVoiceEndpoints,authenticateVoiceEndpoint,withVoiceControl,revokeAuthVoiceEndpoints} from '../lib/acd/voice-endpoints.mjs';
-import {heartbeatAgentSession} from '../lib/acd/sessions.mjs';
+import {heartbeatAgentSession,expireAgentSessions} from '../lib/acd/sessions.mjs';
 import {effectiveAgentStatus,readAgentStatusPresentation,setManualAgentStatus,setWorkflowState} from '../lib/acd/agent-state.mjs';
-import {createWorkItem} from '../lib/acd/lifecycle.mjs';
+import {createWorkItem,applyTransition} from '../lib/acd/lifecycle.mjs';
 import {tryOfferAndReserve} from '../lib/acd/reservations.mjs';
 import {upsertDevice} from '../lib/mobile/devices.mjs';
 import {drainMobileAlerts,mobileAlertPayload} from '../lib/mobile/alerts.mjs';
@@ -14,14 +15,14 @@ const pool=await prepareAcdTestPool('cc_web_mobile_coordination_test');
 after(()=>pool.end());
 const tx=makeTxRunner(pool);
 const provision=async id=>({id:`cred-${id}`,username:`sip-${id}`});
-async function setup(){
+async function setup(kind = 'ios'){
   const id=randomUUID(); await seedAgent(pool,id);
   const web={id,username:`${id}@test.local`,authSessionId:randomUUID()};
   const mobile={...web,authSessionId:randomUUID()};
   for(const user of [web,mobile])await mutateRefreshSession(id,{add:{sessionId:user.authSessionId,refreshToken:user.authSessionId}},pool);
   const a=await registerVoiceEndpoint(pool,web,{kind:'web',deviceId:randomUUID(),label:'Computer'},provision);
   const deviceId=randomUUID();
-  const b=await registerVoiceEndpoint(pool,mobile,{kind:'ios',deviceId,label:'Phone'},provision);
+  const b=await registerVoiceEndpoint(pool,mobile,{kind,deviceId,label:kind === 'android' ? 'Android' : 'Phone'},provision);
   for(const [user,state] of [[web,a],[mobile,b]]){
     const endpoint=await authenticateVoiceEndpoint(pool,user,state.registration.token);
     await heartbeatAgentSession(pool,{agentId:id,sessionId:endpoint.id,voiceEndpoint:endpoint,voiceReady:true});
@@ -177,3 +178,92 @@ test('notification content carries channel, queue, customer and interaction deep
   assert.equal(payload.aps.category,'CC_INTERACTION');
   assert.ok(Buffer.byteLength(JSON.stringify(payload))<4096);
 });
+
+
+async function pushPhone(kind = 'ios') {
+  const f=await setup(kind);
+  const endpoint=await authenticateVoiceEndpoint(pool,f.mobile,f.b.registration.token);
+  await upsertDevice(f.id,{deviceId:f.deviceId,kind,voipToken:kind === 'ios' ? 'a'.repeat(64) : null,fcmToken:kind === 'android' ? 'android:fcm-token-original' : null,bundleIdentifier:'test.bundle',environment:'test',authSessionId:f.mobile.authSessionId},pool);
+  const beat=overrides=>heartbeatAgentSession(pool,{agentId:f.id,sessionId:endpoint.id,voiceEndpoint:endpoint,...overrides});
+  await beat({voiceReady:true,pushReady:true});
+  await chooseVoiceEndpoint(pool,f.mobile,{endpointId:endpoint.id,expectedGeneration:'0'});
+  const queue=randomUUID();await seedQueue(pool,queue,[f.id]);
+  // Only the selected handset is online; the companion browser is gone.
+  await pool.query("UPDATE acd_agent_sessions SET state='offline' WHERE id=$1",[f.a.registration.id]);
+  return {...f,endpoint,beat,queue};
+}
+
+for (const kind of ['ios', 'android']) {
+const pushTest = (name, body) => test(`${kind}: ${name}`, body);
+pushTest('background socket disconnect preserves authenticated push readiness beyond one hour',async()=>{
+  const f=await pushPhone(kind);
+  const first=await f.beat({voiceReady:false,pushReady:true});
+  assert.ok(first.expiresInSeconds>3600);
+  // A delayed SDK disconnect from an older client must not clear the lease.
+  await f.beat({voiceReady:false,pushReady:false});
+  await pool.query("UPDATE cc_voice_endpoints SET socket_ready_until=now()-interval '2 hours' WHERE id=$1",[f.endpoint.id]);
+  await pool.query("UPDATE acd_agent_sessions SET heartbeat_at=now()-interval '2 hours' WHERE id=$1",[f.endpoint.id]);
+  await expireAgentSessions(pool);
+  const state=await readVoiceEndpoints(pool,f.id);
+  assert.equal(state.endpointId,f.endpoint.id);
+  assert.equal(state.endpoints.find(e=>e.id===f.endpoint.id).availability,'standby');
+  assert.equal((await candidatesForQueue(pool,f.queue)).length,1);
+  assert.equal((await readAgentStatusPresentation(pool,f.id)).status,'Available');
+  const work=await tx(async db=>{
+    const work=await createWorkItem(db,{channel:'voice',direction:'inbound',queueId:f.queue,actor:'test'});
+    await applyTransition(db,{workItemId:work.id,to:'queued',eventType:'work_item_queued',actor:'test',patch:{queueId:f.queue,enqueuedAt:new Date().toISOString()}});
+    return work;
+  });
+  assert.equal((await routeOne(pool,work.id)).routed,true,'a queue call is actually offered to the sleeping phone');
+});
+
+for(const failure of ['token revoked','token rotated','session expired','session revoked','device moved','device removed','user disabled','endpoint revoked']) {
+  pushTest(`push readiness ends when ${failure}`,async()=>{
+    const f=await pushPhone(kind);await f.beat({voiceReady:false,pushReady:false});
+    const tokenColumn = kind === 'android' ? 'fcm_token' : 'voip_token';
+    if(failure==='token revoked')await pool.query(`UPDATE cc_mobile_devices SET ${tokenColumn}=NULL WHERE device_id=$1`,[f.deviceId]);
+    if(failure==='token rotated')await pool.query(`UPDATE cc_mobile_devices SET ${tokenColumn}=$2 WHERE device_id=$1`,[f.deviceId,'b'.repeat(64)]);
+    if(failure==='session expired')await pool.query(`UPDATE users SET refresh_tokens=jsonb_build_array(jsonb_build_object('sessionId',$2::text,'expiresAt','2000-01-01T00:00:00Z')) WHERE id=$1`,[f.id,f.mobile.authSessionId]);
+    if(failure==='session revoked')await pool.query("UPDATE users SET refresh_tokens='[]' WHERE id=$1",[f.id]);
+    if(failure==='device removed')await pool.query('DELETE FROM cc_mobile_devices WHERE device_id=$1',[f.deviceId]);
+    if(failure==='user disabled')await pool.query('UPDATE users SET active=false WHERE id=$1',[f.id]);
+    if(failure==='endpoint revoked')await revokeAuthVoiceEndpoints(pool,f.mobile,f.mobile.authSessionId);
+    if(failure==='device moved')await pool.query("UPDATE cc_mobile_devices SET auth_session_id='another-login' WHERE device_id=$1",[f.deviceId]);
+    assert.equal((await candidatesForQueue(pool,f.queue)).length,0); // even before the sweep
+    assert.equal(Boolean((await readVoiceEndpoints(pool,f.id)).endpoints.find(e=>e.id===f.endpoint.id)?.reachable),false);
+    await expireAgentSessions(pool);
+    assert.equal((await pool.query('SELECT presence FROM acd_agent_state WHERE agent_id=$1',[f.id])).rows[0].presence,'offline');
+  });
+}
+
+pushTest('push cannot arm without a recent authenticated SDK registration and does not survive explicit offline',async()=>{
+  const f=await pushPhone(kind);
+  await f.beat({offline:true});
+  const result=await f.beat({voiceReady:false,pushReady:true});
+  assert.equal(result.voiceReady,false);
+  assert.equal(result.expiresInSeconds,45);
+});
+
+pushTest('voice standby does not extend foreground messaging/video readiness',async()=>{
+  const f=await pushPhone(kind);await f.beat({voiceReady:false,pushReady:true});
+  await pool.query(`UPDATE acd_agent_sessions SET capabilities=capabilities || '{"chat":true,"video":true}',heartbeat_at=now()-interval '2 hours' WHERE id=$1`,[f.endpoint.id]);
+  await pool.query("UPDATE cc_voice_endpoints SET video_ready_until=now()-interval '1 hour' WHERE id=$1",[f.endpoint.id]);
+  assert.equal((await candidatesForQueue(pool,f.queue,'chat')).length,0);
+  assert.equal((await candidatesForQueue(pool,f.queue,'video')).length,0);
+  await expireAgentSessions(pool);
+  const caps=(await pool.query('SELECT capabilities FROM acd_agent_sessions WHERE id=$1',[f.endpoint.id])).rows[0].capabilities;
+  assert.equal(caps.voice,true);assert.equal(caps.video,false);assert.equal(caps.chat,false);
+});
+
+
+pushTest('a push lease never outlives the authenticated login',async()=>{
+  const f=await pushPhone(kind);
+  const expiresAt=new Date(Date.now()+2*3600_000).toISOString();
+  await pool.query(`UPDATE users SET refresh_tokens=jsonb_build_array(jsonb_build_object('sessionId',$2::text,'expiresAt',$3::text)) WHERE id=$1`,[f.id,f.mobile.authSessionId,expiresAt]);
+  const result=await f.beat({voiceReady:true,pushReady:true});
+  assert.ok(result.expiresInSeconds>7100 && result.expiresInSeconds<=7200);
+  const end=(await pool.query('SELECT expires_at FROM cc_voice_endpoints WHERE id=$1',[f.endpoint.id])).rows[0].expires_at;
+  assert.ok(new Date(end)<=new Date(expiresAt));
+});
+
+}

@@ -147,6 +147,26 @@ test("streaming websocket shutdown has a deadline for connected clients", async 
   await assertHealthUnavailable(port);
 });
 
+test("streaming websocket shutdown waits for avatar session persistence", async () => {
+  const port = await getFreePort();
+  const { initStreamingWSServer, shutdownStreamingWSServer, waitForStreamingWSServerReady } = await import("../lib/streaming-ws-handler.mjs");
+  const state = initStreamingWSServer({ port, registerProcessHandlers: false });
+  await waitForStreamingWSServerReady(READY_TIMEOUT_MS);
+  let release, entered, completed = false;
+  const pendingWrite = new Promise(resolve => { release = resolve; });
+  const closing = new Promise(resolve => { entered = resolve; });
+  const originalClose = state.widgetAvatars.close.bind(state.widgetAvatars);
+  state.widgetAvatars.close = async () => { entered(); await originalClose(); await pendingWrite; };
+  const shutdown = shutdownStreamingWSServer({ reason: "test_avatar_persistence" }).then(result => { completed = true; return result; });
+  try {
+    await closing;
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(completed, false);
+  } finally { release(); }
+  assert.equal((await shutdown).stopped, true);
+  await assertHealthUnavailable(port);
+});
+
 test("streaming websocket init is ignored while shutdown is in progress", async () => {
   const port = await getFreePort();
   const moduleUrl = new URL(`../lib/streaming-ws-handler.mjs?test=init-during-shutdown-${Date.now()}`, import.meta.url);

@@ -41,11 +41,11 @@ async function build(){
     await new Promise(resolve=>setTimeout(resolve,1200));
     assert.equal(await page.evaluate(()=>window.fixture.plays.filter(src=>!src.startsWith('data:')).length),plays,'one-shot must not replay across pages');
     await page.evaluate(()=>window.fixture.update([window.fixture.interactions[0],window.fixture.offer('chat-2','chat')]));
-    await page.waitForFunction(()=>document.body.textContent.includes('2 new interactions'));
+    await page.waitForFunction(()=>document.querySelector('[data-testid=incoming-interaction-alert]')?.textContent.includes('New interactions: 2'));
     await page.waitForFunction(()=>window.fixture.plays.filter(src=>!src.startsWith('data:')).length===2);
     await page.screenshot({path:path.join(output,'header-multiple-dark.png')});
     await page.evaluate(()=>{document.documentElement.classList.remove('dark');window.fixture.update([window.fixture.interactions[1]]);});
-    await page.waitForFunction(()=>document.body.textContent.includes('New chat'));
+    await page.waitForFunction(()=>document.querySelector('[data-testid=incoming-interaction-alert]')?.textContent.includes('New interaction: chat'));
     await page.screenshot({path:path.join(output,'header-chat-light.png')});
     await page.setViewport({width:1120,height:700});
     await page.screenshot({path:path.join(output,'header-compact.png')});

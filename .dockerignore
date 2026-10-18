@@ -17,3 +17,7 @@ yarn-error.log*
 *.tar
 *.tar.gz
 *.tar.zst
+
+# Private conference recordings and alternate verification build outputs.
+.data
+.next-*

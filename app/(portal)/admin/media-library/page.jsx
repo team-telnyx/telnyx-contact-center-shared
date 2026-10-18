@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -49,6 +51,7 @@ import MediaPlayer from "@/components/media-library/MediaPlayer";
 import { Can } from "@/components/auth-provider";
 
 export default function AdminMediaLibraryPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -134,7 +137,7 @@ export default function AdminMediaLibraryPage() {
     if (!dateString) return "—";
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+      return date.toLocaleDateString(tUi.locale) + " " + date.toLocaleTimeString(tUi.locale);
     } catch {
       return dateString;
     }
@@ -180,34 +183,30 @@ export default function AdminMediaLibraryPage() {
           q: "",
         })
       }
-    >
-      Clear
-    </Button>
+    >{tUi("Clear")}</Button>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
     <Can permission="media:create"><Button onClick={handleNewMedia} variant="default">
-      <IconPlus className="size-4 mr-2" />
-      Upload Media
-    </Button></Can>
+      <IconPlus className="size-4 mr-2" />{tUi("Upload Media")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Media Library" badges={<Badge variant="secondary">{total} assets</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Media Library")} badges={<Badge variant="secondary">{total}{tUi(" assets")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="media-library">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
-              <label className="text-xs">Search</label>
+              <label className="text-xs">{tUi("Search")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="media name, content type…"
+                placeholder={tUi("media name, content type…")}
               />
             </div>
             <div></div>
@@ -229,11 +228,11 @@ export default function AdminMediaLibraryPage() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Media Name</TableHead>
-                    <TableHead className="px-[10px]">Content Type</TableHead>
-                    <TableHead className="px-[10px]">Created At</TableHead>
-                    <TableHead className="px-[10px]">Expires At</TableHead>
-                    <TableHead className="px-[10px] text-right">Actions</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Media Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Content Type")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Created At")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Expires At")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -275,9 +274,7 @@ export default function AdminMediaLibraryPage() {
                             {item.expires_at ? (
                               formatDate(item.expires_at)
                             ) : (
-                              <Badge variant="outline" className="border-green-500 text-green-600">
-                                Never
-                              </Badge>
+                              <Badge variant="outline" className="border-green-500 text-green-600">{tUi("Never")}</Badge>
                             )}
                           </TableCell>
                           <TableCell
@@ -289,7 +286,7 @@ export default function AdminMediaLibraryPage() {
                                 type="button"
                                 onClick={() => handlePlay(item.media_name)}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Play media"
+                                title={tUi("Play media")}
                               >
                                 <IconPlayerPlay className="size-4" />
                               </button>
@@ -298,31 +295,26 @@ export default function AdminMediaLibraryPage() {
                                   <Can permission="media:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete media"
+                                    title={tUi("Delete media")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete media file?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the media file "
-                                      {item.media_name}".
+                                    <DialogTitle>{tUi("Delete media file?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the media file \"")}{item.media_name}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(item.media_name)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -340,8 +332,8 @@ export default function AdminMediaLibraryPage() {
                         className="text-center py-8 text-sm text-muted-foreground"
                       >
                         {items.length === 0
-                          ? "No media files"
-                          : "No media files match your search"}
+                          ? tUi("No media files")
+                          : tUi("No media files match your search")}
                       </TableCell>
                     </TableRow>
                   )}
@@ -352,14 +344,10 @@ export default function AdminMediaLibraryPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">
-              Showing: {filteredItems.length} of {total} media files
-            </div>
+            <div className="text-xs text-muted-foreground">{tUi("Showing: ")}{filteredItems.length}{tUi(" of ")}{total}{tUi(" media files")}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -395,8 +383,7 @@ export default function AdminMediaLibraryPage() {
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm">
-                  Page {page} of {pageCount}
+                <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
                 </span>
                 <Button
                   variant="outline"

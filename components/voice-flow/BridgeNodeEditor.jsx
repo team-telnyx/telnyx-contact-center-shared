@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
@@ -62,6 +64,7 @@ const RINGTONE_OPTIONS = [
 ];
 
 export default function BridgeNodeEditor({ config = {}, onChange }) {
+  const tUi = useUiText();
   // Basic fields
   const [callControlId, setCallControlId] = useState(
     config.call_control_id || ""
@@ -192,72 +195,59 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
       {/* Basic Bridge Settings */}
       <div className="space-y-3">
         <div>
-          <Label>Call Control ID</Label>
+          <Label>{tUi("Call Control ID")}</Label>
           <Input
             type="text"
             value={callControlId}
             onChange={(e) => {
               setCallControlId(e.target.value);
             }}
-            placeholder="v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg"
+            placeholder={tUi("v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            The Call Control ID of the call you want to bridge with, can't be
-            used together with queue parameter or video_room_id parameter
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("The Call Control ID of the call you want to bridge with, can't be used together with queue parameter or video_room_id parameter")}</p>
         </div>
 
         <div>
-          <Label>Queue</Label>
+          <Label>{tUi("Queue")}</Label>
           <Input
             type="text"
             value={queue}
             onChange={(e) => {
               setQueue(e.target.value);
             }}
-            placeholder="support"
+            placeholder={tUi("support")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            The name of the queue you want to bridge with, can't be used
-            together with call_control_id parameter or video_room_id parameter.
-            Bridging with a queue means bridging with the first call in the
-            queue.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("The name of the queue you want to bridge with, can't be used together with call_control_id parameter or video_room_id parameter. Bridging with a queue means bridging with the first call in the queue.")}</p>
         </div>
 
         <div>
-          <Label>Client State</Label>
+          <Label>{tUi("Client State")}</Label>
           <Input
             type="text"
             value={clientState}
             onChange={(e) => {
               setClientState(e.target.value);
             }}
-            placeholder="aGF2ZSBhIG5pY2UgZGF5ID1d"
+            placeholder={tUi("aGF2ZSBhIG5pY2UgZGF5ID1d")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Base-64 encoded string to add state to every subsequent webhook
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Base-64 encoded string to add state to every subsequent webhook")}</p>
         </div>
 
         <div>
-          <Label>Command ID</Label>
+          <Label>{tUi("Command ID")}</Label>
           <Input
             type="text"
             value={commandId}
             onChange={(e) => {
               setCommandId(e.target.value);
             }}
-            placeholder="891510ac-f3e4-11e8-af5b-de00688a4901"
+            placeholder={tUi("891510ac-f3e4-11e8-af5b-de00688a4901")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Use this field to avoid duplicate commands. Telnyx will ignore any
-            command with the same command_id for the same call_control_id.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Use this field to avoid duplicate commands. Telnyx will ignore any command with the same command_id for the same call_control_id.")}</p>
         </div>
       </div>
 
@@ -274,14 +264,12 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
                 bridgeOptionsExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Bridge Options
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Bridge Options")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>Park After Unbridge</Label>
+            <Label>{tUi("Park After Unbridge")}</Label>
             <Select
               value={parkAfterUnbridge}
               onValueChange={(value) => {
@@ -289,17 +277,13 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
               }}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select option" />
+                <SelectValue placeholder={tUi("Select option")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="self">Self</SelectItem>
+                <SelectItem value="self">{tUi("Self")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Specifies behavior after the bridge ends. If supplied with the
-              value 'self', the current leg will be parked after unbridge. If
-              not set, the default behavior is to hang up the leg.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Specifies behavior after the bridge ends. If supplied with the value 'self', the current leg will be parked after unbridge. If not set, the default behavior is to hang up the leg.")}</p>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -313,18 +297,13 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
             <Label
               htmlFor="play_ringtone"
               className="text-sm font-normal cursor-pointer"
-            >
-              Play Ringtone
-            </Label>
+            >{tUi("Play Ringtone")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            Specifies whether to play a ringtone if the call you want to
-            bridge with has not yet been answered
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2">{tUi("Specifies whether to play a ringtone if the call you want to bridge with has not yet been answered")}</p>
 
           {playRingtone && (
             <div>
-              <Label>Ringtone</Label>
+              <Label>{tUi("Ringtone")}</Label>
               <Select
                 value={ringtone}
                 onValueChange={(value) => {
@@ -332,25 +311,22 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
                 }}
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select ringtone" />
+                  <SelectValue placeholder={tUi("Select ringtone")} />
                 </SelectTrigger>
                 <SelectContent>
                   {RINGTONE_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                      {tUi(option.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Specifies which country ringtone to play when play_ringtone is
-                set to true. If not set, the US ringtone will be played.
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">{tUi("Specifies which country ringtone to play when play_ringtone is set to true. If not set, the US ringtone will be played.")}</p>
             </div>
           )}
 
           <div>
-            <Label>Mute DTMF</Label>
+            <Label>{tUi("Mute DTMF")}</Label>
             <Select
               value={muteDtmf}
               onValueChange={(value) => {
@@ -358,19 +334,16 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
               }}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select option" />
+                <SelectValue placeholder={tUi("Select option")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="both">Both</SelectItem>
-                <SelectItem value="self">Self</SelectItem>
-                <SelectItem value="opposite">Opposite</SelectItem>
+                <SelectItem value="none">{tUi("None")}</SelectItem>
+                <SelectItem value="both">{tUi("Both")}</SelectItem>
+                <SelectItem value="self">{tUi("Self")}</SelectItem>
+                <SelectItem value="opposite">{tUi("Opposite")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              When enabled, DTMF tones are not passed to the call participant.
-              The webhooks containing the DTMF information will be sent.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("When enabled, DTMF tones are not passed to the call participant. The webhooks containing the DTMF information will be sent.")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -388,14 +361,12 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
                 recordingExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Recording
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Recording")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>Record</Label>
+            <Label>{tUi("Record")}</Label>
             <Select
               value={record}
               onValueChange={(value) => {
@@ -403,23 +374,19 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
               }}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select recording option" />
+                <SelectValue placeholder={tUi("Select recording option")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="record-from-answer">
-                  Record From Answer
-                </SelectItem>
+                <SelectItem value="record-from-answer">{tUi("Record From Answer")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Start recording automatically after an event. Disabled by default.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Start recording automatically after an event. Disabled by default.")}</p>
           </div>
 
           {record && (
             <>
               <div>
-                <Label>Record Channels</Label>
+                <Label>{tUi("Record Channels")}</Label>
                 <Select
                   value={recordChannels}
                   onValueChange={(value) => {
@@ -427,21 +394,18 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select channels" />
+                    <SelectValue placeholder={tUi("Select channels")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single">Single</SelectItem>
-                    <SelectItem value="dual">Dual</SelectItem>
+                    <SelectItem value="single">{tUi("Single")}</SelectItem>
+                    <SelectItem value="dual">{tUi("Dual")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defines which channel should be recorded ('single' or 'dual')
-                  when record is specified.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Defines which channel should be recorded ('single' or 'dual') when record is specified.")}</p>
               </div>
 
               <div>
-                <Label>Record Format</Label>
+                <Label>{tUi("Record Format")}</Label>
                 <Select
                   value={recordFormat}
                   onValueChange={(value) => {
@@ -449,63 +413,49 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select format" />
+                    <SelectValue placeholder={tUi("Select format")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mp3">MP3</SelectItem>
-                    <SelectItem value="wav">WAV</SelectItem>
+                    <SelectItem value="mp3">{tUi("MP3")}</SelectItem>
+                    <SelectItem value="wav">{tUi("WAV")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defines the format of the recording ('wav' or 'mp3') when
-                  record is specified.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Defines the format of the recording ('wav' or 'mp3') when record is specified.")}</p>
               </div>
 
               <div>
-                <Label>Record Max Length (seconds)</Label>
+                <Label>{tUi("Record Max Length (seconds)")}</Label>
                 <Input
                   type="number"
                   value={recordMaxLength}
                   onChange={(e) => {
                     setRecordMaxLength(e.target.value);
                   }}
-                  placeholder="0 (infinite)"
+                  placeholder={tUi("0 (infinite)")}
                   min={0}
                   max={43200}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defines the maximum length for the recording in seconds when
-                  record is specified. The minimum value is 0. The maximum value
-                  is 43200. The default value is 0 (infinite).
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Defines the maximum length for the recording in seconds when record is specified. The minimum value is 0. The maximum value is 43200. The default value is 0 (infinite).")}</p>
               </div>
 
               <div>
-                <Label>Record Timeout (seconds)</Label>
+                <Label>{tUi("Record Timeout (seconds)")}</Label>
                 <Input
                   type="number"
                   value={recordTimeoutSecs}
                   onChange={(e) => {
                     setRecordTimeoutSecs(e.target.value);
                   }}
-                  placeholder="0 (infinite)"
+                  placeholder={tUi("0 (infinite)")}
                   min={0}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The number of seconds that Telnyx will wait for the recording
-                  to be stopped if silence is detected when record is specified.
-                  The timer only starts when the speech is detected. Please note
-                  that call transcription is used to detect silence and the
-                  related charge will be applied. The minimum value is 0. The
-                  default value is 0 (infinite).
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The number of seconds that Telnyx will wait for the recording to be stopped if silence is detected when record is specified. The timer only starts when the speech is detected. Please note that call transcription is used to detect silence and the related charge will be applied. The minimum value is 0. The default value is 0 (infinite).")}</p>
               </div>
 
               <div>
-                <Label>Record Track</Label>
+                <Label>{tUi("Record Track")}</Label>
                 <Select
                   value={recordTrack}
                   onValueChange={(value) => {
@@ -513,24 +463,19 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select track" />
+                    <SelectValue placeholder={tUi("Select track")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="inbound">Inbound</SelectItem>
-                    <SelectItem value="outbound">Outbound</SelectItem>
-                    <SelectItem value="both">Both</SelectItem>
+                    <SelectItem value="inbound">{tUi("Inbound")}</SelectItem>
+                    <SelectItem value="outbound">{tUi("Outbound")}</SelectItem>
+                    <SelectItem value="both">{tUi("Both")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  The audio track to be recorded. Can be either 'both', 'inbound'
-                  or 'outbound'. If only single track is specified ('inbound',
-                  'outbound'), 'channels' configuration is ignored and it will
-                  be recorded as mono (single channel).
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The audio track to be recorded. Can be either 'both', 'inbound' or 'outbound'. If only single track is specified ('inbound', 'outbound'), 'channels' configuration is ignored and it will be recorded as mono (single channel).")}</p>
               </div>
 
               <div>
-                <Label>Record Trim</Label>
+                <Label>{tUi("Record Trim")}</Label>
                 <Select
                   value={recordTrim}
                   onValueChange={(value) => {
@@ -538,35 +483,28 @@ export default function BridgeNodeEditor({ config = {}, onChange }) {
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select option" />
+                    <SelectValue placeholder={tUi("Select option")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="trim-silence">Trim Silence</SelectItem>
+                    <SelectItem value="trim-silence">{tUi("Trim Silence")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  When set to 'trim-silence', silence will be removed from the
-                  beginning and end of the recording.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("When set to 'trim-silence', silence will be removed from the beginning and end of the recording.")}</p>
               </div>
 
               <div>
-                <Label>Record Custom File Name</Label>
+                <Label>{tUi("Record Custom File Name")}</Label>
                 <Input
                   type="text"
                   value={recordCustomFileName}
                   onChange={(e) => {
                     setRecordCustomFileName(e.target.value);
                   }}
-                  placeholder="my_recording_file_name"
+                  placeholder={tUi("my_recording_file_name")}
                   maxLength={40}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The custom recording file name to be used instead of the
-                  default call_leg_id. Telnyx will still add a Unix timestamp
-                  suffix. Maximum 40 characters.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The custom recording file name to be used instead of the default call_leg_id. Telnyx will still add a Unix timestamp suffix. Maximum 40 characters.")}</p>
               </div>
             </>
           )}

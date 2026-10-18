@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -13,6 +15,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+// Same Telnyx model picker as Admin → AI Copilot.
+import AIModels from "@/components/assistants/AIModels";
 import {
   Accordion,
   AccordionContent,
@@ -49,15 +53,21 @@ import {
   IconChevronRight,
   IconClipboardList,
   IconSettings,
-  IconMoodSmile,
-  IconMoodSad,
-  IconMoodNeutral,
-  IconTarget,
   IconPencil,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
-import { getIntentLabel } from "@/lib/agent-assist/sentiment-analysis";
+// Sequential, never-cancelled slot analysis shared by the chat and voice
+// channels (the internal documentation, 5.3).
+import { createTestAnalysisQueue } from "@/lib/agent-assist/test-analysis-queue.mjs";
+import { hasSlotValue } from "@/lib/agent-assist/slot-display.mjs";
+// Voice channel: the same authenticated Telnyx conversation WebSocket client
+// and relay as the assistant configurator's Call button. The turn engine turns
+// the documented Telnyx events into caller turns; the PCM helpers pace TTS
+// audio into the socket as the simulated caller's voice.
+import { TelnyxAvatarClient } from "@/lib/ai/telnyx-avatar-client.mjs";
+import { createVoiceTestEngine } from "@/lib/ai/workflow-voice-test-engine.mjs";
+import { decodeToPcm16Mono, buildInjection, createPacedSender, createSilenceStreamer } from "@/lib/ai/pcm16-injection.mjs";
 // Shared, client-safe persona + Expressive Mode helpers. Same source of truth as
 // the Call Generator's "Workflow Testing" action, so the simulated caller behaves
 // identically here and in real call-flow workflow testing.
@@ -98,17 +108,24 @@ function getStageCompletion(stage, itemStatuses) {
   };
 }
 
-// Analyze a single message for workflow item completion (same LLM as live agent desktop)
-async function analyzeWorkflowMessage(workflowId, transcript, speaker, itemStatuses, slotsFilled) {
+// Analyze a single conversation line for workflow item completion (same LLM
+// as the live agent desktop). `job` comes from the test analysis queue and
+// carries the preceding lines as `recentContext`, which the analyzer needs to
+// attribute bare answers ("Around 85 euros") to the agent's question.
+async function analyzeWorkflowMessage(workflowId, job, model) {
   const res = await fetch(`/api/admin/workflows/${workflowId}/analyze-test`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
+    signal: job.signal,
     body: JSON.stringify({
-      transcript,
-      speaker,
-      itemStatuses,
-      slotsFilled,
+      transcript: job.transcript,
+      speaker: job.speaker,
+      itemStatuses: job.itemStatuses,
+      slotsFilled: job.slotsFilled,
+      recentContext: job.recentContext,
+      // Per-test model chosen in the Model pickers (omitted = default chain).
+      ...(model ? { model } : {}),
     }),
   });
   const data = await res.json();
@@ -118,6 +135,7 @@ async function analyzeWorkflowMessage(workflowId, transcript, speaker, itemStatu
 
 // Workflow agent view - stages in accordions, crossed out when complete
 function WorkflowAgentView({ stages, itemStatuses }) {
+  const tUi = useUiText();
   const [expandedStage, setExpandedStage] = useState(null);
   const activeStageId = useMemo(() => {
     for (const stage of stages || []) {
@@ -141,8 +159,8 @@ function WorkflowAgentView({ stages, itemStatuses }) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center py-12 text-muted-foreground">
         <IconClipboardList className="size-12 opacity-30 mb-4" />
-        <p className="text-sm">No workflow stages</p>
-        <p className="text-xs mt-1">Configure stages in the workflow editor</p>
+        <p className="text-sm">{tUi("No workflow stages")}</p>
+        <p className="text-xs mt-1">{tUi("Configure stages in the workflow editor")}</p>
       </div>
     );
   }
@@ -208,20 +226,33 @@ function WorkflowAgentView({ stages, itemStatuses }) {
                         status: "pending",
                       };
                       const isCompleted = status.status === "completed";
-                      const slotValue =
-                        status.value || status.extracted_value;
+                      // Below-threshold extraction: shown in amber with its
+                      // confidence (agent desktop semantics) but not counted as
+                      // completed anywhere.
+                      const isSuggested = status.status === "suggested";
+                      const slotValue = hasSlotValue(status.value)
+                        ? status.value
+                        : status.extracted_value;
+                      const confidencePercent =
+                        typeof status.confidence_score === "number"
+                          ? Math.round(status.confidence_score * 100)
+                          : null;
                       return (
                         <div
                           key={item.id}
+                          data-workflow-item-status={status.status || "pending"}
                           className={cn(
                             "flex items-start gap-2 p-2 rounded-md",
                             isCompleted && "bg-green-500/10",
-                            !isCompleted && "hover:bg-muted/50"
+                            isSuggested && "bg-amber-500/10 border-l-2 border-amber-500",
+                            !isCompleted && !isSuggested && "hover:bg-muted/50"
                           )}
                         >
                           <span className="mt-0.5">
                             {isCompleted ? (
                               <IconCircleCheck className="size-4 text-green-500 shrink-0" />
+                            ) : isSuggested ? (
+                              <IconAlertCircle className="size-4 text-amber-500 shrink-0" />
                             ) : (
                               <span className="w-4 h-4 rounded-full border border-muted-foreground/50 shrink-0 inline-block" />
                             )}
@@ -235,10 +266,37 @@ function WorkflowAgentView({ stages, itemStatuses }) {
                             >
                               {item.label}
                             </p>
-                            {item.type === "slot" && slotValue && (
-                              <p className="text-sm font-medium text-foreground mt-1">
-                                {slotValue}
+                            {item.type === "slot" && hasSlotValue(slotValue) && (
+                              <p
+                                className={cn(
+                                  "text-sm font-medium mt-1",
+                                  isSuggested
+                                    ? "text-amber-700 dark:text-amber-300"
+                                    : "text-foreground"
+                                )}
+                              >
+                                {String(slotValue)}
                               </p>
+                            )}
+                            {isSuggested && (
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] px-1.5 py-0 text-amber-700 dark:text-amber-300 border-amber-500/60 bg-amber-500/10"
+                                  title={
+                                    status.is_correction
+                                      ? tUi("Heard as a correction — confirm to replace the captured value")
+                                      : undefined
+                                  }
+                                >
+                                  {status.is_correction ? tUi("Correction") : tUi("Suggested")}
+                                </Badge>
+                                {confidencePercent !== null && (
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                    {tUi("{value0}% confidence", { value0: confidencePercent })}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -263,6 +321,7 @@ function TestWorkflowProgressBar({
   totalItems,
   currentStep,
 }) {
+  const tUi = useUiText();
   const displayPercentage =
     totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
   const isComplete = completedItems >= totalItems && totalItems > 0;
@@ -282,7 +341,7 @@ function TestWorkflowProgressBar({
                   "flex items-center",
                   index < (stages?.length || 1) - 1 && "gap-1"
                 )}
-                title={`${stage.name}: ${completion.completed}/${completion.total}`}
+                title={tUi("{value0}: {value1}/{value2}", { value0: stage.name, value1: completion.completed, value2: completion.total })}
               >
                 <div
                   className={cn(
@@ -304,7 +363,7 @@ function TestWorkflowProgressBar({
               </div>
             );
           }) : (
-            <span className="text-sm text-muted-foreground">No stages</span>
+            <span className="text-sm text-muted-foreground">{tUi("No stages")}</span>
           )}
         </div>
         <div className="flex-1">
@@ -329,8 +388,7 @@ function TestWorkflowProgressBar({
           >
             {displayPercentage}%
           </Badge>
-          <span className="text-sm text-muted-foreground">
-            Turn {currentStep}
+          <span className="text-sm text-muted-foreground">{tUi("Turn ")}{currentStep}
           </span>
         </div>
       </div>
@@ -338,35 +396,11 @@ function TestWorkflowProgressBar({
   );
 }
 
-// Sentiment icon helper (matches agent desktop)
-function getSentimentIcon(sentiment) {
-  const iconProps = { className: "size-3.5 shrink-0" };
-  switch (sentiment) {
-    case "positive":
-      return <IconMoodSmile {...iconProps} />;
-    case "negative":
-      return <IconMoodSad {...iconProps} />;
-    default:
-      return <IconMoodNeutral {...iconProps} />;
-  }
-}
-
-function getSentimentColor(sentiment) {
-  switch (sentiment) {
-    case "positive":
-      return "text-green-600 dark:text-green-400";
-    case "negative":
-      return "text-red-500 dark:text-red-400";
-    default:
-      return "text-muted-foreground";
-  }
-}
-
-// Message component with intent/sentiment badges (same as agent desktop)
-function Message({ message, isUser, analysis }) {
-  const sentiment = analysis?.sentiment;
-  const sentimentScore = analysis?.sentimentScore;
-  const intent = analysis?.intent;
+// Message bubble. Intent/sentiment badges were removed: the analyze-test
+// route stopped returning them in #1365 (intent and sentiment run as their
+// own request in the live path and never ride on slot extraction).
+function Message({ message, isUser }) {
+  const tUi = useUiText();
   const isManual = message.manual === true;
 
   return (
@@ -395,222 +429,146 @@ function Message({ message, isUser, analysis }) {
           )}
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm flex-1">{message.content}</p>
+            <div className="flex-1 min-w-0">
+              <p className={cn("text-sm", message.streaming && "animate-pulse")}>{message.content}</p>
+              {message.spoken && (
+                <p className="mt-1 text-[11px] opacity-80" title={tUi("What the simulated caller said; the bubble shows what Telnyx heard")}>
+                  {tUi("Spoken")}: {message.spoken}
+                </p>
+              )}
+              {message.interrupted && (
+                <p className="mt-1 text-[11px] text-amber-500">{tUi("Interrupted by the caller")}</p>
+              )}
+            </div>
             {isManual && isUser && (
               <IconPencil
                 className="size-3.5 shrink-0 mt-0.5 opacity-80"
-                title="Manually provided (auto flow stopped)"
+                title={tUi("Manually provided (auto flow stopped)")}
               />
             )}
           </div>
           <span className="text-xs opacity-70 mt-1 block">
-            {new Date(message.timestamp).toLocaleTimeString()}
+            {new Date(message.timestamp).toLocaleTimeString(tUi.locale)}
           </span>
         </div>
-        {/* Intent and sentiment badges (same as agent desktop) */}
-        {(intent || sentiment) && (
-          <div
-            className={cn(
-              "flex items-center gap-1.5 mt-1 flex-wrap",
-              isUser ? "flex-row-reverse" : ""
-            )}
-          >
-            {intent && (
-              <Badge
-                variant="outline"
-                className="text-[10px] bg-purple-500/10 text-purple-500 border-purple-500/50 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/50"
-              >
-                <IconTarget className="size-3 mr-0.5" />
-                {getIntentLabel(intent)}
-              </Badge>
-            )}
-            {sentiment && (
-              <div
-                className={cn(
-                  "flex items-center gap-0.5",
-                  getSentimentColor(sentiment)
-                )}
-              >
-                {getSentimentIcon(sentiment)}
-                {typeof sentimentScore === "number" && (
-                  <span className="text-[10px]">{sentimentScore}</span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
 // ============================================
-// MOCK MICROPHONE FOR VOICE TESTS
-// ============================================
-
-class MockMicrophone {
-  constructor() {
-    this.audioContext = null;
-    this.destination = null;
-    this.stream = null;
-    this.isPlaying = false;
-    this.silentOscillator = null;
-    this.silentGain = null;
-  }
-
-  async init() {
-    // Create AudioContext at 48kHz (WebRTC standard for Opus codec)
-    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: 48000,
-    });
-
-    // Resume context if suspended (browser autoplay policy)
-    if (this.audioContext.state === 'suspended') {
-      console.log("[MockMic] AudioContext suspended, resuming...");
-      await this.audioContext.resume();
-    }
-
-    // Create destination that produces a MediaStream
-    this.destination = this.audioContext.createMediaStreamDestination();
-    this.stream = this.destination.stream;
-
-    // Create a constant low-level tone to keep the stream "alive"
-    // WebRTC needs continuous audio data flow
-    this.silentOscillator = this.audioContext.createOscillator();
-    this.silentOscillator.type = 'sine';
-    this.silentOscillator.frequency.value = 100; // 100 Hz tone
-    
-    this.silentGain = this.audioContext.createGain();
-    this.silentGain.gain.value = 0.001; // Barely audible
-    
-    this.silentOscillator.connect(this.silentGain);
-    this.silentGain.connect(this.destination);
-    this.silentOscillator.start();
-
-    console.log(`[MockMic] Initialized (48kHz), AudioContext state: ${this.audioContext.state}`);
-    
-    // Try to disable AGC/noise suppression on the track
-    const track = this.stream.getAudioTracks()[0];
-    try {
-      await track.applyConstraints({
-        autoGainControl: false,
-        noiseSuppression: false,
-        echoCancellation: false,
-      });
-      console.log(`[MockMic] Disabled AGC/noise suppression on track`);
-    } catch (e) {
-      console.warn(`[MockMic] Could not disable AGC:`, e.message);
-    }
-    
-    console.log(`[MockMic] Audio track: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
-    
-    return this.stream;
-  }
-  
-  // Method to verify stream is active
-  debugStreamStatus() {
-    if (!this.stream) return "No stream";
-    const track = this.stream.getAudioTracks()[0];
-    if (!track) return "No audio track";
-    return `enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`;
-  }
-
-  async injectAudio(audioBuffer) {
-    if (!this.audioContext || !this.destination) {
-      throw new Error("Mock microphone not initialized");
-    }
-
-    this.isPlaying = true;
-
-    return new Promise((resolve, reject) => {
-      try {
-        const source = this.audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        
-        source.connect(this.destination);
-
-        source.onended = () => {
-          this.isPlaying = false;
-          console.log(`[MockMic] Audio injection completed`);
-          resolve();
-        };
-
-        source.start();
-        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio`);
-      } catch (err) {
-        this.isPlaying = false;
-        reject(err);
-      }
-    });
-  }
-
-  async injectAudioFromUrl(url) {
-    console.log(`[MockMic] Loading audio from: ${url}`);
-
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`);
-
-    const arrayBuffer = await response.arrayBuffer();
-    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-
-    return this.injectAudio(audioBuffer);
-  }
-
-  getStream() {
-    return this.stream;
-  }
-
-  cleanup() {
-    // Stop silent oscillator
-    if (this.silentOscillator) {
-      try {
-        this.silentOscillator.stop();
-      } catch (e) {
-        // Ignore if already stopped
-      }
-      this.silentOscillator = null;
-    }
-    this.silentGain = null;
-    
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
-    this.destination = null;
-    this.stream = null;
-    
-    console.log("[MockMic] Cleaned up");
-  }
-}
-
-// ============================================
 // TTS SERVICE FOR VOICE TESTS
 // ============================================
 
+// Synthesize the simulated caller's line. Returns the encoded audio so it can
+// be decoded to PCM16 for the Telnyx conversation socket and, optionally,
+// played locally for monitoring.
 async function generateTTS(text, voice) {
   console.log(`[TTS] Generating for: "${text.substring(0, 50)}..." with voice: ${voice}`);
 
   const response = await fetch("/api/tts/speech", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text,
-      voice,
-    }),
+    body: JSON.stringify({ text, voice }),
   });
 
   if (!response.ok) {
     throw new Error(`TTS server error: ${response.status}`);
   }
 
-  const audioBlob = await response.blob();
-  const audioUrl = URL.createObjectURL(audioBlob);
+  return {
+    arrayBuffer: await response.arrayBuffer(),
+    contentType: response.headers.get("content-type") || "audio/mpeg",
+  };
+}
 
-  console.log("[TTS] Audio generated");
-  return audioUrl;
+// Issue a workflow-scoped capability for the authenticated assistant call relay
+// (the same relay the assistant configurator's Call button uses).
+async function requestVoiceTestSession(workflowId) {
+  const response = await fetch(`/api/admin/workflows/${workflowId}/voice-test-session`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      response.status === 401 ? "Your Contact Center session has ended. Sign in again."
+        : response.status === 403 ? "You do not have permission to run voice tests."
+        : data.error || "Could not prepare the voice test. Try again."
+    );
+  }
+  return data;
+}
+
+const VOICE_INPUT_RATE = 16000;
+// Select triggers in the configuration column fill the column and truncate long
+// values (e.g. TTS voice names) instead of widening it.
+const CONFIG_SELECT_TRIGGER = "w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate";
+const VOICE_RESPONSE_WATCHDOG_MS = 12000;
+// After a closing phrase the assistant usually hangs up itself; if it does not,
+// the test is finished after this grace period.
+const VOICE_ENDING_GRACE_MS = 5000;
+// A typed MANUAL turn whose Telnyx echo has not arrived within this time is no
+// longer expected.
+const TEXT_ECHO_TTL_MS = 15000;
+const normalizeEchoText = (text) => String(text || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+// Model picker for one test run: the Admin → AI Copilot model list and the
+// effective default with its source. Choosing another model applies to this
+// test only; the workflow and AI Copilot settings are not changed.
+function TestModelPicker({ id, label, hint, value, onChange, defaultModel, models, loading, disabled }) {
+  const tUi = useUiText();
+  const options = value && !models.some((m) => m.id === value) ? [{ id: value, name: value }, ...models] : models;
+  const overridden = Boolean(value && defaultModel?.model && value !== defaultModel.model);
+  const sourceText = overridden
+    ? tUi("This test only. Default: {value0}", { value0: defaultModel.model })
+    : defaultModel?.source === "workflow"
+      ? tUi("Workflow setting (overrides AI Copilot)")
+      : defaultModel?.source === "ai-copilot"
+        ? tUi("From its Admin → AI Copilot card")
+        : defaultModel?.source === "default"
+          ? tUi("Platform default model (Admin → AI Copilot)")
+          : defaultModel?.source === "env"
+            ? tUi("Platform default from TELNYX_AI_DEFAULT_MODEL")
+            : defaultModel && !defaultModel.model
+              ? tUi("No model configured. Choose one here or in Admin → AI Copilot.")
+              : "";
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-sm font-medium">{label}</Label>
+      {loading ? (
+        <Skeleton className="h-9 w-full" />
+      ) : (
+        <AIModels
+          id={id}
+          value={value}
+          onValueChange={onChange}
+          models={options}
+          placeholder={tUi("Select model...")}
+          triggerClassName="border bg-background"
+          disabled={disabled}
+        />
+      )}
+      <p className="text-xs text-muted-foreground">{hint}</p>
+      {sourceText && (
+        <div className="flex flex-wrap items-center gap-x-2 text-xs">
+          <span className={overridden ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}>{sourceText}</span>
+          {overridden && !disabled && (
+            <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => onChange(defaultModel.model)}>
+              {tUi("Reset")}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TestAgentPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const params = useParams();
   const flowId = params.id;
@@ -618,7 +576,7 @@ export default function TestAgentPage() {
   const [loading, setLoading] = useState(true);
   const [workflow, setWorkflow] = useState(null);
   const [channel, setChannel] = useState("chat"); // "chat" or "voice"
-  
+
   // Dynamic response generation (on-the-fly customer simulation)
   // Persona vocabulary is shared with the Call Generator workflow tester
   // (neutral default + the full Ultra-emotion-aligned persona list).
@@ -627,35 +585,45 @@ export default function TestAgentPage() {
   const [expressive, setExpressive] = useState(false); // Expressive Mode: add Ultra/xAI TTS tags matching the persona
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
-  const [turnSettleMs, setTurnSettleMs] = useState(800); // Event-driven: silence window after agent settles into "listening" before the simulated caller replies (ms)
   const [isMuted, setIsMuted] = useState(false); // Microphone mute state (MANUAL mode)
+
+  // Models for this test. Defaults follow the platform precedence and come from
+  // the server: analysis = workflow model > Admin → AI Copilot "Workflow
+  // analysis" > built-in; caller = AI Copilot "Simulated customer" > built-in.
+  // Picking another model applies to this test only; nothing is saved.
+  const [modelCatalog, setModelCatalog] = useState([]);
+  const [modelDefaults, setModelDefaults] = useState(null); // { analysis: {model, source}, caller: {model, source} }
+  const [modelCatalogLoading, setModelCatalogLoading] = useState(true);
+  const [modelCatalogError, setModelCatalogError] = useState("");
+  const [analysisModel, setAnalysisModel] = useState("");
+  const [callerModel, setCallerModel] = useState("");
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  
+
   // Chat state
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [isAutoMode, setIsAutoMode] = useState(true);
-  
+
   // Voice state
   const [voiceStatus, setVoiceStatus] = useState("idle"); // idle, connecting, active, error
   const [localAudioEnabled, setLocalAudioEnabled] = useState(true);
   const [agentState, setAgentState] = useState("idle");
-  const [hasReceivedWelcomeMessage, setHasReceivedWelcomeMessage] = useState(false);
-  
+  const [pendingAssistantText, setPendingAssistantText] = useState(null); // Assistant line being spoken (streamed transcript)
+  const [userSpeaking, setUserSpeaking] = useState(false); // Telnyx VAD detected the caller's voice
+
   // TTS configuration
   const [ttsVoices, setTtsVoices] = useState({});
   const [ttsProvider, setTtsProvider] = useState("");
   const [ttsModel, setTtsModel] = useState("");
-  const [ttsVoice, setTtsVoice] = useState("");
   const [ttsVoiceId, setTtsVoiceId] = useState(""); // Full voice ID like "Minimax.speech-2.8-turbo.English_male"
-  
+
   // Agent state (from workflow config - no dropdown)
   const [agentId, setAgentId] = useState(null);
   const [assistantName, setAssistantName] = useState(null);
-  
+
   // Chat conversation state
   const [conversationId, setConversationId] = useState(null);
 
@@ -663,69 +631,76 @@ export default function TestAgentPage() {
   const [workflowItemStatuses, setWorkflowItemStatuses] = useState({});
   const [workflowSlotsFilled, setWorkflowSlotsFilled] = useState({});
   const [isAnalyzingWorkflow, setIsAnalyzingWorkflow] = useState(false);
-  const [messageAnalysis, setMessageAnalysis] = useState({}); // index -> { intent, sentiment, sentimentScore }
-  
+
   // Refs
   const messagesEndRef = useRef(null);
-  const voiceClientRef = useRef(null);
-  const activeCallRef = useRef(null); // Store active call for mute/unmute
-  const audioContextRef = useRef(null);
-  const mockMicRef = useRef(null); // Mock microphone for audio injection
-  const originalGetUserMediaRef = useRef(null); // Original browser microphone API while AUTO mode is patched
-  const remoteAudioRef = useRef(null); // Remote audio element for AI voice
+  const voiceClientRef = useRef(null); // TelnyxAvatarClient for the active voice test
+  const voiceEngineRef = useRef(null); // Turn engine fed with the client's raw Telnyx events
+  const injectionRef = useRef(null); // Paced PCM sender for the caller line in flight
+  const silenceStopRef = useRef(null); // Stops the silent-frame stream that keeps the caller's line alive (AUTO mode)
+  const responseWatchdogRef = useRef(null); // Timer: assistant did not answer the caller
+  const lastSpokenTextRef = useRef(null); // Text injected as the caller (compared with Telnyx STT)
+  const pendingTextEchoesRef = useRef([]); // MANUAL text turns already shown locally; Telnyx echoes each as a transcription
+  const callerUtteranceRef = useRef(0); // Token of the caller line in flight; hearing the caller or the assistant starting invalidates it
+  const endingTimerRef = useRef(null); // Grace period after a closing phrase before the test is finished
+  const voiceRetryRef = useRef(0); // Watchdog retries for the current caller line
   const autoModeRef = useRef(isAutoMode); // Track auto mode in ref for callbacks
   const isTestRunningRef = useRef(false); // Track test running for async stop checks
-  const welcomeMessageReceivedRef = useRef(false); // Track if welcome message was received
   const currentStepRef = useRef(0); // Track current step in ref for voice callbacks
   const respondingInProgressRef = useRef(false); // Prevent double responses
   const localAudioEnabledRef = useRef(true); // Track local audio playback
   const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
   const expressiveRef = useRef(false); // Expressive Mode, read by voice callbacks without stale closures
   const selectedPersonaRef = useRef("neutral"); // Persona, read by voice callbacks / expression helper
-  // Event-driven turn detection (replaces fixed response delay)
-  const turnSettleTimerRef = useRef(null); // Debounce timer armed when agent settles into "listening"
-  const lastTranscriptAtRef = useRef(0); // Timestamp of the most recent assistant transcript line
-  const agentStateRef = useRef("idle"); // Live agent state for async checks without stale closures
-  const lastAnalyzedMessageIndexRef = useRef(-1);
-  const workflowAnalysisInProgressRef = useRef(false);
+  const analysisModelOverrideRef = useRef(""); // Per-test analysis model, read by the analysis queue
+  const callerModelOverrideRef = useRef(""); // Per-test simulated caller model
+  const isPausedRef = useRef(false); // Pause flag read inside the auto loop (the closure would be stale)
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
   const customerDataRef = useRef(null); // Persist customer data across async calls
   customerDataRef.current = customerData;
   const messagesRef = useRef([]); // Track messages for async access without stale closures
   messagesRef.current = messages;
 
-  // Wait for workflow analysis to complete before sending next message (so LLM can fill slots)
-  const waitForAnalysisAndDelay = useCallback(async () => {
-    // Let React commit so analysis useEffect can run and process new messages
-    await new Promise((r) => setTimeout(r, 600));
-    // Wait for analysis to finish (poll, max 15s)
-    const maxWait = 15000;
-    const pollInterval = 200;
-    const start = Date.now();
-    while (workflowAnalysisInProgressRef.current && Date.now() - start < maxWait) {
-      await new Promise((r) => setTimeout(r, pollInterval));
-    }
-    // Brief delay so workflow UI updates
-    await new Promise((r) => setTimeout(r, 800));
-  }, []);
-  const workflowItemStatusesRef = useRef({});
-  const workflowSlotsFilledRef = useRef({});
-  const [analysisRetryTrigger, setAnalysisRetryTrigger] = useState(0);
-  workflowItemStatusesRef.current = workflowItemStatuses;
-  workflowSlotsFilledRef.current = workflowSlotsFilled;
+  // Slot analysis queue. One instance per page: every analysable line (chat
+  // message or voice transcript item) is enqueued where it is appended to
+  // `messages`, analysed one at a time in arrival order, and never cancelled
+  // by a later line. The queue owns the item statuses / filled slots; React
+  // state only mirrors them for rendering.
+  const analysisEnabledRef = useRef(false);
+  // `flowId` is a route param: a different workflow mounts a fresh page (and
+  // a fresh queue), so capturing it here is exact.
+  const [analysisQueue] = useState(() =>
+    createTestAnalysisQueue({
+      // The per-test model travels with each line (set when it is enqueued).
+      analyze: (job) => analyzeWorkflowMessage(flowId, job, job.message?.analysisModel),
+      onUpdate: ({ itemStatuses, slotsFilled }) => {
+        setWorkflowItemStatuses(itemStatuses);
+        setWorkflowSlotsFilled(slotsFilled);
+      },
+      onError: (err, job) => {
+        if (err?.name === "AbortError") return;
+        console.error("[Workflow Test] Analyze error:", err, job?.messageId);
+      },
+      onBusyChange: setIsAnalyzingWorkflow,
+    })
+  );
 
-  const restoreMockMicrophone = useCallback(() => {
-    if (mockMicRef.current) {
-      mockMicRef.current.cleanup();
-      mockMicRef.current = null;
-    }
+  useEffect(() => {
+    analysisEnabledRef.current = Boolean(flowId && workflow?.stages?.length);
+  }, [flowId, workflow?.stages?.length]);
 
-    if (originalGetUserMediaRef.current && typeof navigator !== "undefined" && navigator.mediaDevices) {
-      navigator.mediaDevices.getUserMedia = originalGetUserMediaRef.current;
-      originalGetUserMediaRef.current = null;
-    }
-  }, []);
-  
+  const enqueueForAnalysis = useCallback((message) => {
+    if (!analysisEnabledRef.current || !isTestRunningRef.current) return;
+    analysisQueue.enqueue(analysisModelOverrideRef.current ? { ...message, analysisModel: analysisModelOverrideRef.current } : message);
+  }, [analysisQueue]);
+
+  // Wait for the queue to finish every line enqueued so far (the caller's
+  // answer and the assistant's reply), so the next simulated reply is
+  // generated with the slots the analyzer has already filled.
+  const waitForAnalysis = useCallback(async () => {
+    await analysisQueue.idle();
+  }, [analysisQueue]);
+
   // Generate dynamic customer response via LLM (on-the-fly, no pre-generated scenario)
   const generateDynamicResponse = useCallback(async (lastAiMessage, conversationHistory) => {
     console.log("[generateDynamicResponse] Called with:", {
@@ -734,7 +709,7 @@ export default function TestAgentPage() {
       persona: selectedPersona,
       hasCustomerData: !!customerDataRef.current,
     });
-    
+
     try {
       const res = await fetch(`/api/admin/workflows/${flowId}/generate-response`, {
         method: "POST",
@@ -745,18 +720,19 @@ export default function TestAgentPage() {
           conversationHistory,
           persona: selectedPersona,
           customerData: customerDataRef.current,
-          filledSlots: workflowSlotsFilledRef.current,
+          filledSlots: analysisQueue.getState().slotsFilled,
           // Voice + Expressive Mode let the simulated caller's reply carry the
           // matching TTS expression tags (Ultra <emotion>, xAI speech tags),
           // mirroring the Call Generator workflow tester.
           voice: ttsVoiceRef.current,
           expressive: expressiveRef.current,
+          ...(callerModelOverrideRef.current ? { model: callerModelOverrideRef.current } : {}),
         }),
       });
 
       const data = await res.json();
       console.log("[generateDynamicResponse] API response:", { ok: res.ok, response: data.response?.substring(0, 50) });
-      
+
       if (!res.ok) throw new Error(data.error || "Failed to generate response");
 
       // Store customer data for consistency across the test session
@@ -774,7 +750,7 @@ export default function TestAgentPage() {
       });
       return null;
     }
-  }, [flowId, selectedPersona]);
+  }, [flowId, selectedPersona, analysisQueue]);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -790,14 +766,14 @@ export default function TestAgentPage() {
   }, [isTestRunning]);
 
   useEffect(() => {
-    localAudioEnabledRef.current = localAudioEnabled;
-  }, [localAudioEnabled]);
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
-  // Keep the turn-settle window live for event callbacks (avoids stale closures)
-  const turnSettleMsRef = useRef(turnSettleMs);
   useEffect(() => {
-    turnSettleMsRef.current = turnSettleMs;
-  }, [turnSettleMs]);
+    localAudioEnabledRef.current = localAudioEnabled;
+    // Also (un)mute the assistant's voice on an active conversation.
+    voiceClientRef.current?.setPlaybackHeld?.(!localAudioEnabled);
+  }, [localAudioEnabled]);
 
   // Load TTS voices from API
   useEffect(() => {
@@ -831,7 +807,7 @@ export default function TestAgentPage() {
             }
           }
           setTtsVoices(voicesMap);
-          
+
           // Set defaults - prefer Telnyx NaturalHD
           const providerKeys = Object.keys(voicesMap);
           if (providerKeys.length > 0) {
@@ -843,7 +819,6 @@ export default function TestAgentPage() {
               setTtsModel(defaultModel);
               const voices = voicesMap[defaultProvider][defaultModel] || [];
               if (voices.length > 0) {
-                setTtsVoice(voices[0].name);
                 setTtsVoiceId(voices[0].id);
               }
             }
@@ -910,24 +885,53 @@ export default function TestAgentPage() {
       setTtsModel(models[0]);
       const voices = ttsVoices[ttsProvider][models[0]] || [];
       if (voices.length > 0) {
-        setTtsVoice(voices[0].name);
         setTtsVoiceId(voices[0].id);
       }
     }
   }, [ttsProvider, ttsVoices]);
 
-  // Reset voice when model changes  
+  // Reset voice when model changes
   useEffect(() => {
     if (!ttsProvider || !ttsModel || !ttsVoices[ttsProvider]) return;
     const voices = ttsVoices[ttsProvider]?.[ttsModel] || [];
     if (voices.length > 0) {
-      const currentVoice = voices.find(v => v.name === ttsVoice);
+      // Voice ids are unique; names are not (Minimax lists several voices per name).
+      const currentVoice = voices.find(v => v.id === ttsVoiceId);
       if (!currentVoice) {
-        setTtsVoice(voices[0].name);
         setTtsVoiceId(voices[0].id);
       }
     }
-  }, [ttsModel, ttsProvider, ttsVoice, ttsVoices]);
+  }, [ttsModel, ttsProvider, ttsVoiceId, ttsVoices]);
+
+  // Load the model catalogue (same list as Admin → AI Copilot) and the defaults.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/admin/workflows/${flowId}/model-catalog`, { cache: "no-store", credentials: "include", signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Model list unavailable");
+        setModelCatalog(Array.isArray(data.models) ? data.models : []);
+        setModelDefaults(data.defaults || null);
+        setAnalysisModel(data.defaults?.analysis?.model || "");
+        setCallerModel(data.defaults?.caller?.model || "");
+        if (data.error) setModelCatalogError(data.error);
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") setModelCatalogError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setModelCatalogLoading(false);
+      });
+    return () => controller.abort();
+  }, [flowId]);
+
+  // A model equal to the default is not an override: the server resolves it.
+  useEffect(() => {
+    analysisModelOverrideRef.current =
+      analysisModel && analysisModel !== modelDefaults?.analysis?.model ? analysisModel : "";
+    callerModelOverrideRef.current =
+      callerModel && callerModel !== modelDefaults?.caller?.model ? callerModel : "";
+  }, [analysisModel, callerModel, modelDefaults]);
 
   // Load workflow data
   useEffect(() => {
@@ -994,7 +998,7 @@ export default function TestAgentPage() {
   const currentPersona = personas.find((p) => p.id === selectedPersona);
   const currentPersonaDescription =
     currentPersona?.instruction?.trim() ||
-    (selectedPersona === "neutral" ? "Cooperative caller, neutral tone — no extra behavioural pressure." : "");
+    (selectedPersona === "neutral" ? tUi("Cooperative caller, neutral tone — no extra behavioural pressure.") : "");
 
   const workflowStages = workflow?.stages ?? [];
   const totalWorkflowItems = workflowStages.reduce(
@@ -1005,108 +1009,24 @@ export default function TestAgentPage() {
     (s) => s?.status === "completed"
   ).length;
 
-  // Analyze new messages with LLM (same approach as live agent desktop)
-  useEffect(() => {
-    if (!flowId || !workflow?.stages?.length || !isTestRunning) return;
-
-    const analyzableMessages = messages
-      .map((m, i) => ({ ...m, index: i }))
-      .filter((m) => m.role !== "system" && m.content?.trim());
-    const toAnalyze = analyzableMessages.filter(
-      (m) => m.index > lastAnalyzedMessageIndexRef.current
-    );
-    if (toAnalyze.length === 0) return;
-
-    if (workflowAnalysisInProgressRef.current) {
-      // Analysis in progress, retry shortly so we process these messages when it finishes
-      const t = setTimeout(() => setAnalysisRetryTrigger((r) => r + 1), 400);
-      return () => clearTimeout(t);
-    }
-
-    let cancelled = false;
-    workflowAnalysisInProgressRef.current = true;
-    setIsAnalyzingWorkflow(true);
-
-    (async () => {
-      let statuses = { ...workflowItemStatusesRef.current };
-      let slots = { ...workflowSlotsFilledRef.current };
-
-      for (const msg of toAnalyze) {
-        if (cancelled) break;
-        const speaker = msg.role === "user" ? "customer" : "agent";
-        try {
-          const result = await analyzeWorkflowMessage(
-            flowId,
-            msg.content,
-            speaker,
-            statuses,
-            slots
-          );
-          if (result.updates?.length) {
-            for (const u of result.updates) {
-              if (u.status === "completed") {
-                statuses = {
-                  ...statuses,
-                  [u.item_id]: {
-                    status: "completed",
-                    extracted_value: u.extracted_value,
-                    value: u.extracted_value,
-                    confidence_score: u.confidence,
-                  },
-                };
-              }
-            }
-          }
-          if (result.slotsFilled && Object.keys(result.slotsFilled).length > 0) {
-            slots = { ...slots, ...result.slotsFilled };
-          }
-          // Store intent/sentiment for message display (same as agent desktop)
-          if (result.intent || result.sentiment) {
-            setMessageAnalysis((prev) => ({
-              ...prev,
-              [msg.index]: {
-                intent: result.intent,
-                sentiment: result.sentiment,
-                sentimentScore: result.sentimentScore,
-              },
-            }));
-          }
-        } catch (err) {
-          console.error("[Workflow Test] Analyze error:", err);
-        }
-        lastAnalyzedMessageIndexRef.current = msg.index;
-      }
-
-      if (!cancelled) {
-        setWorkflowItemStatuses(statuses);
-        setWorkflowSlotsFilled(slots);
-      }
-      workflowAnalysisInProgressRef.current = false;
-      setIsAnalyzingWorkflow(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [flowId, workflow?.stages?.length, isTestRunning, messages, analysisRetryTrigger]);
 
   // Send chat message via REST API
   const sendChatMessage = useCallback(async (messageText, convId, stepIndex = null, options = {}) => {
     if (!agentId || !convId) return null;
-    
+
     setSendingMessage(true);
-    
-    // Add user message to UI
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: uniqueMessageId("user"),
-        role: "user",
-        content: messageText,
-        timestamp: new Date().toISOString(),
-        manual: options.manual === true,
-      },
-    ]);
+
+    // Add user message to UI and queue it for slot analysis right away, so
+    // the analyzer works while the assistant composes its reply.
+    const userMessage = {
+      id: uniqueMessageId("user"),
+      role: "user",
+      content: messageText,
+      timestamp: new Date().toISOString(),
+      manual: options.manual === true,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    enqueueForAnalysis(userMessage);
 
     try {
       const res = await fetch(`/api/ai/assistants/${agentId}/chat`, {
@@ -1118,27 +1038,26 @@ export default function TestAgentPage() {
           name: "Test User",
         }),
       });
-      
+
       const data = await res.json();
       setSendingMessage(false);
-      
+
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Chat request failed");
       }
-      
+
       const aiContent = data.content || data.response || "";
-      
-      // Add AI response to UI
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uniqueMessageId("ai"),
-          role: "assistant",
-          content: aiContent,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-      
+
+      // Add AI response to UI; it joins the queue behind the user's line.
+      const aiMessage = {
+        id: uniqueMessageId("ai"),
+        role: "assistant",
+        content: aiContent,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+      enqueueForAnalysis(aiMessage);
+
       return aiContent;
     } catch (err) {
       setSendingMessage(false);
@@ -1149,42 +1068,49 @@ export default function TestAgentPage() {
       });
       return null;
     }
-  }, [agentId]);
+  }, [agentId, enqueueForAnalysis]);
 
   // Process AI response and send next customer response if in auto mode
   const processAIResponse = useCallback(async (aiContent, convId, currentStepIndex) => {
-    if (!autoModeRef.current || isPaused || !isTestRunningRef.current) return;
-    
+    if (!autoModeRef.current || !isTestRunningRef.current) return;
+
     try {
       // Dynamic response generation loop
       let currentAiMessage = aiContent;
       let stepNum = currentStepIndex;
       const MAX_TURNS = 50; // Safety limit to prevent infinite loops
-      
+
       // Phrases that indicate conversation is ending
       // NOTE: Removed "thank you for calling" / "thanks for calling" - often used as greeting, not goodbye
       const ENDING_PHRASES = [
         "goodbye", "good bye", "have a great day", "have a nice day",
         "take care", "end the call", "ending the call", "disconnect", "hanging up",
       ];
-      
+
       // Check if message indicates conversation ending
       const isConversationEnding = (message) => {
         if (!message) return false;
         const lower = message.toLowerCase();
         return ENDING_PHRASES.some(phrase => lower.includes(phrase));
       };
-      
+
       for (let turn = 0; turn < MAX_TURNS; turn++) {
-        if (!isTestRunningRef.current || isPaused) {
-          console.log("[Dynamic] Test stopped or paused");
+        if (!isTestRunningRef.current) {
+          console.log("[Dynamic] Test stopped");
           break;
         }
+        // Pause holds the loop here until Resume or Stop. The flag is read
+        // from a ref: the closure's `isPaused` is the value from when this
+        // loop started, so it never saw the button.
+        while (isPausedRef.current && isTestRunningRef.current) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        if (!isTestRunningRef.current) break;
         if (!autoModeRef.current) {
           console.log("[Dynamic] Auto mode disabled");
           break;
         }
-        
+
         // Check if AI is saying goodbye - if so, end the test
         if (isConversationEnding(currentAiMessage)) {
           console.log("[Dynamic] Detected conversation ending phrase, completing test");
@@ -1207,14 +1133,14 @@ export default function TestAgentPage() {
 
         console.log(`[Dynamic] Turn ${turn + 1}: Processing AI response:`, currentAiMessage?.substring(0, 50) + "...");
 
-        await waitForAnalysisAndDelay();
+        await waitForAnalysis();
         if (!isTestRunningRef.current) break;
 
         // Generate dynamic response based on AI's message
         setIsGeneratingResponse(true);
         const dynamicResponse = await generateDynamicResponse(currentAiMessage, conversationHistory);
         setIsGeneratingResponse(false);
-        
+
         if (!dynamicResponse) {
           console.error("[Dynamic] Failed to generate response, stopping");
           break;
@@ -1226,7 +1152,7 @@ export default function TestAgentPage() {
 
         // Send the generated response
         const nextAiResponse = await sendChatMessage(dynamicResponse, convId, stepNum);
-        
+
         if (!isTestRunningRef.current) break;
 
         if (!nextAiResponse) {
@@ -1243,7 +1169,7 @@ export default function TestAgentPage() {
     } catch (err) {
       console.error("[Dynamic] Error in processAIResponse:", err);
     }
-  }, [isPaused, sendChatMessage, waitForAnalysisAndDelay, generateDynamicResponse]);
+  }, [sendChatMessage, waitForAnalysis, generateDynamicResponse]);
 
   // Create a new conversation via Telnyx API
   const createConversation = useCallback(async () => {
@@ -1259,12 +1185,12 @@ export default function TestAgentPage() {
           },
         }),
       });
-      
+
       const data = await res.json();
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Failed to create conversation");
       }
-      
+
       return data.id;
     } catch (err) {
       console.error("Failed to create conversation:", err);
@@ -1296,13 +1222,15 @@ export default function TestAgentPage() {
       });
       return;
     }
-    
+
     setIsTestRunning(true);
+    isTestRunningRef.current = true; // the first lines are enqueued before React commits
+    setIsPaused(false);
+    isPausedRef.current = false;
     setMessages([]);
-    setMessageAnalysis({});
     setCurrentStep(0);
     currentStepRef.current = 0;
-    lastAnalyzedMessageIndexRef.current = -1;
+    analysisQueue.reset();
     setWorkflowItemStatuses({});
     setWorkflowSlotsFilled({});
     setCustomerData(null); // Reset customer data for new test session
@@ -1313,7 +1241,7 @@ export default function TestAgentPage() {
       {
         id: "system-start",
         role: "system",
-        content: `Starting chat test: ${selectedPersona} persona (REST API)`,
+        content: `Starting chat test: ${selectedPersona} persona (REST API) · analysis model ${analysisModel || "default"} · caller model ${callerModel || "default"}`,
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -1321,13 +1249,13 @@ export default function TestAgentPage() {
     try {
       // Step 1: Send "Hello" to get welcome message from AI
       const welcomeResponse = await sendChatMessage("Hello", newConversationId);
-      
+
       if (!welcomeResponse) {
         throw new Error("No welcome message from AI");
       }
 
       // Wait for workflow analysis of welcome exchange before sending first response
-      await waitForAnalysisAndDelay();
+      await waitForAnalysis();
 
       // Generate first customer response based on AI's welcome
       setCurrentStep(1);
@@ -1335,13 +1263,13 @@ export default function TestAgentPage() {
         { role: "user", content: "Hello" },
         { role: "assistant", content: welcomeResponse },
       ]);
-      
+
       if (!dynamicFirstResponse) {
         throw new Error("Failed to generate customer response");
       }
 
       const firstAiResponse = await sendChatMessage(dynamicFirstResponse, newConversationId);
-      
+
       if (isAutoMode && firstAiResponse) {
         await processAIResponse(firstAiResponse, newConversationId, 2);
       }
@@ -1355,88 +1283,153 @@ export default function TestAgentPage() {
         variant: "error",
       });
     }
-  }, [agentId, isAutoMode, sendChatMessage, processAIResponse, createConversation, waitForAnalysisAndDelay, selectedPersona, generateDynamicResponse]);
+  }, [agentId, isAutoMode, sendChatMessage, processAIResponse, createConversation, waitForAnalysis, selectedPersona, generateDynamicResponse, analysisQueue, analysisModel, callerModel]);
 
-  // Speak text via TTS and inject into mock microphone
+  // Speak text as the simulated caller: TTS → PCM16 16 kHz → paced
+  // input_audio_buffer.append frames on the Telnyx conversation socket.
+  // Resolves when the last frame (including trailing silence) has been sent.
   const speakTextViaAudio = useCallback(async (text) => {
-    if (!mockMicRef.current) {
-      console.error("[Voice] Mock mic not initialized");
-      return;
+    const client = voiceClientRef.current;
+    if (!client?.active) {
+      throw new Error("The voice conversation is not active");
     }
 
+    // Expressive Mode: for Ultra voices prepend the persona's <emotion> tag,
+    // for xAI voices prepend a fitting speech tag, so the simulated caller
+    // sounds the part. Only when Expressive Mode is on and the voice family
+    // supports it. The expressive text is only used for TTS — the chat bubble
+    // and transcript keep the clean text.
+    const spokenText = applyVoiceExpression(text, {
+      voice: ttsVoiceRef.current,
+      persona: selectedPersonaRef.current,
+      expressive: expressiveRef.current,
+    });
+
+    const { arrayBuffer, contentType } = await generateTTS(spokenText, ttsVoiceRef.current);
+    const pcm = await decodeToPcm16Mono(arrayBuffer, { rate: VOICE_INPUT_RATE });
+    const { frames, speechMs } = buildInjection(pcm, { rate: VOICE_INPUT_RATE });
+    if (!client.active || !isTestRunningRef.current) return { sent: 0, cancelled: true };
+
+    lastSpokenTextRef.current = text;
+
+    // Local monitoring of the caller's voice (optional).
+    let monitorUrl = null;
+    if (localAudioEnabledRef.current) {
+      monitorUrl = URL.createObjectURL(new Blob([arrayBuffer], { type: contentType }));
+      const monitor = new Audio(monitorUrl);
+      monitor.volume = 0.7;
+      monitor.play().catch((e) => console.warn("[Voice] Local playback error:", e));
+    }
+
+    injectionRef.current?.cancel();
+    // The token identifies this line. Telnyx may hear it (or start answering)
+    // before the trailing silence is sent; that invalidates the token, so the
+    // watchdog armed afterwards never fires for a line that was answered.
+    const token = ++callerUtteranceRef.current;
+    const sender = createPacedSender(frames, { send: (frame) => client.appendInputAudio(frame) });
+    injectionRef.current = sender;
+    console.log(`[Voice] Injecting ${(speechMs / 1000).toFixed(1)}s of caller speech (${frames.length} frames)`);
     try {
-      // Don't add message here - let transcript.item from Telnyx handle it
-      // This prevents duplicate messages
-
-      // Expressive Mode: for Ultra voices prepend the persona's <emotion> tag,
-      // for xAI voices prepend a fitting speech tag, so the simulated caller
-      // sounds the part. Only when Expressive Mode is on and the voice family
-      // supports it. The expressive text is only used for TTS — the chat bubble
-      // and transcript keep the clean text.
-      const spokenText = applyVoiceExpression(text, {
-        voice: ttsVoiceRef.current,
-        persona: selectedPersonaRef.current,
-        expressive: expressiveRef.current,
-      });
-
-      // Generate TTS audio with selected voice
-      const audioUrl = await generateTTS(spokenText, ttsVoiceRef.current);
-
-      // Start local playback immediately (in parallel with injection)
-      // This ensures we hear our response at the same time it's being sent
-      let localPlaybackPromise = Promise.resolve();
-      if (localAudioEnabledRef.current) {
-        const localAudio = new Audio(audioUrl);
-        localAudio.volume = 0.7;
-        localPlaybackPromise = localAudio.play().catch((e) => console.warn("[Voice] Local playback error:", e));
-      }
-
-      // Inject into mock microphone stream (runs in parallel with local playback)
-      await mockMicRef.current.injectAudioFromUrl(audioUrl);
-
-      // Wait for local playback to start (usually instant)
-      await localPlaybackPromise;
-
-      // Cleanup after a delay
-      setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
-
-      console.log("[Voice] Audio injected successfully");
-    } catch (err) {
-      console.error("[Voice] Failed to speak:", err);
-      notify({
-        title: "TTS Error",
-        description: err.message,
-        variant: "error",
-      });
+      return { ...(await sender.done), token };
+    } finally {
+      if (injectionRef.current === sender) injectionRef.current = null;
+      if (monitorUrl) setTimeout(() => URL.revokeObjectURL(monitorUrl), 15000);
     }
   }, []);
 
-  // Toggle mute (MANUAL mode) - mute/unmute real microphone
+  // Toggle mute (MANUAL mode) - mute/unmute the real microphone
   const toggleMute = useCallback(() => {
-    const call = activeCallRef.current;
+    const call = voiceClientRef.current?.call;
     if (!call) {
       console.warn("[Voice] No active call for mute toggle");
       return;
     }
-    
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
-    
-    // Get the active call's local stream and toggle audio tracks
-    try {
-      if (call.localStream) {
-        const audioTracks = call.localStream.getAudioTracks();
-        audioTracks.forEach((track) => {
-          track.enabled = !newMutedState;
-        });
-        console.log(`[Voice] Microphone ${newMutedState ? 'muted' : 'unmuted'} (${audioTracks.length} tracks)`);
-      } else {
-        console.warn("[Voice] No local stream available for mute toggle");
-      }
-    } catch (err) {
-      console.error("[Voice] Failed to toggle mute:", err);
-    }
+    if (newMutedState) call.muteAudio?.(); else call.unmuteAudio?.();
+    console.log(`[Voice] Microphone ${newMutedState ? "muted" : "unmuted"}`);
   }, [isMuted]);
+
+  // Cancel in-flight caller audio and the response watchdog.
+  const cancelVoiceActivity = useCallback(() => {
+    silenceStopRef.current?.();
+    silenceStopRef.current = null;
+    injectionRef.current?.cancel();
+    injectionRef.current = null;
+    if (responseWatchdogRef.current) {
+      clearTimeout(responseWatchdogRef.current);
+      responseWatchdogRef.current = null;
+    }
+    if (endingTimerRef.current) {
+      clearTimeout(endingTimerRef.current);
+      endingTimerRef.current = null;
+    }
+    callerUtteranceRef.current += 1;
+    pendingTextEchoesRef.current = [];
+  }, []);
+
+  // End the voice conversation (idempotent) and return the page to "Ready".
+  const finishVoiceTest = useCallback((reason) => {
+    cancelVoiceActivity();
+    voiceEngineRef.current?.stop();
+    const client = voiceClientRef.current;
+    voiceClientRef.current = null;
+    voiceEngineRef.current = null;
+    if (client) {
+      client.endConversation().catch(() => {});
+      client.disconnect().catch(() => {});
+    }
+    const wasRunning = isTestRunningRef.current;
+    isTestRunningRef.current = false;
+    setIsTestRunning(false);
+    setIsGeneratingResponse(false);
+    setPendingAssistantText(null);
+    setUserSpeaking(false);
+    setIsMuted(false);
+    setAgentState("idle");
+    setVoiceStatus((status) => (status === "error" ? status : "idle"));
+    if (reason && wasRunning) {
+      setMessages((prev) => [
+        ...prev,
+        { id: uniqueMessageId("system"), role: "system", content: reason, timestamp: new Date().toISOString() },
+      ]);
+    }
+  }, [cancelVoiceActivity]);
+
+  // If the assistant does not start a response after the caller spoke, repeat
+  // the line once (speech recognition may have missed it), then leave the turn
+  // to the operator.
+  const armResponseWatchdog = useCallback((text, token) => {
+    const arm = (lineToken) => {
+      // The line was already heard or answered while its audio was still being sent.
+      if (lineToken !== callerUtteranceRef.current) return;
+      if (responseWatchdogRef.current) clearTimeout(responseWatchdogRef.current);
+      responseWatchdogRef.current = setTimeout(async () => {
+        responseWatchdogRef.current = null;
+        if (lineToken !== callerUtteranceRef.current) return;
+        if (!isTestRunningRef.current || voiceEngineRef.current?.phase !== "caller") return;
+        if (voiceRetryRef.current < 1) {
+          voiceRetryRef.current += 1;
+          setMessages((prev) => [
+            ...prev,
+            { id: uniqueMessageId("system"), role: "system", content: "The assistant did not respond within 12 s - repeating the caller's line once.", timestamp: new Date().toISOString() },
+          ]);
+          try {
+            const result = await speakTextViaAudio(text);
+            if (!result?.cancelled) arm(result.token);
+          } catch (err) {
+            console.error("[Voice] Retry failed:", err);
+          }
+          return;
+        }
+        setMessages((prev) => [
+          ...prev,
+          { id: uniqueMessageId("system"), role: "system", content: "No response from the assistant after two attempts. Type a message to continue or stop the test.", timestamp: new Date().toISOString() },
+        ]);
+      }, VOICE_RESPONSE_WATCHDOG_MS);
+    };
+    arm(token);
+  }, [speakTextViaAudio]);
 
   // Send manual message - uses REST API for chat, TTS+inject for voice
   const sendMessage = useCallback(async () => {
@@ -1444,8 +1437,10 @@ export default function TestAgentPage() {
 
     const messageText = inputMessage.trim();
     setInputMessage("");
-    
-    if (channel === "chat" && conversationId) {
+
+    // A voice conversation id is never used for REST chat (the channel tabs are
+    // also locked while a test runs).
+    if (channel === "chat" && conversationId && !voiceClientRef.current) {
       // Chat mode - use REST API (mark as manual - user typed because auto flow stopped)
       const response = await sendChatMessage(messageText, conversationId, undefined, { manual: true });
       // In auto mode, process the response for next steps
@@ -1453,25 +1448,40 @@ export default function TestAgentPage() {
         await processAIResponse(response, conversationId, currentStep);
       }
     } else if (channel === "voice" && voiceClientRef.current) {
-      // Voice mode - convert text to TTS and inject into WebRTC
-      // This is the same as auto mode but with user-typed text
+      const client = voiceClientRef.current;
       setSendingMessage(true);
       try {
-        await speakTextViaAudio(messageText);
+        if (isAutoMode) {
+          // AUTO: speak the typed text through TTS as the simulated caller.
+          const result = await speakTextViaAudio(messageText);
+          if (!result?.cancelled) armResponseWatchdog(messageText, result.token);
+        } else {
+          // MANUAL: a text turn on the conversation socket (no TTS). The bubble
+          // is added locally; Telnyx echoes text items as a completed
+          // transcription (verified live). The user_final handler skips only an
+          // echo that matches a pending typed text, so microphone speech that
+          // arrives first is kept.
+          pendingTextEchoesRef.current = [
+            ...pendingTextEchoesRef.current.filter((echo) => Date.now() - echo.at < TEXT_ECHO_TTL_MS),
+            { text: normalizeEchoText(messageText), at: Date.now() },
+          ];
+          client.sendConversationMessage(messageText);
+          const typedMessage = { id: uniqueMessageId("user"), role: "user", content: messageText, manual: true, timestamp: new Date().toISOString() };
+          setMessages((prev) => [...prev, typedMessage]);
+          enqueueForAnalysis(typedMessage);
+        }
+      } catch (err) {
+        notify({ title: "Voice Error", description: err.message, variant: "error" });
       } finally {
         setSendingMessage(false);
       }
     }
-  }, [inputMessage, sendingMessage, channel, conversationId, sendChatMessage, isAutoMode, processAIResponse, currentStep, speakTextViaAudio]);
+  }, [inputMessage, sendingMessage, channel, conversationId, sendChatMessage, isAutoMode, processAIResponse, currentStep, speakTextViaAudio, armResponseWatchdog, enqueueForAnalysis]);
 
   // Stop test - also clear conversation so no further messages can be sent
   const stopTest = useCallback(() => {
     chatProcessingRef.current = false;
     isTestRunningRef.current = false;
-    if (turnSettleTimerRef.current) {
-      clearTimeout(turnSettleTimerRef.current);
-      turnSettleTimerRef.current = null;
-    }
     setIsTestRunning(false);
     setIsPaused(false);
     setIsGeneratingResponse(false);
@@ -1486,143 +1496,88 @@ export default function TestAgentPage() {
       },
     ]);
 
-    // Clean up voice if active
-    if (voiceClientRef.current) {
-      try {
-        voiceClientRef.current.endConversation?.();
-        voiceClientRef.current.disconnect?.();
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      voiceClientRef.current = null;
-    }
-    
-    restoreMockMicrophone();
-    
+    // Clean up voice if active (ends the Telnyx conversation)
+    finishVoiceTest();
     setVoiceStatus("idle");
-  }, [restoreMockMicrophone]);
+  }, [finishVoiceTest]);
 
   // Reset test - regenerate scenario for current selection
   const resetTest = useCallback(() => {
     chatProcessingRef.current = false;
     isTestRunningRef.current = false;
-    if (turnSettleTimerRef.current) {
-      clearTimeout(turnSettleTimerRef.current);
-      turnSettleTimerRef.current = null;
-    }
+    finishVoiceTest();
     setIsTestRunning(false);
     setIsPaused(false);
     setIsGeneratingResponse(false);
     setConversationId(null);
     setMessages([]);
-    setMessageAnalysis({});
     setCurrentStep(0);
     currentStepRef.current = 0;
-    lastAnalyzedMessageIndexRef.current = -1;
-    workflowAnalysisInProgressRef.current = false;
+    analysisQueue.reset();
     setWorkflowItemStatuses({});
     setWorkflowSlotsFilled({});
     setCustomerData(null); // Reset customer data for new test session
     setVoiceStatus("idle");
     setAgentState("idle");
-    setHasReceivedWelcomeMessage(false);
-    welcomeMessageReceivedRef.current = false;
     respondingInProgressRef.current = false;
-    
-    restoreMockMicrophone();
-  }, [restoreMockMicrophone]);
+  }, [finishVoiceTest, analysisQueue]);
 
-  // Handle auto-response when AI finishes speaking
-  const handleVoiceAutoResponse = useCallback(async () => {
-    if (!autoModeRef.current || respondingInProgressRef.current) return;
-    if (!isTestRunningRef.current) return;
+  // Wait for the workflow analysis of the assistant's final line so the caller
+  // LLM sees up-to-date filled slots. Bounded; never blocks the loop for long.
+  const waitForVoiceAnalysis = useCallback(async () => {
+    // Capped: in a voice conversation a long pause makes the assistant
+    // re-prompt, so the caller replies after at most 2.5 s even if the queue
+    // is still working (the queue itself keeps going and is never cancelled).
+    let timer;
+    await Promise.race([
+      analysisQueue.idle(),
+      new Promise((r) => { timer = setTimeout(r, 2500); }),
+    ]);
+    clearTimeout(timer);
+  }, [analysisQueue]);
 
+  // Simulated caller turn: opened by the turn engine after the assistant's
+  // response completed (response.done). Generates the reply, speaks it, and
+  // arms the watchdog. No settle timers - the next assistant turn is an event.
+  const runCallerTurn = useCallback(async (lastAiMessage) => {
+    if (!autoModeRef.current || respondingInProgressRef.current || !isTestRunningRef.current) return;
+    if (!lastAiMessage) return;
     respondingInProgressRef.current = true;
-    
     try {
-      // Turn completion is now event-driven: this handler is only invoked after the
-      // agent has stayed in "listening" for `turnSettleMs` with no new transcript lines
-      // (see the conversation.agent.state handler). No fixed delay needed here.
-      // Safety guard: if the agent resumed speaking/thinking in the meantime, bail out.
-      if (agentStateRef.current === "speaking" || agentStateRef.current === "thinking") {
-        console.log(`[Voice] Agent resumed (${agentStateRef.current}) before reply — aborting this turn`);
-        respondingInProgressRef.current = false;
-        return;
-      }
+      await waitForVoiceAnalysis();
+      if (!isTestRunningRef.current || !autoModeRef.current) return;
 
-      if (!isTestRunningRef.current) {
-        respondingInProgressRef.current = false;
-        return;
-      }
-
-      // Get the last AI message from transcript (turn is settled, all lines are in)
-      const lastAiMessage = messagesRef.current
-        .filter(m => m.role === "assistant")
-        .pop()?.content;
-
-      if (!lastAiMessage) {
-        console.log("[Voice] No AI message to respond to");
-        respondingInProgressRef.current = false;
-        return;
-      }
-
-      // Check for conversation ending phrases
-      // NOTE: Removed "thank you for calling" / "thanks for calling" - often used as greeting
-      const ENDING_PHRASES = [
-        "goodbye", "good bye", "have a great day", "have a nice day",
-        "take care", "end the call", "ending the call",
-      ];
-      const isEnding = ENDING_PHRASES.some(phrase => 
-        lastAiMessage.toLowerCase().includes(phrase)
-      );
-
-      if (isEnding) {
-        console.log("[Voice] Detected conversation ending, completing test");
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "system-complete",
-            role: "system",
-            content: "✅ Test completed - conversation ended naturally",
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        respondingInProgressRef.current = false;
-        return;
-      }
-
-      // Generate dynamic response based on AI message
-      console.log("[Voice] Generating response for:", lastAiMessage.substring(0, 50) + "...");
-      setIsGeneratingResponse(true);
-      
       const conversationHistory = messagesRef.current
-        .filter(m => m.role === "user" || m.role === "assistant")
-        .map(m => ({ role: m.role, content: m.content }));
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, content: m.content }));
 
+      setIsGeneratingResponse(true);
       const responseText = await generateDynamicResponse(lastAiMessage, conversationHistory);
       setIsGeneratingResponse(false);
-
-      if (!responseText) {
-        console.error("[Voice] Failed to generate response");
-        respondingInProgressRef.current = false;
-        return;
-      }
+      if (!responseText || !isTestRunningRef.current) return;
 
       console.log(`[Voice] Responding: "${responseText.substring(0, 50)}..."`);
       setCurrentStep((prev) => prev + 1);
       currentStepRef.current += 1;
-      
-      // Speak the response (this waits for audio injection to complete)
-      await speakTextViaAudio(responseText);
-      
-      // Wait for audio to be processed by AI
-      await new Promise((r) => setTimeout(r, 2000));
+      voiceRetryRef.current = 0;
+
+      const result = await speakTextViaAudio(responseText);
+      if (!result?.cancelled && isTestRunningRef.current) armResponseWatchdog(responseText, result.token);
+    } catch (err) {
+      console.error("[Voice] Caller turn failed:", err);
+      if (isTestRunningRef.current) {
+        notify({ title: "Voice Error", description: err.message, variant: "error" });
+      }
     } finally {
       respondingInProgressRef.current = false;
+      setIsGeneratingResponse(false);
     }
-  }, [speakTextViaAudio, generateDynamicResponse]);
+  }, [waitForVoiceAnalysis, generateDynamicResponse, speakTextViaAudio, armResponseWatchdog]);
 
-  // Start voice test with audio injection
+  // Start voice test over the authenticated Telnyx conversation WebSocket.
+  // AUTO mode injects TTS audio as the caller; MANUAL mode streams the real
+  // microphone. Both use the same relay as the assistant configurator's Call
+  // button, so anonymous web calling on the assistant is not required.
   const startVoiceTest = useCallback(async () => {
     if (!agentId) {
       notify({
@@ -1633,348 +1588,207 @@ export default function TestAgentPage() {
       return;
     }
 
+    cancelVoiceActivity();
+    isTestRunningRef.current = true;
     setIsTestRunning(true);
     setVoiceStatus("connecting");
-    setHasReceivedWelcomeMessage(false);
-    welcomeMessageReceivedRef.current = false;
+    setAgentState("idle");
     respondingInProgressRef.current = false;
+    voiceRetryRef.current = 0;
+    lastSpokenTextRef.current = null;
     setCurrentStep(0);
     currentStepRef.current = 0;
-    lastAnalyzedMessageIndexRef.current = -1;
+    analysisQueue.reset();
     setWorkflowItemStatuses({});
     setWorkflowSlotsFilled({});
     setCustomerData(null); // Reset customer data for new voice test session
     setIsGeneratingResponse(false);
-    setIsMuted(false); // Reset mute state
-    
+    setIsMuted(false);
+    setConversationId(null);
+    setPendingAssistantText(null);
+    setUserSpeaking(false);
+
+    const currentAutoMode = isAutoMode; // Capture for closure
     setMessages([
       {
         id: "system-voice-start",
         role: "system",
-        content: `Starting voice test: ${selectedPersona} persona (${isAutoMode ? 'AUTO - TTS injection' : 'MANUAL - real microphone'})`,
+        content: `Starting voice test: ${selectedPersona} persona (${currentAutoMode ? "AUTO - TTS injection" : "MANUAL - real microphone"}) over the Telnyx conversation WebSocket · analysis model ${analysisModel || "default"} · caller model ${callerModel || "default"}`,
         timestamp: new Date().toISOString(),
       },
     ]);
 
-    try {
-      // Dynamic import of TelnyxAIAgent
-      const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
+    const client = new TelnyxAvatarClient();
+    const engine = createVoiceTestEngine();
+    voiceClientRef.current = client;
+    voiceEngineRef.current = engine;
+    client.setPlaybackHeld(!localAudioEnabledRef.current);
 
-      const client = new TelnyxAIAgent({
-        agentId: agentId,
-        debug: true,
-      });
+    const pushSystem = (content) =>
+      setMessages((prev) => [...prev, { id: uniqueMessageId("system"), role: "system", content, timestamp: new Date().toISOString() }]);
 
-      // AUTO MODE: Initialize mock microphone for TTS injection
-      // MANUAL MODE: Use real microphone directly (library handles it)
-      if (isAutoMode) {
-        console.log("[Voice] AUTO mode - initializing mock microphone for TTS injection...");
-        const mockMic = new MockMicrophone();
-        await mockMic.init();
-        mockMicRef.current = mockMic;
-
-        // Override getUserMedia to return mock stream for WebRTC
-        if (!originalGetUserMediaRef.current) {
-          originalGetUserMediaRef.current = navigator.mediaDevices.getUserMedia;
-        }
-        const libGetUserMedia = originalGetUserMediaRef.current.bind(navigator.mediaDevices);
-        navigator.mediaDevices.getUserMedia = async (constraints) => {
-          if (constraints.audio) {
-            console.log("[Voice] getUserMedia intercepted - returning mock stream");
-            console.log(`[Voice] Mock stream status: ${mockMic.debugStreamStatus()}`);
-            return mockMic.getStream();
-          }
-          return libGetUserMedia(constraints);
-        };
-      } else {
-        console.log("[Voice] MANUAL mode - requesting microphone permissions...");
-        restoreMockMicrophone();
-        
-        // Request microphone permissions BEFORE connecting (like demo-portal)
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: true, 
-            video: false 
-          });
-          // Stop the stream - we just needed permission
-          stream.getTracks().forEach((track) => track.stop());
-          console.log("[Voice] MANUAL mode - microphone permissions granted");
-        } catch (audioError) {
-          console.error("[Voice] Microphone permission denied:", audioError);
-          notify({
-            title: "Microphone Required",
-            description: "Please allow microphone access for voice testing",
-            variant: "error",
-          });
-          setVoiceStatus("error");
-          setIsTestRunning(false);
-          return;
-        }
-      }
-
-      voiceClientRef.current = client;
-      let lastAgentState = null;
-
-      // Set up event handlers
-      const currentAutoMode = isAutoMode; // Capture for closure
-
-      // Arm the event-driven turn-settle debounce. The simulated caller replies only
-      // after the agent stays in "listening" for `turnSettleMs` with no new transcript
-      // lines and no return to speaking/thinking. Safe to call repeatedly (it no-ops
-      // if a timer is already armed or preconditions aren't met).
-      const armTurnSettle = () => {
-        if (!autoModeRef.current || !isTestRunningRef.current) return;
-        if (!welcomeMessageReceivedRef.current) return;
-        if (respondingInProgressRef.current) return;
-        if (agentStateRef.current !== "listening") return;
-        if (turnSettleTimerRef.current) return;
-        const armedAt = Date.now();
-        const tick = () => {
-          if (!isTestRunningRef.current || agentStateRef.current !== "listening") {
-            turnSettleTimerRef.current = null;
-            return;
-          }
-          // If a transcript line arrived after we armed, the turn isn't done — wait again.
-          const sinceLastLine = Date.now() - lastTranscriptAtRef.current;
-          const settle = turnSettleMsRef.current;
-          if (lastTranscriptAtRef.current > armedAt && sinceLastLine < settle) {
-            turnSettleTimerRef.current = setTimeout(tick, settle - sinceLastLine);
-            return;
-          }
-          turnSettleTimerRef.current = null;
-          handleVoiceAutoResponse();
-        };
-        turnSettleTimerRef.current = setTimeout(tick, turnSettleMsRef.current);
-      };
-
-      client.on("agent.connected", () => {
-        setVoiceStatus("active");
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "system-connected",
-            role: "system",
-            content: currentAutoMode 
-              ? "✅ Connected to AI Agent (AUTO mode - TTS injection)"
-              : "✅ Connected to AI Agent (MANUAL mode - real microphone)",
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      });
-
-      client.on("agent.disconnected", () => {
-        setVoiceStatus("idle");
-        setIsTestRunning(false);
-        setIsMuted(false);
-        activeCallRef.current = null;
-        agentStateRef.current = "idle";
-        if (turnSettleTimerRef.current) {
-          clearTimeout(turnSettleTimerRef.current);
-          turnSettleTimerRef.current = null;
-        }
-        restoreMockMicrophone();
-      });
-
-      client.on("agent.error", (err) => {
-        setVoiceStatus("error");
-        restoreMockMicrophone();
-        let errorMessage = "An unknown error occurred";
-        
-        if (err) {
-          if (typeof err === 'string') {
-            errorMessage = err;
-          } else if (err.message) {
-            errorMessage = err.message;
-          } else if (err.description) {
-            errorMessage = err.description;
-          } else if (err.error?.message) {
-            errorMessage = err.error.message;
-          } else if (typeof err === 'object') {
-            if (err.code && err.message) {
-              errorMessage = `Error ${err.code}: ${err.message}`;
-            } else {
-              errorMessage = JSON.stringify(err);
-            }
-          } else {
-            errorMessage = String(err);
-          }
-        }
-        
-        notify({
-          title: "Voice Error",
-          description: errorMessage,
-          variant: "error",
-        });
-        console.error("[Voice Test] Agent error:", err);
-      });
-
-      // Handle agent state changes for auto-response
-      client.on("conversation.agent.state", (state) => {
-        const prevState = lastAgentState;
-        lastAgentState = state;
-        setAgentState(state);
-
-        console.log(`[Voice] Agent: ${prevState || "init"} → ${state}`);
-        agentStateRef.current = state;
-
-        // Any time the agent is NOT idle-listening, cancel a pending reply trigger.
-        const cancelTurnSettle = () => {
-          if (turnSettleTimerRef.current) {
-            clearTimeout(turnSettleTimerRef.current);
-            turnSettleTimerRef.current = null;
-          }
-        };
-
-        if (state === "speaking") {
-          // Agent (re)started talking — abort any armed reply; we are mid-turn.
-          cancelTurnSettle();
-          // Mark greeting received when AI starts speaking for the first time
-          if (!welcomeMessageReceivedRef.current) {
-            welcomeMessageReceivedRef.current = true;
-            setHasReceivedWelcomeMessage(true);
-            console.log("[Voice] AI started speaking (greeting)");
-          }
-        } else if (state === "thinking") {
-          // Agent is processing — definitely not the caller's turn yet.
-          cancelTurnSettle();
-        } else if (state === "listening") {
-          // Event-driven turn end: arm the debounce (no-ops until the welcome gate
-          // is open and the agent is settled in "listening").
-          armTurnSettle();
-        }
-      });
-
-      client.on("transcript.item", (item) => {
-        const isAssistant = item.role === "assistant";
-        if (isAssistant) {
-          // Record activity so the turn-settle debounce can detect "still talking".
-          lastTranscriptAtRef.current = Date.now();
-          // A real assistant transcript line is hard proof the agent has spoken.
-          // Use it as the welcome gate so replies don't depend on the audio-volume
-          // "speaking" state (which can be missed if TTS stays below the monitor's
-          // loudness threshold). Without this, bubbles render but no reply fires.
-          if (!welcomeMessageReceivedRef.current) {
-            welcomeMessageReceivedRef.current = true;
-            setHasReceivedWelcomeMessage(true);
-            console.log("[Voice] Welcome gate opened by assistant transcript");
-          }
-          // If the agent already settled into "listening" before this transcript
-          // line arrived, arm the turn-settle debounce now (the state handler may
-          // have skipped arming because the welcome gate was still closed).
-          armTurnSettle();
-        }
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: item.id || uniqueMessageId("transcript"),
-            role: isAssistant ? "assistant" : "user",
-            content: item.content,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      });
-
-      // Handle conversation updates to connect remote audio stream
-      client.on("conversation.update", (conv) => {
-        console.log("[Voice] conversation.update:", conv?.call?.state, conv);
-        
-        if (conv?.call?.state === "active") {
-          console.log("[Voice] Call is active");
-          
-          // Store call reference for mute/unmute
-          activeCallRef.current = conv.call;
-          
-          // Connect remote audio stream so we can hear AI
-          if (conv.call.remoteStream && remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = conv.call.remoteStream;
-            console.log("[Voice] Remote audio stream connected");
-          }
-          
-          // Log local stream info for debugging
-          if (conv.call.localStream) {
-            const tracks = conv.call.localStream.getAudioTracks();
-            console.log(`[Voice] Local stream has ${tracks.length} audio tracks:`);
-            tracks.forEach((track, i) => {
-              console.log(`[Voice]   Track ${i}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+    const handleAction = (action) => {
+      if (voiceClientRef.current !== client) return; // stale client after stop/reset
+      switch (action.type) {
+        case "session":
+          setVoiceStatus("active");
+          setConversationId(action.conversationId);
+          if (currentAutoMode) {
+            // Keep the caller's line carrying silence between utterances so the
+            // server-side VAD can close each turn (a microphone never stops).
+            silenceStopRef.current?.();
+            silenceStopRef.current = createSilenceStreamer({
+              send: (frame) => client.appendInputAudio(frame),
+              isPaused: () => Boolean(injectionRef.current) || !client.active,
             });
-          } else {
-            console.warn("[Voice] NO LOCAL STREAM - microphone not connected!");
           }
-        } else {
-          activeCallRef.current = null;
+          pushSystem(`✅ Connected to the assistant (${currentAutoMode ? "AUTO mode - TTS injection" : "MANUAL mode - real microphone"})${action.conversationId ? ` · conversation ${action.conversationId}` : ""}`);
+          break;
+        case "assistant_started":
+          callerUtteranceRef.current += 1; // the caller's line was answered
+          if (responseWatchdogRef.current) {
+            clearTimeout(responseWatchdogRef.current);
+            responseWatchdogRef.current = null;
+          }
+          setPendingAssistantText("");
+          break;
+        case "assistant_delta":
+          setPendingAssistantText(action.text);
+          break;
+        case "assistant_final": {
+          setPendingAssistantText(null);
+          const assistantMessage = {
+            id: action.responseId || uniqueMessageId("assistant"),
+            role: "assistant",
+            content: action.text,
+            interrupted: action.interrupted === true,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+          enqueueForAnalysis(assistantMessage);
+          break;
         }
-      });
-
-      await client.connect();
-      await new Promise((r) => setTimeout(r, 1000));
-
-      // Start conversation - pass mock stream in AUTO mode, let library use real mic in MANUAL mode
-      const conversationOptions = {
-        callerName: "Voice Test Harness",
-      };
-      
-      if (isAutoMode && mockMicRef.current) {
-        const mockStream = mockMicRef.current.getStream();
-        console.log(`[Voice] AUTO mode - passing mock localStream: ${mockMicRef.current.debugStreamStatus()}`);
-        conversationOptions.localStream = mockStream;
-        conversationOptions.audio = true;
-      } else {
-        console.log("[Voice] MANUAL mode - library will request real microphone");
-        // Explicitly request audio - library will call getUserMedia
-        conversationOptions.audio = true;
+        case "user_final": {
+          // The caller was heard: the assistant is now thinking, however long
+          // that takes. Only an unheard line is ever repeated.
+          callerUtteranceRef.current += 1;
+          if (responseWatchdogRef.current) {
+            clearTimeout(responseWatchdogRef.current);
+            responseWatchdogRef.current = null;
+          }
+          // The echo of a typed MANUAL turn is already shown; match it by text so
+          // microphone speech arriving first is not dropped.
+          const pendingEchoes = pendingTextEchoesRef.current.filter((echo) => Date.now() - echo.at < TEXT_ECHO_TTL_MS);
+          const echoIndex = pendingEchoes.findIndex((echo) => echo.text === normalizeEchoText(action.text));
+          if (echoIndex >= 0) {
+            pendingTextEchoesRef.current = pendingEchoes.filter((_, index) => index !== echoIndex);
+            break;
+          }
+          pendingTextEchoesRef.current = pendingEchoes;
+          const spoken = lastSpokenTextRef.current;
+          lastSpokenTextRef.current = null;
+          if (!action.text) break;
+          // Analysed as Telnyx heard it: that is what the assistant acted on.
+          const callerMessage = {
+            id: action.itemId || uniqueMessageId("user"),
+            role: "user",
+            content: action.text,
+            spoken: spoken && spoken.trim() !== action.text.trim() ? spoken : undefined,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, callerMessage]);
+          enqueueForAnalysis(callerMessage);
+          break;
+        }
+        case "caller_turn":
+          void runCallerTurn(action.text);
+          break;
+        case "silent_response":
+          pushSystem("The assistant completed a turn without speaking.");
+          break;
+        case "ending":
+          pushSystem("✅ Test completed - conversation ended naturally");
+          // No more caller turns. Give the assistant a moment to hang up itself,
+          // then finish the test (WebSocket, silence stream and microphone).
+          if (endingTimerRef.current) clearTimeout(endingTimerRef.current);
+          endingTimerRef.current = setTimeout(() => {
+            endingTimerRef.current = null;
+            if (voiceClientRef.current === client && isTestRunningRef.current) finishVoiceTest();
+          }, VOICE_ENDING_GRACE_MS);
+          break;
+        case "response_failed":
+          finishVoiceTest(`The assistant could not finish its response (Telnyx status: ${action.status}). The test was stopped so the simulated caller does not answer a cut-off line.`);
+          break;
+        case "user_speaking":
+          setUserSpeaking(true);
+          break;
+        case "user_stopped":
+          setUserSpeaking(false);
+          break;
+        case "tool":
+          pushSystem(`🔧 Tool ${action.name || ""} ${action.status}`.replace(/\s+/g, " "));
+          break;
+        case "error":
+          console.error("[Voice] Telnyx error:", action);
+          notify({ title: "Voice Error", description: action.message, variant: "error" });
+          if (["session_idle_timeout", "session_max_duration_exceeded", "conversation_ended"].includes(action.code)) {
+            finishVoiceTest("The Telnyx session ended.");
+          }
+          break;
+        case "ended":
+          finishVoiceTest("The assistant ended the conversation.");
+          break;
+        default:
+          break;
       }
-      
-      await client.startConversation(conversationOptions);
+    };
 
-      console.log(`[Voice] Conversation started (${isAutoMode ? 'AUTO' : 'MANUAL'} mode) - waiting for AI greeting...`);
-    } catch (err) {
+    client.on("assistant.event", (frame) => {
+      for (const action of engine.handle(frame)) handleAction(action);
+    });
+    client.on("conversation.agent.state", ({ state }) => {
+      if (voiceClientRef.current === client) setAgentState(state);
+    });
+    client.on("conversation.update", ({ call }) => {
+      if (voiceClientRef.current !== client) return;
+      if (call?.state === "hangup" && isTestRunningRef.current) finishVoiceTest("The call ended.");
+    });
+    client.on("agent.error", (err) => {
+      if (voiceClientRef.current !== client) return;
+      const errorMessage = err?.message || (typeof err === "string" ? err : "An unknown error occurred");
+      console.error("[Voice Test] Agent error:", err);
+      notify({ title: "Voice Error", description: errorMessage, variant: "error" });
       setVoiceStatus("error");
-      setIsTestRunning(false);
-      
-      restoreMockMicrophone();
-      
-      let errorMessage = "An unknown error occurred";
-      if (err) {
-        if (typeof err === 'string') {
-          errorMessage = err;
-        } else if (err.message) {
-          errorMessage = err.message;
-        } else if (err.description) {
-          errorMessage = err.description;
-        } else if (err.error?.message) {
-          errorMessage = err.error.message;
-        } else if (typeof err === 'object') {
-          if (err.code && err.message) {
-            errorMessage = `Error ${err.code}: ${err.message}`;
-          } else {
-            errorMessage = JSON.stringify(err);
-          }
-        } else {
-          errorMessage = String(err);
-        }
-      }
-      
-      notify({
-        title: "Failed to start voice test",
-        description: errorMessage,
-        variant: "error",
+      finishVoiceTest();
+    });
+
+    try {
+      await client.startConversation({
+        capture: currentAutoMode ? "none" : "microphone",
+        avatarSession: () => requestVoiceTestSession(flowId),
       });
+      console.log(`[Voice] Conversation started (${currentAutoMode ? "AUTO" : "MANUAL"} mode) - waiting for AI greeting...`);
+    } catch (err) {
+      if (voiceClientRef.current !== client) return; // stopped while connecting
+      let errorMessage = err?.message || "An unknown error occurred";
+      if (err?.name === "NotAllowedError") errorMessage = "Allow microphone access in your browser, then try again.";
+      if (err?.name === "NotFoundError") errorMessage = "No microphone was found. Connect a microphone, then try again.";
+      setVoiceStatus("error");
+      finishVoiceTest();
+      notify({ title: "Failed to start voice test", description: errorMessage, variant: "error" });
       console.error("[Voice Test] Failed to start:", err);
     }
-  }, [agentId, selectedPersona, handleVoiceAutoResponse, isAutoMode, restoreMockMicrophone]);
+  }, [agentId, flowId, selectedPersona, isAutoMode, cancelVoiceActivity, finishVoiceTest, runCallerTurn, enqueueForAnalysis, analysisQueue, analysisModel, callerModel]);
 
   if (loading) {
     return (
       <AdminPageShell>
-        <AdminPageHeader title="Test AI Agent" badges={<Badge variant="secondary">Loading</Badge>} />
+        <AdminPageHeader title={tUi("Test AI Agent")} badges={<Badge variant="secondary">{tUi("Loading")}</Badge>} />
         <AdminPageContent>
           <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <IconRobot className="h-5 w-5 text-telnyx-green" />
-              Test AI Agent
-            </CardTitle>
+              <IconRobot className="h-5 w-5 text-telnyx-green" />{tUi("Test AI Agent")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <Skeleton className="h-10 w-64" />
@@ -1988,12 +1802,9 @@ export default function TestAgentPage() {
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Test AI Agent" badges={<Badge variant="secondary">{workflow?.name || "Workflow"}</Badge>} />
+      <AdminPageHeader title={tUi("Test AI Agent")} badges={<Badge variant="secondary">{workflow?.name || tUi("Workflow")}</Badge>} />
       <AdminPageContent>
         <div className="space-y-4">
-      {/* Hidden audio element for AI voice playback */}
-      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
-      
       <Card className="w-full shadow-sm flex flex-col overflow-hidden" style={{ height: "90vh" }}>
         <CardHeader className="flex flex-row items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
@@ -2002,68 +1813,80 @@ export default function TestAgentPage() {
               size="sm"
               onClick={() => router.push(`/admin/workflows/${flowId}`)}
             >
-              <IconArrowLeft className="size-4 mr-2" />
-              Back to Workflow
-            </Button>
+              <IconArrowLeft className="size-4 mr-2" />{tUi("Back to Workflow")}</Button>
             <Separator orientation="vertical" className="h-6" />
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <IconRobot className="h-5 w-5 text-telnyx-green" />
-              Test AI Agent
-            </CardTitle>
+              <IconRobot className="h-5 w-5 text-telnyx-green" />{tUi("Test AI Agent")}</CardTitle>
             <div className="text-sm text-muted-foreground">
-              {workflow?.name || "Workflow"}
+              {workflow?.name || tUi("Workflow")}
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-4 md:p-6 h-full flex flex-col overflow-hidden">
           <div className="flex h-full min-h-0 gap-6">
-          {/* Left: narrow config panel as Card */}
-          <Card className="w-64 shrink-0 flex flex-col overflow-hidden">
+          {/* Left: config panel as Card. Its content never scrolls sideways:
+              long values (voices, personas) are truncated to the column. */}
+          <Card className="w-96 shrink-0 flex flex-col overflow-hidden">
             <div className="shrink-0 border-b px-4 py-3 mb-4">
               <h3 className="text-sm font-semibold flex items-center gap-2">
-                <IconSettings className="size-4 text-blue-500" />
-                Configuration
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">Test setup and controls</p>
+                <IconSettings className="size-4 text-blue-500" />{tUi("Configuration")}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{tUi("Test setup and controls")}</p>
             </div>
-            <CardContent className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Model</label>
-                <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
-                  {workflow?.llm_model || "openai/gpt-4o"}
-                </div>
-              </div>
+            <CardContent className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-4 pb-4 space-y-4">
+              <TestModelPicker
+                id="test-analysis-model"
+                label={tUi("Workflow analysis model")}
+                hint={tUi("Slot filling and corrections in this test.")}
+                value={analysisModel}
+                onChange={setAnalysisModel}
+                defaultModel={modelDefaults?.analysis}
+                models={modelCatalog}
+                loading={modelCatalogLoading}
+                disabled={isTestRunning}
+              />
+              <TestModelPicker
+                id="test-caller-model"
+                label={tUi("Simulated caller model")}
+                hint={tUi("Generates the simulated customer's replies.")}
+                value={callerModel}
+                onChange={setCallerModel}
+                defaultModel={modelDefaults?.caller}
+                models={modelCatalog}
+                loading={modelCatalogLoading}
+                disabled={isTestRunning}
+              />
+              {modelCatalogError && (
+                <p role="alert" className="text-xs text-destructive">{modelCatalogError}</p>
+              )}
               <div className="space-y-4">
                 {/* AI Assistant (from workflow config) */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">AI Assistant</label>
+                  <label className="text-sm font-medium">{tUi("AI Assistant")}</label>
                   <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
                     {agentId ? (
                       assistantName ? (
                         assistantName
                       ) : (
-                        <span className="text-muted-foreground">Loading…</span>
+                        <span className="text-muted-foreground">{tUi("Loading…")}</span>
                       )
                     ) : (
-                      <span className="text-muted-foreground">Not assigned</span>
+                      <span className="text-muted-foreground">{tUi("Not assigned")}</span>
                     )}
                   </div>
                   {!agentId && (
-                    <p className="text-xs text-muted-foreground">
-                      Create an AI Agent from the workflow page and assign it to this workflow.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tUi("Create an AI Agent from the workflow page and assign it to this workflow.")}</p>
                   )}
                 </div>
 
                 {/* Customer Persona */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Customer Persona</label>
+                  <label className="text-sm font-medium">{tUi("Customer Persona")}</label>
                   <Select
                     value={selectedPersona}
                     onValueChange={setSelectedPersona}
                     disabled={isTestRunning}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={CONFIG_SELECT_TRIGGER}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2081,26 +1904,22 @@ export default function TestAgentPage() {
 
                 {/* Channel Selection */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Channel</label>
-                  <Tabs value={channel} onValueChange={setChannel}>
-                    <TabsList className="w-full">
-                      <TabsTrigger value="chat" className="flex-1">
-                        <IconMessageCircle className="size-4 mr-2" />
-                        Chat
-                      </TabsTrigger>
-                      <TabsTrigger value="voice" className="flex-1">
-                        <IconPhone className="size-4 mr-2" />
-                        Voice
-                      </TabsTrigger>
+                  <label className="text-sm font-medium">{tUi("Channel")}</label>
+                  {/* Locked while a test runs: a chat and a voice run must never
+                      share one conversation or run two loops at once. */}
+                  <Tabs value={channel} onValueChange={(value) => { if (!isTestRunningRef.current) setChannel(value); }}>
+                    <TabsList aria-label={tUi("Channel")}>
+                      <TabsTrigger value="chat" disabled={isTestRunning}>
+                        <IconMessageCircle className="size-4" />{tUi("Chat")}</TabsTrigger>
+                      <TabsTrigger value="voice" disabled={isTestRunning}>
+                        <IconPhone className="size-4" />{tUi("Voice")}</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
 
                 {/* Auto Mode Toggle */}
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="auto-mode" className="text-sm font-medium cursor-pointer">
-                    Auto Mode
-                  </Label>
+                  <Label htmlFor="auto-mode" className="text-sm font-medium cursor-pointer">{tUi("Auto Mode")}</Label>
                   <Switch
                     id="auto-mode"
                     checked={isAutoMode}
@@ -2109,19 +1928,32 @@ export default function TestAgentPage() {
                   />
                 </div>
 
+                {/* Audio monitoring: hear the assistant and the simulated caller locally */}
+                {channel === "voice" && (
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="audio-monitoring" className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                      {localAudioEnabled ? <IconVolume className="size-4" /> : <IconVolumeOff className="size-4" />}{tUi("Audio monitoring")}</Label>
+                    <Switch
+                      id="audio-monitoring"
+                      checked={localAudioEnabled}
+                      onCheckedChange={setLocalAudioEnabled}
+                    />
+                  </div>
+                )}
+
                 {/* TTS Configuration (Voice channel + AUTO mode only) */}
                 {channel === "voice" && isAutoMode && (
                   <div className="space-y-3 pt-3 border-t">
-                    <label className="text-sm font-medium">TTS Voice</label>
-                    
+                    <label className="text-sm font-medium">{tUi("TTS Voice")}</label>
+
                     {/* Provider */}
                     <Select
                       value={ttsProvider}
                       onValueChange={setTtsProvider}
                       disabled={isTestRunning}
                     >
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="Provider" />
+                      <SelectTrigger size="sm" className={CONFIG_SELECT_TRIGGER}>
+                        <SelectValue placeholder={tUi("Provider")} />
                       </SelectTrigger>
                       <SelectContent>
                         {Object.keys(ttsVoices).map((provider) => (
@@ -2138,8 +1970,8 @@ export default function TestAgentPage() {
                       onValueChange={setTtsModel}
                       disabled={isTestRunning}
                     >
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="Model" />
+                      <SelectTrigger size="sm" className={CONFIG_SELECT_TRIGGER}>
+                        <SelectValue placeholder={tUi("Model")} />
                       </SelectTrigger>
                       <SelectContent>
                         {Object.keys(ttsVoices[ttsProvider] || {}).map((model) => (
@@ -2151,23 +1983,20 @@ export default function TestAgentPage() {
                     </Select>
 
                     {/* Voice */}
+                    {/* Keyed by voice id: several voices can share a name, and a
+                        name used as the value showed every match in the trigger. */}
                     <Select
-                      value={ttsVoice}
-                      onValueChange={(name) => {
-                        const voices = ttsVoices[ttsProvider]?.[ttsModel] || [];
-                        const voice = voices.find(v => v.name === name);
-                        setTtsVoice(name);
-                        if (voice) setTtsVoiceId(voice.id);
-                      }}
+                      value={ttsVoiceId}
+                      onValueChange={setTtsVoiceId}
                       disabled={isTestRunning}
                     >
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="Voice" />
+                      <SelectTrigger size="sm" className={CONFIG_SELECT_TRIGGER}>
+                        <SelectValue placeholder={tUi("Voice")} />
                       </SelectTrigger>
                       <SelectContent>
                         {(ttsVoices[ttsProvider]?.[ttsModel] || []).map((voice) => (
-                          <SelectItem key={voice.id} value={voice.name}>
-                            {voice.name} {voice.gender ? `(${voice.gender})` : ""}
+                          <SelectItem key={voice.id} value={voice.id}>
+                            {voice.name} {voice.gender ? tUi("({value0})", { value0: voice.gender }) : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2180,12 +2009,8 @@ export default function TestAgentPage() {
                     {voiceSupportsExpressive(ttsVoiceId) && (
                       <div className="flex items-center justify-between pt-1">
                         <div className="pr-2">
-                          <Label htmlFor="expressive-mode" className="text-sm font-medium cursor-pointer">
-                            Expressive Mode
-                          </Label>
-                          <p className="text-xs text-muted-foreground">
-                            Add {ttsVoiceId.startsWith("xAI.") ? "xAI speech" : "Ultra emotion"} tags matching the persona
-                          </p>
+                          <Label htmlFor="expressive-mode" className="text-sm font-medium cursor-pointer">{tUi("Expressive Mode")}</Label>
+                          <p className="text-xs text-muted-foreground">{tUi("Add ")}{ttsVoiceId.startsWith("xAI.") ? tUi("xAI speech") : tUi("Ultra emotion")}{tUi(" tags matching the persona")}</p>
                         </div>
                         <Switch
                           id="expressive-mode"
@@ -2196,33 +2021,13 @@ export default function TestAgentPage() {
                       </div>
                     )}
 
-                    {/* Turn Settle Time */}
-                    <div className="pt-2">
-                      <label className="text-sm font-medium">Turn Settle Time</label>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Silence after the agent stops speaking before the simulated caller replies ({(turnSettleMs / 1000).toFixed(1)}s). The reply is event-driven — it waits for the agent to settle, not a fixed delay.
-                      </p>
-                      <input
-                        type="range"
-                        min="300"
-                        max="2000"
-                        step="100"
-                        value={turnSettleMs}
-                        onChange={(e) => setTurnSettleMs(Number(e.target.value))}
-                        disabled={isTestRunning}
-                        className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-500"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                        <span>0.3s</span>
-                        <span>2s</span>
-                      </div>
-                    </div>
+                    <p className="text-xs text-muted-foreground pt-1">{tUi("The simulated caller replies as soon as the assistant finishes a response (Telnyx response.done); turn-taking is event-driven.")}</p>
                   </div>
                 )}
               </div>
 
             <div className="pt-2 border-t">
-              <h3 className="text-sm font-semibold mb-2">Controls</h3>
+              <h3 className="text-sm font-semibold mb-2">{tUi("Controls")}</h3>
               {/* Status Badge - shows Voice Status when voice test active, otherwise Ready/Test Running */}
               {isTestRunning && channel === "voice" ? (
                 <Badge
@@ -2246,8 +2051,9 @@ export default function TestAgentPage() {
                     voiceStatus === "connecting" && "bg-yellow-500 animate-pulse",
                     voiceStatus === "error" && "bg-red-500"
                   )} />
-                  {voiceStatus === "connecting" ? "Connecting..." : 
-                   voiceStatus === "error" ? "Error" :
+                  {voiceStatus === "connecting" ? tUi("Connecting...") :
+                   voiceStatus === "error" ? tUi("Error") :
+                   userSpeaking ? tUi("Caller speaking") :
                    agentState.charAt(0).toUpperCase() + agentState.slice(1)}
                 </Badge>
               ) : (
@@ -2264,8 +2070,13 @@ export default function TestAgentPage() {
                     "w-2 h-2 rounded-full",
                     isTestRunning ? "bg-green-500 animate-pulse" : "bg-emerald-500"
                   )} />
-                  {isTestRunning ? "Test Running" : "Ready"}
+                  {isTestRunning ? tUi("Test Running") : tUi("Ready")}
                 </Badge>
+              )}
+              {channel === "voice" && conversationId && (
+                <p className="mb-3 break-all text-[11px] text-muted-foreground" title={tUi("Telnyx conversation ID")}>
+                  {tUi("Conversation")}: <span className="font-mono">{conversationId}</span>
+                </p>
               )}
               <div className="space-y-3">
                 {!isTestRunning ? (
@@ -2274,9 +2085,7 @@ export default function TestAgentPage() {
                     onClick={channel === "chat" ? startChatTest : startVoiceTest}
                     disabled={!agentId}
                   >
-                    <IconPlayerPlay className="size-4 mr-2" />
-                    Start Test
-                  </Button>
+                    <IconPlayerPlay className="size-4 mr-2" />{tUi("Start Test")}</Button>
                 ) : (
                   <>
                     {channel === "chat" && (
@@ -2287,14 +2096,10 @@ export default function TestAgentPage() {
                       >
                         {isPaused ? (
                           <>
-                            <IconPlayerPlay className="size-4 mr-2" />
-                            Resume
-                          </>
+                            <IconPlayerPlay className="size-4 mr-2" />{tUi("Resume")}</>
                         ) : (
                           <>
-                            <IconPlayerStop className="size-4 mr-2" />
-                            Pause
-                          </>
+                            <IconPlayerStop className="size-4 mr-2" />{tUi("Pause")}</>
                         )}
                       </Button>
                     )}
@@ -2303,9 +2108,7 @@ export default function TestAgentPage() {
                       className="w-full"
                       onClick={stopTest}
                     >
-                      <IconX className="size-4 mr-2" />
-                      Stop Test
-                    </Button>
+                      <IconX className="size-4 mr-2" />{tUi("Stop Test")}</Button>
                   </>
                 )}
                 <Button
@@ -2313,9 +2116,7 @@ export default function TestAgentPage() {
                   className="w-full"
                   onClick={resetTest}
                 >
-                  <IconRefresh className="size-4 mr-2" />
-                  Reset
-                </Button>
+                  <IconRefresh className="size-4 mr-2" />{tUi("Reset")}</Button>
               </div>
             </div>
 
@@ -2329,18 +2130,12 @@ export default function TestAgentPage() {
               <Card className="flex flex-col min-h-0 overflow-hidden">
                 <div className="shrink-0 border-b px-4 py-3">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <IconClipboardList className="size-4 text-purple-500" />
-                    Workflow
-                    {isAnalyzingWorkflow && (
+                    <IconClipboardList className="size-4 text-purple-500" />{tUi("Workflow")}{isAnalyzingWorkflow && (
                       <Badge variant="outline" className="ml-auto text-xs animate-pulse bg-purple-500/10 text-purple-500 border-purple-500/50">
-                        <IconLoader2 className="size-3 mr-1 animate-spin" />
-                        Analyzing
-                      </Badge>
+                        <IconLoader2 className="size-3 mr-1 animate-spin" />{tUi("Analyzing")}</Badge>
                     )}
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    LLM analyzes conversation for intent & slot extraction
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{tUi("LLM analyzes the conversation for slot extraction")}</p>
                 </div>
                 <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
                   <WorkflowAgentView
@@ -2356,19 +2151,13 @@ export default function TestAgentPage() {
                   <h3 className="text-sm font-semibold flex items-center gap-2">
                     {channel === "chat" ? (
                       <>
-                        <IconMessageCircle className="size-4 text-green-500" />
-                        Simulated Conversation
-                      </>
+                        <IconMessageCircle className="size-4 text-green-500" />{tUi("Simulated Conversation")}</>
                     ) : (
                       <>
-                        <IconPhone className="size-4 text-green-500" />
-                        Simulated Conversation
-                      </>
+                        <IconPhone className="size-4 text-green-500" />{tUi("Simulated Conversation")}</>
                     )}
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Chat or voice messages from the test run
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{tUi("Chat or voice messages from the test run")}</p>
                 </div>
                 <CardContent className="flex-1 flex flex-col overflow-hidden p-0 min-h-0">
                 {/* Messages Area */}
@@ -2378,12 +2167,8 @@ export default function TestAgentPage() {
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center py-12">
                         <IconRobot className="size-12 text-muted-foreground/50 mb-4" />
-                        <p className="text-sm text-muted-foreground">
-                          No messages yet
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Click "Start Test" to begin
-                        </p>
+                        <p className="text-sm text-muted-foreground">{tUi("No messages yet")}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{tUi("Click \"Start Test\" to begin")}</p>
                       </div>
                     ) : (
                       messages.map((message, idx) => {
@@ -2403,21 +2188,26 @@ export default function TestAgentPage() {
                             key={key}
                             message={message}
                             isUser={message.role === "user"}
-                            analysis={messageAnalysis[idx]}
                           />
                         );
                       })
                     )}
+                    {pendingAssistantText !== null && (
+                      <Message
+                        message={{ id: "assistant-pending", role: "assistant", content: pendingAssistantText || "…", timestamp: new Date().toISOString(), streaming: true }}
+                        isUser={false}
+                      />
+                    )}
                     {isGeneratingResponse && (
                       <div className="flex items-center gap-2 text-purple-400 justify-end">
-                        <span className="text-sm">Customer is thinking...</span>
+                        <span className="text-sm">{tUi("Customer is thinking...")}</span>
                         <IconLoader2 className="size-4 animate-spin" />
                       </div>
                     )}
                     {sendingMessage && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <IconLoader2 className="size-4 animate-spin" />
-                        <span className="text-sm">AI is typing...</span>
+                        <span className="text-sm">{tUi("AI is typing...")}</span>
                       </div>
                     )}
                     <div ref={messagesEndRef} />
@@ -2432,7 +2222,7 @@ export default function TestAgentPage() {
                       <Input
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}
-                        placeholder={channel === "voice" ? "Type to speak via TTS..." : "Type a message..."}
+                        placeholder={channel === "voice" ? (isAutoMode ? tUi("Type to speak via TTS...") : tUi("Type a text turn...")) : tUi("Type a message...")}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
@@ -2447,7 +2237,7 @@ export default function TestAgentPage() {
                           variant={isMuted ? "destructive" : "outline"}
                           onClick={toggleMute}
                           disabled={!isTestRunning}
-                          title={isMuted ? "Unmute microphone" : "Mute microphone"}
+                          title={isMuted ? tUi("Unmute microphone") : tUi("Mute microphone")}
                         >
                           {isMuted ? (
                             <IconMicrophoneOff className="size-4" />
@@ -2466,11 +2256,11 @@ export default function TestAgentPage() {
                     </div>
                     {channel === "voice" && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {isAutoMode 
-                          ? "Type text → converted to speech via TTS → sent to AI"
-                          : (isMuted 
-                              ? "🔇 Microphone muted - click to unmute"
-                              : "🎤 Microphone active - speak naturally or click to mute")
+                        {isAutoMode
+                          ? tUi("Type text → converted to speech via TTS → sent to AI")
+                          : (isMuted
+                              ? tUi("🔇 Microphone muted - click to unmute. Typed text is sent as a text turn.")
+                              : tUi("🎤 Microphone active - speak naturally or click to mute. Typed text is sent as a text turn."))
                         }
                       </p>
                     )}

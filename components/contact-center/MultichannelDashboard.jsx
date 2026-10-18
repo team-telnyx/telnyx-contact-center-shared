@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -67,11 +69,12 @@ function Metric({
   tone = "slate",
   loading = false,
 }) {
+  const tUi = useUiText();
   return (
     <Card className="overflow-hidden border-border/70 shadow-sm">
       <CardContent className="p-5">
         <div className="flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
-          {label}
+          {tUi(label)}
           <span className={`rounded-xl p-2 ${metricIconTones[tone]}`}>
             <Icon className="size-4" />
           </span>
@@ -89,6 +92,7 @@ function Metric({
   );
 }
 function ReportTable({ headers, children, empty = false }) {
+  const tUi = useUiText();
   return (
     <div className="overflow-x-auto rounded-xl border bg-card text-card-foreground">
       <table className="w-full text-left text-xs">
@@ -96,7 +100,7 @@ function ReportTable({ headers, children, empty = false }) {
           <tr>
             {headers.map((h) => (
               <th key={h} className="whitespace-nowrap px-4 py-3 font-medium">
-                {h}
+                {tUi(h)}
               </th>
             ))}
           </tr>
@@ -107,9 +111,7 @@ function ReportTable({ headers, children, empty = false }) {
               <td
                 colSpan={headers.length}
                 className="p-8 text-center text-muted-foreground"
-              >
-                No matching interactions in this period.
-              </td>
+              >{tUi("No matching interactions in this period.")}</td>
             </tr>
           ) : (
             children
@@ -120,6 +122,7 @@ function ReportTable({ headers, children, empty = false }) {
   );
 }
 function WorkloadCard({ workload, personal = false, loading = false, channel, queueId, onOpenInteraction }) {
+  const tUi = useUiText();
   return (
     <Card data-testid="live-workload-card">
       <CardContent className="p-5">
@@ -127,12 +130,10 @@ function WorkloadCard({ workload, personal = false, loading = false, channel, qu
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <Users className="size-4 text-emerald-600 dark:text-emerald-400" />
-              {personal ? "Working now" : "Workforce capacity"}
+              {personal ? tUi("Working now") : tUi("Workforce capacity")}
             </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {workload?.scope || "All channels, including offered work and wrap-up"}. Capacity remains global when
-              filtering a channel.
-            </p>
+              {tUi("All channels, including offered work and wrap-up")}{tUi(". Capacity remains global when filtering a channel.")}</p>
           </div>
           {loading ? <Skeleton className="h-7 w-28" /> : (
             <span className="text-lg font-semibold tabular-nums">
@@ -171,10 +172,10 @@ function WorkloadCard({ workload, personal = false, loading = false, channel, qu
                   <InteractionChannel channel={item.channel} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium">
-                      {item.customer_address || "Customer"}
+                      {item.customer_address || tUi("Customer")}
                     </span>
                     <span className="mt-1 block text-[10px] text-muted-foreground">
-                      {item.queue_name || "No queue"} ·{" "}
+                      {item.queue_name || tUi("No queue")} ·{" "}
                       {item.assignment_state || item.state}
                     </span>
                   </span>
@@ -182,18 +183,14 @@ function WorkloadCard({ workload, personal = false, loading = false, channel, qu
                 </button>
               ))}
             {!workload.interactions.length && (
-              <p className="text-xs text-muted-foreground">
-                No current assignments.
-              </p>
+              <p className="text-xs text-muted-foreground">{tUi("No current assignments.")}</p>
             )}
             {!onOpenInteraction &&
               workload.interactions.length > 0 && (
                 <Link
                   href="/agent/desktop"
                   className="text-xs underline"
-                >
-                  Open Agent Desktop to handle interactions
-                </Link>
+                >{tUi("Open Agent Desktop to handle interactions")}</Link>
               )}
           </div>
         )}
@@ -209,6 +206,7 @@ export default function MultichannelDashboard({
   onOpenInteraction,
   refreshKey,
 }) {
+  const tUi = useUiText();
   const [channel, setChannel] = useState("all"),
     [period, setPeriod] = useState("today"),
     [queueId, setQueueId] = useState("all");
@@ -358,8 +356,8 @@ export default function MultichannelDashboard({
     >
       {personal && (
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{reportTitles[report] || "Interaction performance"}</h2>
-          {personal && <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">Your participation across channels. SLA describes the customer’s experience, including waiting before assignment.</p>}
+          <h2 className="text-2xl font-semibold tracking-tight">{tUi(reportTitles[report] || tUi("Interaction performance"))}</h2>
+          {personal && <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground">{tUi("Your participation across channels. SLA describes the customer’s experience, including waiting before assignment.")}</p>}
         </div>
       )}
       <AnalyticsReportFilters
@@ -384,24 +382,21 @@ export default function MultichannelDashboard({
         onRefresh={load}
         loading={loading}
         queueFilter={(
-          <select aria-label="Queue" value={queueId} onChange={(event) => setQueueId(event.target.value)} className="h-10 max-w-48 rounded-lg border bg-background px-3 text-xs">
-            <option value="all">All queues</option>
-            <option value="none">No queue</option>
+          <select aria-label={tUi("Queue")} value={queueId} onChange={(event) => setQueueId(event.target.value)} className="h-10 max-w-48 rounded-lg border bg-background px-3 text-xs">
+            <option value="all">{tUi("All queues")}</option>
+            <option value="none">{tUi("No queue")}</option>
             {data?.filters?.queues.map((queue) => <option key={queue.id} value={queue.id}>{queue.display_name || queue.name}</option>)}
           </select>
         )}
       />
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>
-          Timezone: {timezone || "…"} · Outcomes: closed in range · SLA: started
-          in range
-        </span>
+        <span>{tUi("Timezone: ")}{timezone || "…"}{tUi(" · Outcomes: closed in range · SLA: started in range")}</span>
         <span>
           {data
-            ? `Updated ${new Date(data.timestamp).toLocaleTimeString()}`
+            ? tUi("Updated {value0}", { value0: new Date(data.timestamp).toLocaleTimeString(tUi.locale) })
             : error
-              ? "Report unavailable"
-              : "Loading report…"}
+              ? tUi("Report unavailable")
+              : tUi("Loading report…")}
         </span>
       </div>
       {error && (
@@ -410,7 +405,7 @@ export default function MultichannelDashboard({
           className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm"
         >
           {error}
-          {data ? " · Showing the last successful snapshot." : ""}
+          {data ? tUi(" · Showing the last successful snapshot.") : ""}
         </div>
       )}
       {(data || initial) && (!personal && report !== "overview" ? (
@@ -425,33 +420,33 @@ export default function MultichannelDashboard({
               loading={initial}
               icon={ArrowDownLeft}
               tone="sky"
-              label="Received in range"
+              label={tUi("Received in range")}
               value={totals?.received}
-              detail="Distinct interactions created"
+              detail={tUi("Distinct interactions created")}
             />
             <Metric
               loading={initial}
               icon={CheckCheck}
               tone="emerald"
-              label="Closed in range"
+              label={tUi("Closed in range")}
               value={totals?.closed}
-              detail="Completed, abandoned and failed"
+              detail={tUi("Completed, abandoned and failed")}
             />
             <Metric
               loading={initial}
               icon={Clock3}
               tone="amber"
-              label="Waiting now"
+              label={tUi("Waiting now")}
               value={totals ? totals.waiting + totals.offered : null}
-              detail="Queued and offered interactions"
+              detail={tUi("Queued and offered interactions")}
             />
             <Metric
               loading={initial}
               icon={Activity}
               tone="violet"
-              label="Handling now"
+              label={tUi("Handling now")}
               value={totals?.active}
-              detail="Live interactions · all ages"
+              detail={tUi("Live interactions · all ages")}
             />
           </div>
           {initial ? (
@@ -465,11 +460,9 @@ export default function MultichannelDashboard({
                 <Card>
                   <CardContent className="p-5">
                     <div className="mb-5 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold">
-                        Closed interactions by channel
-                      </h3>
+                      <h3 className="text-sm font-semibold">{tUi("Closed interactions by channel")}</h3>
                       <Badge variant="outline">
-                        {data.scope.bucket === "hour" ? "Hourly" : "Daily"}
+                        {data.scope.bucket === "hour" ? tUi("Hourly") : tUi("Daily")}
                       </Badge>
                     </div>
                     {trend.length ? (
@@ -526,24 +519,19 @@ export default function MultichannelDashboard({
                         </ResponsiveContainer>
                       </div>
                     ) : (
-                      <div className="grid h-60 place-items-center text-sm text-muted-foreground">
-                        No closed interactions in this period.
-                      </div>
+                      <div className="grid h-60 place-items-center text-sm text-muted-foreground">{tUi("No closed interactions in this period.")}</div>
                     )}
                   </CardContent>
                 </Card>
                 <Card data-testid="dashboard-service-level">
                   <CardContent className="p-5">
                     <div className="flex items-center gap-2 text-sm font-semibold">
-                      <ShieldCheck className="size-4 text-emerald-600" />
-                      Service level
-                    </div>
+                      <ShieldCheck className="size-4 text-emerald-600" />{tUi("Service level")}</div>
                     <div className="mt-5 text-4xl font-semibold tracking-tight">
                       {percent(data.sla.rate)}
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {data.sla.denominator} evaluated measurements
-                    </p>
+                      {tUi("Evaluated measurements: {value0}", { value0: data.sla.denominator })}</p>
                     <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
                       {[
                         ["Within SLA", data.sla.met],
@@ -555,7 +543,7 @@ export default function MultichannelDashboard({
                           key={label}
                           className="rounded-lg border bg-background/60 p-3"
                         >
-                          <span className="text-muted-foreground">{label}</span>
+                          <span className="text-muted-foreground">{tUi(label)}</span>
                           <strong className="mt-1 block text-lg tabular-nums">
                             {value}
                           </strong>
@@ -571,31 +559,21 @@ export default function MultichannelDashboard({
                         ["No historical rule", data.sla.unavailable],
                       ].map(([label, value]) => (
                         <div key={label} className="flex justify-between gap-2">
-                          <dt>{label}</dt>
+                          <dt>{tUi(label)}</dt>
                           <dd className="font-medium text-foreground">
                             {value ?? 0}
                           </dd>
                         </div>
                       ))}
                     </dl>
-                    <p className="mt-4 text-[10px] leading-relaxed text-muted-foreground">
-                      Met ÷ (met + breached + unserved). Pending and
-                      unconfigured measurements are excluded. Voice counts queue
-                      visits; messaging counts first replies.
-                    </p>
+                    <p className="mt-4 text-[10px] leading-relaxed text-muted-foreground">{tUi("Met ÷ (met + breached + unserved). Pending and unconfigured measurements are excluded. Voice counts queue visits; messaging counts first replies.")}</p>
                   </CardContent>
                 </Card>
               </div>
               {personal && data.workforce && (
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold">
-                    My workforce time · all channels
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    Elapsed presence and status time in the selected period,
-                    including the current interval. Concurrent interactions do
-                    not multiply these durations.
-                  </p>
+                  <h3 className="text-sm font-semibold">{tUi("My workforce time · all channels")}</h3>
+                  <p className="text-[11px] text-muted-foreground">{tUi("Elapsed presence and status time in the selected period, including the current interval. Concurrent interactions do not multiply these durations.")}</p>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {[
                       ["Logged in", data.workforce.agents[0]?.loggedInSeconds],
@@ -604,16 +582,16 @@ export default function MultichannelDashboard({
                     ].map(([label, value]) => (
                       <Metric
                         key={label}
-                        label={label}
+                        label={tUi(label)}
                         value={duration(value)}
-                        detail="Global workforce time"
+                        detail={tUi("Global workforce time")}
                       />
                     ))}
                   </div>
                 </section>
               )}
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold">Channel performance</h3>
+                <h3 className="text-sm font-semibold">{tUi("Channel performance")}</h3>
                 <ReportTable
                   headers={[
                     "Channel",
@@ -660,7 +638,7 @@ export default function MultichannelDashboard({
                           className={td}
                           title={
                             key === "avgResponseSeconds"
-                              ? `${row.responseCoverage} interactions with measured evidence`
+                              ? tUi("{value0} interactions with measured evidence", { value0: row.responseCoverage })
                               : undefined
                           }
                         >
@@ -671,27 +649,19 @@ export default function MultichannelDashboard({
                         {percent(row.sla.rate)}
                         <span className="mt-1 block text-[10px] text-muted-foreground">
                           {row.sla.not_configured
-                            ? "Not configured for some work"
+                            ? tUi("Not configured for some work")
                             : row.sla.disabled
-                              ? "Disabled for some work"
-                              : `${row.sla.denominator} measurements`}
+                              ? tUi("Disabled for some work")
+                              : tUi("Measurements: {value0}", { value0: row.sla.denominator })}
                         </span>
                       </td>
                     </tr>
                   ))}
                 </ReportTable>
-                <p className="text-[10px] text-muted-foreground">
-                  Durations are averages. Messaging handling is elapsed
-                  assignment time, including concurrent work; it is not talk
-                  time or occupancy. My first response measures each assignment
-                  until the agent’s first persisted reply or accepted email
-                  send.
-                </p>
+                <p className="text-[10px] text-muted-foreground">{tUi("Durations are averages. Messaging handling is elapsed assignment time, including concurrent work; it is not talk time or occupancy. My first response measures each assignment until the agent’s first persisted reply or accepted email send.")}</p>
               </section>
               <ServiceLevelSection className={personal ? "space-y-3" : "rounded-xl border bg-card p-4"}>
-                <ServiceLevelHeading className={`text-sm font-semibold ${personal ? "" : "cursor-pointer"}`}>
-                  Service-level detail and trend
-                </ServiceLevelHeading>
+                <ServiceLevelHeading className={`text-sm font-semibold ${personal ? "" : "cursor-pointer"}`}>{tUi("Service-level detail and trend")}</ServiceLevelHeading>
                 <div className="mt-4 space-y-4">
                   <ReportTable
                     headers={[
@@ -725,10 +695,7 @@ export default function MultichannelDashboard({
                       </tr>
                     ))}
                   </ReportTable>
-                  <p className="text-[11px] text-muted-foreground">
-                    Lateness covers breached measurements. Pending work is not
-                    counted as met. Each bucket uses the measurement start time.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">{tUi("Lateness covers breached measurements. Pending work is not counted as met. Each bucket uses the measurement start time.")}</p>
                   <div className="max-h-80 overflow-y-auto">
                     <ReportTable
                       headers={[
@@ -768,7 +735,7 @@ export default function MultichannelDashboard({
               {!personal && workload && <WorkloadCard workload={workload} />}
               {report === "overview" && (
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold">Queue participation</h3>
+                  <h3 className="text-sm font-semibold">{tUi("Queue participation")}</h3>
                   <ReportTable
                     headers={[
                       "Channel",
@@ -796,17 +763,12 @@ export default function MultichannelDashboard({
                       </tr>
                     ))}
                   </ReportTable>
-                  <p className="text-[10px] text-muted-foreground">
-                    A transferred interaction can participate in several queues.
-                    Global totals count it once.
-                  </p>
+                  <p className="text-[10px] text-muted-foreground">{tUi("A transferred interaction can participate in several queues. Global totals count it once.")}</p>
                 </section>
               )}
               {!personal && !!data.breaches.length && (
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold">
-                    SLA attention · latest {data.breaches.length} measurements
-                  </h3>
+                  <h3 className="text-sm font-semibold">{tUi("SLA attention · latest ")}{data.breaches.length}{tUi(" measurements")}</h3>
                   <ReportTable
                     headers={[
                       "Channel",
@@ -823,16 +785,16 @@ export default function MultichannelDashboard({
                           <InteractionChannel channel={row.channel} />
                         </td>
                         <td className={td}>
-                          {row.customer_address || "Customer"}
+                          {row.customer_address || tUi("Customer")}
                         </td>
-                        <td className={td}>{row.queue_name || "No queue"}</td>
+                        <td className={td}>{row.queue_name || tUi("No queue")}</td>
                         <td className={td}>
                           <Badge variant="outline">
-                            {row.at_risk ? "At risk" : row.state}
+                            {row.at_risk ? tUi("At risk") : row.state}
                           </Badge>
                         </td>
                         <td className={td}>
-                          {new Date(row.deadline_at).toLocaleString()}
+                          {new Date(row.deadline_at).toLocaleString(tUi.locale)}
                         </td>
                         <td className={td}>
                           {
@@ -852,11 +814,11 @@ export default function MultichannelDashboard({
                               onClick={() => openRow(row)}
                             >
                               {personal && !row.terminal_at
-                                ? "Open assigned work"
+                                ? tUi("Open assigned work")
                                 : channelDefinition(row.channel).capabilities
                                       .conversation
-                                  ? "Conversation"
-                                  : "Details"}
+                                  ? tUi("Conversation")
+                                  : tUi("Details")}
                             </Button>
                           }
                         </td>

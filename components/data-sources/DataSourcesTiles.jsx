@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { IconAddressBook, IconBook, IconChecklist } from "@tabler/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -28,6 +29,7 @@ const tiles = [
 ];
 
 export default function DataSourcesTiles() {
+  const tUi = useUiText();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { canScreen, loaded } = useAuth();
@@ -75,10 +77,10 @@ export default function DataSourcesTiles() {
                       isActive && "text-telnyx-green",
                     )}
                   >
-                    {tile.title}
+                    {tUi(tile.title)}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    {tile.description}
+                    {tUi(tile.description)}
                   </p>
                 </div>
               </div>

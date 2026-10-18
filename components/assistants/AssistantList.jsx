@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -52,6 +54,7 @@ function sttProvider(assistant) {
 }
 
 function CopyIdButton({ value }) {
+  const tUi = useUiText();
   const [copied, setCopied] = useState(false);
   async function copy(event) {
     event.stopPropagation();
@@ -60,13 +63,14 @@ function CopyIdButton({ value }) {
     window.setTimeout(() => setCopied(false), 1400);
   }
   return (
-    <button type="button" onClick={copy} className="text-muted-foreground transition hover:text-foreground" title="Copy assistant ID">
+    <button type="button" onClick={copy} className="text-muted-foreground transition hover:text-foreground" title={tUi("Copy assistant ID")}>
       {copied ? <IconCheck className="size-3.5 text-emerald-500" /> : <IconCopy className="size-3.5" />}
     </button>
   );
 }
 
 export default function AssistantList() {
+  const tUi = useUiText();
   const router = useRouter();
   const [items, setItems] = useState([]);
   const [models, setModels] = useState([]);
@@ -136,28 +140,28 @@ export default function AssistantList() {
 
   const actions = (
     <>
-      <Button variant="outline" onClick={load} disabled={loading}><IconRefresh className="size-4" />Refresh</Button>
-      <Button onClick={() => router.push("/admin/ai-assistants/new")}><IconPlus className="size-4" />Add assistant</Button>
+      <Button variant="outline" onClick={load} disabled={loading}><IconRefresh className="size-4" />{tUi("Refresh")}</Button>
+      <Button onClick={() => router.push("/admin/ai-assistants/new")}><IconPlus className="size-4" />{tUi("Add assistant")}</Button>
     </>
   );
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="AI Assistants" icon={IconRobot} badges={<Badge variant="secondary">{total} assistants</Badge>} actions={actions} />
+      <AdminPageHeader title={tUi("AI Assistants")} icon={IconRobot} badges={<Badge variant="secondary">{total}{tUi(" assistants")}</Badge>} actions={actions} />
       <AiAssistantsSectionPage activeId="assistants">
         <Card>
           <CardContent className="space-y-4 pt-6">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.2fr_auto]">
-              <Input value={filters.name} onChange={(event) => updateFilter("name", event.target.value)} placeholder="Filter by name" aria-label="Filter by assistant name" />
-              <Input value={filters.id} onChange={(event) => updateFilter("id", event.target.value)} placeholder="Filter by ID" aria-label="Filter by assistant ID" />
+              <Input value={filters.name} onChange={(event) => updateFilter("name", event.target.value)} placeholder={tUi("Filter by name")} aria-label={tUi("Filter by assistant name")} />
+              <Input value={filters.id} onChange={(event) => updateFilter("id", event.target.value)} placeholder={tUi("Filter by ID")} aria-label={tUi("Filter by assistant ID")} />
               <Select value={filters.model || "all"} onValueChange={(value) => updateFilter("model", value === "all" ? "" : value)}>
-                <SelectTrigger><SelectValue placeholder="All models" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">All models</SelectItem>{models.map((model) => <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger><SelectValue placeholder={tUi("All models")} /></SelectTrigger>
+                <SelectContent><SelectItem value="all">{tUi("All models")}</SelectItem>{models.map((model) => <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>)}</SelectContent>
               </Select>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setFilters({ name: "", id: "", model: "" }); setPage(1); }}>Clear</Button>
-                <Button variant={view === "list" ? "default" : "outline"} size="icon" onClick={() => setView("list")} title="List view"><IconListDetails className="size-4" /></Button>
-                <Button variant={view === "cards" ? "default" : "outline"} size="icon" onClick={() => setView("cards")} title="Card view"><IconLayoutGrid className="size-4" /></Button>
+                <Button variant="outline" onClick={() => { setFilters({ name: "", id: "", model: "" }); setPage(1); }}>{tUi("Clear")}</Button>
+                <Button variant={view === "list" ? "default" : "outline"} size="icon" onClick={() => setView("list")} title={tUi("List view")}><IconListDetails className="size-4" /></Button>
+                <Button variant={view === "cards" ? "default" : "outline"} size="icon" onClick={() => setView("cards")} title={tUi("Card view")}><IconLayoutGrid className="size-4" /></Button>
               </div>
             </div>
 
@@ -166,18 +170,18 @@ export default function AssistantList() {
             ) : view === "list" ? (
               <div className="overflow-x-auto rounded-lg border">
                 <Table className="min-w-[900px]">
-                  <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>ID</TableHead><TableHead>Model</TableHead><TableHead>TTS</TableHead><TableHead>STT</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>{tUi("Name")}</TableHead><TableHead>{tUi("ID")}</TableHead><TableHead>{tUi("Model")}</TableHead><TableHead>{tUi("TTS")}</TableHead><TableHead>{tUi("STT")}</TableHead><TableHead className="text-right">{tUi("Actions")}</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {items.map((assistant) => (
                       <TableRow key={assistant.id} className="cursor-pointer" onClick={() => router.push(`/admin/ai-assistants/${encodeURIComponent(assistant.id)}`)}>
-                        <TableCell><div className="flex items-center gap-2 font-medium"><IconRobot className="size-4 text-amber-500" />{assistant.name || "Untitled assistant"}</div></TableCell>
+                        <TableCell><div className="flex items-center gap-2 font-medium"><IconRobot className="size-4 text-amber-500" />{assistant.name || tUi("Untitled assistant")}</div></TableCell>
                         <TableCell><div className="flex items-center gap-2 font-mono text-xs"><span className="max-w-64 truncate">{assistant.id}</span><CopyIdButton value={assistant.id} /></div></TableCell>
                         <TableCell className="max-w-60 truncate">{modelName(assistant)}</TableCell>
                         <TableCell>{ttsProvider(assistant)}</TableCell><TableCell>{sttProvider(assistant)}</TableCell>
-                        <TableCell><div className="inline-flex w-full items-center justify-end gap-2"><button type="button" className="inline-flex items-center text-telnyx-green" title="Edit assistant" aria-label={`Edit ${assistant.name || "assistant"}`} onClick={(event) => { event.stopPropagation(); router.push(`/admin/ai-assistants/${encodeURIComponent(assistant.id)}`); }}><IconPencil className="size-4" /></button><button type="button" className="inline-flex items-center text-red-500 hover:text-red-700" title="Delete assistant" aria-label={`Delete ${assistant.name || "assistant"}`} onClick={(event) => { event.stopPropagation(); setDeleteTarget(assistant); }}><IconTrash className="size-4" /></button></div></TableCell>
+                        <TableCell><div className="inline-flex w-full items-center justify-end gap-2"><button type="button" className="inline-flex items-center text-telnyx-green" title={tUi("Edit assistant")} aria-label={tUi("Edit {value0}", { value0: assistant.name || tUi("assistant") })} onClick={(event) => { event.stopPropagation(); router.push(`/admin/ai-assistants/${encodeURIComponent(assistant.id)}`); }}><IconPencil className="size-4" /></button><button type="button" className="inline-flex items-center text-red-500 hover:text-red-700" title={tUi("Delete assistant")} aria-label={tUi("Delete {value0}", { value0: assistant.name || tUi("assistant") })} onClick={(event) => { event.stopPropagation(); setDeleteTarget(assistant); }}><IconTrash className="size-4" /></button></div></TableCell>
                       </TableRow>
                     ))}
-                    {!items.length && <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">No assistants match the current filters.</TableCell></TableRow>}
+                    {!items.length && <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">{tUi("No assistants match the current filters.")}</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
@@ -185,23 +189,23 @@ export default function AssistantList() {
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {items.map((assistant) => (
                   <Card key={assistant.id} className="cursor-pointer transition hover:border-foreground/25 hover:shadow-md" onClick={() => router.push(`/admin/ai-assistants/${encodeURIComponent(assistant.id)}`)}>
-                    <CardContent className="space-y-3 pt-5"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2 font-semibold"><IconRobot className="size-5 shrink-0 text-amber-500" /><span className="truncate">{assistant.name || "Untitled assistant"}</span></div><Button variant="ghost" size="icon" className="shrink-0 text-destructive" onClick={(event) => { event.stopPropagation(); setDeleteTarget(assistant); }}><IconTrash className="size-4" /></Button></div><div className="flex items-center gap-2 font-mono text-xs text-muted-foreground"><span className="truncate">{assistant.id}</span><CopyIdButton value={assistant.id} /></div><div className="grid grid-cols-3 gap-2 text-xs"><div><div className="text-muted-foreground">Model</div><div className="truncate font-medium" title={modelName(assistant)}>{modelName(assistant)}</div></div><div><div className="text-muted-foreground">TTS</div><div className="font-medium">{ttsProvider(assistant)}</div></div><div><div className="text-muted-foreground">STT</div><div className="font-medium">{sttProvider(assistant)}</div></div></div></CardContent>
+                    <CardContent className="space-y-3 pt-5"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2 font-semibold"><IconRobot className="size-5 shrink-0 text-amber-500" /><span className="truncate">{assistant.name || tUi("Untitled assistant")}</span></div><Button variant="ghost" size="icon" className="shrink-0 text-destructive" onClick={(event) => { event.stopPropagation(); setDeleteTarget(assistant); }}><IconTrash className="size-4" /></Button></div><div className="flex items-center gap-2 font-mono text-xs text-muted-foreground"><span className="truncate">{assistant.id}</span><CopyIdButton value={assistant.id} /></div><div className="grid grid-cols-3 gap-2 text-xs"><div><div className="text-muted-foreground">{tUi("Model")}</div><div className="truncate font-medium" title={modelName(assistant)}>{modelName(assistant)}</div></div><div><div className="text-muted-foreground">{tUi("TTS")}</div><div className="font-medium">{ttsProvider(assistant)}</div></div><div><div className="text-muted-foreground">{tUi("STT")}</div><div className="font-medium">{sttProvider(assistant)}</div></div></div></CardContent>
                   </Card>
                 ))}
-                {!items.length && <div className="col-span-full rounded-lg border p-10 text-center text-sm text-muted-foreground">No assistants match the current filters.</div>}
+                {!items.length && <div className="col-span-full rounded-lg border p-10 text-center text-sm text-muted-foreground">{tUi("No assistants match the current filters.")}</div>}
               </div>
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-              <span className="text-muted-foreground">Page {page} of {pageCount} · {total} total</span>
-              <div className="flex items-center gap-2"><Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}><SelectTrigger className="w-24"><SelectValue /></SelectTrigger><SelectContent>{PAGE_SIZES.map((size) => <SelectItem key={size} value={String(size)}>{size} rows</SelectItem>)}</SelectContent></Select><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button></div>
+              <span className="text-muted-foreground">{tUi("Page ")}{page}{tUi(" of ")}{pageCount} · {total}{tUi(" total")}</span>
+              <div className="flex items-center gap-2"><Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}><SelectTrigger className="w-24"><SelectValue /></SelectTrigger><SelectContent>{PAGE_SIZES.map((size) => <SelectItem key={size} value={String(size)}>{size}{tUi(" rows")}</SelectItem>)}</SelectContent></Select><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{tUi("Previous")}</Button><Button variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>{tUi("Next")}</Button></div>
             </div>
           </CardContent>
         </Card>
       </AiAssistantsSectionPage>
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete assistant?</AlertDialogTitle><AlertDialogDescription>This permanently deletes {deleteTarget?.name || deleteTarget?.id} from Telnyx. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleting} onClick={deleteAssistant}>{deleting ? "Deleting…" : "Delete"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{tUi("Delete assistant?")}</AlertDialogTitle><AlertDialogDescription>{tUi("This permanently deletes ")}{deleteTarget?.name || deleteTarget?.id}{tUi(" from Telnyx. This action cannot be undone.")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>{tUi("Cancel")}</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleting} onClick={deleteAssistant}>{deleting ? tUi("Deleting…") : tUi("Delete")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </AdminPageShell>
   );

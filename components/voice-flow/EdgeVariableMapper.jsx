@@ -1,4 +1,6 @@
 "use client";
+import { useUiText, UiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes";
@@ -58,6 +60,7 @@ export function EdgeVariableMapper({
   edges = [],
   globalVariables = {},
 }) {
+  const tUi = useUiText();
   const [variableMappings, setVariableMappings] = useState([]);
   const [expandedSchema, setExpandedSchema] = useState(false);
   const [schemaViewMode, setSchemaViewMode] = useState("list");
@@ -364,7 +367,7 @@ export function EdgeVariableMapper({
       }
       seenNames.add(mapping.variableName);
 
-      const validation = validateVariableName(mapping.variableName);
+      const validation = validateVariableName(mapping.variableName, tUi);
       if (!validation.valid) {
         errors.push(`${mappingLabel}: ${validation.error}`);
       }
@@ -373,8 +376,7 @@ export function EdgeVariableMapper({
         const duplicateCheck = checkDuplicateVariableName(
           mapping.variableName,
           { nodes, edges, globalVariables },
-          { type: "edge", edgeId: edge?.id },
-        );
+          { type: "edge", edgeId: edge?.id }, tUi);
         if (duplicateCheck.isDuplicate) {
           errors.push(`${mappingLabel}: ${duplicateCheck.message}`);
         }
@@ -399,14 +401,13 @@ export function EdgeVariableMapper({
     const duplicateCheck = checkDuplicateVariableName(
       mapping.variableName,
       { nodes, edges, globalVariables },
-      { type: "edge", edgeId: edge?.id },
-    );
+      { type: "edge", edgeId: edge?.id }, tUi);
     return duplicateCheck.isDuplicate;
   });
 
   const hasValidationErrors = variableMappings.some((mapping) => {
     if (!mapping.variableName || !mapping.sourcePath) return true;
-    const validation = validateVariableName(mapping.variableName);
+    const validation = validateVariableName(mapping.variableName, tUi);
     return !validation.valid;
   });
 
@@ -424,26 +425,20 @@ export function EdgeVariableMapper({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconEdit className="size-5" />
-            Configure Edge Variables
-          </SheetTitle>
-          <SheetDescription className="text-sm">
-            Extract variables from webhook, HTTP, or Data Action payloads as data flows through this edge.
-          </SheetDescription>
+            <IconEdit className="size-5" />{tUi("Configure Edge Variables")}</SheetTitle>
+          <SheetDescription className="text-sm">{tUi("Extract variables from webhook, HTTP, or Data Action payloads as data flows through this edge.")}</SheetDescription>
         </SheetHeader>
 
       {!sourceNode && (
         <Card className="mx-5 my-4 border-destructive/40 bg-destructive/5">
           <CardContent className="p-4">
-            <p className="text-sm text-destructive font-medium">Error: Source node not found</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              The source node for this edge could not be found. Please try closing and reopening the flow.
-            </p>
+            <p className="text-sm text-destructive font-medium">{tUi("Error: Source node not found")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The source node for this edge could not be found. Please try closing and reopening the flow.")}</p>
           </CardContent>
         </Card>
       )}
@@ -455,24 +450,20 @@ export function EdgeVariableMapper({
               <CardContent className="p-6 space-y-5">
                 <section className="space-y-2">
                   <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
-                    <IconChevronRight className="size-3.5 text-telnyx-green" />
-                    Source Node
-                  </h3>
+                    <IconChevronRight className="size-3.5 text-telnyx-green" />{tUi("Source Node")}</h3>
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-2">
                     <div className="font-medium">{sourceNode.data?.label || sourceNode.id}</div>
                     <div className="text-muted-foreground font-mono text-xs">{sourceNode.data?.nodeType}</div>
                     {outputEvent && !isHttpRequestNode && !isDataActionNode && (
                       <Badge variant="secondary" className="text-xs">{outputEvent}</Badge>
                     )}
-                    {isHttpRequestActionNode && <Badge variant="secondary" className="text-xs">HTTP Response</Badge>}
+                    {isHttpRequestActionNode && <Badge variant="secondary" className="text-xs">{tUi("HTTP Response")}</Badge>}
                     {isHttpRequestInitiatorNode && (
-                      <Badge variant="secondary" className="text-xs">
-                        HTTP Request Trigger ({sourceNode?.data?.config?.http_method || "POST"})
+                      <Badge variant="secondary" className="text-xs">{tUi("HTTP Request Trigger (")}{sourceNode?.data?.config?.http_method || tUi("POST")})
                       </Badge>
                     )}
                     {isDataActionNode && (
-                      <Badge variant="secondary" className="text-xs">
-                        Data Action: {sourceNode?.data?.config?.dataSource || "select data source"}
+                      <Badge variant="secondary" className="text-xs">{tUi("Data Action: ")}{sourceNode?.data?.config?.dataSource || tUi("select data source")}
                       </Badge>
                     )}
                   </div>
@@ -486,16 +477,12 @@ export function EdgeVariableMapper({
                       onClick={() => setSamplePayloadExpanded(!samplePayloadExpanded)}
                     >
                       <span className="text-sm font-semibold flex items-center gap-2">
-                        <IconCode className="h-4 w-4" />
-                        Sample Payload
-                      </span>
+                        <IconCode className="h-4 w-4" />{tUi("Sample Payload")}</span>
                       <IconChevronRight className={`h-4 w-4 transition-transform ${samplePayloadExpanded ? "rotate-90" : ""}`} />
                     </button>
                     {samplePayloadExpanded && (
                       <div className="p-3 border-t space-y-3">
-                        <p className="text-xs text-muted-foreground">
-                          Provide a sample {sourceNode?.data?.config?.http_method || "POST"} request payload to detect fields for mapping.
-                          {sourceNode?.data?.config?.http_method === "GET" && " For GET requests, provide query parameters as JSON."}
+                        <p className="text-xs text-muted-foreground">{tUi("Provide a sample ")}{sourceNode?.data?.config?.http_method || tUi("POST")}{tUi(" request payload to detect fields for mapping.")}{sourceNode?.data?.config?.http_method === "GET" && tUi(" For GET requests, provide query parameters as JSON.")}
                         </p>
                         <VariableTextarea
                           value={samplePayload}
@@ -526,29 +513,23 @@ export function EdgeVariableMapper({
 
                 {!supportsMapping && (
                   <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">No Variable Mapping Available</p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                      This node type does not generate output data that can be mapped to variables.
-                      {sourceNode.data?.nodeType === "set_variable" && " Variables set by this node are automatically available in subsequent nodes."}
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">{tUi("No Variable Mapping Available")}</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">{tUi("This node type does not generate output data that can be mapped to variables.")}{sourceNode.data?.nodeType === "set_variable" && tUi(" Variables set by this node are automatically available in subsequent nodes.")}
                     </p>
                   </div>
                 )}
 
                 {isHttpRequestActionNode && schemaPaths.length === 0 && (
                   <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
-                    <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">Test Required</p>
-                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                      Please run a test request in the HTTP Request node editor to see available response fields for variable mapping.
-                    </p>
+                    <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">{tUi("Test Required")}</p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">{tUi("Please run a test request in the HTTP Request node editor to see available response fields for variable mapping.")}</p>
                   </div>
                 )}
 
                 {isHttpRequestInitiatorNode && schemaPaths.length === 0 && !samplePayload && (
                   <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Sample Payload Recommended</p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                      Provide a sample payload above to automatically detect available fields for mapping.
-                    </p>
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">{tUi("Sample Payload Recommended")}</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">{tUi("Provide a sample payload above to automatically detect available fields for mapping.")}</p>
                   </div>
                 )}
 
@@ -560,8 +541,8 @@ export function EdgeVariableMapper({
                         className="flex items-center gap-2 text-left flex-1"
                         onClick={() => setExpandedSchema(!expandedSchema)}
                       >
-                        <span className="text-sm font-semibold">{sourceLabel}</span>
-                        <Badge variant="outline" className="text-[10px]">{schemaPaths.length} fields</Badge>
+                        <span className="text-sm font-semibold">{tUi(sourceLabel)}</span>
+                        <Badge variant="outline" className="text-[10px]">{schemaPaths.length}{tUi(" fields")}</Badge>
                         <IconChevronRight className={`h-4 w-4 transition-transform ${expandedSchema ? "rotate-90" : ""}`} />
                       </button>
                       <div className="flex items-center gap-1 border rounded-md bg-background">
@@ -606,10 +587,8 @@ export function EdgeVariableMapper({
                   <section className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <Label className="font-semibold">Variable Mappings</Label>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Select one or more payload keys above, then add them as mappings in one click.
-                        </p>
+                        <Label className="font-semibold">{tUi("Variable Mappings")}</Label>
+                        <p className="text-xs text-muted-foreground mt-1">{tUi("Select one or more payload keys above, then add them as mappings in one click.")}</p>
                       </div>
                       <Button
                         type="button"
@@ -619,8 +598,7 @@ export function EdgeVariableMapper({
                         className="h-8"
                         disabled={selectedSourcePaths.size === 0 || (isHttpRequestActionNode && schemaPaths.length === 0)}
                       >
-                        <IconPlus className="h-3 w-3 mr-1" />
-                        Add {selectedSourcePaths.size || ""} Mapping{selectedSourcePaths.size === 1 ? "" : "s"}
+                        <IconPlus className="h-3 w-3 mr-1" />{tUi("Add mappings ({value0})", {value0: selectedSourcePaths.size})}
                       </Button>
                     </div>
 
@@ -629,7 +607,7 @@ export function EdgeVariableMapper({
                         <div key={mapping.id} className="rounded-xl border bg-card p-4 space-y-4 shadow-sm">
                           <div className="flex items-start justify-between gap-3">
                             <Badge variant="outline" className={getSourcePathBadgeClass(mapping.sourcePath)}>
-                              {mapping.sourcePath || "No source selected"}
+                              {mapping.sourcePath || tUi("No source selected")}
                             </Badge>
                             <Button
                               type="button"
@@ -637,7 +615,7 @@ export function EdgeVariableMapper({
                               variant="ghost"
                               onClick={() => removeMapping(index)}
                               className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                              aria-label={`Remove mapping ${mapping.sourcePath || index + 1}`}
+                              aria-label={tUi("Remove mapping {value0}", { value0: mapping.sourcePath || index + 1 })}
                             >
                               <IconTrash className="h-3.5 w-3.5" />
                             </Button>
@@ -645,29 +623,28 @@ export function EdgeVariableMapper({
 
                           <div className="space-y-3">
                             <div>
-                              <Label className="text-xs">Source Path</Label>
+                              <Label className="text-xs">{tUi("Source Path")}</Label>
                               <Input
                                 value={mapping.sourcePath || ""}
                                 onChange={(e) => updateMapping(index, "sourcePath", e.target.value)}
-                                placeholder="payload.custom_headers[0].name"
+                                placeholder={tUi("payload.custom_headers[0].name")}
                                 className="mt-1 font-mono text-xs"
                               />
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <Label className="text-xs">Variable Name</Label>
+                              <Label className="text-xs">{tUi("Variable Name")}</Label>
                               <Input
                                 value={mapping.variableName}
                                 onChange={(e) => updateMapping(index, "variableName", e.target.value)}
-                                placeholder="call_control_id"
+                                placeholder={tUi("call_control_id")}
                                 className={`mt-1 ${
                                   mapping.variableName &&
                                   checkDuplicateVariableName(
                                     mapping.variableName,
                                     { nodes, edges, globalVariables },
-                                    { type: "edge", edgeId: edge?.id },
-                                  ).isDuplicate
+                                    { type: "edge", edgeId: edge?.id }, tUi).isDuplicate
                                     ? "border-yellow-500"
                                     : ""
                                 }`}
@@ -676,27 +653,25 @@ export function EdgeVariableMapper({
                                 checkDuplicateVariableName(
                                   mapping.variableName,
                                   { nodes, edges, globalVariables },
-                                  { type: "edge", edgeId: edge?.id },
-                                ).isDuplicate && (
+                                  { type: "edge", edgeId: edge?.id }, tUi).isDuplicate && (
                                   <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1 flex items-center gap-1">
                                     <IconAlertCircle className="h-3 w-3" />
                                     {
                                       checkDuplicateVariableName(
                                         mapping.variableName,
                                         { nodes, edges, globalVariables },
-                                        { type: "edge", edgeId: edge?.id },
-                                      ).message
+                                        { type: "edge", edgeId: edge?.id }, tUi).message
                                     }
                                   </p>
                                 )}
                             </div>
 
                             <div>
-                              <Label className="text-xs">Description (Optional)</Label>
+                              <Label className="text-xs">{tUi("Description (Optional)")}</Label>
                               <Input
                                 value={mapping.description || ""}
                                 onChange={(e) => updateMapping(index, "description", e.target.value)}
-                                placeholder="Brief description..."
+                                placeholder={tUi("Brief description...")}
                                 className="mt-1"
                               />
                             </div>
@@ -706,11 +681,7 @@ export function EdgeVariableMapper({
                         ))}
 
                       {variableMappings.length === 0 && (
-                        <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl bg-muted/30">
-                          No variable mappings defined.
-                          <br />
-                          Select payload fields above and click "Add Mapping" to capture data from this edge.
-                        </div>
+                        <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl bg-muted/30">{tUi("No variable mappings defined.")}<br />{tUi("Select payload fields above and click \"Add Mapping\" to capture data from this edge.")}</div>
                       )}
                     </div>
                   </section>
@@ -721,15 +692,13 @@ export function EdgeVariableMapper({
 
           <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
-              {supportsMapping ? "Cancel" : "Close"}
+              {supportsMapping ? tUi("Cancel") : tUi("Close")}
             </Button>
             {supportsMapping && (
               <Button
                 onClick={handleSave}
                 disabled={!canSave || Boolean(isHttpRequestInitiatorNode && samplePayload && payloadError)}
-              >
-                Save Mappings
-              </Button>
+              >{tUi("Save Mappings")}</Button>
             )}
           </SheetFooter>
         </>
@@ -763,9 +732,7 @@ function renderSelectableFieldRow(field, selectedSourcePaths, mappedSourcePaths,
           <span className="text-xs font-mono text-telnyx-green font-semibold break-all">{field.path}</span>
           <Badge variant="secondary" className="text-[10px] font-mono">{field.type}</Badge>
           {isAlreadyMapped && (
-            <Badge variant="outline" className="text-[10px] text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10">
-              mapped
-            </Badge>
+            <Badge variant="outline" className="text-[10px] text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10"><UiText>mapped</UiText></Badge>
           )}
         </div>
         {field.description && (
@@ -784,9 +751,7 @@ function renderJsonPayloadView(mappedSourcePaths, exampleJson) {
     <div className="space-y-3">
       {mappedPaths.length > 0 && (
         <div className="rounded-md border border-telnyx-green/30 bg-telnyx-green/5 p-3">
-          <div className="text-[11px] uppercase tracking-wide text-telnyx-green font-semibold mb-2">
-            Mapped in this edge
-          </div>
+          <div className="text-[11px] uppercase tracking-wide text-telnyx-green font-semibold mb-2"><UiText>Mapped in this edge</UiText></div>
           <div className="flex flex-wrap gap-1.5">
             {mappedPaths.map((path) => (
               <Badge key={path} variant="outline" className={getSourcePathBadgeClass(path)}>

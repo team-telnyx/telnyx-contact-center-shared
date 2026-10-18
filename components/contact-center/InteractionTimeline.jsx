@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import {
   IconAlertCircle,
@@ -133,11 +135,10 @@ export function coalesceAdjacentCallPhases(segments = []) {
 }
 
 export default function InteractionTimeline({ events = [], channel = "voice" }) {
+  const tUi = useUiText();
   if (!Array.isArray(events) || events.length === 0) {
     return (
-      <div className="text-sm text-muted-foreground">
-        No timeline events recorded.
-      </div>
+      <div className="text-sm text-muted-foreground">{tUi("No timeline events recorded.")}</div>
     );
   }
 
@@ -180,7 +181,7 @@ export default function InteractionTimeline({ events = [], channel = "voice" }) 
   if (segments.length === 0) {
     return (
       <div className="space-y-3">
-        <div className="text-sm text-muted-foreground">No timeline segments available.</div>
+        <div className="text-sm text-muted-foreground">{tUi("No timeline segments available.")}</div>
         <TransferWrapups wrapups={transferWrapups} />
       </div>
     );
@@ -215,6 +216,9 @@ export default function InteractionTimeline({ events = [], channel = "voice" }) 
     flexShrink: 0,
   });
 
+  const phaseLabel = label => label === "Transfer" ? tUi("Transfer", undefined, "event")
+    : label === "Consult" ? tUi("Consult", undefined, "event") : tUi(label);
+
   // Legend aggregates total time per phase across all segments.
   const legendByLabel = new Map();
   for (const segment of normalized) {
@@ -246,7 +250,7 @@ export default function InteractionTimeline({ events = [], channel = "voice" }) 
                     >
                       <div className="flex items-center gap-1.5 px-2">
                         <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                        <span className="whitespace-nowrap text-xs font-semibold drop-shadow-sm">{style.label}</span>
+                        <span className="whitespace-nowrap text-xs font-semibold drop-shadow-sm">{phaseLabel(style.label)}</span>
                       </div>
                     </div>
                   </TooltipTrigger>
@@ -257,20 +261,20 @@ export default function InteractionTimeline({ events = [], channel = "voice" }) 
                   >
                     <div className="mb-1.5 flex items-center gap-2 font-semibold">
                       <span className={`h-2.5 w-2.5 rounded-full ${style.classes}`} />
-                      {style.label}
-                      <span className="ml-auto font-normal text-muted-foreground">{segment._sharePct}% of interaction</span>
+                      {phaseLabel(style.label)}
+                      <span className="ml-auto font-normal text-muted-foreground">{segment._sharePct}{tUi("% of interaction")}</span>
                     </div>
                     <div className="space-y-0.5 text-muted-foreground">
-                      <div className="flex justify-between gap-4"><span>Start</span><span className="font-mono">{formatDateTime(segment.timestamp)}</span></div>
-                      <div className="flex justify-between gap-4"><span>Duration</span><span className="font-mono">{formatDuration(segment._durationSeconds)}</span></div>
+                      <div className="flex justify-between gap-4"><span>{tUi("Start")}</span><span className="font-mono">{formatDateTime(segment.timestamp)}</span></div>
+                      <div className="flex justify-between gap-4"><span>{tUi("Duration")}</span><span className="font-mono">{formatDuration(segment._durationSeconds)}</span></div>
                       {segment.alertingDurationSeconds != null && (
-                        <div className="flex justify-between gap-4"><span>Alerting</span><span className="font-mono">{formatDuration(segment.alertingDurationSeconds)}</span></div>
+                        <div className="flex justify-between gap-4"><span>{tUi("Alerting")}</span><span className="font-mono">{formatDuration(segment.alertingDurationSeconds)}</span></div>
                       )}
                       {segment.holdDuration != null && (
-                        <div className="flex justify-between gap-4"><span>Hold</span><span className="font-mono">{formatDuration(segment.holdDuration)}</span></div>
+                        <div className="flex justify-between gap-4"><span>{tUi("Hold")}</span><span className="font-mono">{formatDuration(segment.holdDuration)}</span></div>
                       )}
                       {segment.waitTimeSeconds != null && (
-                        <div className="flex justify-between gap-4"><span>Wait</span><span className="font-mono">{formatDuration(segment.waitTimeSeconds)}</span></div>
+                        <div className="flex justify-between gap-4"><span>{tUi("Wait")}</span><span className="font-mono">{formatDuration(segment.waitTimeSeconds)}</span></div>
                       )}
                     </div>
                   </TooltipContent>
@@ -300,12 +304,12 @@ export default function InteractionTimeline({ events = [], channel = "voice" }) 
         {Array.from(legendByLabel.values()).map((entry) => (
           <span key={entry.label} className="inline-flex items-center gap-1.5">
             <span className={`h-2.5 w-2.5 rounded-full ${entry.classes}`} />
-            <span className="font-medium text-foreground/80">{entry.label}</span>
+            <span className="font-medium text-foreground/80">{phaseLabel(entry.label)}</span>
             <span className="font-mono tabular-nums">{formatDuration(entry.seconds)}</span>
           </span>
         ))}
         <span className="ml-auto inline-flex items-center gap-1.5">
-          <span className="font-medium text-foreground/80">Total</span>
+          <span className="font-medium text-foreground/80">{tUi("Total")}</span>
           <span className="font-mono tabular-nums">{formatDuration(totalSeconds)}</span>
         </span>
       </div>
@@ -315,19 +319,20 @@ export default function InteractionTimeline({ events = [], channel = "voice" }) 
 }
 
 function TransferWrapups({ wrapups }) {
+  const tUi = useUiText();
   return (<>
       {wrapups.length > 0 && (
         <div className="space-y-2 border-t pt-3" data-testid="transfer-wrapups">
-          <p className="text-xs text-muted-foreground">Agent wrap-up after transfer · runs alongside the continuing interaction</p>
+          <p className="text-xs text-muted-foreground">{tUi("Agent wrap-up after transfer · runs alongside the continuing interaction")}</p>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {wrapups.map(wrapup => (
               <div key={wrapup.segmentId} className="flex items-center gap-3 rounded-lg border border-fuchsia-500/20 bg-card p-3" data-testid="transfer-wrapup-segment">
                 <span className="rounded-lg bg-fuchsia-500/10 p-2 text-fuchsia-600 dark:text-fuchsia-400"><IconFileText className="h-4 w-4" /></span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium" title={wrapup.agentName || wrapup.agentUsername || wrapup.agentId}>{wrapup.agentName || wrapup.agentUsername || wrapup.agentId || "Agent"}</div>
-                  <div className="text-xs text-muted-foreground">{formatDateTimeShort(wrapup.timestamp)} – {wrapup.endedAt ? formatDateTimeShort(wrapup.endedAt) : "In progress"}</div>
+                  <div className="truncate text-sm font-medium" title={wrapup.agentName || wrapup.agentUsername || wrapup.agentId}>{wrapup.agentName || wrapup.agentUsername || wrapup.agentId || tUi("Agent")}</div>
+                  <div className="text-xs text-muted-foreground">{formatDateTimeShort(wrapup.timestamp)} – {wrapup.endedAt ? formatDateTimeShort(wrapup.endedAt) : tUi("In progress")}</div>
                 </div>
-                <span className="shrink-0 font-mono text-sm tabular-nums">{wrapup.durationSeconds == null ? "Pending" : formatDuration(wrapup.durationSeconds)}</span>
+                <span className="shrink-0 font-mono text-sm tabular-nums">{wrapup.durationSeconds == null ? tUi("Pending") : formatDuration(wrapup.durationSeconds)}</span>
               </div>
             ))}
           </div>

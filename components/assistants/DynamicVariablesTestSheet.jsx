@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,7 @@ export default function DynamicVariablesTestSheet({
   webhookUrl,
   entries = [],
 }) {
+  const tUi = useUiText();
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [testError, setTestError] = useState(null);
@@ -124,8 +127,7 @@ export default function DynamicVariablesTestSheet({
           className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
         >
           <IconCheck className="h-3 w-3 mr-1" />
-          {status} OK
-        </Badge>
+          {status}{tUi(" OK")}</Badge>
       );
     } else if (status >= 400) {
       return (
@@ -134,8 +136,7 @@ export default function DynamicVariablesTestSheet({
           className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
         >
           <IconAlertCircle className="h-3 w-3 mr-1" />
-          {status} Error
-        </Badge>
+          {status}{tUi(" Error")}</Badge>
       );
     } else {
       return (
@@ -143,8 +144,7 @@ export default function DynamicVariablesTestSheet({
           variant="secondary"
           className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
         >
-          {status} Info
-        </Badge>
+          {status}{tUi(" Info")}</Badge>
       );
     }
   };
@@ -158,12 +158,8 @@ export default function DynamicVariablesTestSheet({
       <SheetContent className="w-[600px] sm:w-[700px] overflow-y-auto mb-4">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <IconFlask className="h-5 w-5 text-blue-500" />
-            Test Dynamic Variables Webhook
-          </SheetTitle>
-          <SheetDescription>
-            Test your dynamic variables webhook with sample data
-          </SheetDescription>
+            <IconFlask className="h-5 w-5 text-blue-500" />{tUi("Test Dynamic Variables Webhook")}</SheetTitle>
+          <SheetDescription>{tUi("Test your dynamic variables webhook with sample data")}</SheetDescription>
         </SheetHeader>
 
         <div className="space-y-4 mt-0 mx-4">
@@ -172,9 +168,7 @@ export default function DynamicVariablesTestSheet({
             <CardHeader className="pb-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <IconSettings className="h-4 w-4" />
-                  Request Configuration
-                </CardTitle>
+                  <IconSettings className="h-4 w-4" />{tUi("Request Configuration")}</CardTitle>
                 <Button
                   onClick={handleTestRequest}
                   disabled={isTesting}
@@ -183,21 +177,17 @@ export default function DynamicVariablesTestSheet({
                 >
                   {isTesting ? (
                     <>
-                      <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Testing...
-                    </>
+                      <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />{tUi("Testing...")}</>
                   ) : (
                     <>
-                      <IconFlask className="h-4 w-4 mr-2" />
-                      Test
-                    </>
+                      <IconFlask className="h-4 w-4 mr-2" />{tUi("Test")}</>
                   )}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label className="text-xs">Webhook URL</Label>
+                <Label className="text-xs">{tUi("Webhook URL")}</Label>
                 <div className="mt-1 px-3 py-2 bg-muted rounded-md text-sm font-mono break-all">
                   {webhookUrl}
                 </div>
@@ -205,13 +195,13 @@ export default function DynamicVariablesTestSheet({
 
               {/* End User Target Parameter */}
               <div>
-                <Label className="text-xs">End User Target</Label>
+                <Label className="text-xs">{tUi("End User Target")}</Label>
                 <div className="space-y-2 mt-2">
                   <div>
                     <Input
                       value={endUserTarget}
                       onChange={(e) => setEndUserTarget(e.target.value)}
-                      placeholder="Enter phone number (e.g., +15551234567)"
+                      placeholder={tUi("Enter phone number (e.g., +15551234567)")}
                       className="mt-1"
                     />
                   </div>
@@ -226,7 +216,7 @@ export default function DynamicVariablesTestSheet({
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                   <IconAlertCircle className="h-4 w-4" />
-                  <span className="font-medium">Test Failed</span>
+                  <span className="font-medium">{tUi("Test Failed")}</span>
                 </div>
                 <p className="text-sm text-red-600 dark:text-red-400 mt-2">
                   {testError}
@@ -239,25 +229,19 @@ export default function DynamicVariablesTestSheet({
             <Card className="mb-4">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <IconCheck className="h-4 w-4 text-green-500" />
-                  Test Response
-                  {getStatusBadge(testResult.status)}
+                  <IconCheck className="h-4 w-4 text-green-500" />{tUi("Test Response")}{getStatusBadge(testResult.status)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Content Type
-                    </Label>
+                    <Label className="text-xs text-muted-foreground">{tUi("Content Type")}</Label>
                     <div className="mt-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
-                      {testResult.content_type || "application/json"}
+                      {testResult.content_type || tUi("application/json")}
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Response Body
-                    </Label>
+                    <Label className="text-xs text-muted-foreground">{tUi("Response Body")}</Label>
                     <div className="mt-2 border rounded-md h-[500px] overflow-y-auto">
                       <CodeBlock
                         language="json"

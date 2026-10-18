@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -11,6 +13,7 @@ import useWorkflowStore from "@/lib/stores/workflow-store";
  * Shows overall workflow completion progress bar.
  */
 export function WorkflowProgress() {
+  const tUi = useUiText();
   const {
     session,
     totalItems,
@@ -26,12 +29,10 @@ export function WorkflowProgress() {
     <div className="bg-card border-2 border-border rounded-lg p-4">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Progress</span>
+          <span className="text-sm font-medium">{tUi("Progress")}</span>
           {isComplete && (
             <Badge className="bg-green-500 text-white">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Complete
-            </Badge>
+              <CheckCircle className="h-3 w-3 mr-1" />{tUi("Complete")}</Badge>
           )}
         </div>
         <span className="text-sm font-bold text-green-500">
@@ -49,22 +50,18 @@ export function WorkflowProgress() {
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1">
             <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-            {completedItems} completed
-          </span>
+            {completedItems}{tUi(" completed")}</span>
           {skippedItems > 0 && (
             <span className="flex items-center gap-1">
               <SkipForward className="h-3.5 w-3.5 text-amber-500" />
-              {skippedItems} skipped
-            </span>
+              {skippedItems}{tUi(" skipped")}</span>
           )}
           <span className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            {pendingItems} pending
-          </span>
+            {pendingItems}{tUi(" pending")}</span>
         </div>
         <span>
-          {totalItems} total items
-        </span>
+          {totalItems}{tUi(" total items")}</span>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync } from "./helpers/ui-source.mjs";
 import test from "node:test";
 
 const routerSource = readFileSync("lib/agent-assist-transcription-router.mjs", "utf8");

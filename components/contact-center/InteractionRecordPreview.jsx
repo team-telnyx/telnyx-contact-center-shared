@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { useEffect, useState } from "react";
 import {
   Dialog,
@@ -15,6 +18,7 @@ export default function InteractionRecordPreview({
   interaction,
   onOpenChange,
 }) {
+  const tUi = useUiText();
   const id = interaction?.work_item_id || interaction?.id;
   const [record, setRecord] = useState(null),
     [error, setError] = useState(null);
@@ -51,12 +55,8 @@ export default function InteractionRecordPreview({
     <Dialog open={Boolean(id)} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[88dvh] overflow-y-auto sm:max-w-2xl">
         <DialogTitle className="flex items-center gap-3">
-          <InteractionChannel channel={channel} />
-          Interaction record
-        </DialogTitle>
-        <DialogDescription>
-          Historical evidence from your interaction. Read only.
-        </DialogDescription>
+          <InteractionChannel channel={channel} />{tUi("Interaction record")}</DialogTitle>
+        <DialogDescription>{tUi("Historical evidence from your interaction. Read only.")}</DialogDescription>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -69,8 +69,8 @@ export default function InteractionRecordPreview({
         ) : (
           <div className="space-y-5">
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{record.state}</Badge>
-              <Badge variant="outline">{record.direction}</Badge>
+              <Badge variant="secondary">{operationalStatusLabel(tUi, record.state)}</Badge>
+              <Badge variant="outline">{operationalStatusLabel(tUi, record.direction)}</Badge>
             </div>
             <dl className="grid grid-cols-2 gap-4 text-xs">
               {[
@@ -80,17 +80,17 @@ export default function InteractionRecordPreview({
                 [
                   "Started",
                   record.created_at &&
-                    new Date(record.created_at).toLocaleString(),
+                    new Date(record.created_at).toLocaleString(tUi.locale),
                 ],
                 [
                   "Closed",
                   record.terminal_at &&
-                    new Date(record.terminal_at).toLocaleString(),
+                    new Date(record.terminal_at).toLocaleString(tUi.locale),
                 ],
                 ["Disposition", record.wrapup_code_names?.join(", ")],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-muted-foreground">{label}</dt>
+                  <dt className="text-muted-foreground">{tUi(label)}</dt>
                   <dd className="mt-1 break-words">{value || "—"}</dd>
                 </div>
               ))}
@@ -98,7 +98,7 @@ export default function InteractionRecordPreview({
             {channelDefinition(channel).capabilities.recordings &&
               record.recording_url && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold">Recording</p>
+                  <p className="mb-2 text-xs font-semibold">{tUi("Recording", undefined, "saved media")}</p>
                   {channel === "video" || record.metadata?.recording?.format === "mp4" ? (
                     <video
                       controls
@@ -118,7 +118,7 @@ export default function InteractionRecordPreview({
                 </div>
               )}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Interaction journey</h3>
+              <h3 className="text-sm font-semibold">{tUi("Interaction journey")}</h3>
               {(record.acd_segments || []).map((segment) => (
                 <div key={segment.id} className="border-l-2 pl-3 text-xs">
                   <p className="font-medium">
@@ -130,7 +130,7 @@ export default function InteractionRecordPreview({
                   </p>
                   <p className="mt-1 text-muted-foreground">
                     {segment.outcome || segment.kind} ·{" "}
-                    {new Date(segment.started_at).toLocaleString()}
+                    {new Date(segment.started_at).toLocaleString(tUi.locale)}
                   </p>
                 </div>
               ))}

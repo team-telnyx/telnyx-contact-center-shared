@@ -149,6 +149,19 @@ test("a mid-call correction expires once collection moves on", () => {
   );
 });
 
+test("agent filler starting with 'no' does not open the mid-call window for the next answer", () => {
+  // The agent's filler is the previous utterance; the customer's bare answer
+  // to the question must not become a correction candidate for every
+  // completed slot.
+  for (const filler of ["No problem. What is your first name?", "No worries, what is the date of birth?"]) {
+    assert.equal(
+      correctionRequested({ transcript: "Michael", recentContext: [{ text: filler }] }),
+      false,
+      `filler opened the correction window: "${filler}"`,
+    );
+  }
+});
+
 test("read-back keeps the wider window it shipped with", () => {
   // Nothing is left to collect at read-back, so a trigger further back in the
   // window is still a live correction — unchanged from #1281.

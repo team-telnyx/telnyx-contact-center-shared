@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -8,6 +10,7 @@ import { AuthBrandLogo } from "@/components/auth-brand-logo";
 import { AuthRightImage } from "@/components/auth-right-image";
 
 export default function ActivateAccountPage() {
+  const tUi = useUiText();
   const params = useParams();
   const router = useRouter();
   const token = params.token;
@@ -66,9 +69,7 @@ export default function ActivateAccountPage() {
           <div className="flex justify-center w-full">
             <div className="flex flex-col items-center w-full justify-center">
               <AuthBrandLogo />
-              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
-                Contact Center
-              </span>
+              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">{tUi("Contact Center")}</span>
             </div>
           </div>
         </div>
@@ -77,72 +78,52 @@ export default function ActivateAccountPage() {
             {loading && (
               <div className="space-y-4">
                 <div className="text-6xl animate-pulse">⏳</div>
-                <h1 className="text-2xl font-bold">Activating Your Account</h1>
-                <p className="text-sm text-muted-foreground">
-                  Please wait while we activate your account...
-                </p>
+                <h1 className="text-2xl font-bold">{tUi("Activating Your Account")}</h1>
+                <p className="text-sm text-muted-foreground">{tUi("Please wait while we activate your account...")}</p>
               </div>
             )}
 
             {!loading && success && (
               <div className="space-y-4">
                 <div className="text-6xl">🎉</div>
-                <h1 className="text-2xl font-bold">Account Activated!</h1>
-                <p className="text-sm text-muted-foreground">
-                  Your account has been activated successfully.
-                  <br />
-                  You can now sign in to access the Contact Center.
-                </p>
+                <h1 className="text-2xl font-bold">{tUi("Account Activated!")}</h1>
+                <p className="text-sm text-muted-foreground">{tUi("Your account has been activated successfully.")}<br />{tUi("You can now sign in to access the Contact Center.")}</p>
                 <Button
                   className="w-full mt-4"
                   onClick={() => router.push("/signin")}
-                >
-                  Go to Sign In
-                </Button>
+                >{tUi("Go to Sign In")}</Button>
               </div>
             )}
 
             {!loading && alreadyActivated && (
               <div className="space-y-4">
                 <div className="text-6xl">✅</div>
-                <h1 className="text-2xl font-bold">Already Activated</h1>
-                <p className="text-sm text-muted-foreground">
-                  Your account is already activated.
-                  <br />
-                  You can sign in to access the Contact Center.
-                </p>
+                <h1 className="text-2xl font-bold">{tUi("Already Activated")}</h1>
+                <p className="text-sm text-muted-foreground">{tUi("Your account is already activated.")}<br />{tUi("You can sign in to access the Contact Center.")}</p>
                 <Button
                   className="w-full mt-4"
                   onClick={() => router.push("/signin")}
-                >
-                  Go to Sign In
-                </Button>
+                >{tUi("Go to Sign In")}</Button>
               </div>
             )}
 
             {!loading && error && (
               <div className="space-y-4">
                 <div className="text-6xl">❌</div>
-                <h1 className="text-2xl font-bold">Activation Failed</h1>
+                <h1 className="text-2xl font-bold">{tUi("Activation Failed")}</h1>
                 <p className="text-sm text-red-500">{error}</p>
-                <p className="text-sm text-muted-foreground">
-                  The activation link may be invalid or expired.
-                </p>
+                <p className="text-sm text-muted-foreground">{tUi("The activation link may be invalid or expired.")}</p>
                 <div className="space-y-2">
                   <Button
                     className="w-full"
                     variant="outline"
                     onClick={() => router.push("/signin")}
-                  >
-                    Go to Sign In
-                  </Button>
+                  >{tUi("Go to Sign In")}</Button>
                   <Button
                     className="w-full"
                     variant="outline"
                     onClick={() => router.push("/signup")}
-                  >
-                    Create New Account
-                  </Button>
+                  >{tUi("Create New Account")}</Button>
                 </div>
               </div>
             )}

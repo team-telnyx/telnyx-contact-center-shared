@@ -1,4 +1,7 @@
 "use client";
+import { sourceText } from "@/lib/i18n/source-text.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
@@ -37,28 +40,33 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger, tabsTriggerCompactClass } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Combobox } from "@/components/ui/combobox";
-import AIModels from "@/components/assistants/AIModels";
-import WorkflowVoicePicker from "@/components/assistants/WorkflowVoicePicker";
-import WorkflowTranscriptionPicker from "@/components/assistants/WorkflowTranscriptionPicker";
+import WorkflowExpressionEditor from "./WorkflowExpressionEditor";
+import AssistantModelConfiguration from "./AssistantModelConfiguration";
+import AssistantTranscriptionSettings from "./AssistantTranscriptionSettings";
+import { Skeleton } from "@/components/ui/skeleton";
+import TtsVoicePicker from "./VoicePicker";
+import AssistantToolAudioSettings from "./AssistantToolAudioSettings";
+import { assistantForEditor, assistantVoiceSettings } from "@/lib/ai/assistant-draft.mjs";
+import { compatibleVoiceAudio } from "@/lib/ai/assistant-audio-ui.mjs";
 import AssistantCapabilityGraph from "@/components/assistants/AssistantCapabilityGraph";
 import { VariableTextarea } from "@/components/voice-flow/VariableTextarea";
+import { hydrateWorkflowCanvasNodes, addAssistantHandoff, updateAssistantHandoff, defaultConnectionCondition, defaultWorkflowNodePosition, normalizeWorkflowNode, toReactFlowNodes, toReactFlowEdges, reactFlowToConversationFlow, virtualAssistantNodeId } from "@/lib/ai/assistant-workflow-canvas.mjs";
 import { cn } from "@/lib/utils";
 import {
   ASSISTANT_TOOL_LIBRARY_SOURCE_KEY,
   ASSISTANT_TOOL_LIBRARY_SOURCE_VALUE,
 } from "@/lib/ai/tool-library";
 import { cloneAssistantTranscriptionOverride } from "@/lib/ai/assistant-transcription.mjs";
+import { cloneAssistantOverride } from "@/lib/ai/assistant-overrides.mjs";
 import {
   buildComparisonExpression,
   createDefaultConversationFlow,
@@ -96,6 +104,7 @@ const edgeTypes = {
 };
 
 const WORKFLOW_NODE_DEFS = {
+  tool: {label:"Tool node", color:"#F59E0B", icon:IconRobot, inputs:1, outputs:1, inputLabel:"Execute", outputLabels:["Next"], category:"AI ASSISTANT"},
   prompt: {
     label: "Prompt node",
     color: "#00E3AA",
@@ -133,6 +142,7 @@ function workflowNodeLabel(type) {
 }
 
 function WorkflowCanvasNode({ data, selected }) {
+  const tUi = useUiText();
   const nodeDef = WORKFLOW_NODE_DEFS[data.nodeType || data.node?.type || "prompt"] || WORKFLOW_NODE_DEFS.prompt;
   const IconComponent = nodeDef.icon;
   const hasInput = nodeDef.inputs > 0;
@@ -150,7 +160,7 @@ function WorkflowCanvasNode({ data, selected }) {
       className={`shadow-lg rounded-lg border-2 bg-card text-card-foreground transition-all ${
         selected ? "border-primary ring-2 ring-primary/30" : "border-border"
       }`}
-      style={{ minWidth: "260px" }}
+      style={{ width: "280px" }}
     >
       {/* Top-down layout: input handle on top, output handle(s) on bottom */}
       {hasInput && (
@@ -164,21 +174,19 @@ function WorkflowCanvasNode({ data, selected }) {
 
       {data.isStart && (
         <div className="flex items-center justify-center pt-1.5 pb-0.5">
-          <Badge className="bg-telnyx-green/15 text-telnyx-green border-telnyx-green/30 text-[10px] font-semibold uppercase tracking-wide">
-            Start
-          </Badge>
+          <Badge className="bg-telnyx-green/15 text-telnyx-green border-telnyx-green/30 text-[10px] font-semibold uppercase tracking-wide">{tUi("Start")}</Badge>
         </div>
       )}
 
       <div className="flex items-center justify-between px-2 py-2 border-y">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <div
             className="flex items-center justify-center w-8 h-8 rounded-md flex-shrink-0"
             style={{ backgroundColor: `${nodeDef.color}20`, color: nodeDef.color }}
           >
             <IconComponent className="h-5 w-5" />
           </div>
-          <div className="font-semibold text-base">{data.label}</div>
+          <div className="truncate font-semibold text-base" title={data.label}>{data.label}</div>
         </div>
         <div className="flex items-center gap-1">
           {data.nodeIssues && data.nodeIssues.length > 0 && (
@@ -189,9 +197,9 @@ function WorkflowCanvasNode({ data, selected }) {
                     <IconAlertTriangle className="h-4 w-4" />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs">
+                <TooltipContent side="bottom" className="max-w-xs [overflow-wrap:anywhere]">
                   <div className="space-y-1">
-                    <div className="font-semibold text-xs">Missing required configuration:</div>
+                    <div className="font-semibold text-xs">{tUi("Missing required configuration:")}</div>
                     <ul className="list-disc space-y-0.5 pl-3 text-xs">
                       {data.nodeIssues.map((issue) => <li key={issue}>{issue}</li>)}
                     </ul>
@@ -243,6 +251,7 @@ function WorkflowEdge({
   selected,
   data,
 }) {
+  const tUi = useUiText();
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -253,7 +262,7 @@ function WorkflowEdge({
   });
 
   const condition = data?.edge?.condition || {};
-  const label = edgeLabel(condition);
+  const label = edgeLabel(condition, tUi);
   const isDefault = condition.type === "default";
   const edgeIssues = data?.edgeIssues || [];
 
@@ -294,9 +303,9 @@ function WorkflowEdge({
                         <IconAlertTriangle className="h-3 w-3" />
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs">
+                    <TooltipContent side="bottom" className="max-w-xs [overflow-wrap:anywhere]">
                       <div className="space-y-1">
-                        <div className="font-semibold text-xs">Missing required configuration:</div>
+                        <div className="font-semibold text-xs">{tUi("Missing required configuration:")}</div>
                         <ul className="list-disc space-y-0.5 pl-3 text-xs">
                           {edgeIssues.map((issue) => <li key={issue}>{issue}</li>)}
                         </ul>
@@ -313,118 +322,6 @@ function WorkflowEdge({
   );
 }
 
-function defaultWorkflowNodePosition(index) {
-  return { x: 40 + index * 320, y: 40 };
-}
-
-function normalizeWorkflowNode(node, index = 0) {
-  const type = node?.type === "speak" ? "speak" : "prompt";
-  const id = String(node.id || `n_${type}_${index + 1}`);
-  return {
-    ...node,
-    id,
-    type,
-    name: node?.name || workflowNodeLabel(type),
-    position: node.position || defaultWorkflowNodePosition(index),
-  };
-}
-
-// Deterministic canvas id for the virtual node synthesized from an edge
-// whose target.type === "assistant". The id is stable across renders so
-// ReactFlow keeps the node mounted and the user's drag is preserved.
-function virtualAssistantNodeId(assistantId) {
-  return `assistant:${String(assistantId)}`;
-}
-
-function toReactFlowNodes(flow, options = {}) {
-  const displayFlow = options.normalize === false ? flow : normalizeWorkflowCanvasLayout(flow);
-  const realNodes = (displayFlow?.nodes || []).map((node, index) => {
-    const normalized = normalizeWorkflowNode(node, index);
-    return {
-      id: String(node.id || normalized.id),
-      type: "customNode",
-      position: node.position || defaultWorkflowNodePosition(index),
-      data: {
-        node: normalized,
-        nodeType: normalized.type,
-        label: normalized.name || workflowNodeLabel(normalized.type),
-        nodeId: normalized.id,
-        nodeNumber: index + 1,
-        isStart: String(displayFlow.start_node_id || "") === normalized.id,
-      },
-    };
-  });
-
-  // Synthesize a virtual read-only Assistant node on the canvas for every
-  // edge whose target.type === "assistant". The node is NOT persisted to
-  // flow.nodes — it is derived from the edge target (assistant_id +
-  // voice_mode + position) purely for visualization. Edges connect to it
-  // via the stable id `assistant:<assistant_id>`.
-  const edges = Array.isArray(displayFlow?.edges) ? displayFlow.edges : [];
-  const seenAssistantIds = new Set();
-  const virtualNodes = [];
-  let virtualIndex = realNodes.length + 1;
-  for (const edge of edges) {
-    const target = edge.target;
-    if (!target || target.type !== "assistant" || !target.assistant_id) continue;
-    const aid = String(target.assistant_id);
-    if (seenAssistantIds.has(aid)) continue; // one node per target assistant
-    seenAssistantIds.add(aid);
-    const position = target.position || { x: 320, y: 320 + virtualIndex * 80 };
-    virtualNodes.push({
-      id: virtualAssistantNodeId(aid),
-      type: "customNode",
-      position: { x: Number(position.x || 0), y: Number(position.y || 0) },
-      // Virtual nodes are not draggable from ReactFlow's perspective because
-      // their position lives on the edge target; we allow drag but persist it
-      // back via onNodesChange → reactFlowToConversationFlow.
-      draggable: true,
-      data: {
-        node: {
-          id: virtualAssistantNodeId(aid),
-          type: "assistant",
-          name: "Assistant node",
-          assistant_id: aid,
-          voice_mode: target.voice_mode || "distinct",
-          position: { x: Number(position.x || 0), y: Number(position.y || 0) },
-        },
-        nodeType: "assistant",
-        label: "Assistant node",
-        nodeId: virtualAssistantNodeId(aid),
-        isVirtualAssistant: true,
-        edgeId: String(edge.id),
-        assistantId: aid,
-        voiceMode: target.voice_mode || "distinct",
-      },
-    });
-    virtualIndex += 1;
-  }
-
-  return [...realNodes, ...virtualNodes];
-}
-
-function toReactFlowEdges(flow) {
-  return (flow?.edges || [])
-    .filter((edge) => edge.target?.type === "node" || edge.target?.type === "assistant")
-    .map((edge) => {
-      const targetNodeId =
-        edge.target?.type === "assistant"
-          ? virtualAssistantNodeId(edge.target.assistant_id)
-          : String(edge.target?.node_id || "");
-      return {
-        id: String(edge.id || `e_${edge.start_node_id}_${targetNodeId}`),
-        source: String(edge.start_node_id),
-        target: targetNodeId,
-        sourceHandle: "output-0",
-        targetHandle: "input-execute",
-        animated: edge.condition?.type === "llm",
-        type: "workflowEdge",
-        data: { edge },
-        style: { stroke: edge.condition?.type === "default" ? "#64748b" : "#00E3AA", strokeWidth: 2 },
-      };
-    });
-}
-
 function workflowLayoutSignature(flow) {
   return JSON.stringify((flow?.nodes || []).map((node) => ({
     id: String(node.id || ""),
@@ -433,13 +330,14 @@ function workflowLayoutSignature(flow) {
   })));
 }
 
-function edgeLabel(condition = {}) {
-  if (condition.type === "default") return "Default";
-  if (condition.type === "expression") return expressionLabel(condition.expression) || "Variable Comparison";
-  return "LLM Prompt";
+function edgeLabel(condition = {}, tUi = sourceText) {
+  if (condition.type === "default") return tUi("Default");
+  if (condition.type === "expression") return expressionLabel(condition.expression, tUi) || tUi("Variable Comparison");
+  return tUi("LLM Prompt");
 }
 
-function expressionLabel(expression) {
+function expressionLabel(expression, tUi = sourceText) {
+  if (expression?.type === "bool_op") return tUi(expression.op === "and" ? "All conditions" : expression.op === "or" ? "Any condition" : "Condition is not met");
   if (!expression || expression.type !== "comparison") return "";
   const left = expression.left?.name || expression.left?.value || "variable";
   const op = expression.op || "==";
@@ -448,89 +346,13 @@ function expressionLabel(expression) {
   return `${left} ${op} ${value}`;
 }
 
-function reactFlowToConversationFlow({ flow, nodes, edges }) {
-  const byId = new Map((flow?.nodes || []).map((node) => [String(node.id), node]));
-
-  // Separate real workflow nodes (prompt/speak) from virtual assistant nodes
-  // synthesized from edge targets. Only real nodes are persisted to flow.nodes.
-  const realRfNodes = [];
-  // Map canvas node id → { position, assistant_id, voice_mode } for virtual
-  // assistant nodes, so edges can read back assistant_id + voice_mode + the
-  // dragged canvas position when persisting.
-  const virtualAssistantByNodeId = new Map();
-  for (const rfNode of nodes) {
-    const n = rfNode.data?.node || {};
-    if (n.type === "assistant") {
-      virtualAssistantByNodeId.set(String(rfNode.id), {
-        assistantId: n.assistant_id,
-        voiceMode: n.voice_mode || "distinct",
-        position: rfNode.position || { x: 0, y: 0 },
-      });
-    } else {
-      realRfNodes.push(rfNode);
-    }
-  }
-
-  const nextNodes = realRfNodes.map((node, index) => {
-    const position = node.position || defaultWorkflowNodePosition(index);
-    return {
-      ...(byId.get(String(node.id)) || node.data.node),
-      id: String(node.id),
-      type: node.data?.nodeType || node.data?.node?.type || "prompt",
-      name: node.data?.label || node.data?.node?.name || workflowNodeLabel(node.data?.nodeType),
-      position: {
-        x: Number(position.x || 0),
-        y: Number(position.y || 0),
-      },
-    };
-  });
-
-  const edgeById = new Map((flow?.edges || []).map((edge) => [String(edge.id), edge]));
-  const nextEdges = edges.map((edge) => {
-    const existing = edgeById.get(String(edge.id));
-    const targetNodeId = String(edge.target);
-    const virtual = virtualAssistantByNodeId.get(targetNodeId);
-    if (virtual) {
-      // Edge targets a virtual assistant node — persist as
-      // target.type="assistant" with the canvas position so Telnyx remembers
-      // where the handoff node was placed.
-      return {
-        ...(existing || edge.data?.edge || {}),
-        id: String(edge.id),
-        start_node_id: String(edge.source),
-        target: {
-          type: "assistant",
-          assistant_id: virtual.assistantId,
-          voice_mode: virtual.voiceMode,
-          position: {
-            x: Number(virtual.position.x || 0),
-            y: Number(virtual.position.y || 0),
-          },
-        },
-      };
-    }
-    // Otherwise keep the original target if it existed (preserves
-    // target.type="assistant" on edges that haven't been reconnected), else
-    // default to a plain node target.
-    return {
-      ...(existing || edge.data?.edge || {}),
-      id: String(edge.id),
-      start_node_id: String(edge.source),
-      target: existing?.target || { type: "node", node_id: targetNodeId },
-    };
-  });
-  return {
-    start_node_id: String(flow?.start_node_id || nextNodes[0]?.id || ""),
-    nodes: nextNodes,
-    edges: nextEdges,
-  };
-}
-
 function WorkflowNodePalette({ onAddNode, onDragStart }) {
+  const tUi = useUiText();
   const nodesByCategory = {
     "AI ASSISTANT": [
       { id: "prompt", ...WORKFLOW_NODE_DEFS.prompt },
       { id: "speak", ...WORKFLOW_NODE_DEFS.speak },
+      { id: "tool", ...WORKFLOW_NODE_DEFS.tool },
       { id: "assistant", ...WORKFLOW_NODE_DEFS.assistant },
     ],
   };
@@ -538,10 +360,8 @@ function WorkflowNodePalette({ onAddNode, onDragStart }) {
   return (
     <div className="w-64 border-r bg-card flex flex-col h-full">
       <Tabs value="nodes" className="flex-1 flex flex-col h-full">
-        <TabsList className="w-full rounded-none border-b flex-shrink-0">
-          <TabsTrigger value="nodes" className="flex-1">
-            Nodes
-          </TabsTrigger>
+        <TabsList className="px-4">
+          <TabsTrigger value="nodes">{tUi("Nodes")}</TabsTrigger>
         </TabsList>
         <TabsContent value="nodes" className="flex-1 overflow-y-auto mt-0 h-0">
           <div className="p-4 space-y-4">
@@ -588,7 +408,8 @@ function WorkflowPropertiesPanel({
   onUpdateEdge,
   onDeleteEdge,
 }) {
-  const errors = useMemo(() => validateConversationFlow(flow), [flow]);
+  const tUi = useUiText();
+  const errors = useMemo(() => validateConversationFlow(flow, {allowInheritedInstructions: true}, tUi), [flow, tUi]);
 
   const systemVariableNames = useMemo(() => OPENCLAW_SYSTEM_VARIABLES.map((variable) => variable.name), []);
   const customVariableNames = useMemo(() => Object.keys(values?.dynamic_variables || {}), [values?.dynamic_variables]);
@@ -617,6 +438,7 @@ function WorkflowPropertiesPanel({
     configContent = (
       <EdgeProperties
         edge={selectedEdge.data?.edge || { id: selectedEdge.id }}
+        sourceType={flow.nodes.find(node => node.id === selectedEdge.data?.edge?.start_node_id)?.type}
         systemVariableNames={systemVariableNames}
         customVariableNames={customVariableNames}
         onUpdateEdge={onUpdateEdge}
@@ -628,59 +450,54 @@ function WorkflowPropertiesPanel({
       <div className="p-4 space-y-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <IconGitBranch className="size-4 text-telnyx-green" />
-            Workflow
-          </div>
+            <IconGitBranch className="size-4 text-telnyx-green" />{tUi("Workflow")}</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {flow.nodes?.length || 0} nodes, {flow.edges?.length || 0} edges
-          </p>
+            {(flow.nodes?.length || 0) + (flow.edges || []).filter(edge => edge.target?.type === "assistant").length + (flow._assistantDrafts?.length || 0)}{tUi(" nodes, ")}{flow.edges?.length || 0}{tUi(" edges")}</p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Select a node or edge on the canvas to edit it. Drag Prompt node or Speak node from the left panel to add steps.
-        </p>
-        {errors.length > 0 && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-            <div className="mb-1 font-medium">Validation</div>
-            <ul className="list-disc space-y-1 pl-4">
-              {errors.map((error) => <li key={error}>{error}</li>)}
-            </ul>
-          </div>
-        )}
-        <Button variant="outline" className="w-full" onClick={onDisable}>
-          Disable Workflow
-        </Button>
+        <p className="text-sm text-muted-foreground">{tUi("Select a step or connection to edit it. Add an Assistant node to hand the conversation to another assistant.")}</p>
+        <Button variant="outline" className="w-full" onClick={onDisable}>{tUi("Disable Workflow")}</Button>
       </div>
     );
   }
 
   return (
-    <div className="w-80 border-l bg-card flex flex-col h-full">
-      <div className="flex-1 min-h-0 overflow-y-auto">
+    <div data-workflow-properties className="flex h-full min-w-0 [overflow-wrap:anywhere] w-[380px] max-w-[48%] shrink-0 flex-col border-l bg-card xl:w-[440px]">
+      <div className="flex-1 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto">
+        {errors.length > 0 && (
+          <div role="status" aria-live="polite" className="m-4 mb-0 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            <div className="mb-1 font-medium">{tUi("Validation")}</div>
+            <ul className="list-disc space-y-1 pl-4">
+              {errors.map((error, index) => <li key={index}>{error}</li>)}
+            </ul>
+          </div>
+        )}
         {configContent}
       </div>
     </div>
   );
 }
 
-function AssistantNodeProperties({ flow, node, edgeId, onUpdateEdge, onDeleteEdge }) {
-  const [assistantOptions, setAssistantOptions] = useState([]);
+function AssistantNodeProperties({ flow, node, edgeId, variableNames, onUpdateEdge, onDeleteNode }) {
+  const tUi = useUiText();
+  const [catalog, setCatalog] = useState({status: "loading", options: []});
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    let mounted = true;
+    const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch("/api/ai/assistants?all=true", { cache: "no-store" });
+        const res = await fetch("/api/ai/assistants?all=true", {cache: "no-store", signal: controller.signal});
         const data = await res.json();
-        if (mounted && res.ok && data?.ok) {
-          const items = Array.isArray(data.items) ? data.items : [];
-          setAssistantOptions(items.map((a) => ({ value: a.id, label: a.name || a.id, Icon: IconRobot })));
-        }
+        if (!res.ok || !data?.ok) throw new Error("assistants");
+        if (!controller.signal.aborted) setCatalog({status: "ready", options: (data.items || []).map(a => ({value: a.id, label: a.name || tUi("Unnamed assistant"), Icon: IconRobot}))});
       } catch (_) {
-        if (mounted) setAssistantOptions([]);
+        if (!controller.signal.aborted) setCatalog({status: "error", options: []});
       }
     })();
-    return () => { mounted = false; };
-  }, []);
+    return () => controller.abort();
+  }, [retry, tUi]);
+  const assistantOptions = catalog.options;
+  const edge = flow.edges.find(candidate => String(candidate.id) === String(edgeId));
 
   // The virtual assistant node carries assistant_id + voice_mode in node.data.
   // Updates go to the edge that synthesizes this node (edgeId) — NOT to
@@ -698,33 +515,41 @@ function AssistantNodeProperties({ flow, node, edgeId, onUpdateEdge, onDeleteEdg
 
   return (
     <div className="p-4 space-y-4">
-      <PanelHeader title={`Assistant node · ${node.name || "Assistant node"}`} />
+      <PanelHeader title={tUi("Assistant handoff")} />
       {assistantMissing && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-            <IconAlertTriangle className="size-3.5" /> Missing required configuration
-          </div>
+            <IconAlertTriangle className="size-3.5" />{tUi(" Missing required configuration")}</div>
           <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-600 dark:text-amber-400">
-            <li>A target assistant is required.</li>
+            <li>{tUi("A target assistant is required.")}</li>
           </ul>
         </div>
       )}
-      <Field label="Target Assistant" required error={assistantMissing ? "A target assistant is required." : null}>
-        <Combobox
-          value={assistantId}
-          onChange={(val) => updateTarget({ assistant_id: val })}
-          options={assistantOptions}
-          placeholder="Select assistant…"
-          triggerClassName="w-full"
-          searchable
-        />
-        {selectedOption && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            Routes the conversation to another assistant when this node is reached.
-          </p>
-        )}
+      <Field label={tUi("From step")}>
+        <Select value={edge?.start_node_id || "__disconnected"} onValueChange={sourceId => onUpdateEdge(edgeId, {start_node_id: sourceId === "__disconnected" ? "" : sourceId})}>
+          <SelectTrigger className="w-full" aria-label={tUi("From step")}><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="__disconnected">{tUi("Not connected")}</SelectItem>{flow.nodes.map((step, index) => <SelectItem key={step.id} value={step.id}>{step.name || tUi("Step {number}", {number: index + 1})}</SelectItem>)}</SelectContent>
+        </Select>
       </Field>
-      <Field label="Voice Mode">
+      <Field label={tUi("Target Assistant")} required>
+        {catalog.status === "loading" ? <Skeleton className="h-10 w-full" aria-label={tUi("Loading assistants")} /> : catalog.status === "error" ? (
+          <div role="alert" className="space-y-2 text-xs text-muted-foreground">
+            <p>{tUi("Assistants could not be loaded. Your current selection is preserved.")}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => {setCatalog({status: "loading", options: []}); setRetry(value => value + 1);}}>{tUi("Retry")}</Button>
+          </div>
+        ) : assistantOptions.length === 0 ? <p className="text-xs text-muted-foreground">{tUi("Create another assistant before configuring this handoff.")}</p> : <>
+          <Combobox
+            value={assistantId}
+            onChange={(val) => updateTarget({ assistant_id: val })}
+            options={assistantOptions}
+            placeholder={assistantId ? tUi("Saved assistant is unavailable — choose another") : tUi("Select assistant…")}
+            triggerClassName="w-full min-w-0"
+            searchable
+          />
+          {selectedOption && <p className="mt-1 text-xs text-muted-foreground">{tUi("Routes the conversation to another assistant when this node is reached.")}</p>}
+        </>}
+      </Field>
+      <Field label={tUi("Voice Mode")}>
         <Select
           value={voiceMode}
           onValueChange={(value) => updateTarget({ voice_mode: value })}
@@ -733,15 +558,15 @@ function AssistantNodeProperties({ flow, node, edgeId, onUpdateEdge, onDeleteEdg
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="unified">Unified (keep current voice)</SelectItem>
-            <SelectItem value="distinct">Distinct (target assistant&apos;s voice)</SelectItem>
+            <SelectItem value="unified">{tUi("Unified (keep current voice)")}</SelectItem>
+            <SelectItem value="distinct">{tUi("Distinct (target assistant's voice)")}</SelectItem>
           </SelectContent>
         </Select>
       </Field>
+      {edge && <EdgeProperties edge={edge} sourceType={flow.nodes.find(step => step.id === edge.start_node_id)?.type} customVariableNames={variableNames} onUpdateEdge={onUpdateEdge} embedded />}
       {edgeId && (
-        <Button variant="destructive" className="w-full" onClick={() => onDeleteEdge(edgeId)}>
-          <IconTrash className="mr-2 size-4" /> Delete Edge
-        </Button>
+        <Button variant="destructive" className="w-full" onClick={() => onDeleteNode(node.id)}>
+          <IconTrash className="mr-2 size-4" />{tUi(" Delete assistant node")}</Button>
       )}
     </div>
   );
@@ -762,6 +587,7 @@ function NodeProperties({
   onUpdateEdge,
   onDeleteEdge,
 }) {
+  const tUi = useUiText();
   const variableNames = useMemo(
     () => Array.from(new Set([...OPENCLAW_SYSTEM_VARIABLES.map((variable) => variable.name), ...Object.keys(values?.dynamic_variables || {})])),
     [values?.dynamic_variables]
@@ -775,20 +601,32 @@ function NodeProperties({
         flow={flow}
         node={node}
         edgeId={edgeId}
+        variableNames={variableNames}
         onUpdateEdge={onUpdateEdge}
-        onDeleteEdge={onDeleteEdge}
+        onDeleteNode={onDeleteNode}
       />
     );
   }
 
+  if (node.type === "tool") return <div className="space-y-5 p-4">
+    <PanelHeader title={tUi("Tool step")} />
+    <Field label={tUi("Name")}><Input aria-label={tUi("Step name")} value={node.name || ""} onChange={event => onUpdateNode(node.id, { name: event.target.value })} /></Field>
+    <Field label={tUi("Shared tool")} required>
+      {libraryToolsLoading ? <Skeleton className="h-10 w-full" /> : <Combobox value={node.shared_tool_id || ""} onChange={shared_tool_id => onUpdateNode(node.id, { shared_tool_id })} options={Array.from(new Map([...(values.tools || []), ...(libraryTools || [])].map(tool => [getSharedToolId(tool) || tool.id, tool])).entries()).filter(([id]) => id).map(([id, tool]) => ({ value: id, label: getToolDisplayName(tool) || tUi("Shared tool") }))} placeholder={tUi("Select a shared tool")} emptyLabel={tUi("No shared tools available")} triggerClassName="w-full" />}
+      <p className="text-xs text-muted-foreground">{tUi("Runs this tool when the conversation reaches the step. Arguments use matching dynamic variables.")}</p>
+    </Field>
+    <Field label={tUi("Announcement before running")}><VariableTextarea rows={4} value={node.message || ""} onChange={message => onUpdateNode(node.id, { message: message || undefined })} availableVariables={variableNames} includeSecrets={false} placeholder={tUi("One moment while I look that up.")} /></Field>
+    <NodeActions isStart={flow.start_node_id === node.id} onSetStart={() => onSetStart(node.id)} onDelete={() => onDeleteNode(node.id)} />
+  </div>;
+
   if (isSpeak) {
     return (
       <div className="p-4 space-y-4">
-        <PanelHeader title={`Speak node · ${node.name || "Speak node"}`} />
-        <Field label="Name">
+        <PanelHeader title={tUi("Speak node · {value0}", { value0: node.name || tUi("Speak node") })} />
+        <Field label={tUi("Name")}>
           <Input value={node.name || ""} onChange={(event) => onUpdateNode(node.id, { name: event.target.value })} />
         </Field>
-        <Field label="Message" required error={!String(node.message || "").trim() ? "Speak node requires a message." : null}>
+        <Field label={tUi("Message")} required error={!String(node.message || "").trim() ? tUi("Speak node requires a message.") : null}>
           <VariableTextarea
             value={node.message || ""}
             onChange={(next) => onUpdateNode(node.id, { message: next })}
@@ -796,7 +634,7 @@ function NodeProperties({
             includeSecrets={false}
             highlightVariables
             rows={8}
-            placeholder="Thanks for calling {{company_name}}."
+            placeholder={tUi("Thanks for calling {{company_name}}.")}
           />
         </Field>
         <NodeActions
@@ -810,19 +648,19 @@ function NodeProperties({
 
   return (
     <div className="p-4">
-      <PanelHeader title={`Prompt node · ${node.name || "Prompt node"}`} />
+      <PanelHeader title={tUi("Prompt node · {value0}", { value0: node.name || tUi("Prompt node") })} />
       <Tabs defaultValue="agent" className="mt-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="agent">Agent</TabsTrigger>
-          <TabsTrigger value="voice">TTS</TabsTrigger>
-          <TabsTrigger value="transcription">STT</TabsTrigger>
-          <TabsTrigger value="tools">Tools</TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="agent">{tUi("Agent")}</TabsTrigger>
+          <TabsTrigger value="voice">{tUi("TTS")}</TabsTrigger>
+          <TabsTrigger value="transcription">{tUi("STT")}</TabsTrigger>
+          <TabsTrigger value="tools">{tUi("Tools")}</TabsTrigger>
         </TabsList>
         <TabsContent value="agent" className="space-y-4 pt-4">
-          <Field label="Name">
+          <Field label={tUi("Name")}>
             <Input value={node.name || ""} onChange={(event) => onUpdateNode(node.id, { name: event.target.value })} />
           </Field>
-          <Field label="Instructions" required error={!String(node.instructions || "").trim() ? "Prompt node requires instructions." : null}>
+          <Field label={tUi("Instructions")} required error={!String(node.instructions || "").trim() ? tUi("Prompt node requires instructions.") : null}>
             <VariableTextarea
               value={node.instructions || ""}
               onChange={(next) => onUpdateNode(node.id, { instructions: next })}
@@ -830,10 +668,10 @@ function NodeProperties({
               includeSecrets={false}
               highlightVariables
               rows={8}
-              placeholder="Tell the assistant how to handle this step."
+              placeholder={tUi("Tell the assistant how to handle this step.")}
             />
           </Field>
-          <Field label="Instructions Mode">
+          <Field label={tUi("Instructions Mode")}>
             <Select
               value={node.instructions_mode || "append"}
               onValueChange={(value) => onUpdateNode(node.id, { instructions_mode: value })}
@@ -842,8 +680,8 @@ function NodeProperties({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="append">Append to assistant instructions</SelectItem>
-                <SelectItem value="replace">Replace assistant instructions</SelectItem>
+                <SelectItem value="append">{tUi("Append to assistant instructions")}</SelectItem>
+                <SelectItem value="replace">{tUi("Replace assistant instructions")}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -881,6 +719,7 @@ function NodeProperties({
 }
 
 function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefreshLibraryTools, onUpdateNode }) {
+  const tUi = useUiText();
   const configuredTools = values?.tools;
   const assistantTools = useMemo(
     () => (Array.isArray(configuredTools) ? configuredTools.filter((tool) => getSharedToolId(tool)) : []),
@@ -1014,21 +853,21 @@ function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefresh
     <div className="space-y-4">
       <div className="rounded-md border p-3">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-medium">Override assistant defaults</div>
+          <div className="text-sm font-medium">{tUi("Override assistant defaults")}</div>
           <Switch checked={override} onCheckedChange={toggleOverride} />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {override
-            ? "Toggle which assistant tools are active for this step. Assistant tools can be disabled but not removed."
-            : "This node inherits all of the assistant's tools. Turn on override to disable specific ones for this step."}
+            ? tUi("Toggle which assistant tools are active for this step. Assistant tools can be disabled but not removed.")
+            : tUi("This node inherits all of the assistant's tools. Turn on override to disable specific ones for this step.")}
         </p>
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">Assistant tools</div>
+        <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">{tUi("Assistant tools")}</div>
         <div className="space-y-2">
           {assistantTools.length === 0 ? (
-            <p className="rounded-md border p-3 text-xs text-muted-foreground">No shared assistant tools attached.</p>
+            <p className="rounded-md border p-3 text-xs text-muted-foreground">{tUi("No shared assistant tools attached.")}</p>
           ) : assistantTools.map((tool) => {
             const id = getSharedToolId(tool);
             return (
@@ -1045,17 +884,17 @@ function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefresh
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">Node tools</div>
+        <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">{tUi("Node tools")}</div>
         <div className="space-y-2">
           {nodeAddedIds.length === 0 ? (
-            <p className="rounded-md border p-3 text-xs text-muted-foreground">No node-specific tools added. Add one from the library below.</p>
+            <p className="rounded-md border p-3 text-xs text-muted-foreground">{tUi("No node-specific tools added. Add one from the library below.")}</p>
           ) : nodeAddedIds.map((id) => {
             const tool = toolById.get(id);
             return (
               <ToolSelectedRow
                 key={id}
-                name={tool ? getToolDisplayName(tool) : id}
-                type={tool?.type || "Tool"}
+                name={tool ? getToolDisplayName(tool, tUi) : id}
+                type={tool?.type || tUi("Tool")}
                 onRemove={() => removeNodeTool(id)}
               />
             );
@@ -1065,7 +904,7 @@ function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefresh
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="text-xs font-medium uppercase text-muted-foreground">Tools Library</div>
+          <div className="text-xs font-medium uppercase text-muted-foreground">{tUi("Tools Library")}</div>
           <Button type="button" size="icon" variant="ghost" className="size-7" onClick={onRefreshLibraryTools}>
             <IconRefresh className="size-4" />
           </Button>
@@ -1076,18 +915,18 @@ function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefresh
           onValueChange={addLibraryTool}
         >
           <SelectTrigger className="w-full text-sm">
-            <SelectValue placeholder={libraryToolsLoading ? "Loading library tools…" : "Select a tool to add"} />
+            <SelectValue placeholder={libraryToolsLoading ? tUi("Loading library tools…") : tUi("Select a tool to add")} />
           </SelectTrigger>
           <SelectContent>
             {addableLibraryTools.length === 0 ? (
               <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                {libraryToolsLoading ? "Loading…" : "No more tools available"}
+                {libraryToolsLoading ? tUi("Loading…") : tUi("No more tools available")}
               </div>
             ) : addableLibraryTools.map((tool) => {
               const id = getSharedToolId(tool);
               return (
                 <SelectItem key={id} value={id}>
-                  {getToolDisplayName(tool)} ({tool.type || "tool"})
+                  {getToolDisplayName(tool, tUi)} ({tool.type || tUi("tool")})
                 </SelectItem>
               );
             })}
@@ -1099,11 +938,12 @@ function ToolsPanel({ node, values, libraryTools, libraryToolsLoading, onRefresh
 }
 
 function ToolToggleRow({ tool, checked, disabled, onCheckedChange }) {
+  const tUi = useUiText();
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border p-3">
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium">{getToolDisplayName(tool)}</div>
-        <div className="text-xs text-muted-foreground">{tool.type || "Tool"}</div>
+        <div className="truncate text-sm font-medium">{getToolDisplayName(tool, tUi)}</div>
+        <div className="text-xs text-muted-foreground">{tool.type || tUi("Tool")}</div>
       </div>
       <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
     </div>
@@ -1111,6 +951,7 @@ function ToolToggleRow({ tool, checked, disabled, onCheckedChange }) {
 }
 
 function ToolSelectedRow({ name, type, onRemove }) {
+  const tUi = useUiText();
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border p-3">
       <div className="min-w-0">
@@ -1123,7 +964,7 @@ function ToolSelectedRow({ name, type, onRemove }) {
         variant="ghost"
         className="size-7 text-muted-foreground hover:text-destructive"
         onClick={onRemove}
-        aria-label="Remove tool"
+        aria-label={tUi("Remove tool")}
       >
         <IconTrash className="size-4" />
       </Button>
@@ -1131,37 +972,29 @@ function ToolSelectedRow({ name, type, onRemove }) {
   );
 }
 
-function EdgeProperties({ edge, systemVariableNames = [], customVariableNames = [], onUpdateEdge, onDeleteEdge }) {
+function EdgeProperties({ edge, sourceType, systemVariableNames = [], customVariableNames = [], onUpdateEdge, onDeleteEdge, embedded = false }) {
+  const tUi = useUiText();
   const condition = edge.condition || { type: "llm", prompt: "" };
-  const expression = condition.expression || {};
-  const variable = expression.left?.name || "";
-  const op = expression.op || "==";
-  const right = expression.right || { type: "string_literal", value: "" };
-  const valueType = right.type === "number_literal" ? "number" : right.type === "bool_literal" ? "boolean" : "string";
-
-  const hasKnownVariable = systemVariableNames.includes(variable) || customVariableNames.includes(variable);
-  const edgeIssues = useMemo(() => validateWorkflowEdge(edge), [edge]);
+  const edgeIssues = useMemo(() => validateWorkflowEdge(edge, undefined, tUi), [edge, tUi]);
   const llmPromptMissing = condition.type === "llm" && !String(condition.prompt || "").trim();
-  const variableMissing = condition.type === "expression" && !String(variable).trim();
 
   function updateCondition(next) {
     onUpdateEdge(edge.id, { condition: next });
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <PanelHeader title="Edge" />
-      {edgeIssues.length > 0 && (
+    <div className={embedded ? "space-y-4 border-t pt-4" : "p-4 space-y-4"}>
+      <PanelHeader title={tUi(embedded ? "When to hand off" : "Connection")} />
+      {!embedded && edgeIssues.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-            <IconAlertTriangle className="size-3.5" /> Missing required configuration
-          </div>
+            <IconAlertTriangle className="size-3.5" />{tUi(" Missing required configuration")}</div>
           <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-600 dark:text-amber-400">
             {edgeIssues.map((issue) => <li key={issue}>{issue}</li>)}
           </ul>
         </div>
       )}
-      <Field label="Condition Type">
+      <Field label={tUi("Condition Type")}>
         <Select
           value={condition.type || "llm"}
           onValueChange={(type) => {
@@ -1174,160 +1007,53 @@ function EdgeProperties({ edge, systemVariableNames = [], customVariableNames = 
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="llm">LLM Prompt</SelectItem>
-            <SelectItem value="expression">Variable Comparison</SelectItem>
-            <SelectItem value="default">Default</SelectItem>
+            <SelectItem value="llm">{tUi("LLM Prompt")}</SelectItem>
+            <SelectItem value="expression">{tUi("Variable Comparison")}</SelectItem>
+            <SelectItem value="default" disabled={!["speak", "tool"].includes(sourceType)}>{tUi("Default route")}</SelectItem>
           </SelectContent>
         </Select>
       </Field>
       {condition.type === "llm" && (
-        <Field label="LLM Prompt" required error={llmPromptMissing ? "LLM prompt is required." : null}>
+        <Field label={tUi("LLM Prompt")} required error={llmPromptMissing ? tUi("LLM prompt is required.") : null}>
           <Textarea
             value={condition.prompt || ""}
+            aria-label={tUi("Handoff condition")}
             rows={5}
             onChange={(event) => updateCondition({ type: "llm", prompt: event.target.value })}
-            placeholder="The caller wants to speak with a human."
+            placeholder={tUi("The caller wants to speak with a human.")}
           />
         </Field>
       )}
-      {condition.type === "expression" && (
-        <div className="space-y-3 rounded-md border p-3">
-          <div className="text-sm font-medium">Variable Comparison</div>
-          <Field label="Variable" required error={variableMissing ? "A variable is required." : null}>
-            <Select
-              value={variable || undefined}
-              onValueChange={(value) => updateCondition({ type: "expression", expression: buildComparisonExpression({ variable: value, op, value: right.value, valueType }) })}
-            >
-              <SelectTrigger className="w-full font-mono text-xs">
-                <SelectValue placeholder="Select a variable" />
-              </SelectTrigger>
-              <SelectContent>
-                {systemVariableNames.length > 0 && (
-                  <SelectGroup>
-                    <SelectLabel>System variables</SelectLabel>
-                    {systemVariableNames.map((name) => (
-                      <SelectItem key={`sys_${name}`} value={name} className="font-mono text-xs">{name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                )}
-                {customVariableNames.length > 0 && (
-                  <SelectGroup>
-                    <SelectLabel>Custom variables</SelectLabel>
-                    {customVariableNames.map((name) => (
-                      <SelectItem key={`custom_${name}`} value={name} className="font-mono text-xs">{name}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                )}
-                {variable && !hasKnownVariable && (
-                  <SelectGroup>
-                    <SelectLabel>Current</SelectLabel>
-                    <SelectItem value={variable} className="font-mono text-xs">{variable}</SelectItem>
-                  </SelectGroup>
-                )}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Operator">
-            <Select
-              value={op}
-              onValueChange={(value) => updateCondition({ type: "expression", expression: buildComparisonExpression({ variable, op: value, value: right.value, valueType }) })}
-            >
-              <SelectTrigger className="w-full text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["==", "!=", "<", "<=", ">", ">=", "contains", "not_contains"].map((operator) => (
-                  <SelectItem key={operator} value={operator}>{operator}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Value Type">
-            <Select
-              value={valueType}
-              onValueChange={(value) => updateCondition({ type: "expression", expression: buildComparisonExpression({ variable, op, value: right.value, valueType: value }) })}
-            >
-              <SelectTrigger className="w-full text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="string">String</SelectItem>
-                <SelectItem value="number">Number</SelectItem>
-                <SelectItem value="boolean">Boolean</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Value">
-            <Input
-              value={String(right.value ?? "")}
-              onChange={(event) => updateCondition({ type: "expression", expression: buildComparisonExpression({ variable, op, value: event.target.value, valueType }) })}
-              placeholder="enterprise"
-            />
-          </Field>
-        </div>
-      )}
-      <Button variant="destructive" className="w-full" onClick={() => onDeleteEdge(edge.id)}>
-        <IconTrash className="mr-2 size-4" /> Delete Edge
-      </Button>
+      {condition.type === "expression" && <WorkflowExpressionEditor value={condition.expression} onChange={expression => updateCondition({ type: "expression", expression })} variables={[...new Set([...systemVariableNames, ...customVariableNames])]} />}
+      {!embedded && <Button variant="destructive" className="w-full" onClick={() => onDeleteEdge(edge.id)}>
+        <IconTrash className="mr-2 size-4" />{tUi(" Delete connection")}</Button>}
     </div>
   );
 }
 
 function NodeActions({ isStart, onSetStart, onDelete }) {
+  const tUi = useUiText();
   if (isStart) {
     // The start node cannot be deleted; only show its (disabled) start control.
     return (
-      <Button variant="outline" className="w-full" disabled>
-        Start node
-      </Button>
+      <Button variant="outline" className="w-full" disabled>{tUi("Start node")}</Button>
     );
   }
   return (
     <div className="grid grid-cols-2 gap-2">
-      <Button variant="outline" onClick={onSetStart}>Set as Start</Button>
-      <Button variant="destructive" onClick={onDelete}><IconTrash className="mr-2 size-4" />Delete Node</Button>
+      <Button variant="outline" onClick={onSetStart}>{tUi("Set as Start")}</Button>
+      <Button variant="destructive" onClick={onDelete}><IconTrash className="mr-2 size-4" />{tUi("Delete Node")}</Button>
     </div>
   );
 }
 
-function SecretsCombobox({ value, onChange, className }) {
-  const [options, setOptions] = useState([]);
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/integration-secrets", { cache: "no-store" });
-        const data = await res.json();
-        if (mounted && res.ok && data?.ok) {
-          setOptions((data.secrets || []).map((s) => ({ value: s.identifier, label: s.identifier })));
-        }
-      } catch (_) {
-        if (mounted) setOptions([]);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-  return (
-    <Combobox
-      value={value || ""}
-      onChange={onChange}
-      options={options}
-      placeholder="Select integration secret…"
-      emptyLabel="No secrets found"
-      triggerClassName={className || "w-full"}
-      searchable
-    />
-  );
-}
-
 function OverrideAssistantDefaultsToggle({ checked, onCheckedChange, description }) {
+  const tUi = useUiText();
   return (
     <div className="rounded-md border p-3">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-medium">Override assistant defaults</div>
-        <Switch checked={checked} onCheckedChange={onCheckedChange} />
+        <div className="text-sm font-medium">{tUi("Override assistant defaults")}</div>
+        <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={tUi("Override assistant defaults")} />
       </div>
       {description && <p className="mt-2 text-xs text-muted-foreground">{description}</p>}
     </div>
@@ -1335,6 +1061,7 @@ function OverrideAssistantDefaultsToggle({ checked, onCheckedChange, description
 }
 
 function NodeTtsOverride({ node, values, onUpdateNode }) {
+  const tUi = useUiText();
   const isOverride = Boolean(
     node.voice_settings &&
     typeof node.voice_settings === "object" &&
@@ -1350,43 +1077,35 @@ function NodeTtsOverride({ node, values, onUpdateNode }) {
             onUpdateNode(node.id, { voice_settings: undefined });
           } else if (!isOverride) {
             onUpdateNode(node.id, {
-              voice_settings: cleanObject({
-                voice: values?.voice || undefined,
-                voice_speed: Number(values?.voice_speed ?? 1),
-                expressive_mode: values?.expressive_mode,
-              }),
+              voice_settings: compatibleVoiceAudio(cloneAssistantOverride(assistantVoiceSettings(values), "VoiceSettings")),
             });
           }
         }}
         description={
           isOverride
-            ? "This node uses its own text-to-speech voice settings."
-            : "This node inherits the assistant text-to-speech voice settings."
+            ? tUi("This node uses its own text-to-speech voice settings.")
+            : tUi("This node inherits the assistant text-to-speech voice settings.")
         }
       />
       {!isOverride ? (
-        <p className="text-xs text-muted-foreground">
-          Uses the assistant voice{values?.voice ? ` (${values.voice})` : ""}.
+        <p className="text-xs text-muted-foreground">{tUi("Uses the assistant voice")}{values?.voice ? tUi(" ({value0})", { value0: values.voice }) : ""}.
         </p>
       ) : (
-        <WorkflowVoicePicker
-          value={{
-            voice: node.voice_settings?.voice || "",
-            voice_speed: node.voice_settings?.voice_speed ?? 1,
-            expressive_mode: node.voice_settings?.expressive_mode,
+        <div className="[&_.grid]:grid-cols-1"><TtsVoicePicker compact hideNoiseSuppression section="voice"
+          value={assistantForEditor({ voice_settings: node.voice_settings })}
+          onChange={patch => {
+            const draft = assistantForEditor({ voice_settings: node.voice_settings });
+            onUpdateNode(node.id, { voice_settings: compatibleVoiceAudio(assistantVoiceSettings({ ...draft, ...patch })) });
           }}
-          onChange={(next) =>
-            onUpdateNode(node.id, {
-              voice_settings: cleanObject({ ...(node.voice_settings || {}), ...next }),
-            })
-          }
-        />
+          callAudioExtras={<AssistantToolAudioSettings value={node.voice_settings?.tool_call_audio} backgroundAudio={node.voice_settings?.background_audio} onChange={tool_call_audio => onUpdateNode(node.id, { voice_settings: compatibleVoiceAudio({ ...node.voice_settings, tool_call_audio }) })} />}
+        /></div>
       )}
     </div>
   );
 }
 
 function NodeSttOverride({ node, values, variableNames, onUpdateNode }) {
+  const tUi = useUiText();
   const isOverride = Boolean(
     node.transcription &&
     typeof node.transcription === "object" &&
@@ -1408,22 +1127,18 @@ function NodeSttOverride({ node, values, variableNames, onUpdateNode }) {
         }}
         description={
           isOverride
-            ? "This node uses its own speech-to-text transcription settings."
-            : "This node inherits the assistant speech-to-text transcription settings."
+            ? tUi("This node uses its own speech-to-text transcription settings.")
+            : tUi("This node inherits the assistant speech-to-text transcription settings.")
         }
       />
       {!isOverride ? (
-        <p className="text-xs text-muted-foreground">
-          Uses the assistant transcription
-          {values?.transcription?.model ? ` (${values.transcription.model})` : ""}.
+        <p className="text-xs text-muted-foreground">{tUi("Uses the assistant transcription")}{values?.transcription?.model ? tUi(" ({value0})", { value0: values.transcription.model }) : ""}.
         </p>
       ) : (
-        <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Changing the model resets provider-specific settings to Telnyx defaults.
-          </p>
-          <WorkflowTranscriptionPicker
-            nodeId={node.id}
+        <div className="space-y-4 [&_.grid]:grid-cols-1">
+          <p className="text-xs text-muted-foreground">{tUi("Changing the model resets provider-specific settings to Telnyx defaults.")}</p>
+          <AssistantTranscriptionSettings
+            compact
             value={node.transcription}
             availableVariables={variableNames}
             onChange={(transcription) => onUpdateNode(node.id, { transcription })}
@@ -1434,65 +1149,13 @@ function NodeSttOverride({ node, values, variableNames, onUpdateNode }) {
   );
 }
 
-function NodeLlmOverride({ node, values, models, onUpdateNode }) {
-  const isOverride = Boolean(node.model);
-  const recommendedModels = useMemo(
-    () => (Array.isArray(models) ? models : []).filter((model) => model.recommended_for_assistants),
-    [models]
-  );
-  const selectedModel = useMemo(
-    () => (Array.isArray(models) ? models : []).find((model) => String(model.id) === String(node.model)) || null,
-    [models, node.model]
-  );
-  const ownedBy = selectedModel?.raw?.owned_by;
-  const requiresSecret = ownedBy ? String(ownedBy).toLowerCase() !== "telnyx" : false;
-
-  return (
-    <Field label="LLM">
-      <div className="space-y-3">
-        <OverrideAssistantDefaultsToggle
-          checked={isOverride}
-          onCheckedChange={(checked) => {
-            if (!checked) {
-              onUpdateNode(node.id, { model: undefined, llm_api_key_ref: undefined });
-            } else if (!node.model) {
-              const fallback = recommendedModels[0]?.id || (Array.isArray(models) ? models[0]?.id : "") || "";
-              onUpdateNode(node.id, { model: fallback || undefined });
-            }
-          }}
-          description={
-            isOverride
-              ? "This node uses its own LLM model settings."
-              : "This node inherits the assistant LLM model settings."
-          }
-        />
-        {!isOverride ? (
-          <p className="text-xs text-muted-foreground">
-            Uses the assistant model{values?.model ? ` (${values.model})` : ""}.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <AIModels
-              value={node.model || ""}
-              onValueChange={(value) => onUpdateNode(node.id, { model: value || undefined })}
-              models={recommendedModels}
-              triggerClassName="w-full max-w-full"
-              contentClassName="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)]"
-            />
-            {requiresSecret && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">LLM API Key Reference</Label>
-                <SecretsCombobox
-                  value={node.llm_api_key_ref || ""}
-                  onChange={(value) => onUpdateNode(node.id, { llm_api_key_ref: value || undefined })}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </Field>
-  );
+function NodeLlmOverride({ node, values, onUpdateNode }) {
+  const tUi = useUiText();
+  const isOverride = Boolean(node.model || node.external_llm || node._llmOverride);
+  return <Field label={tUi("LLM")}><div className="space-y-4">
+    <OverrideAssistantDefaultsToggle checked={isOverride} onCheckedChange={enabled => onUpdateNode(node.id, enabled ? {_llmOverride:true, ...(values.external_llm ? {external_llm:{...values.external_llm}} : {model:values.model || '', llm_api_key_ref:values.llm_api_key_ref || undefined})} : {_llmOverride:undefined,model:undefined,external_llm:undefined,llm_api_key_ref:undefined})} description={isOverride?tUi("This node uses its own LLM model settings."):tUi("This node inherits the assistant LLM model settings.")}/>
+    {isOverride?<AssistantModelConfiguration label="Node model" value={node} ui={node._modelUi} onUiChange={next=>onUpdateNode(node.id,{_modelUi:next})} onChange={cfg=>onUpdateNode(node.id,{model:cfg.external_llm?undefined:cfg.model,llm_api_key_ref:cfg.llm_api_key_ref||undefined,external_llm:cfg.external_llm||undefined})}/>:null}
+  </div></Field>;
 }
 
 function PanelHeader({ title }) {
@@ -1512,13 +1175,8 @@ function Field({ label, children, required = false, error = null }) {
   );
 }
 
-function cleanObject(value) {
-  if (!value || typeof value !== "object") return undefined;
-  const next = Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== ""));
-  return Object.keys(next).length ? next : undefined;
-}
-
 function WorkflowEditor({ values, setValues, assistantId }) {
+  const tUi = useUiText();
   const reactFlowWrapper = useRef(null);
   const flow = values?.conversation_flow;
   const workflowIdentity = assistantId || values?.id || values?.assistant_id || "";
@@ -1528,7 +1186,8 @@ function WorkflowEditor({ values, setValues, assistantId }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [libraryTools, setLibraryTools] = useState([]);
-  const [libraryToolsLoading, setLibraryToolsLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState(false);
+  const [libraryToolsLoading, setLibraryToolsLoading] = useState(true);
   const [models, setModels] = useState([]);
   const localLayoutSignatureRef = useRef("");
   // Guard the flow→nodes/edges sync effect: when updateNode/updateEdge fire
@@ -1566,32 +1225,24 @@ function WorkflowEditor({ values, setValues, assistantId }) {
       internalUpdateRef.current = false;
       return;
     }
-    const currentLayoutSignature = workflowLayoutSignature(flow);
-    if (localLayoutSignatureRef.current === currentLayoutSignature) {
-      setNodes(toReactFlowNodes(flow, { normalize: false }));
-      setEdges(toReactFlowEdges(flow));
-      return;
-    }
-    const normalizedFlow = normalizeWorkflowCanvasLayout(flow);
-    if (workflowLayoutSignature(normalizedFlow) !== workflowLayoutSignature(flow)) {
-      setValues((current) => ({ ...current, conversation_flow: normalizedFlow }));
-      return;
-    }
-    setNodes(toReactFlowNodes(normalizedFlow));
-    setEdges(toReactFlowEdges(normalizedFlow));
-  }, [flow?.start_node_id, flow?.nodes, flow?.edges, setValues, setNodes, setEdges]);
+    // Hydration must never mutate the saved graph. Layout is an explicit action.
+    setNodes(current => hydrateWorkflowCanvasNodes(current, flow));
+    setEdges(toReactFlowEdges(flow));
+  }, [flow?.start_node_id, flow?.nodes, flow?.edges, flow?._assistantDrafts, setValues, setNodes, setEdges]);
 
-  // Mirror Call Flows: let ReactFlow frame the nodes via the fitView prop.
+  const canvasReady = nodes.length > 0 && nodes.every(node => node.width && node.height);
+
+  // Wait for measurement before framing newly added or loaded nodes.
   // When the canvas mounts inside an inactive tab its container can measure 0px,
   // so re-fit once the instance is ready and whenever the node count or the
   // active workflow identity changes (load existing flow or add a node).
   useEffect(() => {
-    if (!reactFlowInstance || !nodes.length) return;
+    if (!reactFlowInstance || !canvasReady) return;
     const frame = window.requestAnimationFrame(() => {
-      reactFlowInstance.fitView({ padding: 0.2, includeHiddenNodes: false, duration: 0 });
+      reactFlowInstance.fitView({ padding: 0.2, maxZoom: 1, includeHiddenNodes: false, duration: 0 });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [reactFlowInstance, nodes.length, workflowIdentity]);
+  }, [reactFlowInstance, canvasReady, nodes.length, workflowIdentity]);
 
   const persist = useCallback((nextNodes, nextEdges, baseFlow = flow) => {
     const nextFlow = reactFlowToConversationFlow({
@@ -1605,13 +1256,15 @@ function WorkflowEditor({ values, setValues, assistantId }) {
 
   const loadLibraryTools = useCallback(async () => {
     setLibraryToolsLoading(true);
+    setLibraryError(false);
     try {
       const res = await fetch("/api/ai/tools?all=true", { cache: "no-store" });
       const data = await res.json();
+      if (!res.ok || data?.ok === false) throw new Error("tools");
       const tools = Array.isArray(data?.items) ? data.items : Array.isArray(data?.tools) ? data.tools : Array.isArray(data?.data) ? data.data : [];
       setLibraryTools(tools);
     } catch (_) {
-      setLibraryTools([]);
+      setLibraryError(true);
     } finally {
       setLibraryToolsLoading(false);
     }
@@ -1633,7 +1286,7 @@ function WorkflowEditor({ values, setValues, assistantId }) {
   // sync with the current flow state (instructions/message/outgoing-edge checks).
   const decoratedNodes = useMemo(
     () => nodes.map((node) => {
-      const nodeIssues = validateWorkflowNode(node.data?.node, flow);
+      const nodeIssues = validateWorkflowNode(node.data?.node, flow, tUi);
       const basePatch = { selected: node.id === selectedNodeId };
       const prevIssues = node.data?.nodeIssues || [];
       const issuesChanged = prevIssues.length !== nodeIssues.length ||
@@ -1645,11 +1298,11 @@ function WorkflowEditor({ values, setValues, assistantId }) {
         selected: basePatch.selected,
       };
     }),
-    [nodes, selectedNodeId, flow]
+    [nodes, selectedNodeId, flow, tUi]
   );
   const decoratedEdges = useMemo(
     () => edges.map((edge) => {
-      const edgeIssues = validateWorkflowEdge(edge.data?.edge, flow);
+      const edgeIssues = validateWorkflowEdge(edge.data?.edge, flow, tUi);
       const prevIssues = edge.data?.edgeIssues || [];
       const issuesChanged = prevIssues.length !== edgeIssues.length ||
         prevIssues.some((issue, index) => issue !== edgeIssues[index]);
@@ -1661,7 +1314,7 @@ function WorkflowEditor({ values, setValues, assistantId }) {
         selected: wantSelected,
       };
     }),
-    [edges, selectedEdgeId, flow]
+    [edges, selectedEdgeId, flow, tUi]
   );
 
   const onNodesChange = useCallback((changes) => {
@@ -1685,10 +1338,14 @@ function WorkflowEditor({ values, setValues, assistantId }) {
   }, [edges, nodes, persist, setEdges]);
 
   const onConnect = useCallback((params) => {
-    const sourceNode = flow.nodes.find((node) => String(node.id) === String(params.source));
-    const condition = sourceNode?.type === "speak"
-      ? { type: "default" }
-      : { type: "llm", prompt: "" };
+    if (!flow.nodes.some(node => String(node.id) === String(params.source))) return;
+    const condition = defaultConnectionCondition(flow, params.source);
+    const handoff = nodes.find(node => node.id === params.target)?.data?.edgeId;
+    if (handoff) {
+      const nextFlow = updateAssistantHandoff(flow, handoff, {start_node_id: params.source});
+      setValues(current => ({...current, conversation_flow: nextFlow}));
+      return;
+    }
     const workflowEdge = {
       id: `e_${params.source}_${params.target}_${Date.now()}`,
       start_node_id: String(params.source),
@@ -1708,7 +1365,7 @@ function WorkflowEditor({ values, setValues, assistantId }) {
       persist(nodes, next);
       return next;
     });
-  }, [flow?.nodes, nodes, persist]);
+  }, [flow, nodes, persist, setEdges, setValues]);
 
   const onDragStart = useCallback((event, nodeType) => {
     event.dataTransfer.setData(NODE_TRANSFER_TYPE, nodeType);
@@ -1717,48 +1374,13 @@ function WorkflowEditor({ values, setValues, assistantId }) {
 
   const handleAddNode = useCallback((nodeType, position = null) => {
     if (nodeType === "assistant") {
-      // Adding an Assistant Handoff from the palette creates a virtual
-      // assistant node (not persisted to flow.nodes) plus an edge from the
-      // most recently added real node so the user can immediately configure
-      // the target assistant. The virtual node is completed once the user
-      // picks an assistant_id in its properties panel.
-      const pos = position || defaultWorkflowNodePosition(nodes.length);
-      const sourceNode = nodes[nodes.length - 1];
-      if (!sourceNode) return; // need at least one real node to connect from
-      const placeholderId = `assistant:pending_${Date.now()}`;
-      const virtualNode = {
-        id: placeholderId,
-        type: "customNode",
-        position: pos,
-        data: {
-          node: { type: "assistant", assistant_id: "", voice_mode: "unified" },
-          nodeType: "assistant",
-          label: "Assistant node",
-          edgeId: null,
-        },
-      };
-      const newEdge = {
-        id: `e_${sourceNode.id}_${placeholderId}_${Date.now()}`,
-        source: String(sourceNode.id),
-        target: placeholderId,
-        sourceHandle: "output-0",
-        targetHandle: "input-execute",
-        type: "workflowEdge",
-        data: {
-          edge: {
-            id: `e_${sourceNode.id}_${placeholderId}_${Date.now()}`,
-            start_node_id: String(sourceNode.id),
-            target: { type: "assistant", assistant_id: "", voice_mode: "unified", position: { x: pos.x, y: pos.y } },
-            condition: { type: "llm", prompt: "" },
-          },
-        },
-      };
-      const nextNodes = [...nodes, virtualNode];
-      const nextEdges = [...edges, newEdge];
-      persist(nextNodes, nextEdges);
-      setNodes(nextNodes);
-      setEdges(nextEdges);
-      setSelectedNodeId(placeholderId);
+      const nextFlow = addAssistantHandoff(flow, {position});
+      if (nextFlow === flow) return;
+      const edgeId = nextFlow._assistantDrafts.at(-1).id;
+      setValues(current => ({...current, conversation_flow: nextFlow}));
+      setNodes(current => hydrateWorkflowCanvasNodes(current, nextFlow));
+      setEdges(toReactFlowEdges(nextFlow));
+      setSelectedNodeId(virtualAssistantNodeId(edgeId));
       setSelectedEdgeId(null);
       return;
     }
@@ -1785,7 +1407,7 @@ function WorkflowEditor({ values, setValues, assistantId }) {
     setNodes(nextNodes);
     setSelectedNodeId(normalized.id);
     setSelectedEdgeId(null);
-  }, [edges, nodes, persist]);
+  }, [edges, nodes, persist, flow, setValues, setNodes, setEdges]);
 
   const onDrop = useCallback((event) => {
     event.preventDefault();
@@ -1819,68 +1441,38 @@ function WorkflowEditor({ values, setValues, assistantId }) {
   }, [flow, setValues, setNodes]);
 
   const deleteNode = useCallback((nodeId) => {
-    const remainingNodes = flow.nodes.filter((node) => String(node.id) !== String(nodeId));
-    const nextFlow = {
-      ...flow,
-      start_node_id: String(flow.start_node_id) === String(nodeId) ? remainingNodes[0]?.id || "" : flow.start_node_id,
-      nodes: remainingNodes,
-      edges: flow.edges.filter((edge) => String(edge.start_node_id) !== String(nodeId) && String(edge.target?.node_id) !== String(nodeId)),
-    };
-    setValues((current) => ({ ...current, conversation_flow: nextFlow }));
+    const nextNodes = nodes.filter(node => String(node.id) !== String(nodeId));
+    const nextEdges = edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId);
+    persist(nextNodes, nextEdges);
+    setNodes(nextNodes);
+    setEdges(nextEdges);
     setSelectedNodeId(null);
-  }, [flow, setValues]);
+  }, [nodes, edges, persist, setNodes, setEdges]);
 
   const updateEdge = useCallback((edgeId, patch) => {
-    // Same dual-update as updateNode: keep ReactFlow edges state in sync with
-    // values.conversation_flow within one batch to avoid stale renders that
-    // reset controlled-input cursor position in the edge properties panel.
-    internalUpdateRef.current = true;
-    setEdges((currentEdges) => currentEdges.map((rfEdge) => {
-      if (String(rfEdge.id) !== String(edgeId)) return rfEdge;
-      const nextEdgeData = { ...rfEdge.data?.edge, ...patch };
-      return { ...rfEdge, data: { ...rfEdge.data, edge: nextEdgeData } };
-    }));
-    // If the patch updates an assistant target (assistant_id / voice_mode),
-    // also sync the virtual node on the canvas so reactFlowToConversationFlow
-    // reads the up-to-date values on the next persist — otherwise the stale
-    // virtual node overwrites the new edge target on save.
-    if (patch?.target?.type === "assistant") {
-      const assistantId = patch.target.assistant_id || "";
-      const virtualId = assistantId ? `assistant:${assistantId}` : null;
-      setNodes((currentNodes) => currentNodes.map((rfNode) => {
-        const n = rfNode.data?.node;
-        if (!n || n.type !== "assistant") return rfNode;
-        if (virtualId && String(rfNode.id) !== virtualId) return rfNode;
-        return {
-          ...rfNode,
-          data: {
-            ...rfNode.data,
-            node: {
-              ...n,
-              assistant_id: patch.target.assistant_id ?? n.assistant_id,
-              voice_mode: patch.target.voice_mode ?? n.voice_mode,
-            },
-          },
-        };
-      }));
-    }
-    const nextFlow = {
-      ...flow,
-      edges: flow.edges.map((edge) => edge.id === edgeId ? { ...edge, ...patch } : edge),
+    const handoff = flow.edges.find(edge => edge.id === edgeId)?.target?.type === "assistant" || flow._assistantDrafts?.some(draft => draft.id === edgeId);
+    const nextFlow = handoff ? updateAssistantHandoff(flow, edgeId, patch) : {
+      ...flow, edges: flow.edges.map(edge => edge.id === edgeId ? {...edge, ...patch} : edge),
     };
-    setValues((current) => ({ ...current, conversation_flow: nextFlow }));
+    internalUpdateRef.current = true;
+    setNodes(current => hydrateWorkflowCanvasNodes(current, nextFlow));
+    setEdges(toReactFlowEdges(nextFlow));
+    setValues(current => ({...current, conversation_flow: nextFlow}));
   }, [flow, setValues, setEdges, setNodes]);
 
   const deleteEdge = useCallback((edgeId) => {
-    const nextFlow = { ...flow, edges: flow.edges.filter((edge) => edge.id !== edgeId) };
-    setValues((current) => ({ ...current, conversation_flow: nextFlow }));
+    const nextEdges = edges.filter(edge => edge.id !== edgeId);
+    // Removing a connection leaves its assistant card available for reconnection.
+    persist(nodes, nextEdges);
+    setEdges(nextEdges);
     setSelectedEdgeId(null);
-  }, [flow, setValues]);
+  }, [nodes, edges, persist, setEdges]);
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden rounded-md border">
       <WorkflowNodePalette onAddNode={handleAddNode} onDragStart={onDragStart} />
-      <div className="min-h-0 flex-1 flex flex-col">
+      <div className="min-h-0 min-w-0 flex-1 flex flex-col">
+        {libraryError ? <div role="alert" className="flex items-center justify-between gap-3 border-b p-3 text-xs">{tUi("The shared tool library could not be loaded. Saved tool choices are preserved.")}<Button type="button" variant="outline" size="sm" onClick={loadLibraryTools}>{tUi("Retry")}</Button></div> : null}
         <div ref={reactFlowWrapper} className="call-flow-canvas min-h-0 flex-1 relative" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={onDrop}>
           <ReactFlow
             nodes={decoratedNodes}
@@ -1904,17 +1496,16 @@ function WorkflowEditor({ values, setValues, assistantId }) {
             }}
             onInit={setReactFlowInstance}
             fitView
+            fitViewOptions={{padding: 0.2, maxZoom: 1}}
+            minZoom={0.2}
             proOptions={{ hideAttribution: true }}
           >
             <Background />
             <Controls className="call-flow-controls" position="bottom-left" />
             <Panel position="bottom-right" className="bg-card border rounded p-2 text-xs">
               <div className="text-muted-foreground">
-                {nodes.length} nodes • {edges.length} connections
-              </div>
-              <div className="text-xs text-muted-foreground mt-0">
-                Drag nodes from sidebar or right-click to add
-              </div>
+                {nodes.length}{tUi(" nodes • ")}{edges.length}{tUi(" connections")}</div>
+              <div className="text-xs text-muted-foreground mt-0">{tUi("Drag nodes from sidebar or right-click to add")}</div>
             </Panel>
           </ReactFlow>
         </div>
@@ -1944,26 +1535,23 @@ function cleanObjectPreserve(value) {
 }
 
 function WorkflowBlockedByInlineTools({ blockers }) {
+  const tUi = useUiText();
   return (
     <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-5">
       <div className="flex items-start gap-3">
         <IconAlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
         <div className="space-y-3">
           <div>
-            <h3 className="text-sm font-semibold">Make your tools shared to use Workflows</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Conversation workflows can only use tools from your shared library. This assistant has {blockers.length} tools that aren&apos;t shared yet. Save them to your library, then enable the workflow.
-            </p>
+            <h3 className="text-sm font-semibold">{tUi("Make your tools shared to use Workflows")}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{tUi("Conversation workflows can only use tools from your shared library. This assistant has ")}{blockers.length}{tUi(" tools that aren't shared yet. Save them to your library, then enable the workflow.")}</p>
           </div>
           <div>
-            <div className="text-xs font-medium uppercase text-muted-foreground">Tools to make shared:</div>
+            <div className="text-xs font-medium uppercase text-muted-foreground">{tUi("Tools to make shared:")}</div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
               {blockers.map((tool) => <li key={tool.name}>{tool.name}</li>)}
             </ul>
           </div>
-          <p className="text-xs text-muted-foreground">
-            To make a tool shared, open the Tools section in the Agent tab, find the tool, and use the “Save to Library” action.
-          </p>
+          <p className="text-xs text-muted-foreground">{tUi("To make a tool shared, open Integrations → Tools, find the tool, and use the “Save to Library” action.")}</p>
         </div>
       </div>
     </div>
@@ -1971,23 +1559,22 @@ function WorkflowBlockedByInlineTools({ blockers }) {
 }
 
 function WorkflowEmptyState({ setValues }) {
+  const tUi = useUiText();
   return (
     <div className="rounded-md border bg-muted/20 p-8 text-center">
       <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-md border bg-background">
         <IconGitBranch className="size-6 text-telnyx-green" />
       </div>
-      <h3 className="text-base font-semibold">Workflow is disabled</h3>
-      <p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">
-        Enable conversation workflows to design prompt and speak nodes with call-flows-style drag and drop.
-      </p>
+      <h3 className="text-base font-semibold">{tUi("Workflow is disabled")}</h3>
+      <p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">{tUi("Enable conversation workflows to design prompt and speak nodes with call-flows-style drag and drop.")}</p>
       <Button className="mt-4" onClick={() => setValues((current) => ({ ...current, conversation_flow: createDefaultConversationFlow() }))}>
-        <IconPlus className="mr-2 size-4" /> Enable Workflow
-      </Button>
+        <IconPlus className="mr-2 size-4" />{tUi(" Enable Workflow")}</Button>
     </div>
   );
 }
 
 export default function AssistantWorkflowTab({ values, setValues, assistantId }) {
+  const tUi = useUiText();
   const blockers = getInlineToolsBlockingWorkflow(values);
   const flow = values?.conversation_flow;
   const tools = Array.isArray(values?.tools) ? values.tools : [];
@@ -2005,53 +1592,37 @@ export default function AssistantWorkflowTab({ values, setValues, assistantId })
   const effectiveMode = hasHandoffTool ? "capability" : viewMode;
 
   return (
-    <div className="flex h-full min-h-0 flex-col space-y-3 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col space-y-3 overflow-hidden" data-setting-path="conversation_flow">
       <div className="flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium">
             <IconGitBranch className="size-4 text-telnyx-green" />
-            {effectiveMode === "capability" ? "Assistant Workflow" : "Conversation Workflow"}
+            {effectiveMode === "capability" ? tUi("Assistant Workflow") : tUi("Conversation Workflow")}
           </div>
         </div>
         <div className="flex items-center gap-3">
           {/* View toggle — disabled when a handoff tool is present */}
-          <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
-            <button
-              type="button"
-              disabled={hasHandoffTool}
-              onClick={() => setViewMode("workflow")}
-              className={cn(
-                "rounded px-2.5 py-1 text-xs font-medium transition",
-                effectiveMode === "workflow"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-                hasHandoffTool && "cursor-not-allowed opacity-50"
-              )}
-              title={hasHandoffTool ? "Remove the handoff tool to use the conversation workflow editor" : "Conversation workflow editor"}
-            >
-              Conversation Workflow
-            </button>
-            <button
-              type="button"
-              disabled={hasHandoffTool}
-              onClick={() => setViewMode("capability")}
-              className={cn(
-                "rounded px-2.5 py-1 text-xs font-medium transition",
-                effectiveMode === "capability"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-                hasHandoffTool && "cursor-not-allowed opacity-50"
-              )}
-              title={hasHandoffTool ? "Capability graph is required when a handoff tool is configured" : "Read-only capability graph"}
-            >
-              Capability Graph
-            </button>
-          </div>
+          <Tabs value={effectiveMode} onValueChange={(mode) => { if (!hasHandoffTool) setViewMode(mode); }} className="gap-0">
+            <TabsList className="w-auto">
+              <TabsTrigger
+                value="workflow"
+                disabled={hasHandoffTool}
+                className={tabsTriggerCompactClass}
+                title={hasHandoffTool ? tUi("Remove the handoff tool to use the conversation workflow editor") : tUi("Conversation workflow editor")}
+              >{tUi("Conversation Workflow")}</TabsTrigger>
+              <TabsTrigger
+                value="capability"
+                disabled={hasHandoffTool}
+                className={tabsTriggerCompactClass}
+                title={hasHandoffTool ? tUi("Capability graph is required when a handoff tool is configured") : tUi("Read-only capability graph")}
+              >{tUi("Capability Graph")}</TabsTrigger>
+            </TabsList>
+          </Tabs>
           {effectiveMode === "workflow" && flow && (
-            <Badge variant="outline" className="rounded">{flow.nodes?.length || 0} nodes</Badge>
+            <><Select value={flow.start_node_id || ""} onValueChange={start_node_id => setValues(current => ({ ...current, conversation_flow: { ...current.conversation_flow, start_node_id } }))}><SelectTrigger aria-label={tUi("Starting step")} className="w-52"><SelectValue placeholder={tUi("Starting step")} /></SelectTrigger><SelectContent>{(flow.nodes || []).map((node, index) => <SelectItem key={node.id} value={node.id}>{node.name || tUi("Step {value0}", { value0: index + 1 })}</SelectItem>)}</SelectContent></Select><Button type="button" size="sm" variant="outline" onClick={() => setValues(current => ({ ...current, conversation_flow: normalizeWorkflowCanvasLayout(current.conversation_flow) }))}>{tUi("Arrange steps")}</Button></>
           )}
           {effectiveMode === "capability" && (
-            <Badge variant="outline" className="rounded">{tools.length} tool{tools.length === 1 ? "" : "s"}</Badge>
+            <Badge variant="outline" className="rounded">{tUi("Tools: {value0}", {value0: tools.length})}</Badge>
           )}
         </div>
       </div>
@@ -2061,10 +1632,8 @@ export default function AssistantWorkflowTab({ values, setValues, assistantId })
         <div className="flex flex-shrink-0 items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-4">
           <IconInfoCircle className="mt-0.5 size-5 shrink-0 text-amber-600" />
           <div className="space-y-1 text-sm">
-            <div className="font-semibold">Workflows unavailable</div>
-            <p className="text-muted-foreground">
-              Workflows cannot be used while this assistant has a handoff tool configured. Remove the handoff tool to use Workflows.
-            </p>
+            <div className="font-semibold">{tUi("Workflows unavailable")}</div>
+            <p className="text-muted-foreground">{tUi("Workflows cannot be used while this assistant has a handoff tool configured. Remove the handoff tool to use Workflows.")}</p>
           </div>
         </div>
       )}

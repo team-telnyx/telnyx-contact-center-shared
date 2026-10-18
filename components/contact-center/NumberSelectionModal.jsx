@@ -1,4 +1,7 @@
 "use client";
+import { statusLabel } from "@/lib/i18n/status-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import {
@@ -46,13 +49,14 @@ import {
 // Radix UI generates random IDs that differ between server and client renders
 const subscribeMounted = () => () => {};
 function ClientOnlySelect({ children, ...props }) {
+  const tUi = useUiText();
   const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
 
   if (!mounted) {
     // Return a placeholder that matches SelectTrigger styling
     return (
       <div className="border-input data-placeholder:text-muted-foreground flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs">
-        <span className="text-muted-foreground">Loading...</span>
+        <span className="text-muted-foreground">{tUi("Loading...")}</span>
       </div>
     );
   }
@@ -124,6 +128,7 @@ export function NumberSelectionModal({
   title,
   description,
 }) {
+  const tUi = useUiText();
   const [mounted, setMounted] = useState(false);
   const [selectionType, setSelectionType] = useState("users"); // "users", "contact", "assistants", or "manual"
   const [selectedRecordId, setSelectedRecordId] = useState("");
@@ -429,8 +434,8 @@ export function NumberSelectionModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] dark:bg-zinc-900">
         <DialogHeader>
-          <DialogTitle>{modalTitle}</DialogTitle>
-          <DialogDescription>{modalDescription}</DialogDescription>
+          <DialogTitle>{tUi(modalTitle)}</DialogTitle>
+          <DialogDescription>{tUi(modalDescription)}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -447,7 +452,7 @@ export function NumberSelectionModal({
               )}
             >
               <UserCheck className="h-5 w-5" />
-              <div className="font-semibold text-xs">Users</div>
+              <div className="font-semibold text-xs">{tUi("Users")}</div>
               {selectionType === "users" && (
                 <CheckCircle2 className="h-3 w-3" />
               )}
@@ -464,7 +469,7 @@ export function NumberSelectionModal({
               )}
             >
               <Users className="h-5 w-5" />
-              <div className="font-semibold text-xs">Contacts</div>
+              <div className="font-semibold text-xs">{tUi("Contacts")}</div>
               {selectionType === "contact" && (
                 <CheckCircle2 className="h-3 w-3" />
               )}
@@ -481,7 +486,7 @@ export function NumberSelectionModal({
               )}
             >
               <Bot className="h-5 w-5" />
-              <div className="font-semibold text-xs">AI Agents</div>
+              <div className="font-semibold text-xs">{tUi("AI Agents")}</div>
               {selectionType === "assistants" && (
                 <CheckCircle2 className="h-3 w-3" />
               )}
@@ -498,7 +503,7 @@ export function NumberSelectionModal({
               )}
             >
               <Phone className="h-5 w-5" />
-              <div className="font-semibold text-xs">Manual</div>
+              <div className="font-semibold text-xs">{tUi("Manual")}</div>
               {selectionType === "manual" && (
                 <CheckCircle2 className="h-3 w-3" />
               )}
@@ -510,18 +515,12 @@ export function NumberSelectionModal({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 text-purple-600" />
-                  Select User
-                </Label>
+                  <UserCheck className="h-4 w-4 text-purple-600" />{tUi("Select User")}</Label>
                 {loading ? (
                   <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading users...
-                  </div>
+                    <Loader2 className="h-4 w-4 animate-spin" />{tUi("Loading users...")}</div>
                 ) : agents.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No users found
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("No users found")}</div>
                 ) : (
                   <ClientOnlySelect
                     value={selectedUserId}
@@ -531,14 +530,14 @@ export function NumberSelectionModal({
                     }}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a user" />
+                      <SelectValue placeholder={tUi("Choose a user")} />
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map((agent) => {
                         const displayName =
                           `${agent.firstName || ""} ${agent.lastName || ""}`.trim() ||
                           agent.username ||
-                          "Unknown User";
+                          tUi("Unknown User");
                         // Get status icon (will fetch status metadata later if needed)
                         const StatusIcon =
                           STATUS_NAME_ICON_FALLBACK[agent.status] ||
@@ -559,7 +558,7 @@ export function NumberSelectionModal({
                               />
                               <span className="font-medium">{displayName}</span>
                               <span className={cn("text-xs", statusColor)}>
-                                ({agent.status})
+                                ({statusLabel(tUi, agent.status)})
                               </span>
                             </div>
                           </SelectItem>
@@ -576,9 +575,7 @@ export function NumberSelectionModal({
                     <>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Status
-                          </Label>
+                          <Label className="text-xs text-muted-foreground">{tUi("Status")}</Label>
                           <div className="flex items-center gap-2 mt-1">
                             {(() => {
                               const StatusIcon =
@@ -603,7 +600,7 @@ export function NumberSelectionModal({
                                       statusColor,
                                     )}
                                   >
-                                    {agentStats.status || "Unknown"}
+                                    {agentStats.status || tUi("Unknown")}
                                   </span>
                                 </>
                               );
@@ -611,9 +608,7 @@ export function NumberSelectionModal({
                           </div>
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground">
-                            On Call
-                          </Label>
+                          <Label className="text-xs text-muted-foreground">{tUi("On Call")}</Label>
                           <div className="mt-1">
                             {(() => {
                               const currentCallsCount =
@@ -630,7 +625,7 @@ export function NumberSelectionModal({
                                       : "bg-gray-500 text-white",
                                   )}
                                 >
-                                  {isOnCall ? "Yes" : "No"}
+                                  {isOnCall ? tUi("Yes") : tUi("No")}
                                 </Badge>
                               );
                             })()}
@@ -640,9 +635,7 @@ export function NumberSelectionModal({
                     </>
                   ) : (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading user statistics...
-                    </div>
+                      <Loader2 className="h-4 w-4 animate-spin" />{tUi("Loading user statistics...")}</div>
                   )}
                 </div>
               )}
@@ -650,15 +643,13 @@ export function NumberSelectionModal({
               {selectedAgent && agentNumbers.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    Select Number
-                  </Label>
+                    <Phone className="h-4 w-4 text-green-600" />{tUi("Select Number")}</Label>
                   <ClientOnlySelect
                     value={selectedAgentNumber}
                     onValueChange={setSelectedAgentNumber}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a number" />
+                      <SelectValue placeholder={tUi("Choose a number")} />
                     </SelectTrigger>
                     <SelectContent>
                       {agentNumbers.map((num, idx) => {
@@ -696,24 +687,18 @@ export function NumberSelectionModal({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <Users className="h-4 w-4 text-blue-600" />
-                  Select Contact
-                </Label>
+                  <Users className="h-4 w-4 text-blue-600" />{tUi("Select Contact")}</Label>
                 {loading ? (
-                  <div className="text-sm text-muted-foreground">
-                    Loading contacts...
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("Loading contacts...")}</div>
                 ) : recordsWithNumbers.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No contacts with phone numbers found
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("No contacts with phone numbers found")}</div>
                 ) : (
                   <ClientOnlySelect
                     value={selectedRecordId}
                     onValueChange={setSelectedRecordId}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a contact" />
+                      <SelectValue placeholder={tUi("Choose a contact")} />
                     </SelectTrigger>
                     <SelectContent>
                       {recordsWithNumbers.map((record) => (
@@ -730,8 +715,8 @@ export function NumberSelectionModal({
                             <span className="text-xs text-muted-foreground">
                               (
                               {record.recordType === "customer"
-                                ? "Customer"
-                                : "Patient"}
+                                ? tUi("Customer")
+                                : tUi("Patient")}
                               )
                             </span>
                           </div>
@@ -745,15 +730,13 @@ export function NumberSelectionModal({
               {selectedRecord && availableNumbers.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    Select Number
-                  </Label>
+                    <Phone className="h-4 w-4 text-green-600" />{tUi("Select Number")}</Label>
                   <ClientOnlySelect
                     value={selectedNumber}
                     onValueChange={setSelectedNumber}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a number" />
+                      <SelectValue placeholder={tUi("Choose a number")} />
                     </SelectTrigger>
                     <SelectContent>
                       {availableNumbers.map((num, idx) => {
@@ -787,24 +770,18 @@ export function NumberSelectionModal({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <Bot className="h-4 w-4 text-indigo-600" />
-                  Select AI Agent
-                </Label>
+                  <Bot className="h-4 w-4 text-indigo-600" />{tUi("Select AI Agent")}</Label>
                 {loading ? (
-                  <div className="text-sm text-muted-foreground">
-                    Loading AI agents...
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("Loading AI agents...")}</div>
                 ) : assistants.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No AI agents found
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("No AI agents found")}</div>
                 ) : (
                   <ClientOnlySelect
                     value={selectedAssistantId}
                     onValueChange={setSelectedAssistantId}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose an AI agent" />
+                      <SelectValue placeholder={tUi("Choose an AI agent")} />
                     </SelectTrigger>
                     <SelectContent>
                       {assistants.map((assistant) => (
@@ -822,9 +799,7 @@ export function NumberSelectionModal({
                 )}
                 {selectedAssistantId && (
                   <p className="text-xs text-muted-foreground">
-                    {mode === "transfer" ? "Will transfer to" : "Will call"}:
-                    sip:user@{selectedAssistantId}.sip.telnyx.com
-                  </p>
+                    {mode === "transfer" ? tUi("Will transfer to") : tUi("Will call")}{tUi(": sip:user@")}{selectedAssistantId}{tUi(".sip.telnyx.com")}</p>
                 )}
               </div>
             </div>
@@ -834,12 +809,10 @@ export function NumberSelectionModal({
           {selectionType === "manual" && (
             <div className="space-y-2">
               <Label className="text-sm font-semibold flex items-center gap-2">
-                <Phone className="h-4 w-4 text-green-600" />
-                Phone Number or SIP URI
-              </Label>
+                <Phone className="h-4 w-4 text-green-600" />{tUi("Phone Number or SIP URI")}</Label>
               <Input
                 type="tel"
-                data-testid="dial-number" placeholder="+1234567890 or sip:user@domain.com"
+                data-testid="dial-number" placeholder={tUi("+1234567890 or sip:user@domain.com")}
                 value={manualNumber}
                 onChange={(e) => setManualNumber(e.target.value)}
                 className="w-full"
@@ -849,15 +822,13 @@ export function NumberSelectionModal({
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>{tUi("Cancel")}</Button>
             <Button
               data-testid="dial-number-confirm" onClick={handleConfirm}
               disabled={!isValid() || loading}
               className="min-w-[120px]"
             >
-              {mode === "transfer" ? "Transfer" : "Select"}
+              {mode === "transfer" ? tUi("Transfer") : tUi("Select")}
             </Button>
           </div>
         </div>

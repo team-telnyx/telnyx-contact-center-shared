@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useId } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -122,17 +124,19 @@ function useIncomingOffer(interaction, callState) {
 }
 
 function IncomingLabel() {
-  return <span className="inline-flex items-center gap-1"><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />Incoming</span>;
+  const tUi = useUiText();
+  return <span className="inline-flex items-center gap-1"><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />{tUi("Incoming")}</span>;
 }
 
 // Selection is a sibling of the controls, so buttons and portalled dialogs do
 // not select a card or create nested interactive elements.
 function InteractionCardFrame({interaction,isSelected,onSelect,label,className,incoming,children}) {
+  const tUi = useUiText();
   const descriptionId = useId();
   return <div className={cn("relative w-full text-left",className,incoming && "cc-interaction-offer")} data-incoming={incoming || undefined} data-channel={interaction.channel || "voice"} data-testid={`${interaction.channel||"voice"}-interaction-card`} data-work-item-id={interaction.id}>
     <button type="button" onClick={()=>onSelect(interaction)} aria-label={label} aria-pressed={isSelected} aria-describedby={incoming ? descriptionId : undefined}
       className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"/>
-    {incoming && <span id={descriptionId} className="sr-only">Incoming interaction awaiting your response.</span>}
+    {incoming && <span id={descriptionId} className="sr-only">{tUi("Incoming interaction awaiting your response.")}</span>}
     <div className="pointer-events-none relative">{children}</div>
   </div>;
 }
@@ -146,71 +150,72 @@ function InteractionCard({
   callState,
   onChanged,
 }) {
+  const tUi = useUiText();
   const duration = useCallDuration(interaction);
   const incoming = useIncomingOffer(interaction, callState);
   if (!interaction) return null;
-  if (interaction.channel === "email") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Email from ${interaction.from_name||"Email customer"}`}
+  if (interaction.channel === "email") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={tUi("Email from {value0}", { value0: interaction.from_name||tUi("Email customer") })}
     className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-amber-500 shadow-lg ring-1 ring-amber-500/30":"border-amber-500/60 hover:border-amber-500")}
     >
     <div className="mb-2 flex items-start gap-2">
       <div className="relative shrink-0 rounded-lg bg-amber-500 p-2 text-white shadow-sm"><IconMail className="size-4"/>{interaction.attributes?.handoff&&<span className="absolute -right-1 -top-1 rounded-full bg-violet-500 p-0.5"><IconRobot className="size-3.5"/></span>}</div>
       <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
-        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">{interaction.queue_name||"Contact Center"}</div>
-        <div className="truncate text-sm font-bold text-amber-700 dark:text-amber-300">{interaction.from_name||"Email customer"}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.subject||"Email"}</div>
-      </div><span className="shrink-0 rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">{interaction.queue_name||tUi("Contact Center")}</div>
+        <div className="truncate text-sm font-bold text-amber-700 dark:text-amber-300">{interaction.from_name||tUi("Email customer")}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.subject||tUi("Email")}</div>
+      </div><span className="shrink-0 rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? tUi("Offered") : interaction.state === "wrapup" ? tUi("Wrap-up") : tUi("Active")}</span></div></div>
     </div>
     <div className="flex items-center justify-between border-t border-amber-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-amber-600"/><span className="font-mono text-xs font-semibold text-amber-700 dark:text-amber-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-amber-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
   </InteractionCardFrame>;
-  if (interaction.channel === "sms") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`SMS from ${interaction.from_name||interaction.customer_address||"Mobile customer"}`}
+  if (interaction.channel === "sms") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={tUi("SMS from {value0}", { value0: interaction.from_name||interaction.customer_address||tUi("Mobile customer") })}
     className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-sky-500 shadow-lg ring-1 ring-sky-500/30":"border-sky-500/60 hover:border-sky-500")}
     >
     <div className="mb-2 flex items-start gap-2">
       <div className="relative shrink-0 rounded-lg bg-sky-500 p-2 text-white shadow-sm"><IconMessage className="size-4"/></div>
       <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
-        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{interaction.queue_name||"Contact Center"}</div>
-        <div className="truncate text-sm font-bold text-sky-700 dark:text-sky-300">{interaction.from_name||interaction.customer_address||"Mobile customer"}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.number_name?`SMS · ${interaction.attributes.number_name}`:interaction.attributes?.business_number?`SMS · ${interaction.attributes.business_number}`:"SMS"}</div>
-      </div><span className="shrink-0 rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">{interaction.queue_name||tUi("Contact Center")}</div>
+        <div className="truncate text-sm font-bold text-sky-700 dark:text-sky-300">{interaction.from_name||interaction.customer_address||tUi("Mobile customer")}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.number_name?tUi("SMS · {value0}", { value0: interaction.attributes.number_name }):interaction.attributes?.business_number?tUi("SMS · {value0}", { value0: interaction.attributes.business_number }):tUi("SMS")}</div>
+      </div><span className="shrink-0 rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? tUi("Offered") : interaction.state === "wrapup" ? tUi("Wrap-up") : tUi("Active")}</span></div></div>
     </div>
     <div className="flex items-center justify-between border-t border-sky-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-sky-600"/><span className="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-sky-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
   </InteractionCardFrame>;
-  if (interaction.channel === "whatsapp") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`WhatsApp from ${interaction.from_name||interaction.customer_address||"WhatsApp customer"}`}
+  if (interaction.channel === "whatsapp") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={tUi("WhatsApp from {value0}", { value0: interaction.from_name||interaction.customer_address||tUi("WhatsApp customer") })}
     className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-green-600 shadow-lg ring-1 ring-green-600/30":"border-green-600/60 hover:border-green-600")}
     >
     <div className="mb-2 flex items-start gap-2">
       <div className="relative shrink-0 rounded-lg bg-green-600 p-2 text-white shadow-sm"><IconBrandWhatsapp className="size-4"/></div>
       <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
-        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">{interaction.queue_name||"Contact Center"}</div>
-        <div className="truncate text-sm font-bold text-green-700 dark:text-green-300">{interaction.from_name||interaction.customer_address||"WhatsApp customer"}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.number_name?`WhatsApp · ${interaction.attributes.number_name}`:interaction.attributes?.business_number?`WhatsApp · ${interaction.attributes.business_number}`:"WhatsApp"}</div>
-      </div><span className="shrink-0 rounded border border-green-600/25 bg-green-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 dark:text-green-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">{interaction.queue_name||tUi("Contact Center")}</div>
+        <div className="truncate text-sm font-bold text-green-700 dark:text-green-300">{interaction.from_name||interaction.customer_address||tUi("WhatsApp customer")}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.number_name?tUi("WhatsApp · {value0}", { value0: interaction.attributes.number_name }):interaction.attributes?.business_number?tUi("WhatsApp · {value0}", { value0: interaction.attributes.business_number }):tUi("WhatsApp")}</div>
+      </div><span className="shrink-0 rounded border border-green-600/25 bg-green-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 dark:text-green-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? tUi("Offered") : interaction.state === "wrapup" ? tUi("Wrap-up") : tUi("Active")}</span></div></div>
     </div>
     <div className="flex items-center justify-between border-t border-green-600/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-green-600"/><span className="font-mono text-xs font-semibold text-green-700 dark:text-green-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-green-600">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
   </InteractionCardFrame>;
-  if (interaction.channel === "video") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Video call with ${interaction.from_name||"Website visitor"}`}
+  if (interaction.channel === "video") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={tUi("Video call with {value0}", { value0: interaction.from_name||tUi("Website visitor") })}
     className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-rose-500 shadow-lg ring-1 ring-rose-500/30":"border-rose-500/60 hover:border-rose-500")}
     >
     <div className="mb-2 flex items-start gap-2">
       <div className="relative shrink-0 rounded-lg bg-rose-500 p-2 text-white shadow-sm"><IconVideo className="size-4"/></div>
       <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
-        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">{interaction.queue_name||"Contact Center"}</div>
-        <div className="truncate text-sm font-bold text-rose-700 dark:text-rose-300">{interaction.from_name||"Website visitor"}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">Web video call</div>
-      </div><span className="shrink-0 rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">{interaction.queue_name||tUi("Contact Center")}</div>
+        <div className="truncate text-sm font-bold text-rose-700 dark:text-rose-300">{interaction.from_name||tUi("Website visitor")}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{tUi("Web video call")}</div>
+      </div><span className="shrink-0 rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? tUi("Offered") : interaction.state === "wrapup" ? tUi("Wrap-up") : tUi("Active")}</span></div></div>
     </div>
     <div className="flex items-center justify-between border-t border-rose-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-rose-600"/><span className="font-mono text-xs font-semibold text-rose-700 dark:text-rose-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-rose-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
   </InteractionCardFrame>;
-  if (interaction.channel === "chat") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Chat with ${interaction.from_name||"Website visitor"}`}
+  if (interaction.channel === "chat") return <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={tUi("Chat with {value0}", { value0: interaction.from_name||tUi("Website visitor") })}
     className={cn("w-full rounded-lg border-2 bg-card p-2.5 text-left transition-all hover:shadow-lg",isSelected?"border-teal-500 shadow-lg ring-1 ring-teal-500/30":"border-teal-500/60 hover:border-teal-500")}
     >
     <div className="mb-2 flex items-start gap-2">
       <div className="relative shrink-0 rounded-lg bg-teal-500 p-2 text-white shadow-sm"><IconMessageCircle className="size-4"/>{interaction.attributes?.handoff&&<span className="absolute -right-1 -top-1 rounded-full bg-violet-500 p-0.5"><IconRobot className="size-3.5"/></span>}</div>
       <div className="min-w-0 flex-1"><div className="mb-1 flex items-start justify-between gap-2"><div className="min-w-0 flex-1">
-        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">{interaction.queue_name||"Contact Center"}</div>
-        <div className="truncate text-sm font-bold text-teal-700 dark:text-teal-300">{interaction.from_name||"Website visitor"}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.handoff?"AI handoff · Web chat":"Web chat"}</div>
-      </div><span className="shrink-0 rounded border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? "Offered" : interaction.state === "wrapup" ? "Wrap-up" : "Active"}</span></div></div>
+        <div className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">{interaction.queue_name||tUi("Contact Center")}</div>
+        <div className="truncate text-sm font-bold text-teal-700 dark:text-teal-300">{interaction.from_name||tUi("Website visitor")}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{interaction.attributes?.handoff?tUi("AI handoff · Web chat"):tUi("Web chat")}</div>
+      </div><span className="shrink-0 rounded border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">{incoming ? <IncomingLabel /> : ["ringing", "offered"].includes(interaction.state) ? tUi("Offered") : interaction.state === "wrapup" ? tUi("Wrap-up") : tUi("Active")}</span></div></div>
     </div>
     <div className="flex items-center justify-between border-t border-teal-500/30 pt-2"><div className="flex items-center gap-1.5"><Clock className="size-3 text-teal-600"/><span className="font-mono text-xs font-semibold text-teal-700 dark:text-teal-300">{formatDuration(duration)}</span>{interaction.state!=="wrapup"&&<span className="text-xs text-teal-500">●</span>}</div><MessagingInteractionActions interaction={interaction} onChanged={onChanged}/></div>
   </InteractionCardFrame>;
@@ -286,7 +291,7 @@ function InteractionCard({
     }
   }
 
-  const callerNumberLabel = callerNumber || "Unknown number";
+  const callerNumberLabel = callerNumber || tUi("Unknown number");
   const callerNameLabel = callerName || null;
 
   // Check if this is an AI-transferred call
@@ -307,7 +312,7 @@ function InteractionCard({
   );
 
   return (
-    <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={`Voice call with ${callerNameLabel||callerNumberLabel}`}
+    <InteractionCardFrame interaction={interaction} incoming={incoming} isSelected={isSelected} onSelect={onSelect} label={tUi("Voice call with {value0}", { value0: callerNameLabel||callerNumberLabel })}
       className={cn(
         "p-2.5 rounded-lg border-2 cursor-pointer transition-all hover:shadow-lg bg-card",
         isSelected
@@ -340,7 +345,7 @@ function InteractionCard({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <div className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">
-                  {interaction.queue_name || "Contact Center"}
+                  {interaction.queue_name || tUi("Contact Center")}
                 </div>
               </div>
               <div className="font-bold text-sm text-orange-600 truncate">
@@ -355,12 +360,12 @@ function InteractionCard({
               {(isMuted || isHeld) && (
                 <div className="flex items-center gap-0.5">
                   {isMuted && (
-                    <MicOff className="h-3 w-3 text-orange-600" title="Muted" />
+                    <MicOff className="h-3 w-3 text-orange-600" title={tUi("Muted")} />
                   )}
                   {isHeld && (
                     <Pause
                       className="h-3 w-3 text-orange-600"
-                      title="On Hold"
+                      title={tUi("On Hold")}
                     />
                   )}
                 </div>
@@ -368,7 +373,7 @@ function InteractionCard({
               <span
                 className={`border px-1.5 py-0.5 rounded text-[10px] font-semibold ${statusDisplay.color}`}
               >
-                {incoming ? <IncomingLabel /> : statusDisplay.text}
+                {incoming ? <IncomingLabel /> : tUi(statusDisplay.text)}
               </span>
             </div>
           </div>
@@ -399,6 +404,7 @@ export function InteractionsList({
   currentUsername,
   onChanged,
 }) {
+  const tUi = useUiText();
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
@@ -406,9 +412,7 @@ export function InteractionsList({
           <div className="p-1.5 rounded-md bg-primary/10">
             <IconPhone className="h-4 w-4 text-primary" />
           </div>
-          <h2 className="text-base font-semibold text-foreground">
-            Interactions
-          </h2>
+          <h2 className="text-base font-semibold text-foreground">{tUi("Interactions")}</h2>
         </div>
       </div>
       <ScrollArea className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
@@ -441,7 +445,7 @@ export function InteractionsList({
                 <div className="flex items-center justify-center w-full -mx-3 min-h-[200px]">
                   <div className="text-center text-muted-foreground text-sm">
                     <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No interactions</p>
+                    <p>{tUi("No interactions")}</p>
                   </div>
                 </div>
               );

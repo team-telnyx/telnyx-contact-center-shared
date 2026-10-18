@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -16,6 +18,7 @@ import { notify } from "@/components/ToastNotify";
 import { IconUpload, IconFileMusic, IconX } from "@tabler/icons-react";
 
 export default function MediaUploadSheet({ open, onOpenChange, onUpload }) {
+  const tUi = useUiText();
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -294,43 +297,33 @@ export default function MediaUploadSheet({ open, onOpenChange, onUpload }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconFileMusic className="size-5" />
-            Upload Media File
-          </SheetTitle>
+            <IconFileMusic className="size-5" />{tUi("Upload Media File")}</SheetTitle>
         </SheetHeader>
 
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-5 py-4">
           <Card className="flex-1 flex flex-col overflow-hidden">
             <CardContent className="p-6 flex-1 flex flex-col min-h-0">
               <div className="space-y-4">
-                <div className="text-sm text-muted-foreground">
-                  Upload MP3 or WAV audio files. Maximum file size is 20 MB.
-                  Files will never expire.
-                </div>
+                <div className="text-sm text-muted-foreground">{tUi("Upload MP3 or WAV audio files. Maximum file size is 20 MB. Files will never expire.")}</div>
 
                 {/* Media name input */}
                 <div className="space-y-2">
-                  <Label htmlFor="media-name">
-                    Media Name <span className="text-red-500">*</span>
+                  <Label htmlFor="media-name">{tUi("Media Name ")}<span className="text-red-500">*</span>
                   </Label>
                   <Input
                     id="media-name"
                     value={mediaName}
                     onChange={(e) => setMediaName(e.target.value)}
-                    placeholder="e.g., welcome-message, hold-music"
+                    placeholder={tUi("e.g., welcome-message, hold-music")}
                     disabled={uploading || checkingUniqueness}
                     className="w-full"
                   />
-                  <div className="text-xs text-muted-foreground">
-                    Provide a descriptive name for this media file. Only
-                    letters, numbers, dots, dashes, and underscores are
-                    allowed. Must be unique.
-                  </div>
+                  <div className="text-xs text-muted-foreground">{tUi("Provide a descriptive name for this media file. Only letters, numbers, dots, dashes, and underscores are allowed. Must be unique.")}</div>
                 </div>
 
                 {/* Drag and drop area */}
@@ -368,9 +361,7 @@ export default function MediaUploadSheet({ open, onOpenChange, onUpload }) {
                           onClick={() => setSelectedFile(null)}
                           className="mt-2"
                         >
-                          <IconX className="size-4 mr-2" />
-                          Remove
-                        </Button>
+                          <IconX className="size-4 mr-2" />{tUi("Remove")}</Button>
                       </div>
                     </div>
                   ) : (
@@ -379,18 +370,12 @@ export default function MediaUploadSheet({ open, onOpenChange, onUpload }) {
                         <IconUpload className="size-12 text-muted-foreground" />
                       </div>
                       <div className="space-y-2">
-                        <div className="font-medium">
-                          Drag and drop a file here
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          or click to browse
-                        </div>
+                        <div className="font-medium">{tUi("Drag and drop a file here")}</div>
+                        <div className="text-sm text-muted-foreground">{tUi("or click to browse")}</div>
                         <Button
                           variant="outline"
                           onClick={() => fileInputRef.current?.click()}
-                        >
-                          Select File
-                        </Button>
+                        >{tUi("Select File")}</Button>
                       </div>
                     </div>
                   )}
@@ -405,9 +390,7 @@ export default function MediaUploadSheet({ open, onOpenChange, onUpload }) {
             variant="outline"
             onClick={() => onOpenChange?.(false)}
             disabled={uploading}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button
             onClick={handleUpload}
             disabled={
@@ -419,10 +402,10 @@ export default function MediaUploadSheet({ open, onOpenChange, onUpload }) {
             className="bg-telnyx-green hover:bg-telnyx-green/90"
           >
             {checkingUniqueness
-              ? "Checking..."
+              ? tUi("Checking...")
               : uploading
-                ? "Uploading..."
-                : "Upload"}
+                ? tUi("Uploading...")
+                : tUi("Upload")}
           </Button>
         </SheetFooter>
       </SheetContent>

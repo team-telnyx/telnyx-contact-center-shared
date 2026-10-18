@@ -27,17 +27,19 @@ test("workflow slot output cap is persisted, validated, and defaults to 1200", a
   assert.match(analyzer, /Math\.min\(outputCap, Math\.max\(512,/);
 });
 
-test("workflow slot fallback model is persisted and configurable with Luna as the default", async () => {
+test("workflow slot fallback model is optional and configurable, with no default model in code", async () => {
   const schema = await read("../lib/postgres-schema.mjs");
   const api = await read("../app/api/admin/workflows/[id]/route.js");
   const editor = await read("../app/(portal)/admin/workflows/[id]/page.jsx");
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
   const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
-  assert.match(schema, /llm_fallback_model VARCHAR\(100\) NOT NULL DEFAULT 'openai\/gpt-5\.6-luna'/);
-  assert.match(api, /llm_fallback_model/);
+  assert.match(schema, /llm_fallback_model VARCHAR\(100\), -- optional/);
+  assert.match(schema, /ALTER COLUMN llm_fallback_model DROP NOT NULL,\s*ALTER COLUMN llm_fallback_model DROP DEFAULT;/);
+  assert.match(api, /values\.push\(fallbackModel \|\| null\)/);
   assert.match(editor, /Slot filling fallback model/);
-  assert.match(editor, /Select fallback model/);
-  assert.match(route, /fallbackModel = workflow\?\.llm_fallback_model \|\| "openai\/gpt-5\.6-luna"/);
+  assert.match(editor, /No fallback model/);
+  assert.match(route, /fallbackModel = workflow\?\.llm_fallback_model \|\| null/);
+  assert.doesNotMatch(route + editor + analyzer, /gpt-5\.6-luna/);
   assert.match(analyzer, /models\.push\(configuredFallbackModel\)/);
 });
 
@@ -74,7 +76,7 @@ test("slot analysis has timeout, fallback, cancellation, and releases DB during 
   const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
   const store = await read("../lib/stores/workflow-store.js");
-  assert.match(analyzer, /fallbackModel = DEFAULT_FALLBACK_MODEL/);
+  assert.match(analyzer, /fallbackModel = null/);
   assert.match(analyzer, /DEFAULT_TOTAL_TIMEOUT_MS = 12000/);
   assert.match(route, /connectionRef\.client\.release\(\);[\s\S]*analyzeWorkflowTranscript/);
   assert.match(route, /MAX_CONCURRENT_CONCEPT_GROUPS = 2/);

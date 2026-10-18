@@ -11,7 +11,8 @@ Open **Admin → System**. The System landing page is a tile overview and a pers
 
 | Tile and rail item | Purpose |
 | --- | --- |
-| **Settings** | Configure SLA response targets, hold behavior, interaction notification sounds, agent lifecycle, and the chat AI Copilot model and retrieval sources. |
+| **AI Copilot** | Configure fifteen AI operations, their default models and editable guidance, inspect full effective prompts, and test drafts with synthetic examples. |
+| **Settings** | Configure SLA response targets, hold behavior, interaction notification sounds, agent lifecycle, and agent lifecycle settings. |
 | **Call Generator** | Create controlled scenarios, action sequences, and test runs. |
 | **Logging** | Inspect live runtime events, JSONL files, and logging policies. |
 | **Phones Provisioning** | Manage hardphone inventory, LAN bridges, provisioning events, and vendor settings. |
@@ -19,9 +20,16 @@ Open **Admin → System**. The System landing page is a tile overview and a pers
 
 Select either a tile or the matching rail item. Call Generator, Logging, and Phones Provisioning then show their own nested rails. Use their **Exit** item to return to the System tile overview.
 
-In **Settings**, the center cards are read-only summaries. Select a card to edit its configuration in the right panel. Unsaved values remain in the draft when switching cards, and the summaries reflect the current draft. Use **Save settings** in the header to apply hold, notification sound, lifecycle, and Copilot settings. For **Service level agreements**, the header shows **Save SLA** because SLA policies are saved separately.
+In **Settings**, the center cards are read-only summaries. Select a card to edit its configuration in the right panel. Unsaved values remain in the draft when switching cards, and the summaries reflect the current draft. Use **Save settings** in the header to apply hold, notification sound and lifecycle settings. For **Service level agreements**, the header shows **Save SLA** because SLA policies are saved separately.
 
-In **Settings → AI Copilot**, choose a Telnyx Chat Completions model and up to five embedded Object Storage buckets. Save them with the page's **Save settings** button. The bucket picker lists sources already available through Telnyx's embeddings service; upload and embed documents in Telnyx before selecting them here. With no sources selected, Copilot uses the selected chat's conversation context. These settings apply to future generations, while existing suggestions remain unchanged.
+## AI Copilot
+
+Open **Admin → System → AI Copilot** to select an operation in the center and edit its default model or business guidance in the right panel. Each card identifies affected menus and screens. Protected output formats and technical rules remain read-only; the full effective system and user prompts are available in the instruction preview.
+
+For **Chat reply suggestions**, choose a Telnyx Chat Completions model, token budget and up to five embedded Object Storage buckets. With no sources selected, replies use conversation context. Upload and embed documents in Telnyx before selecting their buckets. Channel-specific models can override the default.
+
+Use the tester to choose a model, edit the synthetic example and run an unsaved draft. It sends only the supplied example and instructions to Telnyx, then displays output, format checks, latency and token usage. It does not retrieve real conversations or save an evaluation. Format checks do not guarantee semantic correctness. Save settings separately to apply a configuration to future generations; existing results remain unchanged.
+
 
 In **Settings → Interaction sounds**, below **Hold experiences**, select one of ten original ringtones for each messaging channel. The tones last 3.2–4 seconds. Use **Play** to hear the current selection and **Stop** to stop the preview. **Loop** repeats the tone with a one-second pause after each playback; without Loop, each new offer rings once. The volume control and channel enable switches apply globally when you click **Save settings**. Email and Chat are enabled by default with different tones. WhatsApp and SMS settings can be prepared in advance; they do not activate those channels. Voice keeps its WebRTC ringtone.
 

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
+import { readFileSync } from "./helpers/ui-source.mjs";
 import path from "node:path";
 import { test } from "node:test";
 
 import { normalizeSteps, describeStep } from "../lib/call-generator/actions.mjs";
 
 const ROOT = process.cwd();
-const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
 
 // --- Delay action step ------------------------------------------------------
 

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 
@@ -14,6 +16,7 @@ const MAX_ITEMS = 10;
 const formatBytes = (bytes) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 export default function VideoWaitingPlaylist({ items, onChange }) {
+  const tUi = useUiText();
   const [library, setLibrary] = useState(null);
   const [link, setLink] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -54,7 +57,7 @@ export default function VideoWaitingPlaylist({ items, onChange }) {
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
   };
   const remove = async (media) => {
-    if (!window.confirm(`Delete "${media.name}" from the media library? Widgets using it will skip the file.`)) return;
+    if (!window.confirm(tUi("Delete \"{value0}\" from the media library? Widgets using it will skip the file.", {value0: media.name}))) return;
     setError("");
     try {
       const response = await fetch(`/api/admin/widgets/video-media/${media.id}`, { method: "DELETE" });
@@ -68,44 +71,44 @@ export default function VideoWaitingPlaylist({ items, onChange }) {
   return (
     <div className="grid min-w-0 gap-4 overflow-hidden">
       <div className="grid min-w-0 gap-1.5">
-        <Label>Playlist ({items.length}/{MAX_ITEMS})</Label>
-        {items.length === 0 && <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">No videos yet: the visitor sees the queue message over their own preview while waiting.</p>}
+        <Label>{tUi("Playlist (")}{items.length}/{MAX_ITEMS})</Label>
+        {items.length === 0 && <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">{tUi("No videos yet: the visitor sees the queue message over their own preview while waiting.")}</p>}
         <ol className="grid min-w-0 gap-1.5" data-testid="video-waiting-playlist">
           {items.map((item, index) => (
             <li key={`${item.source}-${item.mediaId || item.url}-${index}`} className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 text-xs">
               <span className="w-5 shrink-0 text-center text-muted-foreground">{index + 1}</span>
               {item.source === "library" ? <Film className="size-3.5 shrink-0 text-muted-foreground" /> : <Link2 className="size-3.5 shrink-0 text-muted-foreground" />}
               {(() => { const text = item.source === "library" ? (item.label || libraryName(item.mediaId) || item.mediaId) : item.url; return <span className="min-w-0 flex-1 truncate" title={text}>{text}</span>; })()}
-              <Button type="button" variant="ghost" size="icon" className="size-7" disabled={index === 0} aria-label="Move up" onClick={() => move(index, -1)}><ArrowUp className="size-3.5" /></Button>
-              <Button type="button" variant="ghost" size="icon" className="size-7" disabled={index === items.length - 1} aria-label="Move down" onClick={() => move(index, 1)}><ArrowDown className="size-3.5" /></Button>
-              <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive" aria-label="Remove from playlist" onClick={() => update(items.filter((_, i) => i !== index))}><Trash2 className="size-3.5" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7" disabled={index === 0} aria-label={tUi("Move up")} onClick={() => move(index, -1)}><ArrowUp className="size-3.5" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7" disabled={index === items.length - 1} aria-label={tUi("Move down")} onClick={() => move(index, 1)}><ArrowDown className="size-3.5" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive" aria-label={tUi("Remove from playlist")} onClick={() => update(items.filter((_, i) => i !== index))}><Trash2 className="size-3.5" /></Button>
             </li>
           ))}
         </ol>
       </div>
       <div className="grid min-w-0 gap-1.5">
-        <Label>Add a link</Label>
+        <Label>{tUi("Add a link")}</Label>
         <div className="flex gap-2">
           <Input value={link} placeholder="https://cdn.example.com/promo.mp4" onChange={(event) => setLink(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addLink(); } }} />
-          <Button type="button" variant="outline" disabled={!linkValid || items.length >= MAX_ITEMS} onClick={addLink}>Add</Button>
+          <Button type="button" variant="outline" disabled={!linkValid || items.length >= MAX_ITEMS} onClick={addLink}>{tUi("Add")}</Button>
         </div>
       </div>
       <div className="grid min-w-0 gap-1.5">
         <div className="flex items-center justify-between gap-2">
-          <Label>Media library</Label>
+          <Label>{tUi("Media library")}</Label>
           <input ref={fileRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => void upload(event.target.files?.[0])} />
-          <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>{uploading ? <Loader2 className="size-3.5 animate-spin" /> : <UploadCloud className="size-3.5" />}Upload video</Button>
+          <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>{uploading ? <Loader2 className="size-3.5 animate-spin" /> : <UploadCloud className="size-3.5" />}{tUi("Upload video")}</Button>
         </div>
-        <p className="text-xs text-muted-foreground">mp4 or webm up to 64 MB, stored with the Contact Center and streamed to the widget.</p>
-        {library === null ? <p className="text-xs text-muted-foreground">Loading…</p> : library.length === 0 ? <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">No uploaded videos yet.</p> : (
+        <p className="text-xs text-muted-foreground">{tUi("mp4 or webm up to 64 MB, stored with the Contact Center and streamed to the widget.")}</p>
+        {library === null ? <p className="text-xs text-muted-foreground">{tUi("Loading…")}</p> : library.length === 0 ? <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">{tUi("No uploaded videos yet.")}</p> : (
           <ul className="grid min-w-0 gap-1.5" data-testid="video-media-library">
             {library.map((media) => (
               <li key={media.id} className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 text-xs">
                 <Film className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate" title={media.name}>{media.name}</span>
                 <span className="shrink-0 text-muted-foreground">{formatBytes(media.byteSize)}</span>
-                <Button type="button" variant="outline" size="sm" className="h-7" disabled={items.length >= MAX_ITEMS} onClick={() => addFromLibrary(media)}>Add</Button>
-                <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive" aria-label="Delete from library" onClick={() => void remove(media)}><Trash2 className="size-3.5" /></Button>
+                <Button type="button" variant="outline" size="sm" className="h-7" disabled={items.length >= MAX_ITEMS} onClick={() => addFromLibrary(media)}>{tUi("Add")}</Button>
+                <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive" aria-label={tUi("Delete from library")} onClick={() => void remove(media)}><Trash2 className="size-3.5" /></Button>
               </li>
             ))}
           </ul>

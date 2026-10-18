@@ -51,7 +51,8 @@ test("live analyzer uses only the workflow threshold to split completed vs sugge
 
 test("slot completion respects the item's configured speaker trigger and requires a value", async () => {
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
-  const testRoute = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
+  // The test route applies analyzer results through its pure helper module.
+  const testRoute = await read("../lib/agent-assist/test-workflow-analysis.mjs");
   const prompts = await read("../lib/agent-assist/workflow-prompts.js");
   const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
 
@@ -182,7 +183,9 @@ test("intent and sentiment transcription analysis uses workflow settings model i
   // The options bag has since gained intent/sentiment toggles and an abort
   // signal; what matters is that the model is an argument, not a constant.
   assert.match(sentiment, /export async function analyzeTranscription\(transcript, \{\s*\n?\s*model,/);
-  assert.match(sentiment, /model: model \|\| DEFAULT_AGENT_ASSIST_LLM_MODEL/);
+  // Workflow / call-flow model (override) > AI Copilot "Sentiment & intent" > platform default.
+  assert.match(sentiment, /\}, \{preferredModel: model\}\)/);
+  assert.doesNotMatch(sentiment, /DEFAULT_AGENT_ASSIST_LLM_MODEL|openai\/gpt-4o/);
   assert.doesNotMatch(sentiment, /model: "moonshotai\/Kimi-K2\.5"/);
 
   assert.match(router, /resolveAgentAssistAnalysisModel\(assistConfig\)/);

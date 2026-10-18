@@ -98,3 +98,34 @@ test("GlobalWrapupSheet is the single authoritative wrap-up owner", async () => 
   assert.match(global, /workflow_state\s*!==\s*["']wrapup["']/);
   assert.doesNotMatch(global, /wrapup_required|contact-center:wrapup-required/);
 });
+
+test("consult calls from TransferModal attach audio with helpers the softphone defines", async () => {
+  for (const path of ["components/softphone.jsx", "components/softphone-mini.jsx"]) {
+    const source = await read(path);
+    const handler = source.match(
+      /onConsultCallCreated=\{\(call\) => \{([\s\S]*?)\n\s*\}\}/,
+    )?.[1];
+    assert.ok(handler, `${path} must handle consult calls created by TransferModal`);
+    const called = new Set(
+      [...handler.matchAll(/\b([A-Za-z_$][\w$]*)\(/g)].map((match) => match[1]),
+    );
+    called.delete("setTimeout");
+    assert.ok(called.size > 0, `${path} consult handler must wire the consult call`);
+    for (const name of called) {
+      assert.match(
+        source,
+        new RegExp(`(?:function\\s+${name}\\s*\\(|const\\s+${name}\\s*=)`),
+        `${path} consult handler calls ${name}(), which the file must define`,
+      );
+    }
+  }
+
+  // The consult leg is newer than the render's activeCall, so the full softphone
+  // must hand that call to the audio helper instead of relying on the closure.
+  const softphone = await read("components/softphone.jsx");
+  assert.match(
+    softphone,
+    /const hydrateRemoteAudio = useCallback\(\(targetCall\) => \{\s*try \{\s*const call = targetCall \|\| activeCall;/,
+  );
+  assert.match(softphone, /setTimeout\(\(\) => hydrateRemoteAudio\(call\), delay\)/);
+});

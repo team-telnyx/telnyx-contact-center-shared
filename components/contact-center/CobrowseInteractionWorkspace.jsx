@@ -1,4 +1,8 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+import { tabsListClass, tabsTriggerClass } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+
 import {useVideoDeviceControl} from "@/hooks/use-video-device-control";
 
 import { useEffect, useState } from "react";
@@ -7,6 +11,7 @@ import CobrowseAgentViewer from "./CobrowseAgentViewer";
 const liveStates = new Set(["pending_consent", "connecting", "active", "reconnecting"]);
 
 export default function CobrowseInteractionWorkspace({ interaction, autoOpen = false, children }) {
+  const tUi = useUiText();
   const [session, setSession] = useState(null);
   const [tab, setTab] = useState("interaction");
   const workItemId = interaction.id;
@@ -45,17 +50,17 @@ export default function CobrowseInteractionWorkspace({ interaction, autoOpen = f
   }, [workItemId, interaction.state]);
 
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="cobrowse-interaction-workspace">
-    {live && <div role="tablist" aria-label="Interaction details view" className="flex shrink-0 items-center gap-1 border-b bg-background px-3 pt-1" onKeyDown={(event) => {
+    {live && <div role="tablist" aria-label={tUi("Interaction details view")} className={cn(tabsListClass, "bg-background px-3 pt-1")} onKeyDown={(event) => {
       if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
       event.preventDefault();
       const next = currentTab === "interaction" ? "cobrowse" : "interaction";
       setTab(next);
       event.currentTarget.querySelector(`[data-cobrowse-tab="${next}"]`)?.focus();
     }}>
-      <button type="button" role="tab" data-cobrowse-tab="interaction" id={`${panelPrefix}-tab-interaction`} aria-controls={`${panelPrefix}-panel-interaction`} aria-selected={currentTab === "interaction"} tabIndex={currentTab === "interaction" ? 0 : -1} onClick={() => setTab("interaction")}
-        className={`border-b-2 px-3 py-2 text-sm font-medium ${currentTab === "interaction" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{interactionLabel}</button>
-      <button type="button" role="tab" data-cobrowse-tab="cobrowse" id={`${panelPrefix}-tab-cobrowse`} aria-controls={`${panelPrefix}-panel-cobrowse`} aria-selected={currentTab === "cobrowse"} tabIndex={currentTab === "cobrowse" ? 0 : -1} onClick={() => setTab("cobrowse")}
-        className={`flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium ${currentTab === "cobrowse" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Co-browsing<span className={`size-1.5 rounded-full ${session.state === "pending_consent" ? "bg-amber-500" : "bg-emerald-500"}`} aria-hidden="true" /></button>
+      <button type="button" role="tab" data-cobrowse-tab="interaction" id={`${panelPrefix}-tab-interaction`} aria-controls={`${panelPrefix}-panel-interaction`} aria-selected={currentTab === "interaction"} data-state={currentTab === "interaction" ? "active" : "inactive"} tabIndex={currentTab === "interaction" ? 0 : -1} onClick={() => setTab("interaction")}
+        className={tabsTriggerClass}>{tUi(interactionLabel)}</button>
+      <button type="button" role="tab" data-cobrowse-tab="cobrowse" id={`${panelPrefix}-tab-cobrowse`} aria-controls={`${panelPrefix}-panel-cobrowse`} aria-selected={currentTab === "cobrowse"} data-state={currentTab === "cobrowse" ? "active" : "inactive"} tabIndex={currentTab === "cobrowse" ? 0 : -1} onClick={() => setTab("cobrowse")}
+        className={tabsTriggerClass}>{tUi("Co-browsing")}<span className={`size-1.5 rounded-full ${session.state === "pending_consent" ? "bg-amber-500" : "bg-emerald-500"}`} aria-hidden="true" /></button>
     </div>}
     <div role={live ? "tabpanel" : undefined} id={`${panelPrefix}-panel-interaction`} aria-labelledby={live ? `${panelPrefix}-tab-interaction` : undefined} hidden={currentTab !== "interaction"} className={currentTab === "interaction" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "hidden"}>{children}</div>
     {live && currentTab === "cobrowse" && <div role="tabpanel" id={`${panelPrefix}-panel-cobrowse`} aria-labelledby={`${panelPrefix}-tab-cobrowse`} className="flex min-h-0 min-w-0 flex-1 flex-col">

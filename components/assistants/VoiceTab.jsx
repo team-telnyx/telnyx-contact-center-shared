@@ -1,11 +1,18 @@
 "use client";
 
 import TtsVoicePicker from "@/components/assistants/VoicePicker";
+import AssistantToolAudioSettings from "./AssistantToolAudioSettings";
+import AssistantConfigurationCard from "./AssistantConfigurationCard";
+import { NestedAssistantFields } from "./AssistantSettingsSection";
+import { assistantVoiceSettings, withAssistantVoiceSettings } from "@/lib/ai/assistant-draft.mjs";
+import { compatibleVoiceAudio } from "@/lib/ai/assistant-audio-ui.mjs";
 
-export default function VoiceTab({ values, setValues }) {
+export default function VoiceTab({ values, setValues, section }) {
   return (
-    <>
+    <div className={section === "interruptions" ? "grid items-start gap-5 lg:grid-cols-2" : ""}>
       <TtsVoicePicker
+        section={section}
+        callAudioExtras={<AssistantToolAudioSettings value={assistantVoiceSettings(values)?.tool_call_audio} backgroundAudio={values.background_audio} onChange={tool_call_audio => setValues(current => withAssistantVoiceSettings(current, compatibleVoiceAudio({ ...assistantVoiceSettings(current), tool_call_audio })))} />}
         value={{
           voice: values.voice,
           voice_speed: values.voice_speed,
@@ -97,7 +104,7 @@ export default function VoiceTab({ values, setValues }) {
               samePronunciationDictId
             )
               return v;
-            return {
+            const updated = {
               ...v,
               voice: nextVoice,
               voice_speed: nextSpeed,
@@ -112,9 +119,13 @@ export default function VoiceTab({ values, setValues }) {
               expressive_mode: nextExpressiveMode,
               pronunciation_dict_id: nextPronunciationDictId,
             };
+            return next?.background_audio !== undefined
+              ? withAssistantVoiceSettings(updated, compatibleVoiceAudio(assistantVoiceSettings(updated)))
+              : updated;
           });
         }}
       />
-    </>
+      {section === "interruptions" ? <AssistantConfigurationCard title="Interruption behavior" description="Protect the opening greeting and control recognition confidence."><NestedAssistantFields root="interruption_settings" schemaName="InterruptionSettings" fields={["disable_greeting_interruption", "interrupt_prediction_threshold"]} values={values} setValues={setValues} /></AssistantConfigurationCard> : null}
+    </div>
   );
 }

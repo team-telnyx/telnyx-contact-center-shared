@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Input } from "@/components/ui/input";
@@ -41,6 +44,7 @@ import TaskEditSheet from "@/components/tasks/EditSheet";
 import { AgentDataSourcePagination } from "./AgentDataSourcePagination";
 
 export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
+  const tUi = useUiText();
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedItem, setExpandedItem] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
@@ -285,22 +289,18 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
   function formatDate(dateString) {
     if (!dateString) return "—";
     try {
-      return new Date(dateString).toLocaleDateString();
+      return new Date(dateString).toLocaleDateString(tUi.locale);
     } catch {
       return dateString;
     }
   }
 
   function formatStatus(status) {
-    if (!status) return "OPEN";
-    return String(status)
-      .replace(/_/g, " ")
-      .toUpperCase();
+    return operationalStatusLabel(tUi, String(status || "open").toLowerCase());
   }
 
   function formatPriority(priority) {
-    if (!priority) return "MEDIUM";
-    return String(priority).toUpperCase();
+    return operationalStatusLabel(tUi, String(priority || "medium").toLowerCase());
   }
 
   // Helper function to get caller information from task or contact
@@ -382,7 +382,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Search tasks..."
+                placeholder={tUi("Search tasks...")}
                 className="pl-8 pr-8"
               />
               {searchQuery && (
@@ -393,7 +393,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                     setPage(1);
                   }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-muted transition-colors"
-                  aria-label="Clear search"
+                  aria-label={tUi("Clear search")}
                 >
                   <IconX className="h-3 w-3 text-muted-foreground" />
                 </button>
@@ -404,15 +404,12 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
               onClick={handleCreateTask}
               className="h-8 shrink-0"
             >
-              <IconPlus className="h-3 w-3 mr-1" />
-              New Task
-            </Button>
+              <IconPlus className="h-3 w-3 mr-1" />{tUi("New Task")}</Button>
           </div>
           {identifiedContact && (
-            <div className="mt-2 text-xs text-muted-foreground">
-              Showing tasks for: {identifiedContact.display_name || 
+            <div className="mt-2 text-xs text-muted-foreground">{tUi("Showing tasks for: ")}{identifiedContact.display_name ||
                 [identifiedContact.first_name, identifiedContact.last_name].filter(Boolean).join(" ") ||
-                "Unnamed Contact"}
+                tUi("Unnamed Contact")}
             </div>
           )}
         </div>
@@ -426,9 +423,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                 ))}
               </div>
             ) : items.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8 text-sm">
-                No tasks found
-              </div>
+              <div className="text-center text-muted-foreground py-8 text-sm">{tUi("No tasks found")}</div>
             ) : (
               <Accordion
                 type="single"
@@ -489,9 +484,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                           {/* Description */}
                           {task.description && (
                             <div className="space-y-2">
-                              <div className="text-xs font-medium text-muted-foreground">
-                                Description
-                              </div>
+                              <div className="text-xs font-medium text-muted-foreground">{tUi("Description")}</div>
                               <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md whitespace-pre-wrap">
                                 {task.description}
                               </div>
@@ -502,9 +495,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                           {task.task_type && (
                             <div className="space-y-2">
                               <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                                <IconTag className="h-3 w-3" />
-                                Task Type
-                              </div>
+                                <IconTag className="h-3 w-3" />{tUi("Task Type")}</div>
                               <Badge
                                 variant="outline"
                                 className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-800"
@@ -524,9 +515,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                               return (
                                 <div className="space-y-2">
                                   <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                                    <IconUser className="h-3 w-3" />
-                                    Caller Information
-                                  </div>
+                                    <IconUser className="h-3 w-3" />{tUi("Caller Information")}</div>
                                   <div className="flex flex-wrap gap-1.5">
                                     {callerName && (
                                       <Badge
@@ -566,17 +555,14 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                           {(task.created_at || task.due_date) && (
                             <div className="space-y-2">
                               <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                                <IconCalendar className="h-3 w-3" />
-                                Dates
-                              </div>
+                                <IconCalendar className="h-3 w-3" />{tUi("Dates")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {task.created_at && (
                                   <Badge
                                     variant="outline"
                                     className="bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600"
                                   >
-                                    <IconClock className="h-3 w-3 mr-1" />
-                                    Created: {formatDate(task.created_at)}
+                                    <IconClock className="h-3 w-3 mr-1" />{tUi("Created: ")}{formatDate(task.created_at)}
                                   </Badge>
                                 )}
                                 {task.due_date && (
@@ -589,8 +575,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                                         : "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-800",
                                     )}
                                   >
-                                    <IconCalendar className="h-3 w-3 mr-1" />
-                                    Due: {formatDate(task.due_date)}
+                                    <IconCalendar className="h-3 w-3 mr-1" />{tUi("Due: ")}{formatDate(task.due_date)}
                                   </Badge>
                                 )}
                               </div>
@@ -601,9 +586,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                           {task.tags && (
                             <div className="space-y-2">
                               <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                                <IconTag className="h-3 w-3" />
-                                Tags
-                              </div>
+                                <IconTag className="h-3 w-3" />{tUi("Tags")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {typeof task.tags === "string" ? (
                                   <Badge
@@ -635,9 +618,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                               onClick={() => handleEditTask(task.id)}
                               className="h-8"
                             >
-                              <IconEdit className="h-3 w-3 mr-1" />
-                              Edit Task
-                            </Button>
+                              <IconEdit className="h-3 w-3 mr-1" />{tUi("Edit Task")}</Button>
                           </div>
                         </div>
                       </AccordionContent>
@@ -702,17 +683,13 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
       <AlertDialog open={confirmCreateContact} onOpenChange={(open) => { if (!open) setConfirmCreateContact(false); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Caller is not registered</AlertDialogTitle>
-            <AlertDialogDescription>
-              This caller isn&apos;t linked to a contact yet. Would you like to create a contact first, or continue and create the task without one?
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Caller is not registered")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("This caller isn't linked to a contact yet. Would you like to create a contact first, or continue and create the task without one?")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={() => { setConfirmCreateContact(false); setShowTaskSheet(true); }}
-            >
-              Continue without contact
-            </AlertDialogCancel>
+            >{tUi("Continue without contact")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setConfirmCreateContact(false);
@@ -722,9 +699,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                   variant: "info",
                 });
               }}
-            >
-              Create contact first
-            </AlertDialogAction>
+            >{tUi("Create contact first")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

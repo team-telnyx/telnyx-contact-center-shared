@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +13,7 @@ import { AuthBrandLogo } from "@/components/auth-brand-logo";
 import { AuthRightImage } from "@/components/auth-right-image";
 
 export default function ForgotPasswordPage() {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -54,32 +57,25 @@ export default function ForgotPasswordPage() {
           <div className="flex justify-center w-full">
             <div className="flex flex-col items-center w-full justify-center">
               <AuthBrandLogo />
-              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
-                Contact Center
-              </span>
+              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">{tUi("Contact Center")}</span>
             </div>
           </div>
         </div>
         <div className="flex flex-1 mt-30 justify-center">
           <div className="w-full max-w-xs">
             <form onSubmit={onSubmit} className={cn("w-full space-y-4")}>
-              <h1 className="text-2xl font-bold">Forgot your password?</h1>
-              <p className="text-sm text-muted-foreground">
-                Enter your email address and we’ll send you a reset link.
-              </p>
+              <h1 className="text-2xl font-bold">{tUi("Forgot your password?")}</h1>
+              <p className="text-sm text-muted-foreground">{tUi("Enter your email address and we’ll send you a reset link.")}</p>
               <div className="grid gap-2">
-                <Label htmlFor="username">Email address</Label>
+                <Label htmlFor="username">{tUi("Email address")}</Label>
                 <Input id="username" name="username" type="email" required />
                 {error && <p className="text-xs text-red-500">{error}</p>}
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Sending..." : "Send reset link"}
+                {loading ? tUi("Sending...") : tUi("Send reset link")}
               </Button>
-              <p className="text-center text-sm">
-                Remembered your password?{" "}
-                <a href="/signin" className="underline underline-offset-4">
-                  Back to sign in
-                </a>
+              <p className="text-center text-sm">{tUi("Remembered your password?")}{" "}
+                <a href="/signin" className="underline underline-offset-4">{tUi("Back to sign in")}</a>
               </p>
             </form>
           </div>

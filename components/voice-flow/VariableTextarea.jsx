@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   Command,
   CommandGroup,
@@ -22,6 +23,7 @@ export function VariableTextarea({
   placeholder = "",
   className = "",
   wrapperClassName = "",
+  pickerClassName = "",
   rows = 3,
   ...props
 }) {
@@ -153,7 +155,7 @@ export function VariableTextarea({
       />
 
       {showPicker && (filteredSecrets.length > 0 || filteredVars.length > 0) && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-auto">
+        <div className={cn("absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-auto", pickerClassName)}>
           <Command>
             <CommandList>
               {filteredSecrets.length > 0 && (

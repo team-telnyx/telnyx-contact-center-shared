@@ -1,4 +1,8 @@
 "use client";
+import { assertVisionCapability } from "@/lib/ai/vision-capabilities.mjs";
+import { isLibraryAssistantTool } from "@/lib/ai/tool-library.js";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo, useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -15,7 +19,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ASSISTANT_TOOL_TYPES } from "@/config/assistant-tools";
 import {
-  DEMO_ENTITIES,
   TELNYX_API_ACTIONS,
   THIRD_PARTY_API_ACTIONS,
 } from "@/config/demo-entities";
@@ -73,6 +76,9 @@ import {
   IconLink,
   IconLinkOff,
 } from "@tabler/icons-react";
+import { createDefaultTool } from "@/lib/ai/assistant-tool-defaults.mjs";
+import AssistantSectionTabs from "./AssistantSectionTabs";
+import { AssistantA2ASettings, AssistantObservabilitySettings } from "./AssistantIntegrationSettings";
 import MCPServersSection from "@/components/assistants/MCPServersSection";
 import DynamicVariablesTestSheet from "@/components/assistants/DynamicVariablesTestSheet";
 import WebhookTestSheet from "@/components/assistants/tools/WebhookTestSheet";
@@ -101,7 +107,8 @@ function getIntegrationDisplayName(integration) {
   );
 }
 
-export default function IntegrationsTab({ values, setValues, assistantId }) {
+export default function IntegrationsTab({ localTab = "tools", onLocalTabChange, values, setValues, assistantId }) {
+  const tUi = useUiText();
   const [varsOpen, setVarsOpen] = useState(false);
   const [dynamicVarsTestOpen, setDynamicVarsTestOpen] = useState(false);
   const [instructionsAdded, setInstructionsAdded] = useState(false);
@@ -175,6 +182,8 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
     return Array.from(new Set([...systemVariables, ...customVariables]));
   }, [values?.dynamic_variables]);
 
+  const [addingTool, setAddingTool] = useState(false);
+  const [addToolError, setAddToolError] = useState("");
   const [newToolType, setNewToolType] = useState("");
   const [webhookEntity, setWebhookEntity] = useState("custom");
   const [webhookAction, setWebhookAction] = useState("");
@@ -326,8 +335,18 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
   }
 
   async function addTool(type) {
-    if (!type) return;
+    if (!type || addingTool) return;
+    setAddingTool(true);
+    setAddToolError("");
 
+    if (type === "vision") {
+      try {
+        const response = await fetch("/api/ai/models", {cache:"no-store"});
+        const catalog = await response.json();
+        if (!response.ok) throw new Error("Unable to verify Vision model support. Please retry.");
+        assertVisionCapability(values, catalog.models || [], {buffered:true});
+      } catch(error) { setAddToolError(error.message); setAddingTool(false); return; }
+    }
     // For webhook tools, check if we should generate config
     let def;
     if (type === "webhook" && webhookEntity !== "custom" && webhookAction) {
@@ -350,22 +369,22 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
         });
 
         if (!response.ok) {
-          console.error("Failed to generate webhook config");
-          def = createDefaultTool(type);
+          throw new Error("Webhook configuration unavailable");
         } else {
           def = await response.json();
         }
       } catch (error) {
-        console.error("Error generating webhook config:", error);
-        def = createDefaultTool(type);
+        setAddToolError(tUi("The webhook could not be added. Please try again."));
+        setAddingTool(false);
+        return;
       }
     } else if (type === "webhook") {
-      // For webhook tools without specific entity/action, use demo data configuration
-      def = createDefaultWebhookWithDemoData();
+      def = createDefaultTool("webhook");
     } else {
       def = createDefaultTool(type);
     }
 
+    setAddingTool(false);
     if (!def) return;
 
     setValues((v) => {
@@ -373,7 +392,15 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
       // enforce singleton for non-webhook types
       const cfg = ASSISTANT_TOOL_TYPES.find((t) => t.type === type);
       if (cfg?.singleton && tools.some((t) => t?.type === type)) return v;
-      return { ...v, tools: [...tools, def] };
+      // Each custom function must have a unique name, including repeated additions.
+      let next = def;
+      if (type === "webhook" && webhookEntity === "custom") {
+        const names = new Set(tools.map(tool => tool.webhook?.name || tool.function?.name || tool.client_side_tool?.name || tool.update_dynamic_variables?.name));
+        let name = "custom_webhook", suffix = 2;
+        while (names.has(name)) name = `custom_webhook_${suffix++}`;
+        next = { ...def, webhook: { ...def.webhook, name } };
+      }
+      return { ...v, tools: [...tools, next] };
     });
 
     // Reset state
@@ -672,27 +699,28 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
   }
 
   return (
-    <div className="space-y-6 mt-5">
-      <Accordion type="single" collapsible defaultValue="dynamic-variables" className="space-y-3">
-        <AccordionItem value="dynamic-variables" className="rounded-xl border bg-card px-4">
+    <div className="flex h-full min-h-0 flex-col">
+      <AssistantSectionTabs value={localTab} onValueChange={onLocalTabChange} label="Integration settings" tabs={[{id:'tools',label:'Tools'},{id:'connections',label:'MCP & integrations'},{id:'a2a',label:'A2A agents'},{id:'variables',label:'Dynamic variables'},{id:'observability',label:'Observability'}]}>{active => <div className="w-full space-y-5 pb-4">
+      <Accordion type="multiple" value={['dynamic-variables','tools','external-providers','mcp-servers']} className="space-y-3">
+        {active === "variables" && <AccordionItem value="dynamic-variables" className="rounded-xl border bg-card px-4">
           <AccordionTrigger className="hover:no-underline">
             <SectionHeading
               icon={<IconVariable className="h-5 w-5 text-telnyx-green" />}
-              title="Dynamic Variables"
-              description="Configure webhook-backed variables available to the assistant."
+              title={tUi("Dynamic Variables")}
+              description={tUi("Configure webhook-backed variables available to the assistant.")}
             />
           </AccordionTrigger>
-          <AccordionContent className="space-y-3 pb-5">
-            <div className="space-y-2">
+          <AccordionContent className="space-y-4 pb-5">
+            <div className="w-full space-y-4">
               <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-6">
-                  <label className="text-xs">Dynamic Variables Webhook URL</label>
+                <div className="col-span-6" data-setting-path="dynamic_variables_webhook_url">
+                  <label className="text-xs">{tUi("Dynamic Variables Webhook URL")}</label>
                 </div>
                 <div className="col-span-3">
-                  <label className="text-xs">Target</label>
+                  <label className="text-xs">{tUi("Target")}</label>
                 </div>
                 <div className="col-span-3">
-                  <label className="text-xs">Memory Limit</label>
+                  <label className="text-xs">{tUi("Memory Limit")}</label>
                 </div>
               </div>
               <div className="grid grid-cols-12 gap-2 items-center">
@@ -715,8 +743,8 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="custom">Custom</SelectItem>
-                      <SelectItem value="contacts">Contacts</SelectItem>
+                      <SelectItem value="custom">{tUi("Custom")}</SelectItem>
+                      <SelectItem value="contacts">{tUi("Contacts")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -738,6 +766,7 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                   </Select>
                 </div>
               </div>
+              <label className="block space-y-2 text-xs" data-setting-path="dynamic_variables_webhook_timeout_ms">{tUi("Variable lookup timeout (ms)")}<Input type="number" min={1} max={10000} className="w-36" value={values.dynamic_variables_webhook_timeout_ms ?? ""} placeholder="1500" onChange={e => setValues(current => ({ ...current, dynamic_variables_webhook_timeout_ms: e.target.value === "" ? undefined : Number(e.target.value) }))} /></label>
               {entries.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {entries.map(([name], index) => (
@@ -752,14 +781,10 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => setVarsOpen(true)}>
-                Manage Dynamic Variables
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setVarsOpen(true)}>{tUi("Manage Dynamic Variables")}</Button>
               {values.dynamic_variables_webhook_url && (
                 <Button type="button" variant="outline" onClick={() => setDynamicVarsTestOpen(true)}>
-                  <IconFlask className="h-4 w-4 mr-2" />
-                  Test Webhook
-                </Button>
+                  <IconFlask className="h-4 w-4 mr-2" />{tUi("Test Webhook")}</Button>
               )}
               {webhookPreset !== "custom" && entries.length > 0 && (
                 <Button
@@ -770,34 +795,32 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                 >
                   {instructionsAdded ? (
                     <>
-                      <IconCheck className="h-4 w-4 mr-2" />
-                      Added
-                    </>
+                      <IconCheck className="h-4 w-4 mr-2" />{tUi("Added")}</>
                   ) : (
-                    "Add to Instructions"
+                    tUi("Add to Instructions")
                   )}
                 </Button>
               )}
             </div>
           </AccordionContent>
-        </AccordionItem>
+        </AccordionItem>}
 
-        <AccordionItem value="tools" className="rounded-xl border bg-card px-4">
+        {active === "tools" && <AccordionItem value="tools" className="rounded-xl border bg-card px-4">
           <AccordionTrigger className="hover:no-underline">
             <SectionHeading
               icon={<IconTools className="h-5 w-5 text-telnyx-green" />}
-              title="Tools"
-              description="Add built-in assistant tools and reusable tools from your library."
+              title={tUi("Tools")}
+              description={tUi("Add built-in assistant tools and reusable tools from your library.")}
             />
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-5">
             <div className="space-y-3">
               <div className="flex items-end gap-2">
-                <div className="w-44"><label className="text-xs">Tool Type</label></div>
+                <div className="w-44"><label className="text-xs">{tUi("Tool Type")}</label></div>
                 {newToolType === "webhook" && (
                   <>
-                    <div className="w-44"><label className="text-xs">Entity</label></div>
-                    <div className="w-44"><label className="text-xs">Action</label></div>
+                    <div className="w-44"><label className="text-xs">{tUi("Entity")}</label></div>
+                    <div className="w-44"><label className="text-xs">{tUi("Action")}</label></div>
                   </>
                 )}
               </div>
@@ -813,7 +836,7 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                   }}
                 >
                   <SelectTrigger className="w-44">
-                    <SelectValue placeholder="Select tool type" />
+                    <SelectValue placeholder={tUi("Select tool type")} />
                   </SelectTrigger>
                   <SelectContent>
                     {ASSISTANT_TOOL_TYPES.map((t) => {
@@ -821,7 +844,7 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                       const disabled = t.singleton && count >= 1;
                       return (
                         <SelectItem key={t.type} value={t.type} disabled={disabled}>
-                          {t.label}{disabled ? " (already added)" : ""}
+                          {tUi(t.label)}{disabled ? tUi(" (already added)") : ""}
                         </SelectItem>
                       );
                     })}
@@ -830,23 +853,23 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                 {newToolType === "webhook" && (
                   <>
                     <Select value={webhookEntity} onValueChange={(val) => { setWebhookEntity(val); setWebhookAction(""); }}>
-                      <SelectTrigger className="w-44"><SelectValue placeholder="Select entity" /></SelectTrigger>
+                      <SelectTrigger className="w-44"><SelectValue placeholder={tUi("Select entity")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="custom">Custom</SelectItem>
-                        <SelectItem value="telnyx_apis">Telnyx APIs</SelectItem>
-                        <SelectItem value="third_party_apis">3rd Party APIs</SelectItem>
+                        <SelectItem value="custom">{tUi("Custom")}</SelectItem>
+                        <SelectItem value="telnyx_apis">{tUi("Telnyx APIs")}</SelectItem>
+                        <SelectItem value="third_party_apis">{tUi("3rd Party APIs")}</SelectItem>
                         {CONTACT_CENTER_DATA_SOURCES.map((entity) => (
                           <SelectItem key={entity.id} value={entity.id}>{entity.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <Select value={webhookAction} onValueChange={setWebhookAction} disabled={webhookEntity === "custom"}>
-                      <SelectTrigger className="w-80"><SelectValue placeholder="Select action" /></SelectTrigger>
+                      <SelectTrigger className="w-80"><SelectValue placeholder={tUi("Select action")} /></SelectTrigger>
                       <SelectContent>
                         {webhookEntity === "telnyx_apis"
-                          ? TELNYX_API_ACTIONS.map((action) => (<SelectItem key={action.id} value={action.id}>{action.description}</SelectItem>))
+                          ? TELNYX_API_ACTIONS.map((action) => (<SelectItem key={action.id} value={action.id}>{tUi(action.description)}</SelectItem>))
                           : webhookEntity === "third_party_apis"
-                          ? THIRD_PARTY_API_ACTIONS.map((action) => (<SelectItem key={action.id} value={action.id}>{action.description}</SelectItem>))
+                          ? THIRD_PARTY_API_ACTIONS.map((action) => (<SelectItem key={action.id} value={action.id}>{tUi(action.description)}</SelectItem>))
                           : getContactCenterDataSourceActions(webhookEntity).map((action) => {
                               const entity = CONTACT_CENTER_DATA_SOURCES.find((e) => e.id === webhookEntity);
                               const entitySingular = entity ? entity.label.toLowerCase().slice(0, -1) : "";
@@ -861,13 +884,12 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                 <Button
                   type="button"
                   onClick={() => addTool(newToolType)}
-                  disabled={!newToolType || (newToolType === "webhook" && webhookEntity !== "custom" && !webhookAction)}
-                >
-                  Add Tool
-                </Button>
-                <Button type="button" variant="outline" onClick={openLibrarySheet}>Add from Library</Button>
+                  disabled={addingTool || !newToolType || (newToolType === "webhook" && webhookEntity !== "custom" && !webhookAction)}
+                >{tUi(addingTool ? "Adding…" : "Add Tool")}</Button>
+                <Button type="button" variant="outline" onClick={openLibrarySheet}>{tUi("Add from Library")}</Button>
               </div>
             </div>
+            {addToolError ? <p role="alert" className="text-sm text-destructive">{addToolError}</p> : null}
             <ToolsCardsGrid
               tools={Array.isArray(values?.tools) ? values.tools : []}
               assistantId={assistantId}
@@ -883,14 +905,14 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
               onSaveToolToLibrary={saveToolToLibrary}
             />
           </AccordionContent>
-        </AccordionItem>
+        </AccordionItem>}
 
-        <AccordionItem value="external-providers" className="rounded-xl border bg-card px-4">
+        {active === "connections" && <AccordionItem value="external-providers" className="rounded-xl border bg-card px-4">
           <AccordionTrigger className="hover:no-underline">
             <SectionHeading
               icon={<IconPlugConnected className="h-5 w-5 text-telnyx-green" />}
-              title="External Providers"
-              description="Connect Merge-backed apps like GitHub, Linear, Salesforce, Notion, and more."
+              title={tUi("External Providers")}
+              description={tUi("Connect Merge-backed apps like GitHub, Linear, Salesforce, Notion, and more.")}
             />
           </AccordionTrigger>
           <AccordionContent className="pb-5">
@@ -911,48 +933,47 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
               onToggleAssistantIntegration={toggleExternalProviderForAssistant}
             />
           </AccordionContent>
-        </AccordionItem>
+        </AccordionItem>}
 
-        <AccordionItem value="mcp-servers" className="rounded-xl border bg-card px-4">
+        {active === "connections" && <AccordionItem value="mcp-servers" className="rounded-xl border bg-card px-4">
           <AccordionTrigger className="hover:no-underline">
             <SectionHeading
               icon={<IconServerBolt className="h-5 w-5 text-telnyx-green" />}
-              title="MCP Servers"
-              description="Attach Model Context Protocol servers to extend assistant capabilities."
+              title={tUi("MCP Servers")}
+              description={tUi("Attach Model Context Protocol servers to extend assistant capabilities.")}
             />
           </AccordionTrigger>
           <AccordionContent className="pb-5">
             <MCPServersSection values={values} setValues={setValues} />
           </AccordionContent>
-        </AccordionItem>
+        </AccordionItem>}
       </Accordion>
+      {active === 'a2a' ? <AssistantA2ASettings values={values} setValues={setValues} /> : null}
+      {active === 'observability' ? <AssistantObservabilitySettings values={values} setValues={setValues} /> : null}
 
+      </div>}</AssistantSectionTabs>
       {/* Add from Library Sheet */}
       <Sheet open={librarySheetOpen} onOpenChange={setLibrarySheetOpen}>
         <SheetContent className="w-[90vw] sm:w-[800px] h-full flex flex-col overflow-hidden">
           <SheetHeader>
             <SheetTitle className="inline-flex items-center gap-2">
-              <IconDatabaseSearch className="h-5 w-5 text-telnyx-green" />
-              Add from Library
-            </SheetTitle>
-            <SheetDescription>
-              Select reusable tools to attach to this assistant. Duplicates are skipped automatically.
-            </SheetDescription>
+              <IconDatabaseSearch className="h-5 w-5 text-telnyx-green" />{tUi("Add from Library")}</SheetTitle>
+            <SheetDescription>{tUi("Select reusable tools to attach to this assistant. Duplicates are skipped automatically.")}</SheetDescription>
           </SheetHeader>
 
           <div className="mx-4 mt-4 flex-1 min-h-0 flex flex-col gap-3">
             <Input
               value={librarySearch}
               onChange={(e) => setLibrarySearch(e.target.value)}
-              placeholder="Search tools by name, type, or ID…"
+              placeholder={tUi("Search tools by name, type, or ID…")}
             />
             <div className="rounded-lg border bg-background flex-1 min-h-0 overflow-y-auto">
               {libraryToolsLoading ? (
-                <div className="p-6 text-sm text-muted-foreground">Loading library tools…</div>
+                <div className="p-6 text-sm text-muted-foreground">{tUi("Loading library tools…")}</div>
               ) : libraryToolsError ? (
                 <div className="p-6 text-sm text-red-500">{libraryToolsError}</div>
               ) : filteredLibraryTools.length === 0 ? (
-                <div className="p-6 text-sm text-muted-foreground">No library tools found.</div>
+                <div className="p-6 text-sm text-muted-foreground">{tUi("No library tools found.")}</div>
               ) : (
                 <div className="divide-y">
                   {filteredLibraryTools.map((tool) => {
@@ -984,14 +1005,14 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
                           <div className="flex flex-wrap items-center gap-2">
                             {renderAssistantToolIcon(tool.type)}
                             <span className="font-medium text-sm truncate">
-                              {tool.display_name || tool.name || "Unnamed tool"}
+                              {tool.display_name || tool.name || tUi("Unnamed tool")}
                             </span>
                             <Badge variant="secondary" className="text-[11px]">
-                              {labelForAssistantToolType(tool.type)}
+                              {tUi(labelForAssistantToolType(tool.type))}
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground line-clamp-2">
-                            {definition?.description || definition?.name || "No description"}
+                            {definition?.description || definition?.name || tUi("No description")}
                           </div>
                           <div className="text-[11px] font-mono text-muted-foreground truncate">
                             {tool.id}
@@ -1010,15 +1031,12 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
               type="button"
               variant="secondary"
               onClick={() => setLibrarySheetOpen(false)}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               type="button"
               onClick={addSelectedLibraryTools}
               disabled={selectedLibraryToolIds.length === 0}
-            >
-              Add Selected Tools ({selectedLibraryToolIds.length})
+            >{tUi("Add Selected Tools (")}{selectedLibraryToolIds.length})
             </Button>
           </div>
         </SheetContent>
@@ -1029,12 +1047,8 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
         <SheetContent className="w-[600px] sm:w-[700px] overflow-hidden flex flex-col">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <IconVariable className="h-5 w-5 text-telnyx-green" />
-              Manage Dynamic Variables
-            </SheetTitle>
-            <SheetDescription>
-              Configure variables that can be used in your assistant&apos;s responses
-            </SheetDescription>
+              <IconVariable className="h-5 w-5 text-telnyx-green" />{tUi("Manage Dynamic Variables")}</SheetTitle>
+            <SheetDescription>{tUi("Configure variables that can be used in your assistant's responses")}</SheetDescription>
           </SheetHeader>
 
           <div className="flex-1 mt-0 mb-4">
@@ -1052,12 +1066,8 @@ export default function IntegrationsTab({ values, setValues, assistantId }) {
               type="button"
               variant="secondary"
               onClick={() => setVarsOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => setVarsOpen(false)}>
-              Save
-            </Button>
+            >{tUi("Cancel")}</Button>
+            <Button type="button" onClick={() => setVarsOpen(false)}>{tUi("Save")}</Button>
           </div>
         </SheetContent>
       </Sheet>
@@ -1117,6 +1127,7 @@ function ExternalProvidersSection({
   onConnect,
   onToggleAssistantIntegration,
 }) {
+  const tUi = useUiText();
   const categories = useMemo(() => {
     const set = new Set();
     for (const integration of integrations) {
@@ -1312,15 +1323,11 @@ function ExternalProvidersSection({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <div className="text-sm font-medium">Add Integration</div>
-          <p className="text-xs text-muted-foreground">
-            Connected providers can be attached to this assistant. Hover the help icon to preview available tools.
-          </p>
+          <div className="text-sm font-medium">{tUi("Add Integration")}</div>
+          <p className="text-xs text-muted-foreground">{tUi("Connected providers can be attached to this assistant. Hover the help icon to preview available tools.")}</p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          <IconRefresh className="mr-2 h-4 w-4" />
-          Refresh
-        </Button>
+          <IconRefresh className="mr-2 h-4 w-4" />{tUi("Refresh")}</Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -1337,7 +1344,7 @@ function ExternalProvidersSection({
                   : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
               }`}
             >
-              {category === "all" ? "All" : INTEGRATION_CATEGORY_LABELS[category] || category}
+              {category === "all" ? tUi("All") : (INTEGRATION_CATEGORY_LABELS[category] ? tUi(INTEGRATION_CATEGORY_LABELS[category]) : category)}
             </button>
           );
         })}
@@ -1350,13 +1357,9 @@ function ExternalProvidersSection({
       )}
 
       {loading ? (
-        <div className="rounded-xl border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-          Loading external providers…
-        </div>
+        <div className="rounded-xl border bg-muted/20 p-8 text-center text-sm text-muted-foreground">{tUi("Loading external providers…")}</div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-          No integrations found for this filter.
-        </div>
+        <div className="rounded-xl border bg-muted/20 p-8 text-center text-sm text-muted-foreground">{tUi("No integrations found for this filter.")}</div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {filtered.map((integration) => {
@@ -1396,7 +1399,7 @@ function ExternalProvidersSection({
                           <div className="mt-1 flex flex-wrap gap-1">
                             {(integration.categories || []).slice(0, 2).map((category) => (
                               <Badge key={category} variant="secondary" className="text-[10px] font-normal">
-                                {INTEGRATION_CATEGORY_LABELS[category] || category}
+                                {(INTEGRATION_CATEGORY_LABELS[category] ? tUi(INTEGRATION_CATEGORY_LABELS[category]) : category)}
                               </Badge>
                             ))}
                           </div>
@@ -1404,13 +1407,11 @@ function ExternalProvidersSection({
                       </div>
                       {connected && (
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <Badge className="bg-telnyx-green/15 text-telnyx-green hover:bg-telnyx-green/15">
-                            Connected
-                          </Badge>
+                          <Badge className="bg-telnyx-green/15 text-telnyx-green hover:bg-telnyx-green/15">{tUi("Connected")}</Badge>
                           {selected && (
                             <IconLink
                               className="h-4 w-4 text-fuchsia-500"
-                              title="Integration is added to this assistant"
+                              title={tUi("Integration is added to this assistant")}
                             />
                           )}
                         </div>
@@ -1418,11 +1419,11 @@ function ExternalProvidersSection({
                     </div>
 
                     <p className="line-clamp-2 min-h-9 text-xs text-muted-foreground">
-                      {integration.description || "Connect this provider to expose its actions as assistant tools."}
+                      {integration.description || tUi("Connect this provider to expose its actions as assistant tools.")}
                     </p>
 
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span>{tools.length} tools</span>
+                      <span>{tools.length}{tUi(" tools")}</span>
                       <HoverCard openDelay={100} closeDelay={100}>
                         <HoverCardTrigger asChild>
                           <button type="button" className="rounded-full text-muted-foreground hover:text-foreground">
@@ -1431,9 +1432,9 @@ function ExternalProvidersSection({
                         </HoverCardTrigger>
                         <HoverCardContent className="w-[min(760px,calc(100vw-2rem))] max-w-none bg-popover text-popover-foreground">
                           <div className="space-y-2">
-                            <div className="font-medium">Available tools:</div>
+                            <div className="font-medium">{tUi("Available tools:")}</div>
                             {tools.length === 0 ? (
-                              <div className="text-xs text-muted-foreground">No tools advertised.</div>
+                              <div className="text-xs text-muted-foreground">{tUi("No tools advertised.")}</div>
                             ) : (
                               <ul className="grid max-h-[28rem] grid-cols-1 gap-x-6 gap-y-1.5 overflow-y-auto pr-1 text-xs lg:grid-cols-2">
                                 {tools.map((tool) => (
@@ -1456,8 +1457,8 @@ function ExternalProvidersSection({
                       variant={connected ? "outline" : "default"}
                       onClick={() => onConnect(integration)}
                       disabled={busy}
-                      aria-label={connected ? "Reconnect provider" : "Connect provider"}
-                      title={connected ? "Reconnect provider" : busy ? "Opening…" : "Connect provider"}
+                      aria-label={connected ? tUi("Reconnect provider") : tUi("Connect provider")}
+                      title={connected ? tUi("Reconnect provider") : busy ? tUi("Opening…") : tUi("Connect provider")}
                     >
                       <IconExternalLink className="h-4 w-4" />
                     </Button>
@@ -1468,8 +1469,8 @@ function ExternalProvidersSection({
                           size="icon"
                           variant="outline"
                           onClick={() => openExternalProviderToolsDialog(integration)}
-                          aria-label="Configure allowed tools"
-                          title="Configure allowed tools"
+                          aria-label={tUi("Configure allowed tools")}
+                          title={tUi("Configure allowed tools")}
                         >
                           <IconTools className="h-4 w-4" />
                         </Button>
@@ -1479,8 +1480,8 @@ function ExternalProvidersSection({
                           variant="default"
                           onClick={() => onToggleAssistantIntegration(integration, false)}
                           className="bg-telnyx-green hover:bg-telnyx-green"
-                          aria-label="Remove from assistant"
-                          title="Remove from assistant"
+                          aria-label={tUi("Remove from assistant")}
+                          title={tUi("Remove from assistant")}
                         >
                           <IconLinkOff className="h-4 w-4" />
                         </Button>
@@ -1492,8 +1493,8 @@ function ExternalProvidersSection({
                         variant="outline"
                         disabled={!connected}
                         onClick={() => openExternalProviderToolsDialog(integration)}
-                        aria-label="Add to assistant"
-                        title="Add to assistant"
+                        aria-label={tUi("Add to assistant")}
+                        title={tUi("Add to assistant")}
                       >
                         <IconSquareRoundedPlus className="h-4 w-4" />
                       </Button>
@@ -1504,11 +1505,11 @@ function ExternalProvidersSection({
                       variant="outline"
                       disabled={!connection?.id || selected}
                       onClick={() => confirmExternalProviderDelete(integration, connection)}
-                      aria-label="Delete provider connection"
+                      aria-label={tUi("Delete provider connection")}
                       title={
                         selected
-                          ? "Remove this integration from the assistant before deleting the connection"
-                          : "Delete provider connection"
+                          ? tUi("Remove this integration from the assistant before deleting the connection")
+                          : tUi("Delete provider connection")
                       }
                       className="text-red-500 hover:text-red-600"
                     >
@@ -1541,32 +1542,28 @@ function ExternalProvidersSection({
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Delete Integration Connection</DialogTitle>
-            <DialogDescription>
-              This only removes the provider account connection. It will not delete assistants or provider-side data.
-            </DialogDescription>
+            <DialogTitle>{tUi("Delete Integration Connection")}</DialogTitle>
+            <DialogDescription>{tUi("This only removes the provider account connection. It will not delete assistants or provider-side data.")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <div className="rounded-lg border bg-muted/30 p-3">
               <div className="font-medium">
-                {getIntegrationDisplayName(deleteProviderDialog.provider) || "Integration"}
+                {getIntegrationDisplayName(deleteProviderDialog.provider) || tUi("Integration")}
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Connection ID: {deleteProviderDialog.connection?.id || "—"}
+              <div className="mt-1 text-xs text-muted-foreground">{tUi("Connection ID: ")}{deleteProviderDialog.connection?.id || "—"}
               </div>
             </div>
             {deleteProviderDialog.loading && (
-              <p className="text-muted-foreground">Checking assistant usage…</p>
+              <p className="text-muted-foreground">{tUi("Checking assistant usage…")}</p>
             )}
             {deleteProviderDialog.blockingAssistants.length > 0 && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400">
-                <p className="font-medium">
-                  Cannot delete this integration because it is added to {deleteProviderDialog.blockingAssistants.length} assistant{deleteProviderDialog.blockingAssistants.length === 1 ? "" : "s"}.
+                <p className="font-medium">{tUi("Cannot delete this integration. Assistants using it: {value0}.", {value0: deleteProviderDialog.blockingAssistants.length})}
                 </p>
                 <ul className="mt-2 list-inside list-disc text-xs">
                   {deleteProviderDialog.blockingAssistants.slice(0, 5).map((assistant) => (
                     <li key={assistant?.id || assistant?.name}>
-                      {assistant?.name || assistant?.id || "Unnamed assistant"}
+                      {assistant?.name || assistant?.id || tUi("Unnamed assistant")}
                     </li>
                   ))}
                 </ul>
@@ -1578,9 +1575,7 @@ function ExternalProvidersSection({
               </div>
             )}
             {!deleteProviderDialog.loading && deleteProviderDialog.usageChecked && deleteProviderDialog.blockingAssistants.length === 0 && (
-              <p className="text-muted-foreground">
-                Delete this linked provider connection? You can reconnect it later if needed.
-              </p>
+              <p className="text-muted-foreground">{tUi("Delete this linked provider connection? You can reconnect it later if needed.")}</p>
             )}
           </div>
           <DialogFooter>
@@ -1600,9 +1595,7 @@ function ExternalProvidersSection({
                 })
               }
               disabled={deleteProviderDialog.deleting}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               type="button"
               variant="destructive"
@@ -1615,7 +1608,7 @@ function ExternalProvidersSection({
                 !deleteProviderDialog.connection?.id
               }
             >
-              {deleteProviderDialog.deleting ? "Deleting…" : "Delete connection"}
+              {deleteProviderDialog.deleting ? tUi("Deleting…") : tUi("Delete connection")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1632,16 +1625,13 @@ function ExternalProvidersSection({
       >
         <DialogContent className="p-0 gap-0 sm:max-w-2xl overflow-hidden">
           <DialogHeader className="px-6 py-5 border-b">
-            <DialogTitle className="text-xl">Allowed Tools</DialogTitle>
-            <DialogDescription>
-              Select the tools that you want to allow for this assistant.
-            </DialogDescription>
+            <DialogTitle className="text-xl">{tUi("Allowed Tools")}</DialogTitle>
+            <DialogDescription>{tUi("Select the tools that you want to allow for this assistant.")}</DialogDescription>
           </DialogHeader>
           <div className="px-6 py-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm text-muted-foreground">
-                {selectedExternalProviderTools.length} items selected
-              </div>
+                {selectedExternalProviderTools.length}{tUi(" items selected")}</div>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -1649,25 +1639,19 @@ function ExternalProvidersSection({
                   variant="outline"
                   onClick={() => setSelectedExternalProviderTools(toolsDialogTools)}
                   disabled={toolsDialogTools.length === 0}
-                >
-                  Select All
-                </Button>
+                >{tUi("Select All")}</Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   onClick={() => setSelectedExternalProviderTools([])}
                   disabled={selectedExternalProviderTools.length === 0}
-                >
-                  Clear
-                </Button>
+                >{tUi("Clear")}</Button>
               </div>
             </div>
             <div className="max-h-[55vh] overflow-y-auto rounded-lg border bg-background">
               {toolsDialogTools.length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground">
-                  This provider does not advertise any tools.
-                </div>
+                <div className="p-4 text-sm text-muted-foreground">{tUi("This provider does not advertise any tools.")}</div>
               ) : (
                 <div className="divide-y">
                   {toolsDialogTools.map((tool) => {
@@ -1691,9 +1675,7 @@ function ExternalProvidersSection({
               )}
             </div>
             {selectedExternalProviderTools.length === 0 ? (
-              <p className="text-xs text-destructive">
-                Select at least one tool before saving this integration.
-              </p>
+              <p className="text-xs text-destructive">{tUi("Select at least one tool before saving this integration.")}</p>
             ) : null}
           </div>
           <DialogFooter className="px-6 py-4 border-t">
@@ -1704,16 +1686,12 @@ function ExternalProvidersSection({
                 setToolsDialogProvider(null);
                 setSelectedExternalProviderTools([]);
               }}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               type="button"
               onClick={saveExternalProviderToolsSelection}
               disabled={selectedExternalProviderTools.length === 0}
-            >
-              Save Tools
-            </Button>
+            >{tUi("Save Tools")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1756,6 +1734,7 @@ function ToolCard({
   onRemove,
   onSaveToLibrary,
 }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [saveToLibraryDialogOpen, setSaveToLibraryDialogOpen] = useState(false);
@@ -1764,6 +1743,7 @@ function ToolCard({
   const [saveToLibraryError, setSaveToLibraryError] = useState("");
   const type = tool?.type || "";
   const { name, description } = getAssistantToolDisplay(tool);
+  const shared = isLibraryAssistantTool(tool);
 
   // Check if test icon should be shown (only for webhook tools with assistantId and tool_id)
   const canShowTestIcon = type === "webhook" && assistantId && tool?.tool_id;
@@ -1800,12 +1780,13 @@ function ToolCard({
           <div className="flex-1">
             <div className="text-sm font-medium inline-flex items-center gap-1">
               {renderAssistantToolIcon(type)}
-              {labelForAssistantToolType(type)}
+              {tUi(labelForAssistantToolType(type))}
             </div>
             <div className="text-sm">{name}</div>
             <div className="text-xs text-muted-foreground line-clamp-2">
-              {description}
+              {type === "vision" ? tUi(description) : description}
             </div>
+            {shared && <p className="text-xs text-muted-foreground mt-1">{tUi("Shared tool · managed in Tools Library")}</p>}
             {saveToLibraryError && (
               <div className="text-xs text-red-500 line-clamp-2">
                 {saveToLibraryError}
@@ -1819,7 +1800,7 @@ function ToolCard({
                   <TooltipTrigger asChild>
                     <button
                       className="inline-flex items-center text-blue-500 hover:text-blue-600"
-                      aria-label="Test webhook tool"
+                      aria-label={tUi("Test webhook tool")}
                       onClick={() => {
                         setTestOpen(true);
                       }}
@@ -1828,7 +1809,7 @@ function ToolCard({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Test webhook tool</p>
+                    <p>{tUi("Test webhook tool")}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -1839,14 +1820,14 @@ function ToolCard({
                   <button
                     type="button"
                     className="inline-flex size-6 items-center justify-center rounded-md border border-border text-telnyx-green hover:border-telnyx-green hover:bg-telnyx-green/10"
-                    aria-label="Add tool to Tools Library"
+                    aria-label={tUi("Add tool to Tools Library")}
                     onClick={openSaveToLibraryDialog}
                   >
                     <IconSquareRoundedPlus className="size-4" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Add to Tools Library</p>
+                  <p>{tUi("Add to Tools Library")}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -1855,7 +1836,9 @@ function ToolCard({
                 <TooltipTrigger asChild>
                   <button
                     className="inline-flex items-center text-telnyx-green"
-                    aria-label="Edit tool"
+                    aria-label={tUi(shared ? "Edit in Tools Library" : "Edit tool")}
+                    disabled={shared}
+                    title={shared ? tUi("Shared definitions are managed in Tools Library. Detach this tool to remove it from this assistant.") : undefined}
                     onClick={() => setOpen(true)}
                     type="button"
                   >
@@ -1863,7 +1846,7 @@ function ToolCard({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Edit tool</p>
+                  <p>{tUi("Edit tool")}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -1880,14 +1863,14 @@ function ToolCard({
                 <TooltipTrigger asChild>
                   <button
                     className="inline-flex items-center text-red-500 hover:text-red-600"
-                    aria-label="Delete tool"
+                    aria-label={tUi("Delete tool")}
                     onClick={onRemove}
                   >
                     <IconTrash className="size-4" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Delete tool</p>
+                  <p>{tUi("Delete tool")}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -1904,22 +1887,18 @@ function ToolCard({
       >
         <DialogContent className="p-0 gap-0 sm:max-w-2xl overflow-hidden">
           <DialogHeader className="px-6 py-5 border-b">
-            <DialogTitle className="text-xl">Save Tool to Library</DialogTitle>
+            <DialogTitle className="text-xl">{tUi("Save Tool to Library")}</DialogTitle>
           </DialogHeader>
           <div className="px-6 py-5 space-y-4">
-            <DialogDescription className="text-base text-foreground">
-              Save this tool to your library to reuse it across multiple assistants.
-            </DialogDescription>
+            <DialogDescription className="text-base text-foreground">{tUi("Save this tool to your library to reuse it across multiple assistants.")}</DialogDescription>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <label
                   htmlFor={saveToLibraryInputId}
                   className="text-sm font-medium inline-flex items-center gap-1"
-                >
-                  Display Name
-                  <IconHelpCircle className="size-4 text-muted-foreground" />
+                >{tUi("Display Name")}<IconHelpCircle className="size-4 text-muted-foreground" />
                 </label>
-                <span className="text-sm italic text-muted-foreground">Required</span>
+                <span className="text-sm italic text-muted-foreground">{tUi("Required")}</span>
               </div>
               <Input
                 id={saveToLibraryInputId}
@@ -1944,15 +1923,13 @@ function ToolCard({
               variant="outline"
               onClick={() => setSaveToLibraryDialogOpen(false)}
               disabled={savingToLibrary}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               type="button"
               onClick={handleSaveToLibrary}
               disabled={savingToLibrary || !saveToLibraryDisplayName.trim()}
             >
-              {savingToLibrary ? "Saving…" : "Save to Library"}
+              {savingToLibrary ? tUi("Saving…") : tUi("Save to Library")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1972,285 +1949,8 @@ function ToolCard({
   );
 }
 
-function createDefaultWebhookWithDemoData() {
-  // Use the first demo entity (customers) as default
-  const entity = DEMO_ENTITIES[0]; // customers
-  const actions = getEntityActions("customers");
-  const action = actions[0]; // get_single
-
-  if (!entity || !action) {
-    return createDefaultTool("webhook");
-  }
-
-  // Generate URL
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_BASE_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "");
-  let url = action.urlPattern.replace("{basePath}", entity.basePath);
-  url = `${baseUrl}${url}`;
-
-  // Generate name and description
-  const namePrefix =
-    action.method.toLowerCase() === "get" ? "get_" : action.id + "_";
-  const name = namePrefix + entity.id;
-  const entitySingular = entity.label.toLowerCase().slice(0, -1);
-  const entityPlural = entity.label.toLowerCase();
-  const description = action.description
-    .replace("{entity}", entitySingular)
-    .replace("{entities}", entityPlural);
-
-  // Build headers with API key
-  const apiKeyRef = "telnyx-ai-api-key";
-  const headers = [
-    {
-      name: "telnyx-ai-api-key",
-      value: `{{#integration_secret}}${apiKeyRef}{{/integration_secret}}`,
-    },
-  ];
-
-  // Build path parameters
-  const path_parameters = {};
-  if (action.pathParams.length > 0) {
-    const properties = {};
-    action.pathParams.forEach((param) => {
-      properties[param] = {
-        type: "string",
-        description: `The ${param} of the ${entitySingular}`,
-      };
-    });
-    path_parameters.type = "object";
-    path_parameters.properties = properties;
-    path_parameters.required = action.pathParams;
-  }
-
-  // Build query parameters
-  const query_parameters = {};
-  if (action.queryParams.length > 0) {
-    const properties = {};
-    action.queryParams.forEach((param) => {
-      properties[param] = {
-        type: "string",
-        description: `Filter by ${param}`,
-      };
-    });
-    query_parameters.type = "object";
-    query_parameters.properties = properties;
-    query_parameters.required = [];
-  }
-
-  // Build body parameters using entity schema
-  const body_parameters = {};
-  if (
-    action.bodyParams.length > 0 &&
-    action.bodyParams[0] === "*" &&
-    entity.schema
-  ) {
-    const properties = {};
-    const required = [];
-
-    // Add username field first (always present and required)
-    properties.username = {
-      type: "string",
-      description:
-        "Username of the authenticated user (automatically filled from session)",
-    };
-    required.push("username");
-
-    // Add all fields from entity schema
-    Object.entries(entity.schema).forEach(([fieldName, fieldDef]) => {
-      // Skip auto-generated fields
-      if (fieldDef.autoGenerate) {
-        return;
-      }
-
-      // Special handling for object types
-      if (fieldDef.type === "object") {
-        properties[fieldName] = {
-          type: "string",
-          description: fieldDef.description,
-        };
-      } else {
-        properties[fieldName] = {
-          type: fieldDef.type,
-          description: fieldDef.description,
-        };
-
-        // Add enum values if present
-        if (fieldDef.enum && Array.isArray(fieldDef.enum)) {
-          properties[fieldName].enum = fieldDef.enum;
-        }
-      }
-
-      // Mark as required based on schema
-      if (fieldDef.required) {
-        required.push(fieldName);
-      }
-    });
-
-    body_parameters.type = "object";
-    body_parameters.properties = properties;
-    body_parameters.required = required;
-  }
-
-  return {
-    type: "webhook",
-    webhook: {
-      name,
-      description,
-      url,
-      method: action.method,
-      headers,
-      path_parameters:
-        Object.keys(path_parameters).length > 0 ? path_parameters : undefined,
-      query_parameters:
-        Object.keys(query_parameters).length > 0 ? query_parameters : undefined,
-      body_parameters:
-        Object.keys(body_parameters).length > 0 ? body_parameters : undefined,
-      timeout_secs: 30,
-    },
-  };
-}
-
-function createDefaultTool(type) {
-  switch (type) {
-    case "webhook":
-      return {
-        type: "webhook",
-        webhook: {
-          name: "Custom Webhook",
-          description: "A custom webhook tool for external API calls",
-          url: "https://api.example.com/endpoint",
-          method: "POST",
-          timeout_secs: 30,
-          headers: [
-            {
-              name: "Content-Type",
-              value: "application/json",
-            },
-          ],
-          path_parameters: {
-            type: "object",
-            properties: {},
-            required: [],
-          },
-          query_parameters: {
-            type: "object",
-            properties: {},
-            required: [],
-          },
-          body_parameters: {
-            type: "object",
-            properties: {},
-            required: [],
-          },
-        },
-      };
-    case "handoff":
-      return {
-        type: "handoff",
-        handoff: {
-          voice_mode: "unified",
-          ai_assistants: [],
-        },
-      };
-    case "retrieval":
-      return {
-        type: "retrieval",
-        retrieval: { bucket_ids: [], max_num_results: 3 },
-      };
-    case "transfer":
-      return {
-        type: "transfer",
-        transfer: {
-          from: "",
-          targets: [],
-          sip_headers: [],
-          custom_headers: [],
-        },
-      };
-    case "refer":
-      return {
-        type: "refer",
-        refer: {
-          targets: [],
-          sip_headers: [],
-          custom_headers: [],
-        },
-      };
-    case "send_dtmf":
-      return { type: "send_dtmf", send_dtmf: {} };
-    case "hangup":
-      return {
-        type: "hangup",
-        hangup: { description: "This tool is used to hang up the call." },
-      };
-    case "send_message":
-      return {
-        type: "send_message",
-        send_message: {
-          name: "send_message",
-          description: "",
-        },
-      };
-    case "whatsapp_template":
-      return {
-        type: "whatsapp_template",
-        display_name: "WhatsApp Templates",
-        whatsapp_template: {
-          templates: [
-            {
-              name: "",
-              template_name: "",
-              template_id: "",
-              language: "",
-              description: "",
-              variables: [],
-            },
-          ],
-        },
-        timeout_ms: 5000,
-      };
-    case "client_side_tool":
-      return {
-        type: "client_side_tool",
-        display_name: "",
-        client_side_tool: {
-          name: "",
-          description: "",
-          parameters: {
-            type: "object",
-            properties: {},
-            required: [],
-          },
-        },
-        timeout_ms: 5000,
-      };
-    case "invite":
-      return {
-        type: "invite",
-        invite: {
-          from: "",
-          targets: [],
-          custom_headers: [],
-          voicemail_detection: {
-            detection_mode: "disabled",
-          },
-        },
-      };
-    case "skip_turn":
-      return {
-        type: "skip_turn",
-        skip_turn: {
-          description:
-            "This tool is used to skip the assistant turn without producing a response.",
-        },
-      };
-    default:
-      return null;
-  }
-}
-
 function WebhookEditor({ tool, onChange }) {
+  const tUi = useUiText();
   const wh = tool?.webhook || {};
   function update(partial) {
     onChange({ ...tool, webhook: { ...(tool?.webhook || {}), ...partial } });
@@ -2260,14 +1960,14 @@ function WebhookEditor({ tool, onChange }) {
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs">Name</label>
+          <label className="text-xs">{tUi("Name")}</label>
           <Input
             value={wh.name || ""}
             onChange={(e) => update({ name: e.target.value })}
           />
         </div>
         <div>
-          <label className="text-xs">Method</label>
+          <label className="text-xs">{tUi("Method")}</label>
           <Select
             value={wh.method || "POST"}
             onValueChange={(val) => update({ method: val })}
@@ -2285,14 +1985,14 @@ function WebhookEditor({ tool, onChange }) {
           </Select>
         </div>
         <div className="md:col-span-2">
-          <label className="text-xs">Description</label>
+          <label className="text-xs">{tUi("Description")}</label>
           <Input
             value={wh.description || ""}
             onChange={(e) => update({ description: e.target.value })}
           />
         </div>
         <div className="md:col-span-2">
-          <label className="text-xs">URL</label>
+          <label className="text-xs">{tUi("URL")}</label>
           <Input
             value={wh.url || wh.webhook_url || ""}
             onChange={(e) =>
@@ -2302,7 +2002,7 @@ function WebhookEditor({ tool, onChange }) {
         </div>
       </div>
       <div className="space-y-2">
-        <div className="text-xs">Headers</div>
+        <div className="text-xs">{tUi("Headers")}</div>
         <div className="space-y-2">
           {headers.map((h, i) => (
             <div
@@ -2311,7 +2011,7 @@ function WebhookEditor({ tool, onChange }) {
             >
               <Input
                 className="md:col-span-5"
-                placeholder="Header name"
+                placeholder={tUi("Header name")}
                 value={h?.name || ""}
                 onChange={(e) => {
                   const next = headers.map((x, idx) =>
@@ -2322,7 +2022,7 @@ function WebhookEditor({ tool, onChange }) {
               />
               <Input
                 className="md:col-span-5"
-                placeholder="Header value"
+                placeholder={tUi("Header value")}
                 value={h?.value || ""}
                 onChange={(e) => {
                   const next = headers.map((x, idx) =>
@@ -2338,9 +2038,7 @@ function WebhookEditor({ tool, onChange }) {
                   onClick={() =>
                     update({ headers: headers.filter((_, idx) => idx !== i) })
                   }
-                >
-                  Remove
-                </Button>
+                >{tUi("Remove")}</Button>
               </div>
             </div>
           ))}
@@ -2349,9 +2047,7 @@ function WebhookEditor({ tool, onChange }) {
             onClick={() =>
               update({ headers: [...headers, { name: "", value: "" }] })
             }
-          >
-            Add Header
-          </Button>
+          >{tUi("Add Header")}</Button>
         </div>
       </div>
     </div>
@@ -2359,6 +2055,7 @@ function WebhookEditor({ tool, onChange }) {
 }
 
 function HandoffEditor({ tool, onChange }) {
+  const tUi = useUiText();
   const ho = tool?.handoff || {};
   function update(partial) {
     onChange({ ...tool, handoff: { ...(tool?.handoff || {}), ...partial } });
@@ -2367,7 +2064,7 @@ function HandoffEditor({ tool, onChange }) {
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-xs">Voice Mode</label>
+        <label className="text-xs">{tUi("Voice Mode")}</label>
         <Select
           value={ho.voice_mode || "unified"}
           onValueChange={(val) => update({ voice_mode: val })}
@@ -2376,13 +2073,13 @@ function HandoffEditor({ tool, onChange }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="unified">Unified</SelectItem>
-            <SelectItem value="distinct">Distinct</SelectItem>
+            <SelectItem value="unified">{tUi("Unified")}</SelectItem>
+            <SelectItem value="distinct">{tUi("Distinct")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div className="space-y-2">
-        <div className="text-xs">Handoff Targets (Assistants)</div>
+        <div className="text-xs">{tUi("Handoff Targets (Assistants)")}</div>
         {list.map((t, i) => (
           <div
             key={i}
@@ -2390,7 +2087,7 @@ function HandoffEditor({ tool, onChange }) {
           >
             <Input
               className="md:col-span-6"
-              placeholder="Name"
+              placeholder={tUi("Name")}
               value={t?.name || ""}
               onChange={(e) => {
                 const next = list.map((x, idx) =>
@@ -2401,7 +2098,7 @@ function HandoffEditor({ tool, onChange }) {
             />
             <Input
               className="md:col-span-4"
-              placeholder="Assistant ID"
+              placeholder={tUi("Assistant ID")}
               value={t?.id || ""}
               onChange={(e) => {
                 const next = list.map((x, idx) =>
@@ -2417,9 +2114,7 @@ function HandoffEditor({ tool, onChange }) {
                 onClick={() =>
                   update({ ai_assistants: list.filter((_, idx) => idx !== i) })
                 }
-              >
-                Remove
-              </Button>
+              >{tUi("Remove")}</Button>
             </div>
           </div>
         ))}
@@ -2428,15 +2123,14 @@ function HandoffEditor({ tool, onChange }) {
           onClick={() =>
             update({ ai_assistants: [...list, { name: "", id: "" }] })
           }
-        >
-          Add Assistant
-        </Button>
+        >{tUi("Add Assistant")}</Button>
       </div>
     </div>
   );
 }
 
 function TransferEditor({ tool, onChange }) {
+  const tUi = useUiText();
   const tr = tool?.transfer || {};
   function update(partial) {
     onChange({ ...tool, transfer: { ...(tool?.transfer || {}), ...partial } });
@@ -2446,7 +2140,7 @@ function TransferEditor({ tool, onChange }) {
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
         <div className="md:col-span-2">
-          <label className="text-xs">From</label>
+          <label className="text-xs">{tUi("From")}</label>
           <Input
             value={tr.from || ""}
             onChange={(e) => update({ from: e.target.value })}
@@ -2455,7 +2149,7 @@ function TransferEditor({ tool, onChange }) {
         </div>
       </div>
       <div className="space-y-2">
-        <div className="text-xs">Targets</div>
+        <div className="text-xs">{tUi("Targets")}</div>
         {targets.map((t, i) => (
           <div
             key={i}
@@ -2463,7 +2157,7 @@ function TransferEditor({ tool, onChange }) {
           >
             <Input
               className="md:col-span-6"
-              placeholder="Name"
+              placeholder={tUi("Name")}
               value={t?.name || ""}
               onChange={(e) => {
                 const next = targets.map((x, idx) =>
@@ -2474,7 +2168,7 @@ function TransferEditor({ tool, onChange }) {
             />
             <Input
               className="md:col-span-4"
-              placeholder="To (E.164 or SIP URI)"
+              placeholder={tUi("To (E.164 or SIP URI)")}
               value={t?.to || ""}
               onChange={(e) => {
                 const next = targets.map((x, idx) =>
@@ -2490,9 +2184,7 @@ function TransferEditor({ tool, onChange }) {
                 onClick={() =>
                   update({ targets: targets.filter((_, idx) => idx !== i) })
                 }
-              >
-                Remove
-              </Button>
+              >{tUi("Remove")}</Button>
             </div>
           </div>
         ))}
@@ -2501,15 +2193,14 @@ function TransferEditor({ tool, onChange }) {
           onClick={() =>
             update({ targets: [...targets, { name: "", to: "" }] })
           }
-        >
-          Add Target
-        </Button>
+        >{tUi("Add Target")}</Button>
       </div>
     </div>
   );
 }
 
 function ReferEditor({ tool, onChange }) {
+  const tUi = useUiText();
   const rf = tool?.refer || {};
   function update(partial) {
     onChange({ ...tool, refer: { ...(tool?.refer || {}), ...partial } });
@@ -2522,7 +2213,7 @@ function ReferEditor({ tool, onChange }) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="text-xs">Targets</div>
+        <div className="text-xs">{tUi("Targets")}</div>
         {targets.map((t, i) => (
           <div
             key={i}
@@ -2530,7 +2221,7 @@ function ReferEditor({ tool, onChange }) {
           >
             <Input
               className="md:col-span-3"
-              placeholder="Name"
+              placeholder={tUi("Name")}
               value={t?.name || ""}
               onChange={(e) => {
                 const next = targets.map((x, idx) =>
@@ -2541,7 +2232,7 @@ function ReferEditor({ tool, onChange }) {
             />
             <Input
               className="md:col-span-4"
-              placeholder="SIP Address (sip:user@domain)"
+              placeholder={tUi("SIP Address (sip:user@domain)")}
               value={t?.sip_address || ""}
               onChange={(e) => {
                 const next = targets.map((x, idx) =>
@@ -2552,7 +2243,7 @@ function ReferEditor({ tool, onChange }) {
             />
             <Input
               className="md:col-span-2"
-              placeholder="SIP Auth Username"
+              placeholder={tUi("SIP Auth Username")}
               value={t?.sip_auth_username || ""}
               onChange={(e) => {
                 const next = targets.map((x, idx) =>
@@ -2563,7 +2254,7 @@ function ReferEditor({ tool, onChange }) {
             />
             <Input
               className="md:col-span-2"
-              placeholder="SIP Auth Password"
+              placeholder={tUi("SIP Auth Password")}
               value={t?.sip_auth_password || ""}
               onChange={(e) => {
                 const next = targets.map((x, idx) =>
@@ -2579,9 +2270,7 @@ function ReferEditor({ tool, onChange }) {
                 onClick={() =>
                   update({ targets: targets.filter((_, idx) => idx !== i) })
                 }
-              >
-                Remove
-              </Button>
+              >{tUi("Remove")}</Button>
             </div>
           </div>
         ))}
@@ -2590,13 +2279,11 @@ function ReferEditor({ tool, onChange }) {
           onClick={() =>
             update({ targets: [...targets, { name: "", sip_address: "" }] })
           }
-        >
-          Add Target
-        </Button>
+        >{tUi("Add Target")}</Button>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs">SIP Headers (User-to-User or Diversion)</div>
+        <div className="text-xs">{tUi("SIP Headers (User-to-User or Diversion)")}</div>
         {sipHeaders.map((h, i) => (
           <div
             key={i}
@@ -2615,13 +2302,13 @@ function ReferEditor({ tool, onChange }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="User-to-User">User-to-User</SelectItem>
-                <SelectItem value="Diversion">Diversion</SelectItem>
+                <SelectItem value="User-to-User">{tUi("User-to-User")}</SelectItem>
+                <SelectItem value="Diversion">{tUi("Diversion")}</SelectItem>
               </SelectContent>
             </Select>
             <Input
               className="md:col-span-8"
-              placeholder="Header value"
+              placeholder={tUi("Header value")}
               value={h?.value || ""}
               onChange={(e) => {
                 const next = sipHeaders.map((x, idx) =>
@@ -2639,9 +2326,7 @@ function ReferEditor({ tool, onChange }) {
                     sip_headers: sipHeaders.filter((_, idx) => idx !== i),
                   })
                 }
-              >
-                Remove
-              </Button>
+              >{tUi("Remove")}</Button>
             </div>
           </div>
         ))}
@@ -2652,13 +2337,11 @@ function ReferEditor({ tool, onChange }) {
               sip_headers: [...sipHeaders, { name: "User-to-User", value: "" }],
             })
           }
-        >
-          Add SIP Header
-        </Button>
+        >{tUi("Add SIP Header")}</Button>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs">Custom Headers</div>
+        <div className="text-xs">{tUi("Custom Headers")}</div>
         {customHeaders.map((h, i) => (
           <div
             key={i}
@@ -2666,7 +2349,7 @@ function ReferEditor({ tool, onChange }) {
           >
             <Input
               className="md:col-span-4"
-              placeholder="Header name"
+              placeholder={tUi("Header name")}
               value={h?.name || ""}
               onChange={(e) => {
                 const next = customHeaders.map((x, idx) =>
@@ -2677,7 +2360,7 @@ function ReferEditor({ tool, onChange }) {
             />
             <Input
               className="md:col-span-7"
-              placeholder="Header value"
+              placeholder={tUi("Header value")}
               value={h?.value || ""}
               onChange={(e) => {
                 const next = customHeaders.map((x, idx) =>
@@ -2695,9 +2378,7 @@ function ReferEditor({ tool, onChange }) {
                     custom_headers: customHeaders.filter((_, idx) => idx !== i),
                   })
                 }
-              >
-                Remove
-              </Button>
+              >{tUi("Remove")}</Button>
             </div>
           </div>
         ))}
@@ -2708,31 +2389,29 @@ function ReferEditor({ tool, onChange }) {
               custom_headers: [...customHeaders, { name: "", value: "" }],
             })
           }
-        >
-          Add Custom Header
-        </Button>
+        >{tUi("Add Custom Header")}</Button>
       </div>
     </div>
   );
 }
 
 function DtmfEditor({ tool, onChange }) {
+  const tUi = useUiText();
   // Minimal editor; schema allows arbitrary properties, but none are required
   return (
-    <div className="text-xs text-muted-foreground">
-      No configuration required.
-    </div>
+    <div className="text-xs text-muted-foreground">{tUi("No configuration required.")}</div>
   );
 }
 
 function HangupEditor({ tool, onChange }) {
+  const tUi = useUiText();
   const hp = tool?.hangup || {};
   function update(partial) {
     onChange({ ...tool, hangup: { ...(tool?.hangup || {}), ...partial } });
   }
   return (
     <div>
-      <label className="text-xs">Description (optional)</label>
+      <label className="text-xs">{tUi("Description (optional)")}</label>
       <Textarea
         rows={2}
         value={hp.description || ""}
@@ -2743,6 +2422,7 @@ function HangupEditor({ tool, onChange }) {
 }
 
 function DynamicVariablesEditor({ entries, onUpsert, onRemove }) {
+  const tUi = useUiText();
   const [newName, setNewName] = useState("");
   const [newValue, setNewValue] = useState("");
   const [editingIndex, setEditingIndex] = useState(null);
@@ -2794,37 +2474,29 @@ function DynamicVariablesEditor({ entries, onUpsert, onRemove }) {
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Dynamic variables are key-value pairs that can be used in your
-        assistant&apos;s responses. They can be populated from webhooks or set
-        manually.
-      </div>
+      <div className="text-sm text-muted-foreground">{tUi("Dynamic variables are key-value pairs that can be used in your assistant's responses. They can be populated from webhooks or set manually.")}</div>
 
       {/* Add New Variable Card */}
       <Card>
         <CardContent className="pt-6 space-y-3">
           <div className="flex items-center gap-2">
-            <div className="text-sm font-medium">Add New Variable</div>
+            <div className="text-sm font-medium">{tUi("Add New Variable")}</div>
             <div className="h-px bg-border flex-1" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">
-                Variable Name
-              </label>
+              <label className="text-xs text-muted-foreground">{tUi("Variable Name")}</label>
               <Input
-                placeholder="e.g., user_name, company_id"
+                placeholder={tUi("e.g., user_name, company_id")}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyPress={handleKeyPress}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">
-                Description
-              </label>
+              <label className="text-xs text-muted-foreground">{tUi("Description")}</label>
               <Input
-                placeholder="e.g., Customer's first name"
+                placeholder={tUi("e.g., Customer's first name")}
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -2836,25 +2508,19 @@ function DynamicVariablesEditor({ entries, onUpsert, onRemove }) {
             onClick={handleAdd}
             disabled={!newName.trim()}
             className="w-full"
-          >
-            Add Variable
-          </Button>
+          >{tUi("Add Variable")}</Button>
         </CardContent>
       </Card>
 
       {/* Existing Variables Section */}
       <div className="space-y-3">
-        <div className="text-sm font-medium">Existing Variables</div>
+        <div className="text-sm font-medium">{tUi("Existing Variables")}</div>
         <Card>
           <CardContent className="pt-0">
             {entries.length === 0 ? (
               <div className="text-center py-8 border rounded-lg bg-muted/20">
-                <div className="text-sm text-muted-foreground mb-2">
-                  No dynamic variables configured
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Add variables above to get started
-                </div>
+                <div className="text-sm text-muted-foreground mb-2">{tUi("No dynamic variables configured")}</div>
+                <div className="text-xs text-muted-foreground">{tUi("Add variables above to get started")}</div>
               </div>
             ) : (
               <div className="max-h-80 overflow-y-auto space-y-2">
@@ -2872,9 +2538,7 @@ function DynamicVariablesEditor({ entries, onUpsert, onRemove }) {
                       <div className="p-4 space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">
-                              Variable Name
-                            </label>
+                            <label className="text-xs text-muted-foreground">{tUi("Variable Name")}</label>
                             <Input
                               value={editName}
                               onChange={(e) => setEditName(e.target.value)}
@@ -2883,9 +2547,7 @@ function DynamicVariablesEditor({ entries, onUpsert, onRemove }) {
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">
-                              Value
-                            </label>
+                            <label className="text-xs text-muted-foreground">{tUi("Value")}</label>
                             <Input
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
@@ -2899,17 +2561,13 @@ function DynamicVariablesEditor({ entries, onUpsert, onRemove }) {
                             size="sm"
                             onClick={handleSaveEdit}
                             disabled={!editName.trim()}
-                          >
-                            Save Changes
-                          </Button>
+                          >{tUi("Save Changes")}</Button>
                           <Button
                             type="button"
                             variant="secondary"
                             size="sm"
                             onClick={handleCancelEdit}
-                          >
-                            Cancel
-                          </Button>
+                          >{tUi("Cancel")}</Button>
                         </div>
                       </div>
                     ) : (
@@ -2921,13 +2579,11 @@ function DynamicVariablesEditor({ entries, onUpsert, onRemove }) {
                               <div className="text-sm font-medium text-telnyx-green">
                                 {name}
                               </div>
-                              <div className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                                variable
-                              </div>
+                              <div className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{tUi("variable")}</div>
                             </div>
                             <div className="text-sm text-muted-foreground break-words">
                               {String(value) || (
-                                <span className="italic">No value set</span>
+                                <span className="italic">{tUi("No value set")}</span>
                               )}
                             </div>
                           </div>

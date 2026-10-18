@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAvatarBridge } from "@/components/avatar/avatar-bridge";
@@ -35,6 +37,7 @@ export function HeyGenAvatarStage({
   fit = "cover",
   focusY = 25,
 }) {
+  const tUi = useUiText();
   const {
     client,
     claimAvatarAudioResponse,
@@ -516,7 +519,7 @@ export function HeyGenAvatarStage({
         autoPlay
         playsInline
         muted={phase !== "ready" || !hasActiveConversation || isPlaybackHeld}
-        aria-label={`${avatarName} live video`}
+        aria-label={tUi("{value0} live video", { value0: avatarName })}
       />
       {(phase !== "ready" || !hasActiveConversation) && previewUrl && (
         // The URL is normalized by the server before it is persisted.

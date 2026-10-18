@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { AutomationsSectionPage } from "@/components/admin/AutomationsSectionNav";
@@ -59,6 +61,7 @@ import {
 import { Can } from "@/components/auth-provider";
 
 export default function CallFlowsPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const [flows, setFlows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -351,18 +354,14 @@ export default function CallFlowsPage() {
 
   const headerActions = <>
     <Can permission="call_flows:import"><Button variant="outline" size="sm" onClick={handleImport}>
-      <IconUpload className="h-4 w-4 mr-2" />
-      Import
-    </Button></Can>
+      <IconUpload className="h-4 w-4 mr-2" />{tUi("Import")}</Button></Can>
     <Can permission="call_flows:create"><Button size="sm" onClick={handleCreate}>
-      <IconPlus className="h-4 w-4 mr-2" />
-      Create Flow
-    </Button></Can>
+      <IconPlus className="h-4 w-4 mr-2" />{tUi("Create Flow")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Call & App Flows" badges={<Badge variant="secondary">{total} flows</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Call & App Flows")} badges={<Badge variant="secondary">{total}{tUi(" flows")}</Badge>} actions={headerActions} />
       <AutomationsSectionPage activeId="call-app-flows">
         <div className="space-y-4">
       <Card className="w-full">
@@ -370,7 +369,7 @@ export default function CallFlowsPage() {
 
           <div className="mb-4">
             <Input
-              placeholder="Filter by name..."
+              placeholder={tUi("Filter by name...")}
               value={filterName}
               onChange={(e) => {
                 setFilterName(e.target.value);
@@ -391,14 +390,12 @@ export default function CallFlowsPage() {
               <IconGitBranch className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">
                 {filterName
-                  ? "No flows found matching your filter"
-                  : "No flows yet. Create your first call flow!"}
+                  ? tUi("No flows found matching your filter")
+                  : tUi("No flows yet. Create your first call flow!")}
               </p>
               {!filterName && (
                 <Button onClick={handleCreate}>
-                  <IconPlus className="h-4 w-4 mr-2" />
-                  Create Flow
-                </Button>
+                  <IconPlus className="h-4 w-4 mr-2" />{tUi("Create Flow")}</Button>
               )}
             </div>
           ) : (
@@ -406,13 +403,13 @@ export default function CallFlowsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Initiator</TableHead>
-                    <TableHead className="text-center">Phone Numbers</TableHead>
-                    <TableHead className="text-center">Nodes</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{tUi("Name")}</TableHead>
+                    <TableHead>{tUi("Description")}</TableHead>
+                    <TableHead>{tUi("Initiator")}</TableHead>
+                    <TableHead className="text-center">{tUi("Phone Numbers")}</TableHead>
+                    <TableHead className="text-center">{tUi("Nodes")}</TableHead>
+                    <TableHead>{tUi("Created")}</TableHead>
+                    <TableHead className="text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -440,9 +437,7 @@ export default function CallFlowsPage() {
                               <Badge
                                 variant="outline"
                                 className="text-muted-foreground"
-                              >
-                                None
-                              </Badge>
+                              >{tUi("None")}</Badge>
                             );
                           }
 
@@ -450,33 +445,25 @@ export default function CallFlowsPage() {
 
                           if (initiatorType === "incoming_call") {
                             return (
-                              <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 dark:border-sky-500/30 dark:bg-sky-500/20 dark:text-sky-300">
-                                Incoming Call
-                              </Badge>
+                              <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 dark:border-sky-500/30 dark:bg-sky-500/20 dark:text-sky-300">{tUi("Incoming Call")}</Badge>
                             );
                           }
 
                           if (initiatorType === "http_request") {
                             return (
-                              <Badge className="border-orange-500/20 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-400">
-                                HTTP Request
-                              </Badge>
+                              <Badge className="border-orange-500/20 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-400">{tUi("HTTP Request")}</Badge>
                             );
                           }
 
                           if (initiatorType === "form_submit") {
                             return (
-                              <Badge className="border-violet-500/20 bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:border-violet-500/30 dark:bg-violet-500/20 dark:text-violet-300">
-                                Form Submit
-                              </Badge>
+                              <Badge className="border-violet-500/20 bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:border-violet-500/30 dark:bg-violet-500/20 dark:text-violet-300">{tUi("Form Submit")}</Badge>
                             );
                           }
 
                           if (initiatorType === "outbound_campaign") {
                             return (
-                              <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300">
-                                Outbound Campaign
-                              </Badge>
+                              <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300">{tUi("Outbound Campaign")}</Badge>
                             );
                           }
 
@@ -484,9 +471,7 @@ export default function CallFlowsPage() {
                             <Badge
                               variant="outline"
                               className="text-muted-foreground"
-                            >
-                              Unknown
-                            </Badge>
+                            >{tUi("Unknown")}</Badge>
                           );
                         })()}
                       </TableCell>
@@ -512,9 +497,7 @@ export default function CallFlowsPage() {
                                   </TooltipTrigger>
                                   <TooltipContent className="max-w-md">
                                     <div className="space-y-1">
-                                      <p className="font-semibold text-sm mb-2">
-                                        Assigned Phone Numbers:
-                                      </p>
+                                      <p className="font-semibold text-sm mb-2">{tUi("Assigned Phone Numbers:")}</p>
                                       <div className="space-y-1 max-h-60 overflow-y-auto">
                                         {phoneNumbers.map(
                                           (phoneNumber, idx) => (
@@ -546,7 +529,7 @@ export default function CallFlowsPage() {
                         {Array.isArray(flow.nodes) ? flow.nodes.length : 0}
                       </TableCell>
                       <TableCell>
-                        {new Date(flow.created_at).toLocaleDateString()}
+                        {new Date(flow.created_at).toLocaleDateString(tUi.locale)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-right">
                         <div className="inline-flex items-center justify-end gap-2">
@@ -556,7 +539,7 @@ export default function CallFlowsPage() {
                               router.push(`/admin/call-flows/${flow.id}`)
                             }
                             className="inline-flex items-center text-telnyx-green"
-                            title="Edit flow"
+                            title={tUi("Edit flow")}
                           >
                             <IconEdit className="size-4" />
                           </button>
@@ -564,7 +547,7 @@ export default function CallFlowsPage() {
                             type="button"
                             onClick={() => handleDuplicate(flow.id, flow.name)}
                             className="inline-flex items-center text-blue-500"
-                            title="Duplicate flow"
+                            title={tUi("Duplicate flow")}
                           >
                             <IconCopy className="size-4" />
                           </button>
@@ -572,7 +555,7 @@ export default function CallFlowsPage() {
                             type="button"
                             onClick={() => handleExport(flow.id, flow.name)}
                             className="inline-flex items-center text-violet-500"
-                            title="Export flow"
+                            title={tUi("Export flow")}
                           >
                             <IconDownload className="size-4" />
                           </button>
@@ -582,7 +565,7 @@ export default function CallFlowsPage() {
                               handleDeleteClick(flow.id, flow.name)
                             }
                             className="inline-flex items-center text-red-500"
-                            title="Delete flow"
+                            title={tUi("Delete flow")}
                           >
                             <IconTrash className="size-4" />
                           </button></Can>
@@ -598,12 +581,10 @@ export default function CallFlowsPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="call-flows-rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="call-flows-rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -639,8 +620,7 @@ export default function CallFlowsPage() {
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm">
-                  Page {page} of {totalPages}
+                <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{totalPages}
                 </span>
                 <Button
                   variant="outline"
@@ -668,23 +648,15 @@ export default function CallFlowsPage() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Flow</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{flowToDelete?.name}&quot;? This will
-              also delete the associated voice application and unassign all
-              phone numbers. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Delete Flow")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("Are you sure you want to delete \"")}{flowToDelete?.name}{tUi("\"? This will also delete the associated voice application and unassign all phone numbers. This action cannot be undone.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelDelete}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel onClick={handleCancelDelete}>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
+            >{tUi("Delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

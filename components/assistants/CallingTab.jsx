@@ -1,4 +1,7 @@
 "use client";
+import AssistantCallingSettings from "./AssistantCallingSettings";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,17 +49,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export default function CallingTab({ values, setValues }) {
+export default function CallingTab({ values, setValues, connectionOnly = false }) {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [view, setView] = useState("list");
   const [filters, setFilters] = useState({ q: "", tag: "", numberType: "any", assigned: undefined });
   const [texmlApps, setTexmlApps] = useState([]);
   const [assignedNumbers, setAssignedNumbers] = useState([]);
-  const [loadingAssigned, setLoadingAssigned] = useState(false);
+  const [loadingAssigned, setLoadingAssigned] = useState(true);
+  const [assignedError, setAssignedError] = useState("");
+  const [assignedFor, setAssignedFor] = useState(null);
   const [showNumbersList, setShowNumbersList] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
@@ -79,29 +86,6 @@ export default function CallingTab({ values, setValues }) {
   const voiceEnabled = Array.isArray(values?.enabled_features)
     ? values.enabled_features.includes("telephony")
     : false;
-  const currentVoicemailDetection = values?.telephony?.voicemail_detection || {};
-  const currentVoicemailActionRaw = currentVoicemailDetection?.on_voicemail_detected;
-  const currentVoicemailAction =
-    typeof currentVoicemailActionRaw === "string"
-      ? currentVoicemailActionRaw
-      : currentVoicemailActionRaw?.action === "leave_message_and_stop_assistant"
-      ? "leave_message"
-      : currentVoicemailActionRaw?.action === "continue_assistant"
-      ? "continue"
-      : "stop";
-  const currentVoicemailMessage =
-    typeof currentVoicemailDetection?.voicemail_message === "string"
-      ? currentVoicemailDetection.voicemail_message
-      : currentVoicemailActionRaw?.voicemail_message?.message || "";
-  const voicemailEnabled =
-    currentVoicemailDetection?.enabled !== false &&
-    !!currentVoicemailDetection?.on_voicemail_detected;
-  const currentRecordingSettings = values?.telephony?.recording_settings || {};
-  const recordingEnabled =
-    currentRecordingSettings?.enabled !== false &&
-    (!!currentRecordingSettings?.format ||
-      !!currentRecordingSettings?.channels);
-
   const handleVoiceToggle = (checked) => {
     const currentFeatures = Array.isArray(values?.enabled_features)
       ? [...values.enabled_features]
@@ -184,6 +168,7 @@ export default function CallingTab({ values, setValues }) {
 
   async function load() {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await fetch(`/api/phone-numbers?${query}`, {
         cache: "no-store",
@@ -197,7 +182,7 @@ export default function CallingTab({ values, setValues }) {
       );
       setTotal(totalResults);
     } catch (err) {
-      console.error(err);
+      setLoadError(err.message);
     } finally {
       setLoading(false);
     }
@@ -235,10 +220,13 @@ export default function CallingTab({ values, setValues }) {
   async function loadAssignedNumbers() {
     if (!defaultTexmlAppId) {
       setAssignedNumbers([]);
+      setAssignedFor("");
+      setLoadingAssigned(false);
       return;
     }
 
     setLoadingAssigned(true);
+    setAssignedError("");
     try {
       // Fetch numbers assigned to this TeXML app with a large page size
       const res = await fetch(
@@ -253,9 +241,9 @@ export default function CallingTab({ values, setValues }) {
       }
       setAssignedNumbers(Array.isArray(data.items) ? data.items : []);
     } catch (err) {
-      console.error(err);
-      setAssignedNumbers([]);
+      setAssignedError(err.message);
     } finally {
+      setAssignedFor(defaultTexmlAppId);
       setLoadingAssigned(false);
     }
   }
@@ -351,8 +339,7 @@ export default function CallingTab({ values, setValues }) {
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold flex items-center gap-2">
-              <IconPhone className="size-6 text-telnyx-green" /> Voice Numbers
-            </div>
+              <IconPhone className="size-6 text-telnyx-green" />{tUi(" Voice Numbers")}</div>
           </div>
 
           <div className="flex items-center gap-2 pb-2">
@@ -364,25 +351,20 @@ export default function CallingTab({ values, setValues }) {
             <Label
               htmlFor="enable-voice"
               className="text-sm font-medium cursor-pointer"
-            >
-              Enable Voice
-            </Label>
+            >{tUi("Enable Voice")}</Label>
           </div>
 
           {!voiceEnabled && (
-            <div className="text-sm text-muted-foreground py-8 text-center border rounded-md">
-              Enable Voice to assign phone numbers for voice calls
-            </div>
+            <div className="text-sm text-muted-foreground py-8 text-center border rounded-md">{tUi("Enable Voice to assign phone numbers for voice calls")}</div>
           )}
 
           {voiceEnabled && (
             <>
               {/* Assigned Numbers Section */}
-              {assignedNumbers.length > 0 ? (
+              {loadingAssigned || assignedFor !== defaultTexmlAppId ? <div className="rounded-md border p-4 space-y-3"><Skeleton className="h-5 w-48"/><Skeleton className="h-9 w-full"/></div> : assignedError ? <p role="alert" className="text-sm text-destructive">{assignedError}</p> : assignedNumbers.length > 0 ? (
                 <div className="border rounded-md p-4 bg-muted/30">
                   <div className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <IconCheck className="size-4 text-telnyx-green" />
-                    Assigned Voice Numbers ({assignedNumbers.length})
+                    <IconCheck className="size-4 text-telnyx-green" />{tUi("Assigned Voice Numbers (")}{assignedNumbers.length})
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {assignedNumbers.map((n) => (
@@ -396,7 +378,7 @@ export default function CallingTab({ values, setValues }) {
                           variant="ghost"
                           className="h-5 w-5 p-0 hover:bg-destructive/10"
                           onClick={() => unassignFromAssistant(n)}
-                          title="Unassign from assistant"
+                          title={tUi("Unassign from assistant")}
                         >
                           <IconUnlink className="size-3 text-destructive" />
                         </Button>
@@ -406,10 +388,7 @@ export default function CallingTab({ values, setValues }) {
                 </div>
               ) : (
                 <div className="border rounded-md p-4 bg-muted/10 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No numbers assigned yet. Click &quot;Assign Number&quot; below to
-                    assign phone numbers to this assistant.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{tUi("No numbers assigned yet. Click \"Assign Number\" below to assign phone numbers to this assistant.")}</p>
                 </div>
               )}
 
@@ -422,9 +401,7 @@ export default function CallingTab({ values, setValues }) {
                     variant="default"
                     className="gap-2"
                   >
-                    <IconLink className="size-4" />
-                    Assign Number
-                  </Button>
+                    <IconLink className="size-4" />{tUi("Assign Number")}</Button>
                 </div>
               )}
 
@@ -432,28 +409,28 @@ export default function CallingTab({ values, setValues }) {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
                     <div>
-                      <label className="text-xs">Digits</label>
+                      <label className="text-xs">{tUi("Digits")}</label>
                       <Input
                         value={filters.q}
                         onChange={(e) =>
                           setFilters((f) => ({ ...f, q: e.target.value }))
                         }
-                        placeholder="e.g. 312"
+                        placeholder={tUi("e.g. 312")}
                       />
                     </div>
                     <div>
-                      <label className="text-xs">Tag</label>
+                      <label className="text-xs">{tUi("Tag")}</label>
                       <Input
                         value={filters.tag}
                         onChange={(e) =>
                           setFilters((f) => ({ ...f, tag: e.target.value }))
                         }
-                        placeholder="tag"
+                        placeholder={tUi("tag")}
                       />
                     </div>
                     <div className="md:col-span-3 flex items-end gap-3 flex-wrap">
                       <div>
-                        <label className="text-xs">Number type</label>
+                        <label className="text-xs">{tUi("Number type")}</label>
                         <Select
                           value={filters.numberType}
                           onValueChange={(value) =>
@@ -461,17 +438,15 @@ export default function CallingTab({ values, setValues }) {
                           }
                         >
                           <SelectTrigger className="w-28">
-                            <SelectValue placeholder="Any" />
+                            <SelectValue placeholder={tUi("Any")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="any">Any</SelectItem>
-                            <SelectItem value="local">local</SelectItem>
-                            <SelectItem value="mobile">mobile</SelectItem>
-                            <SelectItem value="national">national</SelectItem>
-                            <SelectItem value="toll_free">toll_free</SelectItem>
-                            <SelectItem value="shared_cost">
-                              shared_cost
-                            </SelectItem>
+                            <SelectItem value="any">{tUi("Any")}</SelectItem>
+                            <SelectItem value="local">{tUi("local")}</SelectItem>
+                            <SelectItem value="mobile">{tUi("mobile")}</SelectItem>
+                            <SelectItem value="national">{tUi("national")}</SelectItem>
+                            <SelectItem value="toll_free">{tUi("toll_free")}</SelectItem>
+                            <SelectItem value="shared_cost">{tUi("shared_cost")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -489,9 +464,7 @@ export default function CallingTab({ values, setValues }) {
                         <label
                           htmlFor="unassigned-switch-voice"
                           className="text-xs"
-                        >
-                          Unassigned
-                        </label>
+                        >{tUi("Unassigned")}</label>
                       </div>
                       <div className="flex items-end gap-2">
                         <Button
@@ -499,11 +472,9 @@ export default function CallingTab({ values, setValues }) {
                           onClick={() =>
                             setFilters({ q: "", tag: "", numberType: "any", assigned: undefined })
                           }
-                        >
-                          Clear
-                        </Button>
+                        >{tUi("Clear")}</Button>
                         <Button onClick={() => load()} disabled={loading}>
-                          {loading ? "Loading…" : "Refresh"}
+                          {loading ? tUi("Loading…") : tUi("Refresh")}
                         </Button>
                       </div>
                     </div>
@@ -512,7 +483,7 @@ export default function CallingTab({ values, setValues }) {
                         type="button"
                         variant={view === "list" ? "default" : "secondary"}
                         onClick={() => setView("list")}
-                        title="List view"
+                        title={tUi("List view")}
                       >
                         <IconListDetails className="size-5" />
                       </Button>
@@ -520,7 +491,7 @@ export default function CallingTab({ values, setValues }) {
                         type="button"
                         variant={view === "cards" ? "default" : "secondary"}
                         onClick={() => setView("cards")}
-                        title="Cards view"
+                        title={tUi("Cards view")}
                       >
                         <IconLayoutGrid className="size-5" />
                       </Button>
@@ -538,29 +509,17 @@ export default function CallingTab({ values, setValues }) {
                         </div>
                       </div>
                     </div>
-                  ) : view === "list" ? (
+                  ) : loadError ? <p role="alert" className="text-sm text-destructive">{loadError}</p> : view === "list" ? (
                     <div className="border rounded-md overflow-x-auto">
                       <Table className="table-fixed min-w-[1100px]">
                         <TableHeader>
                           <TableRow className="bg-muted">
-                            <TableHead className="px-[10px] w-[20%]">
-                              Number
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[20%]">
-                              ID
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[15%]">
-                              Type
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[15%]">
-                              Tags
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[15%]">
-                              Assigned To
-                            </TableHead>
-                            <TableHead className="px-[10px] text-right w-[15%]">
-                              Actions
-                            </TableHead>
+                            <TableHead className="px-[10px] w-[20%]">{tUi("Number")}</TableHead>
+                            <TableHead className="px-[10px] w-[20%]">{tUi("ID")}</TableHead>
+                            <TableHead className="px-[10px] w-[15%]">{tUi("Type")}</TableHead>
+                            <TableHead className="px-[10px] w-[15%]">{tUi("Tags")}</TableHead>
+                            <TableHead className="px-[10px] w-[15%]">{tUi("Assigned To")}</TableHead>
+                            <TableHead className="px-[10px] text-right w-[15%]">{tUi("Actions")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -603,7 +562,7 @@ export default function CallingTab({ values, setValues }) {
                                     className="truncate inline-flex items-center px-2 py-0.5 rounded-full text-[11px] capitalize"
                                     style={typeBadgeStyle(type)}
                                   >
-                                    {typeLabel(type)}
+                                    {tUi(typeLabel(type))}
                                   </span>
                                 </TableCell>
                                 <TableCell className="px-[10px] text-xs w-[15%]">
@@ -641,7 +600,7 @@ export default function CallingTab({ values, setValues }) {
                                       <Button
                                         size="sm"
                                         variant="destructive"
-                                        title="Unassign from this assistant"
+                                        title={tUi("Unassign from this assistant")}
                                         onClick={() => unassignFromAssistant(n)}
                                       >
                                         <IconUnlink className="size-4" />
@@ -652,8 +611,8 @@ export default function CallingTab({ values, setValues }) {
                                         variant="secondary"
                                         title={
                                           defaultTexmlAppId
-                                            ? `Assign to TeXML App ${defaultTexmlAppId}`
-                                            : "Set Default TeXML App ID first"
+                                            ? tUi("Assign to TeXML App {value0}", { value0: defaultTexmlAppId })
+                                            : tUi("Set Default TeXML App ID first")
                                         }
                                         disabled={!defaultTexmlAppId}
                                         onClick={() => assignToAssistantApp(n)}
@@ -671,9 +630,7 @@ export default function CallingTab({ values, setValues }) {
                               <TableCell
                                 colSpan={6}
                                 className="text-center py-8 text-sm text-muted-foreground"
-                              >
-                                No numbers
-                              </TableCell>
+                              >{tUi("No numbers")}</TableCell>
                             </TableRow>
                           )}
                         </TableBody>
@@ -717,7 +674,7 @@ export default function CallingTab({ values, setValues }) {
                                       className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] capitalize"
                                       style={typeBadgeStyle(type)}
                                     >
-                                      {typeLabel(type)}
+                                      {tUi(typeLabel(type))}
                                     </span>
                                     {tags.length > 0 && (
                                       <div className="flex flex-wrap gap-1">
@@ -746,7 +703,7 @@ export default function CallingTab({ values, setValues }) {
                                     <Button
                                       size="sm"
                                       variant="destructive"
-                                      title="Unassign from this assistant"
+                                      title={tUi("Unassign from this assistant")}
                                       onClick={() => unassignFromAssistant(n)}
                                     >
                                       <IconUnlink className="size-4" />
@@ -757,8 +714,8 @@ export default function CallingTab({ values, setValues }) {
                                       variant="secondary"
                                       title={
                                         defaultTexmlAppId
-                                          ? `Assign to TeXML App ${defaultTexmlAppId}`
-                                          : "Set Default TeXML App ID first"
+                                          ? tUi("Assign to TeXML App {value0}", { value0: defaultTexmlAppId })
+                                          : tUi("Set Default TeXML App ID first")
                                       }
                                       disabled={!defaultTexmlAppId}
                                       onClick={() => assignToAssistantApp(n)}
@@ -771,14 +728,12 @@ export default function CallingTab({ values, setValues }) {
                               <div
                                 className="mt-1 text-[11px] text-muted-foreground"
                                 title={id}
-                              >
-                                ID: {id}
+                              >{tUi("ID: ")}{id}
                               </div>
                               <div
                                 className="text-[11px] text-muted-foreground"
                                 title={currentConnName || currentConn || "—"}
-                              >
-                                Assigned To:{" "}
+                              >{tUi("Assigned To:")}{" "}
                                 {currentConnName || currentConn || "—"}
                               </div>
                             </CardContent>
@@ -786,9 +741,7 @@ export default function CallingTab({ values, setValues }) {
                         );
                       })}
                       {items.length === 0 && (
-                        <div className="text-center text-sm text-muted-foreground py-8">
-                          No numbers
-                        </div>
+                        <div className="text-center text-sm text-muted-foreground py-8">{tUi("No numbers")}</div>
                       )}
                     </div>
                   )}
@@ -797,20 +750,17 @@ export default function CallingTab({ values, setValues }) {
             </>
           )}
         </CardContent>
-        {voiceEnabled && showNumbersList && (
+        {voiceEnabled && showNumbersList && !loading && !loadError && (
           <div className="px-6 pb-6">
             <div className="flex items-center justify-between">
-              <div className="text-xs text-muted-foreground">
-                Total: {total}
+              <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}
               </div>
               <div className="flex w-full items-center gap-8 lg:w-fit">
                 <div className="hidden items-center gap-2 lg:flex">
                   <Label
                     htmlFor="rows-per-page"
                     className="text-sm font-medium"
-                  >
-                    Rows per page
-                  </Label>
+                  >{tUi("Rows per page")}</Label>
                   <Select
                     value={`${pageSize}`}
                     onValueChange={(value) => {
@@ -834,8 +784,7 @@ export default function CallingTab({ values, setValues }) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex w-fit items-center justify-center text-sm font-medium">
-                  Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
+                <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{Math.max(1, Math.ceil(total / pageSize))}
                 </div>
                 <div className="ml-auto flex items-center gap-2 lg:ml-0">
                   <Button
@@ -844,7 +793,7 @@ export default function CallingTab({ values, setValues }) {
                     onClick={() => setPage(1)}
                     disabled={page <= 1}
                   >
-                    <span className="sr-only">Go to first page</span>
+                    <span className="sr-only">{tUi("Go to first page")}</span>
                     <IconChevronsLeft />
                   </Button>
                   <Button
@@ -854,7 +803,7 @@ export default function CallingTab({ values, setValues }) {
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
                   >
-                    <span className="sr-only">Go to previous page</span>
+                    <span className="sr-only">{tUi("Go to previous page")}</span>
                     <IconChevronLeft />
                   </Button>
                   <Button
@@ -871,7 +820,7 @@ export default function CallingTab({ values, setValues }) {
                     }
                     disabled={page >= Math.max(1, Math.ceil(total / pageSize))}
                   >
-                    <span className="sr-only">Go to next page</span>
+                    <span className="sr-only">{tUi("Go to next page")}</span>
                     <IconChevronRight />
                   </Button>
                   <Button
@@ -883,7 +832,7 @@ export default function CallingTab({ values, setValues }) {
                     }
                     disabled={page >= Math.max(1, Math.ceil(total / pageSize))}
                   >
-                    <span className="sr-only">Go to last page</span>
+                    <span className="sr-only">{tUi("Go to last page")}</span>
                     <IconChevronsRight />
                   </Button>
                 </div>
@@ -893,327 +842,7 @@ export default function CallingTab({ values, setValues }) {
         )}
       </Card>
 
-      {/* Call Settings Card */}
-      <Card className="w-full mt-4">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Call Settings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-0">
-          <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
-            <div className="space-y-1">
-              <Label
-                htmlFor="send-conversation-message-events"
-                className="text-sm font-medium cursor-pointer"
-              >
-                Send conversation message events
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Send conversation message events during assistant calls.
-              </p>
-            </div>
-            <Switch
-              id="send-conversation-message-events"
-              checked={
-                values?.telephony?.send_conversation_message_events === true
-              }
-              onCheckedChange={(checked) =>
-                setValues((v) => ({
-                  ...v,
-                  telephony: {
-                    ...(v.telephony || {}),
-                    send_conversation_message_events: checked,
-                  },
-                }))
-              }
-            />
-          </div>
-
-          {/* Durations row */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Time Limit */}
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Max Call Duration</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={30}
-                  max={14400}
-                  className="w-32"
-                  value={values?.telephony?.time_limit_secs ?? ""}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const num = raw === "" ? null : Math.min(14400, Math.max(30, parseInt(raw, 10) || 30));
-                    setValues((v) => ({
-                      ...v,
-                      telephony: { ...(v.telephony || {}), time_limit_secs: num },
-                    }));
-                  }}
-                  placeholder="1800"
-                />
-                <span className="text-sm text-muted-foreground">seconds</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Maximum call duration in seconds (30–14,400). Default: 1800 (30 min)
-              </p>
-            </div>
-
-            {/* User Idle Timeout */}
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">User Idle Timeout</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={30}
-                  max={14400}
-                  className="w-32"
-                  value={values?.telephony?.user_idle_timeout_secs ?? ""}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const num = raw === "" ? null : Math.min(14400, Math.max(30, parseInt(raw, 10) || 30));
-                    setValues((v) => ({
-                      ...v,
-                      telephony: { ...(v.telephony || {}), user_idle_timeout_secs: num },
-                    }));
-                  }}
-                  placeholder="e.g. 60"
-                />
-                <span className="text-sm text-muted-foreground">seconds</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Seconds of user silence before disconnecting. Leave blank to disable.
-              </p>
-            </div>
-
-            {/* User Idle Reply */}
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">User Idle Reply</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-32"
-                  value={values?.telephony?.user_idle_reply_secs ?? ""}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const num = raw === "" ? null : Math.max(0, parseInt(raw, 10) || 0);
-                    setValues((v) => ({
-                      ...v,
-                      telephony: { ...(v.telephony || {}), user_idle_reply_secs: num },
-                    }));
-                  }}
-                  placeholder="10"
-                />
-                <span className="text-sm text-muted-foreground">seconds</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Seconds of user silence before the assistant checks in with the user.
-                This is distinct from the idle timeout which stops the assistant entirely.
-              </p>
-            </div>
-          </div>
-
-          {/* AMD + Recording row */}
-          <div className="grid grid-cols-2 gap-4 items-start">
-            {/* Voicemail Detection */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="voicemail-detection"
-                  checked={voicemailEnabled}
-                  onCheckedChange={(checked) =>
-                    setValues((v) => ({
-                      ...v,
-                      telephony: {
-                        ...(v.telephony || {}),
-                        voicemail_detection: {
-                          ...(v.telephony?.voicemail_detection || currentVoicemailDetection),
-                          enabled: checked,
-                          on_voicemail_detected: currentVoicemailAction || "stop",
-                        },
-                      },
-                    }))
-                  }
-                />
-                <Label htmlFor="voicemail-detection" className="text-sm font-medium cursor-pointer">
-                  Enable Voicemail Detection (AMD)
-                </Label>
-              </div>
-
-              {voicemailEnabled && (
-                <div className="ml-6 space-y-3 border-l pl-4">
-                  <div className="space-y-1">
-                    <Label className="text-xs">On Voicemail Detected</Label>
-                    <Select
-                      value={currentVoicemailAction}
-                      onValueChange={(val) =>
-                        setValues((v) => ({
-                          ...v,
-                          telephony: {
-                            ...(v.telephony || {}),
-                            voicemail_detection: {
-                              ...(v.telephony?.voicemail_detection || currentVoicemailDetection),
-                              enabled: true,
-                              on_voicemail_detected: val,
-                            },
-                          },
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-48">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="stop">Stop</SelectItem>
-                        <SelectItem value="leave_message">Leave Message</SelectItem>
-                        <SelectItem value="continue">Continue</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {currentVoicemailAction === "leave_message" && (
-                    <div className="space-y-1">
-                      <Label className="text-xs">Voicemail Message</Label>
-                      <Textarea
-                        rows={3}
-                        value={currentVoicemailMessage}
-                        onChange={(e) =>
-                          setValues((v) => ({
-                            ...v,
-                            telephony: {
-                              ...(v.telephony || {}),
-                              voicemail_detection: {
-                                ...(v.telephony?.voicemail_detection || currentVoicemailDetection),
-                                enabled: true,
-                                on_voicemail_detected: "leave_message",
-                                voicemail_message: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                        placeholder="The message the assistant will leave on the voicemail"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Call Recording */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="call-recording"
-                  checked={recordingEnabled}
-                  onCheckedChange={(checked) =>
-                    setValues((v) => ({
-                      ...v,
-                      telephony: {
-                        ...(v.telephony || {}),
-                        recording_settings: {
-                          ...(v.telephony?.recording_settings || currentRecordingSettings),
-                          enabled: checked,
-                          format: currentRecordingSettings.format || "mp3",
-                          channels: currentRecordingSettings.channels || "single",
-                        },
-                      },
-                    }))
-                  }
-                />
-                <Label htmlFor="call-recording" className="text-sm font-medium cursor-pointer">
-                  Enable Call Recording
-                </Label>
-              </div>
-
-              {recordingEnabled && (
-                <div className="ml-6 space-y-3 border-l pl-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Format</Label>
-                      <Select
-                        value={currentRecordingSettings?.format ?? "mp3"}
-                        onValueChange={(val) =>
-                          setValues((v) => ({
-                            ...v,
-                            telephony: {
-                              ...(v.telephony || {}),
-                              recording_settings: {
-                                ...(v.telephony?.recording_settings || currentRecordingSettings),
-                                enabled: true,
-                                format: val,
-                              },
-                            },
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="mp3">MP3</SelectItem>
-                          <SelectItem value="wav">WAV</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Channels</Label>
-                      <Select
-                        value={currentRecordingSettings?.channels ?? "single"}
-                        onValueChange={(val) =>
-                          setValues((v) => ({
-                            ...v,
-                            telephony: {
-                              ...(v.telephony || {}),
-                              recording_settings: {
-                                ...(v.telephony?.recording_settings || currentRecordingSettings),
-                                enabled: true,
-                                channels: val,
-                              },
-                            },
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="single">Single</SelectItem>
-                          <SelectItem value="dual">Dual</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Switch
-                      id="recording-stop-on-conversation-end"
-                      checked={currentRecordingSettings?.stop_on_conversation_end === true}
-                      onCheckedChange={(checked) =>
-                        setValues((v) => ({
-                          ...v,
-                          telephony: {
-                            ...(v.telephony || {}),
-                            recording_settings: {
-                              ...(v.telephony?.recording_settings || currentRecordingSettings),
-                              enabled: true,
-                              stop_on_conversation_end: checked,
-                            },
-                          },
-                        }))
-                      }
-                    />
-                    <Label htmlFor="recording-stop-on-conversation-end" className="text-xs font-medium cursor-pointer">
-                      Stop recording when conversation ends
-                    </Label>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    When enabled, recording stops when the assistant hangs up or the call is transferred.
-                    When disabled, recording continues until the call itself ends.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {!connectionOnly ? <AssistantCallingSettings values={values} setValues={setValues}/> : null}
 
       {/* Confirmation Dialog */}
       <Dialog
@@ -1231,27 +860,21 @@ export default function CallingTab({ values, setValues }) {
               onClick={() =>
                 setConfirmDialog((prev) => ({ ...prev, open: false }))
               }
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             {confirmDialog.onConfirm && (
               <Button
                 onClick={() => {
                   confirmDialog.onConfirm();
                   setConfirmDialog((prev) => ({ ...prev, open: false }));
                 }}
-              >
-                Confirm
-              </Button>
+              >{tUi("Confirm")}</Button>
             )}
             {!confirmDialog.onConfirm && (
               <Button
                 onClick={() =>
                   setConfirmDialog((prev) => ({ ...prev, open: false }))
                 }
-              >
-                OK
-              </Button>
+              >{tUi("OK")}</Button>
             )}
           </DialogFooter>
         </DialogContent>

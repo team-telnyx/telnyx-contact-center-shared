@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -65,6 +67,7 @@ export function AgentDataSources({
   onFormsLoaded,
   hideFormsHeader = false,
 }) {
+  const tUi = useUiText();
   // If view is null, show tiles
   if (view === null) {
     return (
@@ -72,9 +75,7 @@ export function AgentDataSources({
         <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
           <div className="flex items-center gap-2">
             <IconDatabase className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">
-              Data Sources
-            </h3>
+            <h3 className="text-sm font-semibold text-foreground">{tUi("Data Sources")}</h3>
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
@@ -111,10 +112,10 @@ export function AgentDataSources({
                           isSelected && "text-primary",
                         )}
                       >
-                        {tile.title}
+                        {tUi(tile.title)}
                       </h3>
                       <p className="text-xs text-muted-foreground">
-                        {tile.description}
+                        {tUi(tile.description)}
                       </p>
                     </div>
                   </div>

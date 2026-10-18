@@ -1,7 +1,10 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { roleDisplayText } from "@/lib/i18n/role-labels.mjs";
 
 const SYSTEM_COLORS = {
   owner: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
@@ -27,7 +30,8 @@ export function roleBadgeClass(role) {
 }
 
 export function RoleBadge({ role, label, className }) {
-  const text = label || role?.name || String(role?.key || role || "").toUpperCase();
+  const tUi = useUiText();
+  const text = label || roleDisplayText(tUi, role) || String(role?.key || role || "").toUpperCase();
   return (
     <Badge variant="outline" className={cn(roleBadgeClass(role), "justify-center", className)}>
       {text}
@@ -36,17 +40,17 @@ export function RoleBadge({ role, label, className }) {
 }
 
 export function RoleTypeBadge({ origin, className }) {
+  const tUi = useUiText();
   return (
     <Badge variant="outline" className={cn(ORIGIN_COLORS[origin] || ORIGIN_COLORS.custom, className)}>
-      {ORIGIN_LABELS[origin] || "Custom"}
+      {tUi(ORIGIN_LABELS[origin] || tUi("Custom"))}
     </Badge>
   );
 }
 
 export function EditedBadge({ className }) {
+  const tUi = useUiText();
   return (
-    <Badge variant="outline" className={cn("border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300", className)}>
-      edited
-    </Badge>
+    <Badge variant="outline" className={cn("border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300", className)}>{tUi("edited")}</Badge>
   );
 }

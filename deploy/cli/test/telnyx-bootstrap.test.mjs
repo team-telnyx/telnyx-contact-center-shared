@@ -66,7 +66,7 @@ function makeTelnyxMock({ initial = {} } = {}) {
     }
     if (method === 'POST' && u.pathname === '/v2/credential_connections') {
       const body = JSON.parse(init.body);
-      const created = { id: `conn-${state.credentialConnections.length + 1}`, connection_name: body.connection_name, webrtc: body.webrtc };
+      const created = { ...body, id: `conn-${state.credentialConnections.length + 1}` };
       state.credentialConnections.push(created);
       return json(200, { data: created });
     }
@@ -224,18 +224,24 @@ describe('telnyx-bootstrap.mjs', () => {
       const created = mock.state.credentialConnections[0];
       assert.strictEqual(created.webrtc, true);
       assert.strictEqual(created.connection_name, 'cc-main-webrtc');
+      assert.strictEqual(created.outbound.call_parking_enabled, true);
     });
 
     it('is idempotent: second call updates rather than duplicates', async () => {
       const mock = makeTelnyxMock();
-      const args = { fetchImpl: mock.fetchImpl, basePath: BASE, apiKey: API_KEY, name: 'cc-webrtc', outboundVoiceProfileId: 'ovp-1' };
+      const args = { fetchImpl: mock.fetchImpl, basePath: BASE, apiKey: API_KEY, name: 'cc-webrtc', outboundVoiceProfileId: 'ovp-1', webhookUrl: 'https://cc.example.com/api/voice/webhook' };
       const a = await upsertWebrtcCredentialConnection(args);
+      mock.state.credentialConnections[0].outbound.call_parking_enabled = false;
+      mock.state.credentialConnections[0].webhook_event_url = 'https://old.example.com/webhook';
       const b = await upsertWebrtcCredentialConnection(args);
       assert.strictEqual(a.outcome, 'created');
       assert.strictEqual(b.outcome, 'updated');
       assert.strictEqual(mock.state.credentialConnections.length, 1);
       const patchCall = mock.state.callLog.find((c) => c.method === 'PATCH' && c.url.includes('/v2/credential_connections/'));
       assert.ok(patchCall, 'expected PATCH for the existing credential connection');
+      assert.strictEqual(JSON.parse(patchCall.body).outbound.call_parking_enabled, true);
+      assert.strictEqual(mock.state.credentialConnections[0].webhook_event_url, args.webhookUrl);
+      assert.strictEqual(mock.state.credentialConnections[0].webhook_api_version, '2');
       assert.strictEqual(
         JSON.parse(patchCall.body).sip_uri_calling_preference,
         'unrestricted',
@@ -260,7 +266,7 @@ describe('telnyx-bootstrap.mjs', () => {
       const postCall = mock.state.callLog.find((c) => c.method === 'POST' && c.url.includes('/v2/credential_connections'));
       assert.ok(postCall, 'expected POST /v2/credential_connections');
       const body = JSON.parse(postCall.body);
-      // Regression: both fields are REQUIRED per openapi/telnyx.json
+      // Regression: both fields are REQUIRED per the Telnyx API reference
       // CredentialConnection schema (user_name: 4-32 alphanumeric with ≥1 letter
       // in first 5 chars; password: 8-128 chars). Without them Telnyx returns
       // HTTP 422 with "can't be blank".

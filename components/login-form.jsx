@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,7 @@ const clientReadySnapshot = () => true;
 const serverReadySnapshot = () => false;
 
 export function LoginForm({ className, ...props }) {
+  const tUi = useUiText();
   const clientReady = useSyncExternalStore(subscribeToHydration, clientReadySnapshot, serverReadySnapshot);
   const [submitting, setSubmitting] = useState(false);
   const [oauthSubmitting, setOauthSubmitting] = useState(false);
@@ -110,49 +113,43 @@ export function LoginForm({ className, ...props }) {
       {...props}
     >
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold">Sign in to your account</h1>
-        <p className="text-muted-foreground text-sm text-balance">
-          Enter your email below to login to your account
-        </p>
+        <h1 className="text-2xl font-bold">{tUi("Sign in to your account")}</h1>
+        <p className="text-muted-foreground text-sm text-balance">{tUi("Enter your email below to login to your account")}</p>
       </div>
       <div className="grid gap-6">
         <div className="grid gap-3">
-          <Label htmlFor="username">Email</Label>
+          <Label htmlFor="username">{tUi("Email")}</Label>
           <Input
             id="username"
             name="username"
             type="email"
-            placeholder="your email address"
+            placeholder={tUi("your email address")}
             autoComplete="username"
             required
           />
         </div>
         <div className="grid gap-3">
           <div className="flex items-center">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{tUi("Password")}</Label>
             <a
               href="/forgot-password"
               className="ml-auto text-sm underline-offset-4 hover:underline"
-            >
-              Forgot your password?
-            </a>
+            >{tUi("Forgot your password?")}</a>
           </div>
           <Input
             id="password"
             name="password"
             type="password"
-            placeholder="your password"
+            placeholder={tUi("your password")}
             autoComplete="current-password"
             required
           />
         </div>
         <Button type="submit" className="w-full" disabled={!clientReady || submitting}>
-          {submitting ? "Logging in..." : "Login"}
+          {submitting ? tUi("Logging in...") : tUi("Login")}
         </Button>
         <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-          <span className="bg-background text-muted-foreground relative z-10 px-2">
-            Or
-          </span>
+          <span className="bg-background text-muted-foreground relative z-10 px-2">{tUi("Or")}</span>
         </div>
         <Button
           type="button"
@@ -169,15 +166,10 @@ export function LoginForm({ className, ...props }) {
             signIn("google", { callbackUrl: "/" });
           }}
         >
-          <IconBrandGoogleFilled className="mr-2 h-5 w-5" aria-hidden="true" />
-          Continue with Google
-        </Button>
+          <IconBrandGoogleFilled className="mr-2 h-5 w-5" aria-hidden="true" />{tUi("Continue with Google")}</Button>
       </div>
-      <div className="text-center text-sm">
-        Don&apos;t have an account?{" "}
-        <a href="/signup" className="underline underline-offset-4">
-          Sign up
-        </a>
+      <div className="text-center text-sm">{tUi("Don't have an account?")}{" "}
+        <a href="/signup" className="underline underline-offset-4">{tUi("Sign up")}</a>
       </div>
     </form>
   );

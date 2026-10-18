@@ -223,7 +223,7 @@ test("full tick runs all sweeps and reports counts", { skip }, async () => {
   const provider = makeFakeProvider();
   const results = await runReconcilerTick(pool, { provider });
   assert.deepEqual(Object.keys(results).sort(), [
-    "abandonedDirectIntents", "invariantAlarms", "orphanedClaims", "retention", "sagaDeadlines", "settledDirectIntents", "stalledDriven", "unconfirmedDirectCalls", "wrapupsClosed",
+    "abandonedDirectIntents", "invariantAlarms", "nativeAssistants", "orphanedClaims", "retention", "sagaDeadlines", "settledDirectIntents", "stalledDriven", "unconfirmedDirectCalls", "wrapupsClosed",
   ].sort());
   for (const [key, value] of Object.entries(results)) {
     if (key === "retention") {

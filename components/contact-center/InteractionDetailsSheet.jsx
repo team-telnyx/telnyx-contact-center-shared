@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -56,6 +58,7 @@ const getWebhookIcon = (eventType) => {
 };
 
 function CallEventToolHeader({ eventName, eventType, timestamp, failed }) {
+  const tUi = useUiText();
   const Icon = getWebhookIcon(eventName);
 
   const formatTimestamp = (ts) => {
@@ -90,9 +93,7 @@ function CallEventToolHeader({ eventName, eventType, timestamp, failed }) {
           {eventType}
         </Badge>
         {failed && (
-          <Badge variant="destructive" className="text-xs">
-            Failed
-          </Badge>
+          <Badge variant="destructive" className="text-xs">{tUi("Failed")}</Badge>
         )}
       </div>
       <div className="flex items-center gap-2">
@@ -125,6 +126,7 @@ export default function InteractionDetailsSheet({
   onOpenChange,
   interaction,
 }) {
+  const tUi = useUiText();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
@@ -228,7 +230,7 @@ export default function InteractionDetailsSheet({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(label);
-      notify({ title: `${label} copied to clipboard`, variant: "success" });
+      notify({ title: tUi("{value0} copied to clipboard", {value0: label}), variant: "success" });
       setTimeout(() => setCopiedField(null), 2000);
     } catch (error) {
       notify({ title: "Failed to copy to clipboard", variant: "error" });
@@ -245,7 +247,7 @@ export default function InteractionDetailsSheet({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <IconActivity className="h-5 w-5 text-telnyx-green" />
-            <h2 className="font-semibold text-lg">Call Session Details</h2>
+            <h2 className="font-semibold text-lg">{tUi("Call Session Details")}</h2>
           </div>
           <Button
             variant="ghost"
@@ -262,7 +264,7 @@ export default function InteractionDetailsSheet({
           <CardContent className="space-y-2 text-sm py-0">
             {sessionData.call_control_id && (
               <div className="grid grid-cols-[110px_1fr] gap-1">
-                <span className="text-muted-foreground">Call Control ID:</span>
+                <span className="text-muted-foreground">{tUi("Call Control ID:")}</span>
                 <div className="flex items-center gap-2">
                   <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all flex-1">
                     {sessionData.call_control_id}
@@ -285,7 +287,7 @@ export default function InteractionDetailsSheet({
               </div>
             )}
             <div className="grid grid-cols-[110px_1fr] gap-2">
-              <span className="text-muted-foreground">Session ID:</span>
+              <span className="text-muted-foreground">{tUi("Session ID:")}</span>
               <div className="flex items-center gap-2">
                 <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all flex-1">
                   {sessionData.id}
@@ -306,7 +308,7 @@ export default function InteractionDetailsSheet({
             </div>
             {sessionData.connection_id && (
               <div className="grid grid-cols-[110px_1fr] gap-2">
-                <span className="text-muted-foreground">Connection ID:</span>
+                <span className="text-muted-foreground">{tUi("Connection ID:")}</span>
                 <div className="flex items-center gap-2">
                   <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all flex-1">
                     {sessionData.connection_id}
@@ -330,7 +332,7 @@ export default function InteractionDetailsSheet({
             )}
             {sessionData.from && (
               <div className="grid grid-cols-[110px_1fr] gap-2">
-                <span className="text-muted-foreground">From:</span>
+                <span className="text-muted-foreground">{tUi("From:")}</span>
                 <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
                   {sessionData.from}
                 </code>
@@ -338,7 +340,7 @@ export default function InteractionDetailsSheet({
             )}
             {sessionData.to && (
               <div className="grid grid-cols-[110px_1fr] gap-2">
-                <span className="text-muted-foreground">To:</span>
+                <span className="text-muted-foreground">{tUi("To:")}</span>
                 <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
                   {sessionData.to}
                 </code>
@@ -346,7 +348,7 @@ export default function InteractionDetailsSheet({
             )}
             {sessionData.started_at && (
               <div className="grid grid-cols-[110px_1fr] gap-2">
-                <span className="text-muted-foreground">Started At:</span>
+                <span className="text-muted-foreground">{tUi("Started At:")}</span>
                 <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
                   {formatDate(sessionData.started_at)}
                 </code>
@@ -359,11 +361,9 @@ export default function InteractionDetailsSheet({
       <Tabs defaultValue="events" className="flex-1 min-h-0 flex flex-col">
         <div className="px-4 pt-4 pb-2">
           <TabsList>
-            <TabsTrigger value="events" className="flex items-center gap-1.5">
-              Call Events
-              <Badge variant="outline" className="text-xs ml-1">{events.length}</Badge>
+            <TabsTrigger value="events">{tUi("Call Events")}<Badge variant="outline" className="text-xs ml-1">{events.length}</Badge>
             </TabsTrigger>
-            <TabsTrigger value="costs">Costs</TabsTrigger>
+            <TabsTrigger value="costs">{tUi("Costs")}</TabsTrigger>
           </TabsList>
         </div>
 
@@ -382,12 +382,10 @@ export default function InteractionDetailsSheet({
           <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
             <IconActivity className="h-12 w-12 mb-4 opacity-50" />
             <p className="text-sm">
-              {eventsMessage || "No events found for this session"}
+              {eventsMessage || tUi("No events found for this session")}
             </p>
             {!eventsMessage && (
-              <p className="text-xs mt-1">
-                Events will appear here when available
-              </p>
+              <p className="text-xs mt-1">{tUi("Events will appear here when available")}</p>
             )}
           </div>
         ) : (

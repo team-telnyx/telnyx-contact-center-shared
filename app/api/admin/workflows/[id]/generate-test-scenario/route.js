@@ -76,7 +76,6 @@ async function POST_handler(request, { params }) {
     const scenario = await generateTestScenario({
       workflow,
       scenarioType,
-      model: workflow.llm_model || "openai/gpt-4o",
       reasoningEnabled: workflow.llm_reasoning_enabled === true,
     });
 

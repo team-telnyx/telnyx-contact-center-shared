@@ -45,7 +45,6 @@ test("Phones Provisioning UI and admin APIs require experimental access", async 
   const provisioningRoutes = [
     "app/api/admin/phones-provisioning/bridges/route.js",
     "app/api/admin/phones-provisioning/dashboard/route.js",
-    "app/api/admin/phones-provisioning/logs/route.js",
     "app/api/admin/phones-provisioning/phones/route.js",
     "app/api/admin/phones-provisioning/phones/[id]/route.js",
     "app/api/admin/phones-provisioning/phones/[id]/cti/route.js",

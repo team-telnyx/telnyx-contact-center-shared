@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -94,6 +96,7 @@ function coerceEditorValueForSchema(rawValue, schema) {
 }
 
 function ArgumentDescriptionInfo({ description, name }) {
+  const tUi = useUiText();
   if (!description) return null;
   return (
     <TooltipProvider delayDuration={150}>
@@ -104,7 +107,7 @@ function ArgumentDescriptionInfo({ description, name }) {
             variant="ghost"
             size="icon"
             className="h-5 w-5 text-muted-foreground hover:text-foreground"
-            aria-label={`Show ${name} description`}
+            aria-label={tUi("Show {value0} description", { value0: name })}
           >
             <IconInfoCircle className="h-4 w-4" />
           </Button>
@@ -118,6 +121,7 @@ function ArgumentDescriptionInfo({ description, name }) {
 }
 
 function ArgumentMappingField({ name, schema, path, value, onValueChange, availableVariables, required = false }) {
+  const tUi = useUiText();
   const type = schemaType(schema);
   const requiredNames = Array.isArray(schema?.required) ? schema.required : [];
   const properties = getSchemaProperties(schema);
@@ -132,7 +136,7 @@ function ArgumentMappingField({ name, schema, path, value, onValueChange, availa
             </Label>
             <ArgumentDescriptionInfo name={name} description={schema?.description} />
           </div>
-          <Badge variant="outline">object</Badge>
+          <Badge variant="outline">{tUi("object")}</Badge>
         </div>
         <div className="space-y-3 pl-2 border-l border-border">
           {Object.entries(properties).map(([childName, childSchema]) => (
@@ -161,7 +165,7 @@ function ArgumentMappingField({ name, schema, path, value, onValueChange, availa
               {name} {required && <span className="text-red-500">*</span>}
             </Label>
             <ArgumentDescriptionInfo name={name} description={schema?.description} />
-            <Badge variant="outline" className="ml-1">boolean</Badge>
+            <Badge variant="outline" className="ml-1">{tUi("boolean")}</Badge>
           </div>
           <Switch
             checked={Boolean(value)}
@@ -188,7 +192,7 @@ function ArgumentMappingField({ name, schema, path, value, onValueChange, availa
         value={value === undefined || value === null ? "" : typeof value === "string" ? value : safeStringify(value)}
         onChange={(nextValue) => onValueChange(path, coerceEditorValueForSchema(nextValue, schema))}
         availableVariables={availableVariables}
-        placeholder={type === "array" || type === "object" ? "JSON value or {{variable}}" : `Map ${name} or use {{variable}}`}
+        placeholder={type === "array" || type === "object" ? tUi("JSON value or {{variable}}") : tUi("Map {value0} or use {{variable}}", { value0: name })}
         className={type === "array" || type === "object" ? "font-mono text-xs" : ""}
       />
     </div>
@@ -214,6 +218,7 @@ function buildToolSelectionPatch(tool) {
 }
 
 export default function McpToolNodeEditor({ config, onChange, availableVariables = [] }) {
+  const tUi = useUiText();
   const serverId = config?.serverId || "";
   const toolName = config?.toolName || "";
   const input = config?.input ?? "{}";
@@ -350,20 +355,19 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
       {error && (
         <Alert variant="destructive">
           <IconAlertCircle className="h-4 w-4" />
-          <AlertTitle>MCP configuration issue</AlertTitle>
+          <AlertTitle>{tUi("MCP configuration issue")}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <Label className="text-xs">MCP Server <span className="text-red-500">*</span></Label>
+          <Label className="text-xs">{tUi("MCP Server ")}<span className="text-red-500">*</span></Label>
           <Button type="button" variant="ghost" size="sm" onClick={loadServers} disabled={serversLoading}>
-            <IconRefresh className="size-4 mr-1" />Refresh
-          </Button>
+            <IconRefresh className="size-4 mr-1" />{tUi("Refresh")}</Button>
         </div>
         <Select value={serverId || undefined} onValueChange={(value) => onChange({ ...(config || {}), serverId: value, toolName: "", toolInputSchema: null, toolDescription: "", input: "{}", testResponse: null })}>
-          <SelectTrigger><SelectValue placeholder={serversLoading ? "Loading servers…" : "Select MCP server"} /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder={serversLoading ? tUi("Loading servers…") : tUi("Select MCP server")} /></SelectTrigger>
           <SelectContent>
             {servers.map((server) => <SelectItem key={server.id} value={server.id}>{server.name} ({String(server.type || "mcp").toUpperCase()})</SelectItem>)}
           </SelectContent>
@@ -373,9 +377,9 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <Label className="text-xs">Tool <span className="text-red-500">*</span></Label>
+          <Label className="text-xs">{tUi("Tool ")}<span className="text-red-500">*</span></Label>
           <Button type="button" variant="ghost" size="sm" onClick={() => loadTools()} disabled={!selectedServer || toolsLoading}>
-            <IconTools className="size-4 mr-1" />{toolsLoading ? "Loading…" : "Load tools"}
+            <IconTools className="size-4 mr-1" />{toolsLoading ? tUi("Loading…") : tUi("Load tools")}
           </Button>
         </div>
         <Select
@@ -386,23 +390,23 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
           }}
           disabled={!selectedServer}
         >
-          <SelectTrigger><SelectValue placeholder={toolsLoading ? "Loading tools…" : "Select allowed tool"} /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder={toolsLoading ? tUi("Loading tools…") : tUi("Select allowed tool")} /></SelectTrigger>
           <SelectContent>{tools.map((tool) => <SelectItem key={tool.name} value={tool.name}>{tool.name}</SelectItem>)}</SelectContent>
         </Select>
         {selectedTool?.description && <p className="text-xs text-muted-foreground">{selectedTool.description}</p>}
-        {selectedServer && !toolsLoading && tools.length === 0 && <Badge variant="outline">No allowed tools discovered</Badge>}
+        {selectedServer && !toolsLoading && tools.length === 0 && <Badge variant="outline">{tUi("No allowed tools discovered")}</Badge>}
       </div>
 
       <div className="space-y-3 rounded-md border border-border p-3">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <Label className="text-xs font-semibold">Schema-driven Tool Arguments</Label>
-            <p className="text-xs text-muted-foreground mt-1">Assign static values or variables to the selected tool input schema.</p>
+            <Label className="text-xs font-semibold">{tUi("Schema-driven Tool Arguments")}</Label>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Assign static values or variables to the selected tool input schema.")}</p>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => initializeInputFromSchema()} disabled={!toolInputSchema}>Reset from schema</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => initializeInputFromSchema()} disabled={!toolInputSchema}>{tUi("Reset from schema")}</Button>
         </div>
         {Object.keys(schemaProperties).length === 0 ? (
-          <div className="text-xs text-muted-foreground rounded border p-3">Select a discovered tool with an input schema to map arguments.</div>
+          <div className="text-xs text-muted-foreground rounded border p-3">{tUi("Select a discovered tool with an input schema to map arguments.")}</div>
         ) : (
           <div className="space-y-3">
             {Object.entries(schemaProperties).map(([name, schema]) => (
@@ -423,21 +427,20 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
-          <Label className="text-xs">Response Variable</Label>
-          <VariableInput value={responseVariable} onChange={(value) => handleChange("responseVariable", value)} availableVariables={availableVariables} placeholder="mcp_response" />
-          <p className="text-xs text-muted-foreground">Also exposes _text and _structured suffixes.</p>
+          <Label className="text-xs">{tUi("Response Variable")}</Label>
+          <VariableInput value={responseVariable} onChange={(value) => handleChange("responseVariable", value)} availableVariables={availableVariables} placeholder={tUi("mcp_response")} />
+          <p className="text-xs text-muted-foreground">{tUi("Also exposes _text and _structured suffixes.")}</p>
         </div>
         <div className="space-y-2">
-          <Label className="text-xs">Error Variable</Label>
-          <VariableInput value={errorVariable} onChange={(value) => handleChange("errorVariable", value)} availableVariables={availableVariables} placeholder="mcp_error" />
+          <Label className="text-xs">{tUi("Error Variable")}</Label>
+          <VariableInput value={errorVariable} onChange={(value) => handleChange("errorVariable", value)} availableVariables={availableVariables} placeholder={tUi("mcp_error")} />
         </div>
       </div>
 
-      {config?.testResponse?.testedAt && <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">Last tested: {new Date(config.testResponse.testedAt).toLocaleString()}</div>}
+      {config?.testResponse?.testedAt && <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">{tUi("Last tested: ")}{new Date(config.testResponse.testedAt).toLocaleString(tUi.locale)}</div>}
 
       <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setTestOpen(true)} disabled={!serverId || !toolName}>
-        <IconFlask className="h-4 w-4 mr-2" />Test Tool
-      </Button>
+        <IconFlask className="h-4 w-4 mr-2" />{tUi("Test Tool")}</Button>
 
       <McpToolTestSheet open={testOpen} onOpenChange={setTestOpen} config={config || {}} selectedServer={selectedServer} selectedTool={selectedTool} onTestSuccess={handleTestSuccess} />
     </div>

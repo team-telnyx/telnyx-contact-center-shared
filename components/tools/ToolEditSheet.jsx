@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -276,6 +278,7 @@ function ToolTypeEditor({
   setFormData,
   onValidationChange,
 }) {
+  const tUi = useUiText();
   // Each editor expects: value = full tool object (with type key + nested data)
   // onChange receives the same shape back
   const value = { type, ...formData };
@@ -350,11 +353,7 @@ function ToolTypeEditor({
     case "send_dtmf":
       return (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Send DTMF tones during the call. No additional configuration required —
-            the AI assistant will determine the appropriate DTMF sequence based on the
-            conversation context.
-          </p>
+          <p className="text-xs text-muted-foreground">{tUi("Send DTMF tones during the call. No additional configuration required — the AI assistant will determine the appropriate DTMF sequence based on the conversation context.")}</p>
           <DTMFToolEditor value={value} onChange={onChange} />
         </div>
       );
@@ -396,8 +395,7 @@ function ToolTypeEditor({
 
     default:
       return (
-        <p className="text-xs text-muted-foreground">
-          Unknown tool type: {type}
+        <p className="text-xs text-muted-foreground">{tUi("Unknown tool type: ")}{type}
         </p>
       );
   }
@@ -407,6 +405,7 @@ function ToolTypeEditor({
 // Main ToolEditSheet component
 // ============================================================
 export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
+  const tUi = useUiText();
   const isEditing = !!tool?.id;
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
@@ -463,7 +462,7 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
   const TypeIcon = typeDef?.icon || IconTools;
   const validationError =
     editorValidationError ||
-    validateAssistantToolConfiguration({ type, ...formData });
+    validateAssistantToolConfiguration({ type, ...formData }, tUi);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -473,12 +472,12 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <TypeIcon className={`size-5 ${typeDef?.color || "text-telnyx-green"}`} />
-              {isEditing ? "Edit Tool" : "New Tool"}
+              {isEditing ? tUi("Edit Tool") : tUi("New Tool")}
             </SheetTitle>
             <SheetDescription>
               {isEditing
-                ? `Editing: ${tool?.display_name || tool?.name || tool?.id}`
-                : "Create a new reusable tool for AI Assistants"}
+                ? tUi("Editing: {value0}", { value0: tool?.display_name || tool?.name || tool?.id })
+                : tUi("Create a new reusable tool for AI Assistants")}
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -488,20 +487,20 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
           <div className="flex flex-col gap-3 p-4">
             {/* Display Name */}
             <Card className="p-4">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">Display Name</Label>
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">{tUi("Display Name")}</Label>
               <Input
                 value={formData.display_name || ""}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, display_name: e.target.value }))
                 }
-                placeholder="My Tool"
+                placeholder={tUi("My Tool")}
               />
             </Card>
 
             {/* Tool Type Selector — only when creating new tool */}
             {!isEditing && (
               <Card className="p-4">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">Tool Type</Label>
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">{tUi("Tool Type")}</Label>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                   {TOOL_TYPES.map(({ value, label, description, icon: Icon, color }) => (
                     <button
@@ -515,9 +514,9 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
                       }`}
                     >
                       <Icon className={`size-5 ${type === value ? "text-telnyx-green" : color}`} />
-                      <span className="font-medium leading-tight">{label}</span>
+                      <span className="font-medium leading-tight">{tUi(label)}</span>
                       <span className="text-[10px] leading-tight opacity-70 hidden sm:block">
-                        {description}
+                        {tUi(description)}
                       </span>
                     </button>
                   ))}
@@ -527,7 +526,7 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
 
             {/* Type-specific editor — wrapped in dark card */}
             <Card className="p-4">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">Configuration</Label>
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">{tUi("Configuration")}</Label>
               <ToolTypeEditor
                 type={type}
                 formData={formData}
@@ -556,9 +555,7 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
               onClick={() => setTestOpen(true)}
               disabled={saving}
             >
-              <IconFlask className="size-4 mr-2" />
-              Test
-            </Button>
+              <IconFlask className="size-4 mr-2" />{tUi("Test")}</Button>
           )}
           {validationError ? (
             <p className="max-w-sm text-xs text-destructive">
@@ -570,22 +567,18 @@ export default function ToolEditSheet({ open, onOpenChange, tool, onSaved }) {
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button
             onClick={handleSave}
             disabled={saving || Boolean(validationError)}
           >
             {saving ? (
               <>
-                <IconLoader2 className="size-4 mr-2 animate-spin" />
-                Saving…
-              </>
+                <IconLoader2 className="size-4 mr-2 animate-spin" />{tUi("Saving…")}</>
             ) : isEditing ? (
-              "Save Changes"
+              tUi("Save Changes")
             ) : (
-              "Create Tool"
+              tUi("Create Tool")
             )}
           </Button>
           </div>

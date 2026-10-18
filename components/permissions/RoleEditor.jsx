@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -59,20 +61,21 @@ function visibleMenu(screens) {
   })).filter((group) => group.items.length);
 }
 
-function scopeChips(scopes, wildcard, anchors) {
-  if (wildcard) return [{ id: "all", text: "everything", own: false }];
+function scopeChips(scopes, wildcard, anchors, tUi) {
+  if (wildcard) return [{ id: "all", text: tUi("everything"), own: false }];
   const chips = anchors
     .map((anchor) => {
       const value = scopes?.[anchor.id] || { mode: "all" };
       if (value.mode === "all") return null;
-      if (value.mode === "own") return { id: anchor.id, text: `${anchor.label}: own`, own: true };
-      return { id: anchor.id, text: `${anchor.label}: ${(value.ids || []).join(", ") || "—"}`, own: false };
+      if (value.mode === "own") return { id: anchor.id, text: tUi("{value0}: own", { value0: tUi(anchor.label) }), own: true };
+      return { id: anchor.id, text: `${tUi(anchor.label)}: ${(value.ids || []).join(", ") || "—"}`, own: false };
     })
     .filter(Boolean);
-  return chips.length ? chips : [{ id: "all", text: "all objects", own: false }];
+  return chips.length ? chips : [{ id: "all", text: tUi("all objects"), own: false }];
 }
 
 export function RoleEditor({ roleKey }) {
+  const tUi = useUiText();
   const router = useRouter();
   const isNew = roleKey === "new";
   const { loading: catalogueLoading, error: catalogueError, catalogue, actorAccess } = useCatalogue();
@@ -148,7 +151,7 @@ export function RoleEditor({ roleKey }) {
   const blocked = checks.some((issue) => issue.level === "block");
   const canSave = dirty && !blocked && !readOnly && !saving;
   const menu = useMemo(() => visibleMenu(screens), [screens]);
-  const chips = useMemo(() => scopeChips(scopes, false, anchors), [scopes, anchors]);
+  const chips = useMemo(() => scopeChips(scopes, false, anchors, tUi), [scopes, anchors, tUi]);
 
   function touch() {
     setDirty(true);
@@ -176,7 +179,7 @@ export function RoleEditor({ roleKey }) {
       }
       notify({
         title: isNew ? "Role created" : "Role saved",
-        description: isNew ? `${data.role.name} is ready to assign.` : `${data.role.name} updated. ${data.role.usersCount} user${data.role.usersCount === 1 ? "" : "s"} receive the change within seconds.`,
+        description: isNew ? tUi("{value0} is ready to assign.", {value0: data.role.name}) : tUi("Updated “{value0}”. Users receiving the change within seconds: {value1}.", {value0: data.role.name, value1: data.role.usersCount}),
         variant: "success",
       });
       if (isNew) {
@@ -198,7 +201,7 @@ export function RoleEditor({ roleKey }) {
       const res = await fetch(`/api/admin/roles/${encodeURIComponent(role.key)}/clone`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Clone failed");
-      notify({ title: "Role cloned", description: `${data.role.name} is an editable copy.`, variant: "success" });
+      notify({ title: "Role cloned", description: tUi("{value0} is an editable copy.", {value0: data.role.name}), variant: "success" });
       router.push(`/admin/permissions/${encodeURIComponent(data.role.key)}`);
     } catch (err) {
       notify({ title: "Clone failed", description: String(err.message || err), variant: "error" });
@@ -224,11 +227,10 @@ export function RoleEditor({ roleKey }) {
     <>
       {role && !isNew ? (
         <Button variant="outline" size="sm" onClick={clone}>
-          <IconCopy className="size-4" /> Clone
-        </Button>
+          <IconCopy className="size-4" />{tUi(" Clone")}</Button>
       ) : null}
       <Button size="sm" onClick={save} disabled={!canSave}>
-        {saving ? "Saving…" : "Save"}
+        {saving ? tUi("Saving…") : tUi("Save")}
       </Button>
     </>
   );
@@ -236,9 +238,8 @@ export function RoleEditor({ roleKey }) {
   const title = (
     <span className="flex flex-wrap items-center gap-2">
       <Button variant="ghost" size="sm" className="-ml-2 gap-1" onClick={() => router.push("/admin/permissions")}>
-        <IconArrowLeft className="size-4" /> Permissions
-      </Button>
-      <span>{isNew ? "New role" : name || role?.name || roleKey}</span>
+        <IconArrowLeft className="size-4" />{tUi(" Permissions")}</Button>
+      <span>{isNew ? tUi("New role") : name || role?.name || roleKey}</span>
     </span>
   );
 
@@ -247,9 +248,7 @@ export function RoleEditor({ roleKey }) {
       <RoleTypeBadge origin={isNew ? "custom" : role?.origin} />
       {role?.edited ? <EditedBadge /> : null}
       {dirty && !readOnly ? (
-        <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">
-          Unsaved
-        </Badge>
+        <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">{tUi("Unsaved")}</Badge>
       ) : null}
       {role?.key ? <code className="text-xs text-muted-foreground">{role.key}</code> : null}
     </span>
@@ -276,46 +275,39 @@ export function RoleEditor({ roleKey }) {
                   <div className="flex items-start gap-2 rounded-md bg-blue-50 p-3 text-sm text-blue-900 dark:bg-blue-900/30 dark:text-blue-200">
                     <IconLock className="mt-0.5 size-4 shrink-0" />
                     <span>
-                      <b>System role.</b> Its permissions are defined by the product and cannot be edited. Use <b>Clone</b> to create an editable copy.
-                    </span>
+                      <b>{tUi("System role.")}</b>{tUi(" Its permissions are defined by the product and cannot be edited. Use ")}<b>{tUi("Clone")}</b>{tUi(" to create an editable copy.")}</span>
                   </div>
                 ) : null}
                 {actorAccess && !actorAccess.wildcard ? (
                   <div className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
                     <IconLock className="mt-0.5 size-4 shrink-0" />
-                    <span>You can grant only the permissions and scopes you hold yourself. Locked rows are outside your own access.</span>
+                    <span>{tUi("You can grant only the permissions and scopes you hold yourself. Locked rows are outside your own access.")}</span>
                   </div>
                 ) : null}
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <label htmlFor="role-name" className="text-xs font-medium text-muted-foreground">
-                      Name
-                    </label>
-                    <Input id="role-name" value={name} disabled={readOnly} placeholder="e.g. QA Reviewer · Sales" onChange={(event) => { setName(event.target.value); touch(); }} />
+                    <label htmlFor="role-name" className="text-xs font-medium text-muted-foreground">{tUi("Name")}</label>
+                    <Input id="role-name" value={name} disabled={readOnly} placeholder={tUi("e.g. QA Reviewer · Sales")} onChange={(event) => { setName(event.target.value); touch(); }} />
                   </div>
                   <div className="grid gap-1.5">
-                    <label htmlFor="role-description" className="text-xs font-medium text-muted-foreground">
-                      Description shown in the user sheet
-                    </label>
-                    <Input id="role-description" value={description} disabled={readOnly} placeholder="What this position does" onChange={(event) => { setDescription(event.target.value); touch(); }} />
+                    <label htmlFor="role-description" className="text-xs font-medium text-muted-foreground">{tUi("Description shown in the user sheet")}</label>
+                    <Input id="role-description" value={description} disabled={readOnly} placeholder={tUi("What this position does")} onChange={(event) => { setDescription(event.target.value); touch(); }} />
                   </div>
                 </div>
                 <Tabs value={tab} onValueChange={setTab}>
                   <TabsList>
-                    <TabsTrigger value="screens">
-                      Screens <span className="ml-1 tabular-nums text-muted-foreground">{screens.size}</span>
+                    <TabsTrigger value="screens">{tUi("Screens ")}<span className="ml-1 tabular-nums text-muted-foreground">{screens.size}</span>
                     </TabsTrigger>
-                    <TabsTrigger value="operations">
-                      Operations <span className="ml-1 tabular-nums text-muted-foreground">{operations.size}</span>
+                    <TabsTrigger value="operations">{tUi("Operations ")}<span className="ml-1 tabular-nums text-muted-foreground">{operations.size}</span>
                     </TabsTrigger>
-                    <TabsTrigger value="scope">Scope</TabsTrigger>
-                    {!isNew ? <TabsTrigger value="audit">Audit</TabsTrigger> : null}
+                    <TabsTrigger value="scope">{tUi("Scope")}</TabsTrigger>
+                    {!isNew ? <TabsTrigger value="audit">{tUi("Audit")}</TabsTrigger> : null}
                   </TabsList>
                   <TabsContent value="screens" className="pt-3">
                     <ScreenTree tree={catalogue.screens} selected={screens} readOnly={readOnly} actorAccess={actorAccess} onChange={(next) => { setScreens(next); touch(); }} />
                   </TabsContent>
                   <TabsContent value="operations" className="pt-3">
-                    <p className="mb-2 text-xs text-muted-foreground">Read / create / update / delete on each managed object, plus named operations. The Scope column names the anchor that limits the grant.</p>
+                    <p className="mb-2 text-xs text-muted-foreground">{tUi("Read / create / update / delete on each managed object, plus named operations. The Scope column names the anchor that limits the grant.")}</p>
                     <OperationsMatrix areas={catalogue.areas} selected={operations} readOnly={readOnly} actorAccess={actorAccess} onChange={(next) => { setOperations(next); touch(); }} />
                   </TabsContent>
                   <TabsContent value="scope" className="pt-3">
@@ -329,14 +321,12 @@ export function RoleEditor({ roleKey }) {
                 </Tabs>
                 <div className="sticky bottom-0 -mx-4 -mb-4 flex items-center gap-2 border-t bg-card px-4 py-3">
                   <span className="text-xs text-muted-foreground">
-                    {readOnly ? "Read-only system role" : dirty ? `Unsaved changes · ${screens.size} screens · ${operations.size} operations` : "No changes"}
+                    {readOnly ? tUi("Read-only system role") : dirty ? tUi("Unsaved changes · {value0} screens · {value1} operations", { value0: screens.size, value1: operations.size }) : tUi("No changes")}
                   </span>
                   <span className="flex-1" />
-                  <Button variant="outline" size="sm" onClick={discard} disabled={readOnly || (!dirty && !isNew)}>
-                    Discard
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={discard} disabled={readOnly || (!dirty && !isNew)}>{tUi("Discard")}</Button>
                   <Button size="sm" onClick={save} disabled={!canSave}>
-                    {saving ? "Saving…" : "Save role"}
+                    {saving ? tUi("Saving…") : tUi("Save role")}
                   </Button>
                 </div>
               </CardContent>
@@ -345,21 +335,21 @@ export function RoleEditor({ roleKey }) {
             <Card className="xl:sticky xl:top-3">
               <CardContent className="space-y-3 p-4 text-sm">
                 <div className="flex items-baseline justify-between">
-                  <span>Screens granted</span>
+                  <span>{tUi("Screens granted")}</span>
                   <b className="text-xl tabular-nums">{screens.size}</b>
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span>Operations granted</span>
+                  <span>{tUi("Operations granted")}</span>
                   <b className="text-xl tabular-nums">{operations.size}</b>
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span>Users with this role</span>
+                  <span>{tUi("Users with this role")}</span>
                   <b className="text-xl tabular-nums">{role?.usersCount ?? 0}</b>
                 </div>
                 <div className="border-t" />
-                <div className="text-xs font-medium text-muted-foreground">Menu the user will see</div>
+                <div className="text-xs font-medium text-muted-foreground">{tUi("Menu the user will see")}</div>
                 <div className="rounded-md border bg-muted/40 p-2">
-                  {!menu.length ? <div className="px-2 py-1 text-xs text-muted-foreground">No screens yet — the user could sign in but would see only their profile.</div> : null}
+                  {!menu.length ? <div className="px-2 py-1 text-xs text-muted-foreground">{tUi("No screens yet — the user could sign in but would see only their profile.")}</div> : null}
                   {menu.map((group) => (
                     <div key={group.workspace.id} className="mb-1">
                       <div className="flex items-center gap-1.5 px-2 pb-0.5 pt-1 text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -375,7 +365,7 @@ export function RoleEditor({ roleKey }) {
                     </div>
                   ))}
                 </div>
-                <div className="text-xs font-medium text-muted-foreground">Scope</div>
+                <div className="text-xs font-medium text-muted-foreground">{tUi("Scope")}</div>
                 <div className="flex flex-wrap gap-1">
                   {chips.map((chip) => (
                     <span key={chip.id} className={`rounded-full border px-2 py-0.5 text-xs ${chip.own ? "border-telnyx-green" : "bg-muted"}`}>
@@ -384,7 +374,7 @@ export function RoleEditor({ roleKey }) {
                   ))}
                 </div>
                 <div className="border-t" />
-                <div className="text-xs font-medium text-muted-foreground">Checks before save</div>
+                <div className="text-xs font-medium text-muted-foreground">{tUi("Checks before save")}</div>
                 <div className="space-y-1.5">
                   {serverErrors.map((error) => (
                     <div key={error} className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-800 dark:bg-red-900/30 dark:text-red-200">
@@ -404,7 +394,7 @@ export function RoleEditor({ roleKey }) {
                     </div>
                   ))}
                   {!checks.length && !serverErrors.length ? (
-                    <div className="rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-200">✓ Ready to save. Users with this role get the change within seconds.</div>
+                    <div className="rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-200">{tUi("✓ Ready to save. Users with this role get the change within seconds.")}</div>
                   ) : null}
                 </div>
               </CardContent>

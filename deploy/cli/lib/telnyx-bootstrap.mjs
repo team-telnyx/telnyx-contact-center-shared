@@ -11,7 +11,7 @@
 //   - One TeXML/Call Control application per deployment — never share with
 //     another deployment; collisions abort with a clear error rather than
 //     silently adopting a foreign resource.
-//   - All request/response shapes mirror openapi/telnyx.json (no undocumented
+//   - All request/response shapes mirror the Telnyx API reference (no undocumented
 //     fields, no hand-rolled schema drift).
 //   - "created" vs "found" vs "updated" outcome surfaced to the caller so the
 //     wizard can render a precise log line per resource.
@@ -167,7 +167,7 @@ export async function upsertOutboundVoiceProfile({
 // not by the bootstrap — we only provision the OWNER credential here so the
 // bootstrap result is immediately usable.
 //
-// Per openapi/telnyx.json CredentialConnection schema:
+// Per the Telnyx API reference CredentialConnection schema:
 //   - user_name: required on create, 4-32 chars, alphanumeric, ≥1 letter in first 5
 //   - password:  required on create, 8-128 chars
 // We generate both deterministically from `name` so re-runs (resume) reuse
@@ -233,7 +233,7 @@ export async function upsertWebrtcCredentialConnection({
   const existing = await findByName(fetchImpl, basePath, apiKey, '/v2/credential_connections', name, { matchField: 'connection_name' });
   // CredentialConnection schema uses `connection_name` as the unique-ish field
   // and `active: true` plus an `inbound`/`outbound` block.
-  // user_name and password are REQUIRED on create per openapi/telnyx.json; they
+  // user_name and password are REQUIRED on create per the Telnyx API reference; they
   // must be deterministic from `name` so a resume (which finds the existing
   // connection) doesn't need to send them again (Telnyx rejects user_name
   // changes on PATCH anyway). They're stored in TELNYX_SIP_CONNECTION_USER_NAME
@@ -271,7 +271,7 @@ export async function upsertWebrtcCredentialConnection({
       body: JSON.stringify({
         active: true,
         sip_uri_calling_preference: 'unrestricted',
-        outbound: { outbound_voice_profile_id: outboundVoiceProfileId },
+        outbound: { outbound_voice_profile_id: outboundVoiceProfileId, call_parking_enabled: true },
         ...(webhookUrl ? { webhook_event_url: webhookUrl, webhook_api_version: '2' } : {}),
         tags: existing.tags?.includes('webrtc') ? existing.tags : [...(existing.tags || []), 'webrtc'],
       }),
@@ -308,7 +308,7 @@ export async function createOwnerTelephonyCredential({
   const res = await telnyxFetch(fetchImpl, url.toString(), { headers: authHeaders(apiKey) });
   const data = await res.json().catch(() => ({}));
   const items = Array.isArray(data?.data) ? data.data : [];
-  // NOTE: per openapi/telnyx.json's TelephonyCredential schema, the resource
+  // NOTE: per the Telnyx API reference's TelephonyCredential schema, the resource
   // has no `username` field, and `user_id` identifies the *Telnyx account
   // user* the credential belongs to (not something to build a SIP URI from).
   // The actual SIP registration username is `sip_username` — that's the field
@@ -340,7 +340,7 @@ export async function createOwnerTelephonyCredential({
  * is a base64-encoded 32-byte Ed25519 public key — exactly the format
  * lib/telnyx-webhooks.js::decodePublicKeyBytes()/verifyTelnyxSignature()
  * expect in TELNYX_WEBHOOK_SECRET (or TELNYX_WEBHOOK_PUBLIC_KEY). Not present
- * in openapi/telnyx.json (undocumented endpoint) but stable/live.
+ * in the Telnyx API reference (undocumented endpoint) but stable/live.
  */
 export async function getWebhookPublicKey({
   fetchImpl = fetch,
@@ -366,7 +366,7 @@ export async function getWebhookPublicKey({
 // {{#integration_secret}}...{{/integration_secret}} mustache syntax without
 // the raw value ever appearing in a flow definition.
 //
-// IMPORTANT: per openapi/telnyx.json there is NO update endpoint for
+// IMPORTANT: per the Telnyx API reference there is NO update endpoint for
 // integration secrets (only list/create/delete) — so idempotency here means
 // "skip creation if an identifier with this name already exists" rather than
 // "overwrite it with a new value". A re-run therefore never rotates this

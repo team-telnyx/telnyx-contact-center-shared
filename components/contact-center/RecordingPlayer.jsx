@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -78,6 +80,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
   onPlayingChange,
   onReady,
 }, ref) {
+  const tUi = useUiText();
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
   const [duration, setDuration] = useState(0);
@@ -195,7 +198,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
         if (errorString.includes("failed to fetch") || errorString.includes("cors") || errorString.includes("networkerror")) {
           notify({ title: "Failed to load recording. The recording may be unavailable, expired, or there was a network error.", variant: "error" });
         } else {
-          notify({ title: `Failed to load recording: ${errorMessage || "Unknown error"}`, variant: "error" });
+          notify({ title: tUi("Failed to load recording: {value0}", {value0: errorMessage || "Unknown error"}), variant: "error" });
         }
       });
 
@@ -303,9 +306,9 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
               <IconWaveSine className="h-5 w-5" />
             </span>
             <div>
-              <div className="text-sm font-semibold leading-tight">Call Recording</div>
+              <div className="text-sm font-semibold leading-tight">{tUi("Call Recording")}</div>
               <div className="text-xs text-muted-foreground">
-                {playing ? "Playing" : waveReady ? "Ready to play" : "Loading waveform…"}
+                {playing ? tUi("Playing") : waveReady ? tUi("Ready to play") : tUi("Loading waveform…")}
               </div>
             </div>
           </div>
@@ -314,7 +317,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
             <div
               className="inline-flex items-center rounded-full border border-border/70 bg-background/60 p-0.5"
               role="group"
-              aria-label="Waveform style"
+              aria-label={tUi("Waveform style")}
               data-testid="recording-wave-style-toggle"
             >
               {WAVE_STYLE_OPTIONS.map((opt) => (
@@ -329,7 +332,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
                   }`}
                   aria-pressed={waveStyle === opt.value}
                 >
-                  {opt.label}
+                  {tUi(opt.label)}
                 </button>
               ))}
             </div>
@@ -340,8 +343,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
             ) : null}
             {channelLabel ? (
               <Badge variant="outline" className="border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
-                {channelLabel} channel
-              </Badge>
+                {channelLabel}{tUi(" channel")}</Badge>
             ) : null}
             <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
               {formatDuration(duration)}
@@ -354,9 +356,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
           <div className="relative rounded-2xl border border-border/70 bg-gradient-to-b from-muted/40 to-muted/10 p-4 dark:from-zinc-900/60 dark:to-zinc-950/40">
             {!waveReady && (
               <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                <IconLoader2 className="h-4 w-4 animate-spin" />
-                Loading waveform…
-              </div>
+                <IconLoader2 className="h-4 w-4 animate-spin" />{tUi("Loading waveform…")}</div>
             )}
             <div ref={waveformRef} className="w-full" />
           </div>
@@ -379,8 +379,8 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
               variant="outline"
               onClick={() => seek(-10)}
               className="h-10 w-10 rounded-full"
-              aria-label="Back 10 seconds"
-              title="Back 10s"
+              aria-label={tUi("Back 10 seconds")}
+              title={tUi("Back 10s")}
             >
               <IconRewindBackward10 className="h-5 w-5" />
             </Button>
@@ -388,7 +388,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
               size="icon"
               onClick={togglePlay}
               className="h-14 w-14 rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 transition hover:scale-105 hover:bg-emerald-500"
-              aria-label={playing ? "Pause" : "Play"}
+              aria-label={playing ? tUi("Pause") : tUi("Play")}
               data-testid="recording-play-button"
             >
               {playing ? (
@@ -402,8 +402,8 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
               variant="outline"
               onClick={() => seek(10)}
               className="h-10 w-10 rounded-full"
-              aria-label="Forward 10 seconds"
-              title="Forward 10s"
+              aria-label={tUi("Forward 10 seconds")}
+              title={tUi("Forward 10s")}
             >
               <IconRewindForward10 className="h-5 w-5" />
             </Button>
@@ -412,11 +412,10 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
               variant="outline"
               onClick={cyclePlaybackRate}
               className="ml-1 h-8 w-14 rounded-full font-mono text-xs"
-              aria-label="Playback speed"
-              title="Playback speed"
+              aria-label={tUi("Playback speed")}
+              title={tUi("Playback speed")}
             >
-              {playbackRate}x
-            </Button>
+              {playbackRate}{tUi("x")}</Button>
           </div>
 
           <div className="flex min-w-[200px] flex-1 items-center justify-end gap-2 sm:flex-none">
@@ -425,7 +424,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
               variant="ghost"
               onClick={() => setMuted(!muted)}
               className="h-9 w-9 rounded-full"
-              aria-label={muted ? "Unmute" : "Mute"}
+              aria-label={muted ? tUi("Unmute") : tUi("Mute")}
             >
               {muted ? (
                 <IconVolumeOff className="h-4.5 w-4.5 text-muted-foreground" />
@@ -444,7 +443,7 @@ const AudioRecordingPlayer = forwardRef(function AudioRecordingPlayer({
                 setVolume(Number(e.target.value) / 100);
               }}
               className="h-1.5 w-36 cursor-pointer accent-emerald-600"
-              aria-label="Volume"
+              aria-label={tUi("Volume")}
             />
             <span className="w-9 text-right font-mono text-xs tabular-nums text-muted-foreground">
               {muted ? 0 : Math.round(volume * 100)}%

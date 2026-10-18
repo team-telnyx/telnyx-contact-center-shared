@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +68,7 @@ function JsonViewerCard({ title, icon: Icon = IconCode, value, emptyLabel = "Not
 }
 
 export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }) {
+  const tUi = useUiText();
   const inputSchema = tool?.input_schema || tool?.inputSchema || {};
   const outputSchema = tool?.output_schema || tool?.outputSchema || null;
   const properties = schemaProperties(inputSchema);
@@ -87,14 +90,13 @@ export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
+      <SheetContent side="end" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
         <SheetHeader className="px-6 py-4 border-b border-border">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2 min-w-0">
             <IconTools className="size-5 shrink-0" />
-            <span className="truncate">{tool?.title || tool?.name || "MCP Tool"}</span>
+            <span className="truncate">{tool?.title || tool?.name || tUi("MCP Tool")}</span>
           </SheetTitle>
-          <SheetDescription className="break-words">
-            Tool metadata, description, and schemas discovered from {server?.name || "the MCP server"}.
+          <SheetDescription className="break-words">{tUi("Tool metadata, description, and schemas discovered from ")}{server?.name || tUi("the MCP server")}.
           </SheetDescription>
         </SheetHeader>
 
@@ -104,24 +106,23 @@ export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }
               <CardContent className="p-6 space-y-4 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className="bg-telnyx-green/10 text-telnyx-green border-telnyx-green/30">
-                    {tool?.name || "unknown_tool"}
+                    {tool?.name || tUi("unknown_tool")}
                   </Badge>
                   {tool?.title && tool.title !== tool.name && <Badge variant="secondary">{tool.title}</Badge>}
-                  <Badge variant="outline" className="text-xs">{tool?.enabled === false ? "Disabled" : "Enabled"}</Badge>
+                  <Badge variant="outline" className="text-xs">{tool?.enabled === false ? tUi("Disabled") : tUi("Enabled")}</Badge>
                 </div>
 
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <DetailPill label="Server" value={server?.name} />
-                  <DetailPill label="Transport" value={server?.type ? String(server.type).toUpperCase() : null} />
-                  <DetailPill label="Schema hash" value={tool?.schema_hash} />
-                  <DetailPill label="Last discovered" value={tool?.last_discovered_at ? new Date(tool.last_discovered_at).toLocaleString() : null} />
+                  <DetailPill label={tUi("Server")} value={server?.name} />
+                  <DetailPill label={tUi("Transport")} value={server?.type ? String(server.type).toUpperCase() : null} />
+                  <DetailPill label={tUi("Schema hash")} value={tool?.schema_hash} />
+                  <DetailPill label={tUi("Last discovered")} value={tool?.last_discovered_at ? new Date(tool.last_discovered_at).toLocaleString(tUi.locale) : null} />
                 </div>
 
                 {server?.url && (
                   <div className="rounded-lg border bg-background/60 p-3 text-xs text-muted-foreground min-w-0">
                     <div className="flex items-center gap-2 text-foreground font-medium mb-1">
-                      <IconServer className="h-3.5 w-3.5 text-telnyx-green" /> MCP Server URL
-                    </div>
+                      <IconServer className="h-3.5 w-3.5 text-telnyx-green" />{tUi(" MCP Server URL")}</div>
                     <div className="break-all">{server.url}</div>
                   </div>
                 )}
@@ -135,8 +136,8 @@ export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }
                     <IconInfoCircle className="h-4 w-4" />
                   </span>
                   <div>
-                    <div className="text-sm font-semibold">Description</div>
-                    <div className="text-xs text-muted-foreground">Text exposed by the MCP server for this tool.</div>
+                    <div className="text-sm font-semibold">{tUi("Description")}</div>
+                    <div className="text-xs text-muted-foreground">{tUi("Text exposed by the MCP server for this tool.")}</div>
                   </div>
                 </div>
                 {tool?.description ? (
@@ -144,7 +145,7 @@ export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }
                     {tool.description}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-dashed bg-background/50 p-4 text-sm text-muted-foreground">No description provided by the MCP server.</div>
+                  <div className="rounded-lg border border-dashed bg-background/50 p-4 text-sm text-muted-foreground">{tUi("No description provided by the MCP server.")}</div>
                 )}
               </CardContent>
             </Card>
@@ -158,11 +159,11 @@ export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }
                         <IconBraces className="h-4 w-4" />
                       </span>
                       <div>
-                        <div className="text-sm font-semibold">Input Arguments</div>
-                        <div className="text-xs text-muted-foreground">Schema properties available for this tool.</div>
+                        <div className="text-sm font-semibold">{tUi("Input Arguments")}</div>
+                        <div className="text-xs text-muted-foreground">{tUi("Schema properties available for this tool.")}</div>
                       </div>
                     </div>
-                    <Badge variant="secondary">{properties.length} fields</Badge>
+                    <Badge variant="secondary">{properties.length}{tUi(" fields")}</Badge>
                   </div>
                   <div className="space-y-2">
                     {properties.map((property) => (
@@ -170,7 +171,7 @@ export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-xs font-semibold text-foreground">{property.name}</span>
                           <Badge variant="outline" className="text-[10px]">{property.type}</Badge>
-                          {property.required && <Badge className="border-transparent bg-red-500/15 text-red-700 dark:text-red-300 text-[10px]">required</Badge>}
+                          {property.required && <Badge className="border-transparent bg-red-500/15 text-red-700 dark:text-red-300 text-[10px]">{tUi("required")}</Badge>}
                         </div>
                         {property.description && <div className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap break-words">{property.description}</div>}
                       </div>
@@ -180,15 +181,13 @@ export default function MCPToolDetailsSheet({ open, onOpenChange, server, tool }
               </Card>
             )}
 
-            <JsonViewerCard title="Input Schema" icon={IconBraces} value={inputSchema} emptyLabel="No input schema provided." />
-            <JsonViewerCard title="Output Schema" icon={IconBraces} value={outputSchema} emptyLabel="No output schema provided." />
-            <JsonViewerCard title="Raw Tool Metadata" icon={IconCode} value={rawTool} />
+            <JsonViewerCard title={tUi("Input Schema")} icon={IconBraces} value={inputSchema} emptyLabel={tUi("No input schema provided.")} />
+            <JsonViewerCard title={tUi("Output Schema")} icon={IconBraces} value={outputSchema} emptyLabel={tUi("No output schema provided.")} />
+            <JsonViewerCard title={tUi("Raw Tool Metadata")} icon={IconCode} value={rawTool} />
 
             {objectKeys(inputSchema).length === 0 && !tool?.description && !outputSchema && (
               <Card className="border-dashed bg-card/60">
-                <CardContent className="p-6 text-sm text-muted-foreground">
-                  This MCP server did not expose additional metadata for this tool beyond its name.
-                </CardContent>
+                <CardContent className="p-6 text-sm text-muted-foreground">{tUi("This MCP server did not expose additional metadata for this tool beyond its name.")}</CardContent>
               </Card>
             )}
           </div>

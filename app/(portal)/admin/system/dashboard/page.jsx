@@ -1,4 +1,7 @@
 "use client";
+import { sourceText } from "@/lib/i18n/source-text.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -53,51 +56,51 @@ const INVENTORY_TILES = [
     key: "users",
     label: "Users",
     icon: IconUsers,
-    detail: (inventory) =>
+    detail: (inventory, tUi) =>
       inventory.usersActive == null
-        ? "Verification status unavailable"
-        : `${inventory.usersActive} verified accounts`,
+        ? tUi("Verification status unavailable")
+        : tUi('Verified accounts: {value0}', {value0: inventory.usersActive}),
     tone: "from-sky-500/15 to-blue-500/5 text-sky-700 dark:text-sky-300",
   },
   {
     key: "queues",
     label: "Queues",
     icon: IconRoute,
-    detail: (inventory) =>
+    detail: (inventory, tUi) =>
       inventory.queuesActive == null
-        ? "Queue status unavailable"
-        : `${inventory.queuesActive} active queues`,
+        ? tUi("Queue status unavailable")
+        : tUi('Active queues: {value0}', {value0: inventory.queuesActive}),
     tone: "from-violet-500/15 to-purple-500/5 text-violet-700 dark:text-violet-300",
   },
   {
     key: "numbers",
     label: "Numbers",
     icon: IconPhone,
-    detail: () => "Telnyx number inventory",
+    detail: (_inventory, tUi) => tUi("Telnyx number inventory"),
     tone: "from-cyan-500/15 to-sky-500/5 text-cyan-700 dark:text-cyan-300",
   },
   {
     key: "assistants",
     label: "AI Assistants",
     icon: IconRobot,
-    detail: () => "Assistants available in Telnyx",
+    detail: (_inventory, tUi) => tUi("Assistants available in Telnyx"),
     tone: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
   },
   {
     key: "flows",
     label: "Call & App Flows",
     icon: IconGitBranch,
-    detail: () => "Locally configured flows",
+    detail: (_inventory, tUi) => tUi("Locally configured flows"),
     tone: "from-amber-500/15 to-orange-500/5 text-amber-700 dark:text-amber-300",
   },
   {
     key: "skills",
     label: "Skills",
     icon: IconSparkles,
-    detail: (inventory) =>
+    detail: (inventory, tUi) =>
       inventory.skillsActive == null
-        ? "Skill status unavailable"
-        : `${inventory.skillsActive} active skills`,
+        ? tUi("Skill status unavailable")
+        : tUi('Active skills: {value0}', {value0: inventory.skillsActive}),
     tone: "from-rose-500/15 to-pink-500/5 text-rose-700 dark:text-rose-300",
   },
 ];
@@ -106,11 +109,11 @@ function formatValue(value) {
   return value == null ? "—" : Number(value).toLocaleString();
 }
 
-function formatTimestamp(value) {
-  if (!value) return "Not available";
+function formatTimestamp(value, tUi = sourceText) {
+  if (!value) return tUi("Not available");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not available";
-  return new Intl.DateTimeFormat("en", {
+  if (Number.isNaN(date.getTime())) return tUi("Not available");
+  return new Intl.DateTimeFormat(tUi.locale || "en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -118,7 +121,9 @@ function formatTimestamp(value) {
   }).format(date);
 }
 
-function formatActivityType(value) {
+function formatActivityType(value, tUi = sourceText) {
+  const labels = {login: tUi("Login", undefined, "audit event"), logout: tUi("Logout", undefined, "audit event")};
+  if (labels[value]) return labels[value];
   return String(value || "activity")
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -150,6 +155,7 @@ function DashboardTooltip({ active, payload, label }) {
 }
 
 function InventoryTile({ item, inventory }) {
+  const tUi = useUiText();
   const Icon = item.icon;
   return (
     <Card className="overflow-hidden border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
@@ -163,9 +169,9 @@ function InventoryTile({ item, inventory }) {
           </span>
         </div>
         <div className="mt-5">
-          <h3 className="font-semibold">{item.label}</h3>
+          <h3 className="font-semibold">{tUi(item.label)}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {item.detail(inventory)}
+            {item.detail(inventory, tUi)}
           </p>
         </div>
       </CardContent>
@@ -174,6 +180,7 @@ function InventoryTile({ item, inventory }) {
 }
 
 function ServiceCard({ icon: Icon, label, service }) {
+  const tUi = useUiText();
   const ready = service?.ready === true;
   const unavailable = service?.status === "not_configured";
   return (
@@ -199,16 +206,15 @@ function ServiceCard({ icon: Icon, label, service }) {
                   : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
               }
             >
-              {ready ? "Connected" : unavailable ? "Not configured" : "Attention"}
+              {ready ? tUi("Connected") : unavailable ? tUi("Not configured") : tUi("Attention")}
             </Badge>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            {service?.detail || "Status unavailable"}
+            {service?.detail || tUi("Status unavailable")}
           </p>
           {service?.latencyMs != null ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              {service.latencyMs} ms query latency
-            </p>
+              {service.latencyMs}{tUi(" ms query latency")}</p>
           ) : null}
         </div>
       </CardContent>
@@ -235,6 +241,7 @@ function DashboardLoading() {
 }
 
 export default function SystemDashboardPage() {
+  const tUi = useUiText();
   const [range, setRange] = useState("24h");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -282,24 +289,21 @@ export default function SystemDashboardPage() {
           variant={range === option.id ? "default" : "outline"}
           onClick={() => setRange(option.id)}
         >
-          {option.label}
+          {tUi(option.label)}
         </Button>
       ))}
       <Button variant="outline" onClick={loadDashboard} disabled={loading}>
-        <IconRefresh className={`size-4 ${loading ? "animate-spin" : ""}`} />
-        Refresh
-      </Button>
+        <IconRefresh className={`size-4 ${loading ? "animate-spin" : ""}`} />{tUi("Refresh")}</Button>
     </div>
   );
 
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="System Dashboard"
+        title={tUi("System Dashboard")}
         icon={IconShieldCheck}
         badges={
-          <Badge variant="secondary">
-            Updated {formatTimestamp(data?.generatedAt)}
+          <Badge variant="secondary">{tUi("Updated ")}{formatTimestamp(data?.generatedAt, tUi)}
           </Badge>
         }
         actions={headerActions}
@@ -310,12 +314,10 @@ export default function SystemDashboardPage() {
             <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
               <IconAlertTriangle className="mt-0.5 size-5 shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="font-semibold">Dashboard unavailable</div>
+                <div className="font-semibold">{tUi("Dashboard unavailable")}</div>
                 <div className="mt-1 opacity-90">{error}</div>
               </div>
-              <Button size="sm" variant="outline" onClick={loadDashboard}>
-                Retry
-              </Button>
+              <Button size="sm" variant="outline" onClick={loadDashboard}>{tUi("Retry")}</Button>
             </div>
           ) : null}
 
@@ -333,15 +335,13 @@ export default function SystemDashboardPage() {
 
               <section className="space-y-3">
                 <div>
-                  <h2 className="text-lg font-semibold">Connections</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Health checks expose availability without revealing credentials.
-                  </p>
+                  <h2 className="text-lg font-semibold">{tUi("Connections")}</h2>
+                  <p className="text-sm text-muted-foreground">{tUi("Health checks expose availability without revealing credentials.")}</p>
                 </div>
                 <div className="grid gap-4 xl:grid-cols-3">
-                  <ServiceCard icon={IconDatabase} label="Primary database" service={data.services?.database} />
-                  <ServiceCard icon={IconCloud} label="Telnyx account" service={data.services?.telnyx} />
-                  <ServiceCard icon={IconServer} label="Application API" service={data.services?.application} />
+                  <ServiceCard icon={IconDatabase} label={tUi("Primary database")} service={data.services?.database} />
+                  <ServiceCard icon={IconCloud} label={tUi("Telnyx account")} service={data.services?.telnyx} />
+                  <ServiceCard icon={IconServer} label={tUi("Application API")} service={data.services?.application} />
                 </div>
               </section>
 
@@ -349,12 +349,10 @@ export default function SystemDashboardPage() {
                 <Card className="border bg-card shadow-sm">
                   <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
                     <div>
-                      <CardTitle>Platform activity</CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Interactions, flow executions, and exceptions in the selected range.
-                      </p>
+                      <CardTitle>{tUi("Platform activity")}</CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">{tUi("Interactions, flow executions, and exceptions in the selected range.")}</p>
                     </div>
-                    <Badge variant="outline">{formatValue(totalActivity)} operations</Badge>
+                    <Badge variant="outline">{formatValue(totalActivity)}{tUi(" operations")}</Badge>
                   </CardHeader>
                   <CardContent>
                     <div className="h-72">
@@ -370,9 +368,9 @@ export default function SystemDashboardPage() {
                           <XAxis dataKey="label" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                           <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
                           <Tooltip content={<DashboardTooltip />} />
-                          <Area type="monotone" dataKey="interactions" name="Interactions" stroke="#10b981" fill="url(#interactionsGradient)" strokeWidth={2} />
-                          <Area type="monotone" dataKey="executions" name="Flow executions" stroke="#38bdf8" fill="transparent" strokeWidth={2} />
-                          <Area type="monotone" dataKey="exceptions" name="Exceptions" stroke="#f97316" fill="transparent" strokeWidth={2} />
+                          <Area type="monotone" dataKey="interactions" name={tUi("Interactions")} stroke="#10b981" fill="url(#interactionsGradient)" strokeWidth={2} />
+                          <Area type="monotone" dataKey="executions" name={tUi("Flow executions")} stroke="#38bdf8" fill="transparent" strokeWidth={2} />
+                          <Area type="monotone" dataKey="exceptions" name={tUi("Exceptions")} stroke="#f97316" fill="transparent" strokeWidth={2} />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -381,10 +379,8 @@ export default function SystemDashboardPage() {
 
                 <Card className="border bg-card shadow-sm">
                   <CardHeader>
-                    <CardTitle>Role distribution</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Assigned roles across all user accounts.
-                    </p>
+                    <CardTitle>{tUi("Role distribution")}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{tUi("Assigned roles across all user accounts.")}</p>
                   </CardHeader>
                   <CardContent>
                     <div className="h-72">
@@ -394,7 +390,7 @@ export default function SystemDashboardPage() {
                           <XAxis type="number" allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
                           <YAxis type="category" dataKey="role" width={78} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} />
                           <Tooltip content={<DashboardTooltip />} />
-                          <Bar dataKey="total" name="Users" fill="#a78bfa" radius={[0, 6, 6, 0]} />
+                          <Bar dataKey="total" name={tUi("Users")} fill="#a78bfa" radius={[0, 6, 6, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -404,10 +400,8 @@ export default function SystemDashboardPage() {
 
               <Card className="border bg-card shadow-sm">
                 <CardHeader>
-                  <CardTitle>Recent platform activity</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Latest authenticated user and queue events recorded by the contact center.
-                  </p>
+                  <CardTitle>{tUi("Recent platform activity")}</CardTitle>
+                  <p className="text-sm text-muted-foreground">{tUi("Latest authenticated user and queue events recorded by the contact center.")}</p>
                 </CardHeader>
                 <CardContent>
                   {data.recentActivity?.length ? (
@@ -420,23 +414,21 @@ export default function SystemDashboardPage() {
                           <div className="flex min-w-0 items-center gap-3">
                             <span className="size-2 shrink-0 rounded-full bg-emerald-500" />
                             <div className="min-w-0">
-                              <div className="font-medium">{formatActivityType(event.type)}</div>
+                              <div className="font-medium">{formatActivityType(event.type, tUi)}</div>
                               <div className="truncate text-xs text-muted-foreground">
                                 {event.actor}
-                                {event.value ? ` · ${event.value}` : ""}
+                                {event.value ? tUi(" · {value0}", { value0: event.value }) : ""}
                               </div>
                             </div>
                           </div>
                           <span className="shrink-0 text-xs text-muted-foreground">
-                            {formatTimestamp(event.createdAt)}
+                            {formatTimestamp(event.createdAt, tUi)}
                           </span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                      No recent platform activity is available.
-                    </div>
+                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">{tUi("No recent platform activity is available.")}</div>
                   )}
                 </CardContent>
               </Card>

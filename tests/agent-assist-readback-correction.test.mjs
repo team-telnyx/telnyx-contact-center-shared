@@ -276,7 +276,7 @@ test("confirm_slot for a correction shows the NEW proposed value, not the stale 
   // a stale itemStatus.extracted_value (a completely different scenario —
   // see "confirm slot suggestions prefer corrected filled slot values over
   // stale suggested captures" in agent-assist-suggestion-target-contract.test.mjs).
-  const suggestionRoute = await read("../app/api/agent-assist/workflow/generate-suggestion/route.js");
+  const suggestionRoute = await read("../lib/ai-operations/prompts/suggestion.mjs");
   assert.match(suggestionRoute, /if \(itemStatus\?\.is_correction\) \{/);
 
   const storeSource = await read("../lib/stores/workflow-store.js");

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +38,7 @@ export default function AiConversationInsightsTab({
   useDemoApiKey = false,
   hasAiCallControlId = false,
 }) {
+  const tUi = useUiText();
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insights, setInsights] = useState([]);
   const [insightNames, setInsightNames] = useState({});
@@ -118,7 +121,7 @@ export default function AiConversationInsightsTab({
         </div>
       )}
       {!insightsLoading && (!insights || insights.length === 0) && (
-        <div className="text-sm text-muted-foreground">No insights</div>
+        <div className="text-sm text-muted-foreground">{tUi("No insights")}</div>
       )}
       {!insightsLoading &&
         Array.isArray(insights) &&
@@ -141,7 +144,7 @@ export default function AiConversationInsightsTab({
               (isJson && typeof parsed?.title === "string" && parsed.title) ||
               (ins?.insight_id && insightNames[ins.insight_id]) ||
               ins?.insight_id ||
-              "Insight";
+              tUi("Insight");
             return (
               <Card key={`${entry?.id || "e"}-${idx}`}>
                 <CardHeader className="flex-row items-center justify-between gap-2">

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -16,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ToastNotify";
 
 export default function PlayAudioNodeEditor({ config = {}, onChange }) {
+  const tUi = useUiText();
   const [audioSource, setAudioSource] = useState("custom_url");
   const [mediaFiles, setMediaFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -177,16 +180,15 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
     <div className="space-y-4">
       {/* Audio Source Type */}
       <div>
-        <Label>
-          Audio Source <span className="text-red-500">*</span>
+        <Label>{tUi("Audio Source ")}<span className="text-red-500">*</span>
         </Label>
         <Select value={audioSource} onValueChange={handleSourceTypeChange}>
           <SelectTrigger className="w-full mt-1">
-            <SelectValue placeholder="Select audio source" />
+            <SelectValue placeholder={tUi("Select audio source")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="custom_url">Custom URL</SelectItem>
-            <SelectItem value="media_library">Media Library</SelectItem>
+            <SelectItem value="custom_url">{tUi("Custom URL")}</SelectItem>
+            <SelectItem value="media_library">{tUi("Media Library")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -194,7 +196,7 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
       {/* Media Library Selector */}
       {audioSource === "media_library" && (
         <div>
-          <Label>Select Audio File</Label>
+          <Label>{tUi("Select Audio File")}</Label>
           <div className="flex items-center gap-2 mt-1">
             <Select
               value={selectedMediaName || ""}
@@ -206,18 +208,16 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
                 <SelectValue
                   placeholder={
                     loading
-                      ? "Loading audio files..."
+                      ? tUi("Loading audio files...")
                       : mediaFiles.length === 0
-                      ? "No audio files available"
-                      : "Select from media library"
+                      ? tUi("No audio files available")
+                      : tUi("Select from media library")
                   }
                 />
               </SelectTrigger>
               <SelectContent>
                 {mediaFiles.length === 0 && !loading ? (
-                  <div className="p-2 text-sm text-muted-foreground">
-                    No audio files found. Upload files in Admin → Media Library.
-                  </div>
+                  <div className="p-2 text-sm text-muted-foreground">{tUi("No audio files found. Upload files in Admin → Media Library.")}</div>
                 ) : (
                   mediaFiles.map((file) => (
                     <SelectItem key={file.media_name} value={file.media_name}>
@@ -258,7 +258,7 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
       {/* Audio URL Input */}
       <div>
         <Label htmlFor="audio_url">
-          {audioSource === "media_library" ? "Media Name" : "Audio URL"}{" "}
+          {audioSource === "media_library" ? tUi("Media Name") : tUi("Audio URL")}{" "}
           <span className="text-red-500">*</span>
         </Label>
         <Input
@@ -268,7 +268,7 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
           onChange={(e) => handleCustomUrlChange(e.target.value)}
           placeholder={
             audioSource === "media_library"
-              ? "Media name (e.g., welcome-message)"
+              ? tUi("Media name (e.g., welcome-message)")
               : "https://example.com/audio.mp3"
           }
           disabled={audioSource === "media_library"}
@@ -276,8 +276,8 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
         />
         <p className="text-xs text-muted-foreground mt-1">
           {audioSource === "media_library"
-            ? "Media name from Telnyx Media Library (used in Telnyx API calls)"
-            : "The URL of the audio file to play (WAV or MP3)"}
+            ? tUi("Media name from Telnyx Media Library (used in Telnyx API calls)")
+            : tUi("The URL of the audio file to play (WAV or MP3)")}
         </p>
       </div>
 
@@ -293,45 +293,39 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
         >
           {isPlaying ? (
             <>
-              <IconPlayerStop className="w-4 h-4 mr-2" />
-              Stop Audio
-            </>
+              <IconPlayerStop className="w-4 h-4 mr-2" />{tUi("Stop Audio")}</>
           ) : (
             <>
-              <IconPlayerPlay className="w-4 h-4 mr-2" />
-              Test Audio
-            </>
+              <IconPlayerPlay className="w-4 h-4 mr-2" />{tUi("Test Audio")}</>
           )}
         </Button>
       </div>
 
       {/* Loop Configuration */}
       <div>
-        <Label htmlFor="loop">Loop</Label>
+        <Label htmlFor="loop">{tUi("Loop")}</Label>
         <Select
           value={config.loop || "1"}
           onValueChange={(value) => onChange?.({ ...config, loop: value })}
         >
           <SelectTrigger className="w-full mt-1">
-            <SelectValue placeholder="Select loop option" />
+            <SelectValue placeholder={tUi("Select loop option")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="1">1 time</SelectItem>
-            <SelectItem value="2">2 times</SelectItem>
-            <SelectItem value="3">3 times</SelectItem>
-            <SelectItem value="4">4 times</SelectItem>
-            <SelectItem value="5">5 times</SelectItem>
-            <SelectItem value="6">6 times</SelectItem>
-            <SelectItem value="7">7 times</SelectItem>
-            <SelectItem value="8">8 times</SelectItem>
-            <SelectItem value="9">9 times</SelectItem>
-            <SelectItem value="10">10 times</SelectItem>
-            <SelectItem value="infinity">Loop infinitely</SelectItem>
+            <SelectItem value="1">{tUi("1 time")}</SelectItem>
+            <SelectItem value="2">{tUi("2 times")}</SelectItem>
+            <SelectItem value="3">{tUi("3 times")}</SelectItem>
+            <SelectItem value="4">{tUi("4 times")}</SelectItem>
+            <SelectItem value="5">{tUi("5 times")}</SelectItem>
+            <SelectItem value="6">{tUi("6 times")}</SelectItem>
+            <SelectItem value="7">{tUi("7 times")}</SelectItem>
+            <SelectItem value="8">{tUi("8 times")}</SelectItem>
+            <SelectItem value="9">{tUi("9 times")}</SelectItem>
+            <SelectItem value="10">{tUi("10 times")}</SelectItem>
+            <SelectItem value="infinity">{tUi("Loop infinitely")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          How many times the audio file should be played (1-10 or infinity)
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("How many times the audio file should be played (1-10 or infinity)")}</p>
       </div>
 
       {/* Overlay Configuration */}
@@ -343,14 +337,12 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
             onChange?.({ ...config, overlay: checked })
           }
         />
-        <Label htmlFor="overlay" className="text-sm font-normal cursor-pointer">
-          Overlay audio over currently playing audio
-        </Label>
+        <Label htmlFor="overlay" className="text-sm font-normal cursor-pointer">{tUi("Overlay audio over currently playing audio")}</Label>
       </div>
 
       {/* Target Legs Configuration */}
       <div>
-        <Label htmlFor="target_legs">Target Legs</Label>
+        <Label htmlFor="target_legs">{tUi("Target Legs")}</Label>
         <Select
           value={config.target_legs || "self"}
           onValueChange={(value) =>
@@ -358,17 +350,15 @@ export default function PlayAudioNodeEditor({ config = {}, onChange }) {
           }
         >
           <SelectTrigger className="w-full mt-1">
-            <SelectValue placeholder="Select target legs" />
+            <SelectValue placeholder={tUi("Select target legs")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="self">Self</SelectItem>
-            <SelectItem value="opposite">Opposite</SelectItem>
-            <SelectItem value="both">Both</SelectItem>
+            <SelectItem value="self">{tUi("Self")}</SelectItem>
+            <SelectItem value="opposite">{tUi("Opposite")}</SelectItem>
+            <SelectItem value="both">{tUi("Both")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          Specifies which leg(s) of the call will hear the audio
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Specifies which leg(s) of the call will hear the audio")}</p>
       </div>
     </div>
   );

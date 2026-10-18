@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -24,6 +26,7 @@ const memberLabel = (member) => {
  * `agent_groups` contain the team; the list is saved with the team.
  */
 export default function TeamEditSheet({ open, onOpenChange, teamId, onSave, readOnly = false }) {
+  const tUi = useUiText();
   const { openHelp, registerHelpPortalContainer } = useHelp();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -116,7 +119,7 @@ export default function TeamEditSheet({ open, onOpenChange, teamId, onSave, read
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to save team");
       }
-      notify({ title: "Team saved", description: `Team ${teamId ? "updated" : "created"} successfully`, variant: "success" });
+      notify({ title: "Team saved", description: (teamId ? tUi("Team updated successfully") : tUi("Team created successfully")), variant: "success" });
       onSave?.();
       onOpenChange(false);
     } catch (error) {
@@ -130,16 +133,14 @@ export default function TeamEditSheet({ open, onOpenChange, teamId, onSave, read
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent ref={registerHelpPortalContainer} side="right" data-context-help-host="true" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0">
+      <SheetContent ref={registerHelpPortalContainer} side="end" data-context-help-host="true" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0">
         <SheetHeader className="px-6 py-4 pr-12 border-b">
           <div className="flex items-center justify-between gap-3">
             <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-              {teamId ? (<><IconEdit className="size-5" />{readOnly ? "Team" : "Edit Team"}</>) : (<><IconPlus className="size-5" />Create Team</>)}
+              {teamId ? (<><IconEdit className="size-5" />{readOnly ? tUi("Team") : tUi("Edit Team")}</>) : (<><IconPlus className="size-5" />{tUi("Create Team")}</>)}
             </SheetTitle>
-            <Button type="button" variant="ghost" size="sm" aria-controls="context-help-sheet" aria-keyshortcuts="F1" title="Help for teams (F1)" onMouseDown={(event) => event.preventDefault()} onClick={() => openHelp()}>
-              <IconHelpCircle aria-hidden="true" />
-              Help
-            </Button>
+            <Button type="button" variant="ghost" size="sm" aria-controls="context-help-sheet" aria-keyshortcuts="F1" title={tUi("Help for teams (F1)")} onMouseDown={(event) => event.preventDefault()} onClick={() => openHelp()}>
+              <IconHelpCircle aria-hidden="true" />{tUi("Help")}</Button>
           </div>
         </SheetHeader>
 
@@ -157,26 +158,26 @@ export default function TeamEditSheet({ open, onOpenChange, teamId, onSave, read
               ) : (
                 <>
                   <div className="flex items-center justify-between pb-4 border-b">
-                    <Label htmlFor="team-active" className="text-sm font-medium">Active</Label>
+                    <Label htmlFor="team-active" className="text-sm font-medium">{tUi("Active")}</Label>
                     <Switch id="team-active" checked={isActive} onCheckedChange={setIsActive} disabled={readOnly} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="team-name">Name *</Label>
-                    <Input id="team-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Warsaw Sales, Night Shift" disabled={readOnly} />
+                    <Label htmlFor="team-name">{tUi("Name *")}</Label>
+                    <Input id="team-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={tUi("e.g., Warsaw Sales, Night Shift")} disabled={readOnly} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="team-description">Description</Label>
-                    <Input id="team-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description for this team" disabled={readOnly} />
+                    <Label htmlFor="team-description">{tUi("Description")}</Label>
+                    <Input id="team-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={tUi("Optional description for this team")} disabled={readOnly} />
                   </div>
 
                   <div className="space-y-2 pt-2 border-t">
                     <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Members</Label>
+                      <Label className="text-sm font-medium">{tUi("Members")}</Label>
                       <Badge variant="secondary">{members.length}</Badge>
                     </div>
                     <div className="rounded-md border divide-y max-h-48 overflow-y-auto" data-testid="team-members">
                       {members.length === 0 ? (
-                        <div className="px-3 py-3 text-xs text-muted-foreground">No members yet.</div>
+                        <div className="px-3 py-3 text-xs text-muted-foreground">{tUi("No members yet.")}</div>
                       ) : members.map((member) => (
                         <label key={member.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                           <Checkbox checked onCheckedChange={(checked) => toggleMember(member, Boolean(checked))} disabled={readOnly} />
@@ -186,12 +187,12 @@ export default function TeamEditSheet({ open, onOpenChange, teamId, onSave, read
                     </div>
                     {readOnly ? null : (
                       <>
-                        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search users to add…" aria-label="Search users" />
+                        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tUi("Search users to add…")} aria-label={tUi("Search users")} />
                         <div className="rounded-md border divide-y max-h-56 overflow-y-auto">
                           {searching && visibleCandidates.length === 0 ? (
-                            <div className="px-3 py-3 text-xs text-muted-foreground">Searching…</div>
+                            <div className="px-3 py-3 text-xs text-muted-foreground">{tUi("Searching…")}</div>
                           ) : visibleCandidates.length === 0 ? (
-                            <div className="px-3 py-3 text-xs text-muted-foreground">No more users match.</div>
+                            <div className="px-3 py-3 text-xs text-muted-foreground">{tUi("No more users match.")}</div>
                           ) : visibleCandidates.map((user) => (
                             <label key={user.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                               <Checkbox checked={false} onCheckedChange={(checked) => toggleMember(user, Boolean(checked))} />
@@ -209,9 +210,9 @@ export default function TeamEditSheet({ open, onOpenChange, teamId, onSave, read
         </div>
 
         <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{readOnly ? "Close" : "Cancel"}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{readOnly ? tUi("Close") : tUi("Cancel")}</Button>
           {readOnly ? null : (
-            <Button onClick={handleSave} disabled={saving || !name.trim()}>{saving ? "Saving..." : "Save Changes"}</Button>
+            <Button onClick={handleSave} disabled={saving || !name.trim()}>{saving ? tUi("Saving...") : tUi("Save Changes")}</Button>
           )}
         </SheetFooter>
       </SheetContent>

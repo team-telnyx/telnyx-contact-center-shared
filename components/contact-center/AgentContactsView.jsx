@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Input } from "@/components/ui/input";
@@ -30,6 +32,7 @@ import ContactEditSheet from "@/components/contacts/EditSheet";
 import { AgentDataSourcePagination } from "./AgentDataSourcePagination";
 
 export function AgentContactsView({ selectedInteraction, onBackToInteraction }) {
+  const tUi = useUiText();
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedItem, setExpandedItem] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
@@ -206,7 +209,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
     const name = [contact.first_name, contact.last_name]
       .filter(Boolean)
       .join(" ");
-    return name || contact.company_name || "Unnamed Contact";
+    return name || contact.company_name || tUi("Unnamed Contact");
   }
 
   function formatPhoneNumbers(contact) {
@@ -245,7 +248,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Search by name, phone, email, company..."
+                placeholder={tUi("Search by name, phone, email, company...")}
                 className="pl-8 pr-8"
               />
               {searchQuery && (
@@ -256,7 +259,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                     setPage(1);
                   }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-muted transition-colors"
-                  aria-label="Clear search"
+                  aria-label={tUi("Clear search")}
                 >
                   <IconX className="h-3 w-3 text-muted-foreground" />
                 </button>
@@ -267,13 +270,10 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
               onClick={() => setShowContactSheet(true)}
               className="h-8 shrink-0"
             >
-              <IconPlus className="h-3 w-3 mr-1" />
-              New Contact
-            </Button>
+              <IconPlus className="h-3 w-3 mr-1" />{tUi("New Contact")}</Button>
           </div>
         {identifiedContact && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            Caller identified: {getDisplayName(identifiedContact)}
+          <div className="mt-2 text-xs text-muted-foreground">{tUi("Caller identified: ")}{getDisplayName(identifiedContact)}
           </div>
         )}
       </div>
@@ -287,9 +287,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
               ))}
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8 text-sm">
-              No contacts found
-            </div>
+            <div className="text-center text-muted-foreground py-8 text-sm">{tUi("No contacts found")}</div>
           ) : (
             <Accordion
               type="single"
@@ -328,14 +326,12 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                           <div className="font-semibold text-sm">
                             {getDisplayName(contact)}
                             {isIdentified && (
-                              <span className="ml-2 text-xs text-primary">
-                                (Caller)
-                              </span>
+                              <span className="ml-2 text-xs text-primary">{tUi("(Caller)")}</span>
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {contact.company_name || "—"}
-                            {phones.length > 0 && ` • ${phones[0]}`}
+                            {phones.length > 0 && tUi(" • {value0}", { value0: phones[0] })}
                           </div>
                         </div>
                       </div>
@@ -347,9 +343,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                           {phones.length > 0 && (
                             <div>
                               <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                                <IconPhone className="h-3 w-3" />
-                                Phone Numbers
-                              </div>
+                                <IconPhone className="h-3 w-3" />{tUi("Phone Numbers")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {phones.map((phone, idx) => (
                                   <Badge
@@ -367,9 +361,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                           {emails.length > 0 && (
                             <div>
                               <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                                <IconMail className="h-3 w-3" />
-                                Email Addresses
-                              </div>
+                                <IconMail className="h-3 w-3" />{tUi("Email Addresses")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {emails.map((email, idx) => (
                                   <Badge
@@ -392,9 +384,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                           contact.department) && (
                           <div className="space-y-2">
                             <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                              <IconBuilding className="h-3 w-3" />
-                              Company & Role
-                            </div>
+                              <IconBuilding className="h-3 w-3" />{tUi("Company & Role")}</div>
                             <div className="flex flex-wrap gap-1.5">
                               {contact.company_name && (
                                 <Badge
@@ -430,24 +420,20 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                         {(contact.first_name || contact.last_name) && (
                           <div className="space-y-2">
                             <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                              <IconUser className="h-3 w-3" />
-                              Personal Information
-                            </div>
+                              <IconUser className="h-3 w-3" />{tUi("Personal Information")}</div>
                             <div className="flex flex-wrap gap-1.5">
                               {contact.first_name && (
                                 <Badge
                                   variant="outline"
                                   className="bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600"
-                                >
-                                  First: {contact.first_name}
+                                >{tUi("First: ")}{contact.first_name}
                                 </Badge>
                               )}
                               {contact.last_name && (
                                 <Badge
                                   variant="outline"
                                   className="bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600"
-                                >
-                                  Last: {contact.last_name}
+                                >{tUi("Last: ")}{contact.last_name}
                                 </Badge>
                               )}
                             </div>
@@ -461,9 +447,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                           contact.postal_code) && (
                           <div className="space-y-2">
                             <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                              <IconMapPin className="h-3 w-3" />
-                              Address
-                            </div>
+                              <IconMapPin className="h-3 w-3" />{tUi("Address")}</div>
                             <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">
                               {[
                                 contact.address_1,
@@ -481,9 +465,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
                         {/* Notes */}
                         {contact.notes && (
                           <div className="space-y-2">
-                            <div className="text-xs font-medium text-muted-foreground mb-1.5">
-                              Notes
-                            </div>
+                            <div className="text-xs font-medium text-muted-foreground mb-1.5">{tUi("Notes")}</div>
                             <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md whitespace-pre-wrap">
                               {contact.notes}
                             </div>

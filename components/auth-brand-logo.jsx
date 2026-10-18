@@ -1,16 +1,19 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import Image from "next/image";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
 export function AuthBrandLogo() {
+  const tUi = useUiText();
   const { brandLogoUri, loading } = useAppSettings();
 
   if (loading) {
     return (
       <Image
         src="/auth_brand_logo.png"
-        alt="Brand Logo"
+        alt={tUi("Brand Logo")}
         width={400}
         height={50}
         style={{ width: "auto", height: "auto" }}
@@ -24,7 +27,7 @@ export function AuthBrandLogo() {
     return (
       <img
         src={brandLogoUri}
-        alt="Brand Logo"
+        alt={tUi("Brand Logo")}
         style={{ width: "auto", height: "auto", maxHeight: "50px" }}
         className="brightness-0 dark:invert"
       />
@@ -34,7 +37,7 @@ export function AuthBrandLogo() {
   return (
     <Image
       src="/auth_brand_logo.png"
-      alt="Brand Logo"
+      alt={tUi("Brand Logo")}
       width={400}
       height={50}
       style={{ width: "auto", height: "auto" }}

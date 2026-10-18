@@ -4,6 +4,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { readAgentStatusPresentation, setManualAgentStatus } from "@/lib/acd/agent-state.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 import { withPermission } from "@/lib/authz/guard";
+import { isUiLocale, normalizeUiLocale } from "@/lib/i18n/locales.mjs";
 
 const ALLOWED_THEMES = ["light", "dark", "system"];
 
@@ -75,6 +76,7 @@ async function GET_handler(request, _context, authz) {
       agent_state_version: agentStatus.version,
       voice_enabled: voicePolicy?.enabled !== false,
       language: user.language,
+      ui_locale: normalizeUiLocale(user.ui_locale),
       profile_picture_uri: user.profile_picture_uri,
       setup_completed: user.setup_completed,
       experimental_features: user.experimental_features === true,
@@ -116,6 +118,11 @@ async function PUT_handler(request, _context, authz) {
     } catch (_) {}
 
     const update = {};
+    if (Object.hasOwn(payload, "uiLocale") || Object.hasOwn(payload, "ui_locale")) {
+      const locale = payload.uiLocale ?? payload.ui_locale;
+      if (!isUiLocale(locale)) return NextResponse.json({ ok: false, error: "Unsupported interface language", code: "INVALID_UI_LOCALE" }, { status: 400 });
+      update.ui_locale = locale;
+    }
     let requestedStatus = null;
 
     // Theme

@@ -10,7 +10,10 @@ import { sceneAspect } from "@/lib/video/scenes.mjs";
 import HandoffTimeline from "./HandoffTimeline";
 import { handoffTimelinePhases } from "@/lib/widgets/handoff-timeline";
 import WidgetIcon from "./WidgetIcon";
+import ConferenceAiControls from "@/components/video/ConferenceAiControls";
+import { conferenceText } from "@/lib/video/conference-copy.mjs";
 import CobrowseVisitorConsent from "./CobrowseVisitorConsent";
+import { videoStartErrorMessage } from "@/lib/video/start-error.mjs";
 
 const TOKEN_REFRESH_MS = 10 * 60 * 1000;
 // Every video frame keeps 4:3; the scene planner arranges them per scene
@@ -54,6 +57,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
   const direction = widgetDirection(config.locale);
   const [phase, setPhase] = useState(preview ? (scenario === "waiting" || scenario === "prejoin" ? scenario : "connected") : "prejoin"); // prejoin | starting | waiting | connected | ended | error
   const [error, setError] = useState("");
+  const [ai, setAi] = useState(null);
   const [handoff, setHandoff] = useState(preview ? (scenario === "prejoin" ? null : { status: scenario === "waiting" ? "waiting" : "connected", queueName: ui.preview.fallbackQueue, agentName: scenario === "waiting" ? null : "Anna Kowalska" }) : null);
   const [sessionToken, setSessionToken] = useState(null);
   const [cobrowseTabKey, setCobrowseTabKey] = useState(null);
@@ -70,7 +74,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
     initialLayout: video.scenes?.default || "pip",
     onRemoteLayout: (next) => room.setLayout(next, { broadcast: false }),
   });
-  const { setLayout, setSupervision } = room;
+  const { setLayout, setSupervision, updateToken } = room;
   // The Studio preview follows the configured default scene as it is edited.
   useEffect(() => { if (preview && video.scenes?.default) setLayout(video.scenes.default, { broadcast: false }); }, [preview, setLayout, video.scenes?.default]);
 
@@ -101,6 +105,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
   const start = useCallback(async () => {
     if (preview || !["prejoin", "error"].includes(phase)) return;
     setError("");
+    leftRef.current = false;
     setPhase("starting");
     try {
       const fresh = await requestFreshWidgetBootstrap(widget.id);
@@ -113,23 +118,33 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
       setSessionToken(result.sessionToken);
       setCobrowseTabKey(clientKey);
       setHandoff(result.handoff || null);
+      setAi(result.ai || null);
       window.parent.postMessage({ type: "telnyx-widget-session", active: true }, new URLSearchParams(window.location.search).get("parentOrigin") || "*");
       const joined = await widgetFetch("/api/widget-sessions/video/join", result.sessionToken, { method: "POST" });
       joinRef.current = joined.join;
-      await room.join({ roomId: joined.join.roomId, token: joined.join.token });
-      setPhase(joined.handoff?.status === "connected" ? "connected" : "waiting");
+      await room.join({ ...joined.join, onJoined: async participantId => {
+        if (joined.join.member) await widgetFetch("/api/widget-sessions/video/ai", result.sessionToken, { method: "POST", body: { action: "bind", ...joined.join.member, participantId } });
+      } });
+      setPhase(["connected", "ai"].includes(joined.handoff?.status) ? "connected" : "waiting");
     } catch (startError) {
       console.error("[telnyx-widget-video] start failed:", startError);
       const token = sessionTokenRef.current;
       sessionTokenRef.current = null;
       setSessionToken(null);
       setCobrowseTabKey(null);
-      await room.leave().catch(() => undefined);
+      // An admission/service error must not shut down a working camera preview.
+      if (joinRef.current) {
+        await room.leave().catch(() => undefined);
+        await room.prepare().catch(() => undefined);
+      }
+      joinRef.current = null;
       if (token) await widgetFetch("/api/widget-sessions/video/leave", token, { method: "POST", keepalive: true }).catch(() => undefined);
-      setError(config.content.videoErrorMessage);
+      setAi(null);
+      setHandoff(null);
+      setError(videoStartErrorMessage(startError, { media: config.content.videoErrorMessage, generic: ui.video.startFailed }));
       setPhase("error");
     }
-  }, [config.content.videoErrorMessage, phase, preview, room, widget]);
+  }, [config.content.videoErrorMessage, phase, preview, room, ui.video.startFailed, widget]);
 
   const leave = useCallback(async ({ silent = false } = {}) => {
     if (leftRef.current) return;
@@ -149,13 +164,14 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
         const state = await widgetFetch("/api/widget-sessions/video-state", sessionToken);
         if (cancelled) return;
         setHandoff(state.handoff || null);
+        setAi(state.ai || null);
         setSupervision(state.supervision || null);
         if (state.handoff?.status === "disconnected") {
           await leave({ silent: true });
           setPhase("ended");
           return;
         }
-        setPhase((current) => (current === "waiting" || current === "connected") ? (state.handoff?.status === "connected" ? "connected" : "waiting") : current);
+        setPhase((current) => (current === "waiting" || current === "connected") ? (["connected", "ai"].includes(state.handoff?.status) ? "connected" : "waiting") : current);
       } catch (pollError) {
         if (!cancelled && [401, 403, 409].includes(pollError.status)) { await leave({ silent: true }); setPhase("ended"); return; }
       } finally {
@@ -175,11 +191,11 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
       try {
         const result = await widgetFetch("/api/widget-sessions/video/token", sessionToken, { method: "POST", body: { refreshToken } });
         joinRef.current = { ...joinRef.current, ...result.join };
-        await room.updateToken(result.join.token);
+        await updateToken(result.join.token);
       } catch { /* the next poll surfaces a dead session */ }
     }, TOKEN_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [phase, preview, room, sessionToken]);
+  }, [phase, preview, sessionToken, updateToken]);
 
   useEffect(() => {
     if (preview) return undefined;
@@ -205,7 +221,10 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
     // camera state (a preview placeholder, or "camera off" when configured off).
     const own = room.tiles.filter((tile) => tile.self).map((tile) => ({ ...tile, label: tile.kind === "screen" ? `${ui.video.you} · ${ui.video.screen}` : ui.video.you,
       cameraOff: preview ? video.camera === "off" : tile.cameraOff, cameraOffLabel: preview && video.camera !== "off" ? ui.video.cameraPreview : ui.video.cameraOff }));
-    const remote = room.tiles.filter((tile) => !tile.self).map((tile) => ({ ...tile, label: tile.kind === "screen" ? `${remoteLabelFor(tile)} · ${ui.video.screen}` : remoteLabelFor(tile), cameraOffLabel: ui.video.agentCameraOff }));
+    const remote = room.tiles.filter((tile) => !tile.self).map((tile) => ({ ...tile, poster: tile.role === "ai" ? ai?.avatar?.previewUrl : null, label: tile.kind === "screen" ? `${remoteLabelFor(tile)} · ${ui.video.screen}` : remoteLabelFor(tile), cameraOffLabel: ui.video.agentCameraOff }));
+    const portrait = ai?.avatar || video.ai?.avatar;
+    if (portrait?.enabled && (ai && !["stopped", "failed"].includes(ai.state) || ["prejoin", "starting", "error"].includes(phase) && video.ai?.startsWithAi) && !remote.some(tile => tile.role === "ai"))
+      remote.push({ id: "pending-ai", role: "ai", kind: "camera", self: false, track: null, label: portrait.name || "AI assistant", poster: portrait.previewUrl });
     if (preview && !remote.length && scenario !== "waiting" && scenario !== "prejoin") {
       const agentName = handoff?.agentName || config.components.messages.humanLabel;
       remote.push({ id: "preview-agent", role: "agent", kind: "camera", self: false, track: null, cameraOff: false, label: agentName, cameraOffLabel: interpolate(ui.video.agentJoining, { agent: agentName }) });
@@ -213,8 +232,8 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
       if (scenario === "supervisor") remote.push({ id: "preview-supervisor", role: "supervisor", kind: "camera", self: false, track: null, cameraOff: false, label: ui.video.supervisor, cameraOffLabel: ui.video.agentCameraOff });
     }
     return [...own, ...remote];
-  }, [config.components.messages.humanLabel, handoff?.agentName, preview, room.tiles, scenario, ui.video, video.camera]);
-  const modalAspect = sceneAspect({ scene: room.layout, count: Math.min(4, tiles.length), orientation: "row", aspect: FRAME_ASPECT });
+  }, [ai, phase, video.ai, config.components.messages.humanLabel, handoff?.agentName, preview, room.tiles, scenario, ui.video, video.camera]);
+  const modalAspect = sceneAspect({ scene: room.layout, count: Math.min(6, tiles.length), orientation: "row", aspect: FRAME_ASPECT });
   const modalWidthPercent = MODAL_WIDTH_PERCENT[video.modal?.size] || 75;
   const toggleExpanded = () => setExpanded((current) => !current);
   // Widget Studio → Video → Panel size: the video surface may use its own
@@ -302,7 +321,7 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
   // The Studio edits the draft config, where library items still carry the
   // media id; the public projection has already resolved them to URLs.
   const playlistItems = useMemo(() => (video.waiting?.items || []).map((item) => item.source === "library" && item.mediaId ? { ...item, url: `/api/video/media/${encodeURIComponent(item.mediaId)}` } : item), [video.waiting?.items]);
-  const waitingOverlay = phase === "waiting" ? (
+  const waitingOverlay = phase === "waiting" && (!ai || ["failed", "stopped"].includes(ai.state)) ? (
     <div className="flex h-full w-full flex-col justify-end">
       <WaitingPlaylist items={playlistItems} mode={video.waiting?.mode || "rotate"} muted={preview || video.waiting?.sound === false} labels={{ unmute: ui.aria.resumeSpeaker, mute: ui.aria.muteSpeaker }} className="absolute inset-0 h-full w-full object-cover" onEmpty={null} />
       {waitingCardShown && (
@@ -363,17 +382,18 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
       )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-3" style={{ paddingLeft: 12 + edgeInsets.left, paddingRight: 12 + edgeInsets.right }}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-2 border px-3 py-1.5 text-xs font-medium" role="status" aria-live="polite"
+        <div className="@container flex shrink-0 flex-col gap-2" data-video-session-header>
+          <span className="flex min-w-0 max-w-full items-center gap-2 self-start border px-3 py-1.5 text-xs font-medium" role="status" aria-live="polite"
             style={{ borderRadius: config.components.voice.statusBadge.radius, backgroundColor: phase === "error" ? "#fef2f2" : config.components.voice.statusBadge.backgroundColor, color: phase === "error" ? "#b91c1c" : config.components.voice.statusBadge.textColor, borderColor: phase === "error" ? "#fecaca" : config.components.voice.statusBadge.borderColor }}>
             {inCall && <span className="relative grid size-3 shrink-0 place-items-center" aria-hidden="true"><span className="absolute inline-flex h-full w-full rounded-full bg-current opacity-60 motion-safe:animate-ping" /><span className="relative inline-flex size-1.5 rounded-full bg-current" /></span>}
-            <span className="min-w-0 truncate">{statusText}</span>
+            <span className={phase === "error" ? "min-w-0 whitespace-normal break-words" : "min-w-0 truncate"} role={phase === "error" ? "alert" : undefined}>{statusText}</span>
           </span>
-          {(inCall || preview) && (
-            <VideoLayoutSwitch layout={room.layout} onChange={(next) => setLayout(next)} scenes={video.scenes?.available} labels={ui.video} size={30} iconSize={15}
-              buttonStyle={{ borderRadius: controls.radius, borderColor: controls.borderColor, backgroundColor: controls.backgroundColor, color: controls.textColor }}
-              activeStyle={{ backgroundColor: controls.activeBackgroundColor, color: controls.activeTextColor }} />
-          )}
+
+          {(inCall || preview) && <div className="flex min-w-0 items-center gap-2 overflow-x-auto p-0.5 [--video-toolbar-button-size:clamp(24px,calc((100cqw_-_18px)/13),32px)]" data-video-toolbars>
+          {sessionToken && inCall && <ConferenceAiControls palette={colors} translate={conferenceText(config.locale)} ai={ai} config={video.ai} role="customer" agentConnected={handoff?.agentConnected} room={room}
+        onAction={body => widgetFetch("/api/widget-sessions/video/ai", sessionToken, { method: "POST", body })} />}
+            <VideoLayoutSwitch toolbar palette={colors} layout={room.layout} onChange={(next) => setLayout(next)} scenes={video.scenes?.available} labels={ui.video} />
+          </div>}
         </div>
 
         {phase === "ended" ? (
@@ -407,6 +427,8 @@ export default function VideoWidgetRuntime({ widget, preview = false, previewSce
           />
         )}
       </div>
+
+
 
       {phase !== "ended" && controlsPosition !== "top" && (
         <footer className="grid shrink-0 gap-2 border-t p-3" style={{ borderColor: colors.border, paddingLeft: 12 + edgeInsets.left, paddingRight: 12 + edgeInsets.right, paddingBottom: 12 + edgeInsets.bottom }}>

@@ -1,4 +1,8 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { sourceText } from "@/lib/i18n/source-text.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +27,7 @@ import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { SYSTEM_EXIT_ITEM } from "@/components/admin/SystemSectionNav";
 import { useExperimentalFeatures } from "@/lib/experimental-features-client";
+import { RAW_LOG_VIEWER_AVAILABLE } from "@/lib/deployment-capabilities.mjs";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import {
   IconActivity,
@@ -62,7 +67,7 @@ const NAV_ITEMS = [
   { id: "bridges", label: "Bridges", icon: IconRouteAltLeft, description: "Local LAN bridge agents and connection status" },
   { id: "logs", label: "Logs", icon: IconDownload, description: "Provisioning event log with raw details" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Provisioning endpoint and vendor setup" },
-];
+].filter((item) => RAW_LOG_VIEWER_AVAILABLE || item.id !== "logs");
 
 const SECTION_STORAGE_KEY = "admin.phones-provisioning.activeSection";
 
@@ -272,8 +277,8 @@ const vendorBadgeClass = (vendor) => {
   return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
 };
 
-function vendorLabel(vendor) {
-  return VENDORS.find((x) => x.value === vendor)?.label || vendor || "Unknown vendor";
+function vendorLabel(vendor, tUi = sourceText) {
+  return VENDORS.find((x) => x.value === vendor)?.label || vendor || tUi("Unknown vendor");
 }
 
 function PhoneModelThumbnail({ vendor, model, className = "" }) {
@@ -296,7 +301,8 @@ function PhoneModelThumbnail({ vendor, model, className = "" }) {
 function VendorLogoBadge({ vendor, count }) {
   const value = String(vendor || "").toLowerCase();
   const logo = VENDOR_LOGOS[value];
-  const label = vendorLabel(value);
+  const tUi = useUiText();
+  const label = vendorLabel(value, tUi);
 
   if (!logo) {
     return <Badge variant="outline" className={vendorBadgeClass(value)}>{count ? `${label}: ${count}` : label}</Badge>;
@@ -423,6 +429,7 @@ function phoneDraftValid(draft) {
 }
 
 export default function PhonesProvisioningPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const {
     enabled: experimentalFeaturesEnabled,
@@ -456,7 +463,7 @@ export default function PhonesProvisioningPage() {
   const selectedPhone = useMemo(() => phones.find((p) => p.id === selectedPhoneId) || null, [phones, selectedPhoneId]);
   const selectedBridge = useMemo(() => bridges.find((b) => b.bridge_id === selectedBridgeId) || null, [bridges, selectedBridgeId]);
   const pendingRebootPhones = useMemo(() => phones.filter((p) => pendingRebootIds.includes(p.id)), [phones, pendingRebootIds]);
-  const pendingRebootLabel = pendingRebootIds.length === phones.length ? "all phones" : `${pendingRebootIds.length} phone${pendingRebootIds.length === 1 ? "" : "s"}`;
+  const pendingRebootLabel = pendingRebootIds.length === phones.length ? tUi("all phones") : tUi("selected phones: {value0}", { value0: pendingRebootIds.length });
 
   useEffect(() => {
     if (!experimentalFeaturesLoading && !experimentalFeaturesEnabled) {
@@ -556,7 +563,7 @@ export default function PhonesProvisioningPage() {
   const draftValid = phoneDraftValid(phoneDraft);
 
   const loadLogs = useCallback(async (overrides = {}) => {
-    if (!experimentalFeaturesEnabled) return;
+    if (!RAW_LOG_VIEWER_AVAILABLE || !experimentalFeaturesEnabled) return;
     const nextDays = overrides.days ?? logDays;
     const nextPage = overrides.page ?? logPage;
     const nextPageSize = overrides.pageSize ?? logPageSize;
@@ -672,7 +679,7 @@ export default function PhonesProvisioningPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Remote reboot failed");
       const ok = (data.results || []).filter((r) => r.ok).length;
-      notify({ title: "Remote reboot requested", description: `${ok}/${data.results?.length || phoneIds.length} accepted`, variant: ok ? "success" : "warning" });
+      notify({ title: "Remote reboot requested", description: tUi("{value0}/{value1} accepted", {value0: ok, value1: data.results?.length || phoneIds.length}), variant: ok ? "success" : "warning" });
       await refresh(false);
     } catch (err) {
       notify({ title: "Remote reboot failed", description: err.message, variant: "error" });
@@ -687,9 +694,9 @@ export default function PhonesProvisioningPage() {
   if (experimentalFeaturesLoading || !experimentalFeaturesEnabled) {
     return (
       <AdminPageShell>
-        <AdminPageHeader title="Phones Provisioning" />
+        <AdminPageHeader title={tUi("Phones Provisioning")} />
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {experimentalFeaturesLoading ? "Checking feature access…" : "This experimental feature is not enabled for your account."}
+          {experimentalFeaturesLoading ? tUi("Checking feature access…") : tUi("This experimental feature is not enabled for your account.")}
         </div>
       </AdminPageShell>
     );
@@ -698,36 +705,33 @@ export default function PhonesProvisioningPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Phones Provisioning"
+        title={tUi("Phones Provisioning")}
         badges={(
           <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-            {totals.total} phones
-          </Badge>
+            {totals.total}{tUi(" phones")}</Badge>
         )}
         actions={(
           <>
             <Button variant="outline" size="sm" onClick={() => (active === "logs" ? loadLogs() : refresh(true))} disabled={loading || logsLoading}>
-              <IconRefresh className={`mr-2 h-4 w-4 ${loading || logsLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
+              <IconRefresh className={`mr-2 h-4 w-4 ${loading || logsLoading ? "animate-spin" : ""}`} />{tUi("Refresh")}</Button>
             {headerCreate ? (
               <Button size="sm" className={neutralActionClass} onClick={headerCreate.onClick} disabled={saving}>
                 <IconWand className="mr-2 h-4 w-4" />
-                {headerCreate.label}
+                {tUi(headerCreate.label)}
               </Button>
             ) : null}
           </>
         )}
       />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
-        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel="Phones provisioning sections" />
+        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel={tUi("Phones provisioning sections")} />
 
         {/* Main panel */}
         <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">
           <div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold">{activeMeta.label}</h2>
-              <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
+              <h2 className="text-sm font-semibold">{tUi(activeMeta.label)}</h2>
+              <p className="text-xs text-muted-foreground">{tUi(activeMeta.description)}</p>
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-5">
@@ -767,14 +771,12 @@ export default function PhonesProvisioningPage() {
         {/* Right panel — Context Settings */}
         <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
           <PanelHeader
-            title={active === "dashboard" ? "Fleet monitor" : active === "logs" ? "Log filters" : "Context settings"}
-            description={active === "dashboard" ? "Fleet status overview" : active === "logs" ? "Range and page controls" : `${activeMeta.label} configuration`}
+            title={active === "dashboard" ? tUi("Fleet monitor") : active === "logs" ? tUi("Log filters") : tUi("Context settings")}
+            description={active === "dashboard" ? tUi("Fleet status overview") : active === "logs" ? tUi("Range and page controls") : tUi("{value0} configuration", { value0: activeMeta.label })}
           />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {active === "dashboard" ? (
-              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
-                Phones report in when they fetch config files from the provisioning endpoint. Open Logs under Bridges to inspect the detailed event history.
-              </div>
+              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">{tUi("Phones report in when they fetch config files from the provisioning endpoint. Open Logs under Bridges to inspect the detailed event history.")}</div>
             ) : active === "phones" ? (
               <PhoneEditor
                 draft={phoneDraft}
@@ -803,27 +805,23 @@ export default function PhonesProvisioningPage() {
       <AlertDialog open={Boolean(pendingRebootIds.length)} onOpenChange={(open) => { if (!open) { setPendingRebootIds([]); setPendingRebootHostOverrides({}); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reboot hardphone{pendingRebootIds.length === 1 ? "" : "s"}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Send a remote reboot command to {pendingRebootLabel}. Active calls may be interrupted and the phone{pendingRebootIds.length === 1 ? "" : "s"} can be unavailable while restarting.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Reboot hardphone")}{pendingRebootIds.length === 1 ? "" : tUi("s")}?</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("Send a remote reboot command to ")}{pendingRebootLabel}{tUi(". Active calls may be interrupted and the phone")}{pendingRebootIds.length === 1 ? "" : tUi("s")}{tUi(" can be unavailable while restarting.")}</AlertDialogDescription>
           </AlertDialogHeader>
           {pendingRebootPhones.length ? (
             <div className="max-h-40 overflow-y-auto rounded-lg border bg-muted/30 p-2 text-xs">
               {pendingRebootPhones.map((phone) => (
                 <div key={phone.id} className="flex items-center justify-between gap-3 py-1">
-                  <span className="truncate">{phone.phone_name || phone.label || phone.model || "Hardphone"}</span>
+                  <span className="truncate">{phone.phone_name || phone.label || phone.model || tUi("Hardphone")}</span>
                   <span className="text-muted-foreground">{pendingRebootHostOverrides[phone.id] || formatMacDisplay(phone.mac)}</span>
                 </div>
               ))}
             </div>
           ) : null}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={rebooting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={rebooting}>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmRebootPhones} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={rebooting}>
-              {rebooting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconPower className="mr-2 h-4 w-4" />}
-              Reboot
-            </AlertDialogAction>
+              {rebooting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconPower className="mr-2 h-4 w-4" />}{tUi("Reboot")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -832,21 +830,19 @@ export default function PhonesProvisioningPage() {
       <AlertDialog open={confirmDeletePhone !== null} onOpenChange={(open) => { if (!open) setConfirmDeletePhone(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete phone?</AlertDialogTitle>
+            <AlertDialogTitle>{tUi("Delete phone?")}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDeletePhone
-                ? <>This permanently deletes the phone <span className="font-medium text-foreground">{formatMacDisplay(confirmDeletePhone.mac)}</span> and its Telnyx credential. This action cannot be undone.</>
+                ? <>{tUi("This permanently deletes the phone ")}<span className="font-medium text-foreground">{formatMacDisplay(confirmDeletePhone.mac)}</span>{tUi(" and its Telnyx credential. This action cannot be undone.")}</>
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { const item = confirmDeletePhone; setConfirmDeletePhone(null); performDeletePhone(item); }}
-            >
-              Delete phone
-            </AlertDialogAction>
+            >{tUi("Delete phone")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -855,34 +851,35 @@ export default function PhonesProvisioningPage() {
 }
 
 function DashboardView({ dashboard, phones }) {
+  const tUi = useUiText();
   const totals = dashboard?.totals || { total: 0, provisioned: 0, pending: 0, disabled: 0, recently_seen: 0 };
   const byVendor = dashboard?.byVendor || [];
 
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MiniStat label="Total phones" value={totals.total} icon={IconDeviceLandlinePhone} tone="blue" />
-        <MiniStat label="Provisioned" value={totals.provisioned} icon={IconShieldCheck} tone="emerald" />
-        <MiniStat label="Pending" value={totals.pending} icon={IconClockHour4} tone="amber" />
-        <MiniStat label="Disabled" value={totals.disabled} icon={IconActivity} tone="rose" />
-        <MiniStat label="Seen last 2h" value={totals.recently_seen} icon={IconActivity} tone="violet" />
+        <MiniStat label={tUi("Total phones")} value={totals.total} icon={IconDeviceLandlinePhone} tone="blue" />
+        <MiniStat label={tUi("Provisioned")} value={totals.provisioned} icon={IconShieldCheck} tone="emerald" />
+        <MiniStat label={tUi("Pending")} value={totals.pending} icon={IconClockHour4} tone="amber" />
+        <MiniStat label={tUi("Disabled")} value={totals.disabled} icon={IconActivity} tone="rose" />
+        <MiniStat label={tUi("Seen last 2h")} value={totals.recently_seen} icon={IconActivity} tone="violet" />
       </div>
 
-      <SettingCard icon={IconDeviceLandlinePhone} title="Fleet by vendor" subtitle="Inventory split across supported manufacturers">
+      <SettingCard icon={IconDeviceLandlinePhone} title={tUi("Fleet by vendor")} subtitle={tUi("Inventory split across supported manufacturers")}>
         {byVendor.length ? (
           <div className="flex flex-wrap gap-2">
             {byVendor.map((v) => (
               <VendorLogoBadge key={v.vendor} vendor={v.vendor} count={v.count} />
             ))}
           </div>
-        ) : <p className="text-sm text-muted-foreground">No phones in inventory yet — add one in the Phones section.</p>}
+        ) : <p className="text-sm text-muted-foreground">{tUi("No phones in inventory yet — add one in the Phones section.")}</p>}
       </SettingCard>
 
-      <SettingCard icon={IconActivity} title="Phone status" subtitle="Registration identity and last contact per device">
+      <SettingCard icon={IconActivity} title={tUi("Phone status")} subtitle={tUi("Registration identity and last contact per device")}>
         {phones.length ? (
           <div className="overflow-hidden rounded-xl border">
             <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr)" }}>
-              <span>Phone</span><span>Vendor</span><span>State</span><span>SIP user</span><span>Last seen</span>
+              <span>{tUi("Phone")}</span><span>{tUi("Vendor")}</span><span>{tUi("State")}</span><span>{tUi("SIP user")}</span><span>{tUi("Last seen")}</span>
             </div>
             {phones.slice(0, 12).map((p) => (
               <div key={p.id} className="grid items-center border-t px-3 py-2 text-sm" style={{ gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr)" }}>
@@ -893,11 +890,11 @@ function DashboardView({ dashboard, phones }) {
                 <span><VendorLogoBadge vendor={p.vendor} /></span>
                 <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge></span>
                 <span className="truncate font-mono text-xs">{p.sip_username || "—"}</span>
-                <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : "never"}</span>
+                <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : tUi("never")}</span>
               </div>
             ))}
           </div>
-        ) : <Empty title="No phones yet" description="Add hard phones in the Phones section to see fleet status here." />}
+        ) : <Empty title={tUi("No phones yet")} description={tUi("Add hard phones in the Phones section to see fleet status here.")} />}
       </SettingCard>
 
     </div>
@@ -911,27 +908,28 @@ function logDetailText(detail) {
 }
 
 function LogsView({ logs, days, page, pageSize, loading, setLogDays, setLogPage, setLogPageSize }) {
+  const tUi = useUiText();
   const events = logs?.events || [];
   const total = logs?.total || 0;
   const totalPages = Math.max(1, logs?.totalPages || Math.ceil(total / pageSize) || 1);
 
   return (
     <div className="space-y-4">
-      <SettingCard icon={IconDownload} title="Provisioning logs" subtitle="Phone config fetches, bridge observations, CTI commands, and vendor callbacks">
+      <SettingCard icon={IconDownload} title={tUi("Provisioning logs")} subtitle={tUi("Phone config fetches, bridge observations, CTI commands, and vendor callbacks")}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Range</Label>
+              <Label>{tUi("Range")}</Label>
               <Select value={String(days)} onValueChange={(value) => setLogDays(Number(value))}>
                 <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">Last 1 day</SelectItem>
-                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="1">{tUi("Last 1 day")}</SelectItem>
+                  <SelectItem value="7">{tUi("Last 7 days")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Items per page</Label>
+              <Label>{tUi("Items per page")}</Label>
               <Select value={String(pageSize)} onValueChange={(value) => setLogPageSize(Number(value))}>
                 <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -940,22 +938,22 @@ function LogsView({ logs, days, page, pageSize, loading, setLogDays, setLogPage,
               </Select>
             </div>
           </div>
-          <Badge variant="outline" className="bg-card">{total} event{total === 1 ? "" : "s"}</Badge>
+          <Badge variant="outline" className="bg-card">{total}{tUi(" event")}{total === 1 ? "" : tUi("s")}</Badge>
         </div>
       </SettingCard>
 
-      <SettingCard icon={IconActivity} title="Event list" subtitle="Expand a row to inspect hp_provisioning_events.detail">
+      <SettingCard icon={IconActivity} title={tUi("Event list")} subtitle={tUi("Expand a row to inspect hp_provisioning_events.detail")}>
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><IconLoader2 className="h-4 w-4 animate-spin" /> Loading logs…</div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><IconLoader2 className="h-4 w-4 animate-spin" />{tUi(" Loading logs…")}</div>
         ) : events.length ? (
           <Accordion type="multiple" className="rounded-xl border">
             {events.map((event) => (
               <AccordionItem key={event.id} value={String(event.id)} className="px-3">
                 <AccordionTrigger className="py-3 hover:no-underline">
                   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 pr-3 text-left">
-                    <Badge variant="outline" className="max-w-[220px] truncate bg-card" title="Phone name">Phone name: {event.phone_name || event.label || "—"}</Badge>
-                    <Badge variant="outline" className="bg-card font-mono" title="MAC address">MAC address: {event.mac ? formatMacDisplay(event.mac) : "—"}</Badge>
-                    <Badge variant="outline" className="bg-card font-mono" title="Event type">Event type: {event.event_type || "—"}</Badge>
+                    <Badge variant="outline" className="max-w-[220px] truncate bg-card" title={tUi("Phone name")}>{tUi("Phone name: ")}{event.phone_name || event.label || "—"}</Badge>
+                    <Badge variant="outline" className="bg-card font-mono" title={tUi("MAC address")}>{tUi("MAC address: ")}{event.mac ? formatMacDisplay(event.mac) : "—"}</Badge>
+                    <Badge variant="outline" className="bg-card font-mono" title={tUi("Event type")}>{tUi("Event type: ")}{event.event_type || "—"}</Badge>
                     <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">{formatTime(event.created_at)}</span>
                   </div>
                 </AccordionTrigger>
@@ -966,12 +964,12 @@ function LogsView({ logs, days, page, pageSize, loading, setLogDays, setLogPage,
             ))}
           </Accordion>
         ) : (
-          <Empty title="No provisioning logs" description="No hardphone provisioning events exist for the selected range." />
+          <Empty title={tUi("No provisioning logs")} description={tUi("No hardphone provisioning events exist for the selected range.")} />
         )}
         <div className="mt-4 flex items-center justify-between gap-3">
-          <Button variant="outline" size="sm" disabled={loading || page <= 1} onClick={() => setLogPage(page - 1)}>Previous</Button>
-          <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={loading || page >= totalPages} onClick={() => setLogPage(page + 1)}>Next</Button>
+          <Button variant="outline" size="sm" disabled={loading || page <= 1} onClick={() => setLogPage(page - 1)}>{tUi("Previous")}</Button>
+          <span className="text-sm text-muted-foreground">{tUi("Page ")}{page}{tUi(" of ")}{totalPages}</span>
+          <Button variant="outline" size="sm" disabled={loading || page >= totalPages} onClick={() => setLogPage(page + 1)}>{tUi("Next")}</Button>
         </div>
       </SettingCard>
     </div>
@@ -979,23 +977,21 @@ function LogsView({ logs, days, page, pageSize, loading, setLogDays, setLogPage,
 }
 
 function LogsContext({ logs, days, pageSize, loading, onRefresh }) {
+  const tUi = useUiText();
   return (
     <div className="space-y-4 text-sm">
-      <div className="rounded-xl border bg-muted/30 p-4 text-muted-foreground">
-        Showing the last {days} day{days === 1 ? "" : "s"}, {pageSize} rows per page. Each log row opens the raw hp_provisioning_events.detail payload.
-      </div>
+      <div className="rounded-xl border bg-muted/30 p-4 text-muted-foreground">{tUi("Showing the last ")}{days}{tUi(" day")}{days === 1 ? "" : tUi("s")}, {pageSize}{tUi(" rows per page. Each log row opens the raw hp_provisioning_events.detail payload.")}</div>
       <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-        <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        Refresh logs
-      </Button>
-      <MiniStat label="Matching events" value={logs?.total || 0} icon={IconActivity} tone="violet" />
+        <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />{tUi("Refresh logs")}</Button>
+      <MiniStat label={tUi("Matching events")} value={logs?.total || 0} icon={IconActivity} tone="violet" />
     </div>
   );
 }
 
 function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelectedPhoneId, setSelectedRebootIds, deletePhone, togglePhoneState, rebootPhones, rebooting }) {
+  const tUi = useUiText();
   if (!phones.length) {
-    return <Empty title="No phones yet" description="Use New phone in the header, fill in the MAC and vendor in Context Settings on the right, then save. A Telnyx SIP credential is created automatically." />;
+    return <Empty title={tUi("No phones yet")} description={tUi("Use New phone in the header, fill in the MAC and vendor in Context Settings on the right, then save. A Telnyx SIP credential is created automatically.")} />;
   }
   const allSelected = selectedRebootIds.length === phones.length;
   const toggleRebootSelection = (id) => setSelectedRebootIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -1003,23 +999,19 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
     <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold">Phone inventory</h3>
-          <p className="text-sm text-muted-foreground">Rows select configuration in the right Context Settings panel. Use checkboxes for bulk remote reboot.</p>
+          <h3 className="text-lg font-semibold">{tUi("Phone inventory")}</h3>
+          <p className="text-sm text-muted-foreground">{tUi("Rows select configuration in the right Context Settings panel. Use checkboxes for bulk remote reboot.")}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" variant="outline" disabled={rebooting || !selectedRebootIds.length} onClick={() => rebootPhones(selectedRebootIds)} data-testid="hp-bulk-reboot-selected">
-            {rebooting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconPower className="mr-2 h-4 w-4" />}
-            Reboot selected
-          </Button>
-          <Button size="sm" variant="outline" disabled={rebooting || !phones.length} onClick={() => rebootPhones(phones.map((p) => p.id))} data-testid="hp-bulk-reboot-all">
-            Reboot all
-          </Button>
-          <Badge variant="outline" className="bg-card">{phones.length} total</Badge>
+            {rebooting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconPower className="mr-2 h-4 w-4" />}{tUi("Reboot selected")}</Button>
+          <Button size="sm" variant="outline" disabled={rebooting || !phones.length} onClick={() => rebootPhones(phones.map((p) => p.id))} data-testid="hp-bulk-reboot-all">{tUi("Reboot all")}</Button>
+          <Badge variant="outline" className="bg-card">{phones.length}{tUi(" total")}</Badge>
         </div>
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border">
         <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}>
-          <span><input type="checkbox" checked={allSelected} onChange={() => setSelectedRebootIds(allSelected ? [] : phones.map((p) => p.id))} aria-label="Select all phones for reboot" /></span><span>Phone</span><span>Phone number</span><span>Vendor</span><span>Model</span><span>State</span><span>Last seen</span><span className="text-right">Actions</span>
+          <span><input type="checkbox" checked={allSelected} onChange={() => setSelectedRebootIds(allSelected ? [] : phones.map((p) => p.id))} aria-label={tUi("Select all phones for reboot")} /></span><span>{tUi("Phone")}</span><span>{tUi("Phone number")}</span><span>{tUi("Vendor")}</span><span>{tUi("Model")}</span><span>{tUi("State")}</span><span>{tUi("Last seen")}</span><span className="text-right">{tUi("Actions")}</span>
         </div>
         {phones.map((p) => {
           const selected = selectedPhoneId === p.id;
@@ -1031,7 +1023,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
               className={`grid cursor-pointer items-center border-t px-3 py-2.5 text-sm transition hover:bg-muted/40 ${selected ? "bg-sky-500/10" : ""}`}
               style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}
             >
-              <span onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={rebootSelected} onChange={() => toggleRebootSelection(p.id)} aria-label={`Select ${formatMacDisplay(p.mac)} for reboot`} /></span>
+              <span onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={rebootSelected} onChange={() => toggleRebootSelection(p.id)} aria-label={tUi("Select {value0} for reboot", { value0: formatMacDisplay(p.mac) })} /></span>
               <span className="flex min-w-0 items-center gap-3">
                 <PhoneModelThumbnail vendor={p.vendor} model={p.model} />
                 <span className="min-w-0">
@@ -1042,16 +1034,16 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
               <span className="truncate font-mono text-xs">{p.assigned_phone_number || "—"}</span>
               <span><VendorLogoBadge vendor={p.vendor} /></span>
               <span className="truncate text-xs">{p.model || "—"}</span>
-              <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge><Badge variant="outline" className={`${registrationBadgeClass(p.sip_registration_status)} mt-1`}>{registrationBadgeLabel(p.sip_registration_status)}</Badge></span>
-              <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : "never"}</span>
+              <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge><Badge variant="outline" className={`${registrationBadgeClass(p.sip_registration_status)} mt-1`}>{tUi(registrationBadgeLabel(p.sip_registration_status))}</Badge></span>
+              <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : tUi("never")}</span>
               <span className="flex items-center justify-end gap-1">
-                <Button size="icon" variant="ghost" className="h-7 w-7" title="Remote reboot" disabled={rebooting} onClick={(e) => { e.stopPropagation(); rebootPhones([p.id]); }}>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title={tUi("Remote reboot")} disabled={rebooting} onClick={(e) => { e.stopPropagation(); rebootPhones([p.id]); }}>
                   <IconPower className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" title={p.provisioning_state === "disabled" ? "Enable provisioning" : "Disable provisioning"} onClick={(e) => { e.stopPropagation(); togglePhoneState(p); }}>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title={p.provisioning_state === "disabled" ? tUi("Enable provisioning") : tUi("Disable provisioning")} onClick={(e) => { e.stopPropagation(); togglePhoneState(p); }}>
                   {p.provisioning_state === "disabled" ? <IconEye className="h-3.5 w-3.5" /> : <IconEyeOff className="h-3.5 w-3.5" />}
                 </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" title="Delete" onClick={(e) => { e.stopPropagation(); deletePhone(p); }}>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title={tUi("Delete")} onClick={(e) => { e.stopPropagation(); deletePhone(p); }}>
                   <IconTrash className="h-3.5 w-3.5" />
                 </Button>
               </span>
@@ -1064,6 +1056,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
 }
 
 function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges = [], availablePhoneNumbers = [], hardphoneConfig = {}, save, rebootPhones, rebooting = false }) {
+  const tUi = useUiText();
   const [numberChangeOpen, setNumberChangeOpen] = useState(false);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const phoneAdminPasswordConfigured = hardphoneConfig.phoneAdminPasswordConfigured === true;
@@ -1083,29 +1076,29 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
 
   return (
     <>
-      <SettingCard icon={IconDeviceLandlinePhone} title={editing ? "Edit phone" : "New phone"}>
+      <SettingCard icon={IconDeviceLandlinePhone} title={editing ? tUi("Edit phone") : tUi("New phone")}>
         <div className="space-y-3">
           <div>
-            <Label>Phone Name</Label>
-            <Input className="mt-1" value={draft.phone_name} onChange={(e) => update({ phone_name: e.target.value })} placeholder="Desk phone / Reception" />
+            <Label>{tUi("Phone Name")}</Label>
+            <Input className="mt-1" value={draft.phone_name} onChange={(e) => update({ phone_name: e.target.value })} placeholder={tUi("Desk phone / Reception")} />
           </div>
           <div>
-            <Label>MAC address<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-            <Input className="mt-1 font-mono" value={formatMacInput(draft.mac)} onChange={(e) => update({ mac: formatMacInput(e.target.value) })} placeholder="00:90:8f:56:10:a5" disabled={editing} />
+            <Label>{tUi("MAC address")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+            <Input className="mt-1 font-mono" value={formatMacInput(draft.mac)} onChange={(e) => update({ mac: formatMacInput(e.target.value) })} placeholder={tUi("00:90:8f:56:10:a5")} disabled={editing} />
           </div>
           <div>
-            <Label>Vendor<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+            <Label>{tUi("Vendor")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
             <Select value={draft.vendor} onValueChange={(v) => update({ vendor: v, model: "" })}>
-              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Vendor" /></SelectTrigger>
+              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder={tUi("Vendor")} /></SelectTrigger>
               <SelectContent>
-                {VENDORS.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}
+                {VENDORS.map((v) => <SelectItem key={v.value} value={v.value}>{tUi(v.label)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Model</Label>
+            <Label>{tUi("Model")}</Label>
             <Select value={draft.model || ""} onValueChange={(v) => update({ model: v })}>
-              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select model" /></SelectTrigger>
+              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder={tUi("Select model")} /></SelectTrigger>
               <SelectContent>
                 {models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
@@ -1114,11 +1107,11 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
           {catalogEntry ? <PhoneModelPreview vendor={draft.vendor} model={draft.model} catalogEntry={catalogEntry} /> : null}
           <PhoneModelSettingsCard vendor={draft.vendor} model={draft.model} settings={normalizePhoneSettings(draft.settings)} updateSettings={updateSettings} draft={draft} update={update} bridges={bridges} />
           <div>
-            <Label>Line Label</Label>
-            <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Line 1 / Agent name" />
+            <Label>{tUi("Line Label")}</Label>
+            <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder={tUi("Line 1 / Agent name")} />
           </div>
           <div className="rounded-xl border bg-muted/20 p-3">
-            <Label>Telnyx number</Label>
+            <Label>{tUi("Telnyx number")}</Label>
             <div className="mt-1 flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 {editing && draft.assigned_phone_number && !numberChangeOpen ? (
@@ -1128,16 +1121,16 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
                     const selected = numberOptions.find((n) => n.id === v);
                     update({ assigned_phone_number_id: v === "none" ? "" : v, assigned_phone_number: selected?.phone_number || "" });
                   }}>
-                    <SelectTrigger className="w-full" data-testid="hp-phone-number-select"><SelectValue placeholder="Select a Telnyx number" /></SelectTrigger>
+                    <SelectTrigger className="w-full" data-testid="hp-phone-number-select"><SelectValue placeholder={tUi("Select a Telnyx number")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No Telnyx number assigned</SelectItem>
-                      {numberOptions.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}{n.assigned ? " · current" : ""}</SelectItem>)}
+                      <SelectItem value="none">{tUi("No Telnyx number assigned")}</SelectItem>
+                      {numberOptions.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}{n.assigned ? tUi(" · current") : ""}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
               </div>
               {editing && draft.assigned_phone_number ? (
-                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNumberChangeOpen(true)} disabled={numberChangeOpen} aria-label="Change Telnyx number" title="Change Telnyx number" data-testid="hp-phone-number-change">
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNumberChangeOpen(true)} disabled={numberChangeOpen} aria-label={tUi("Change Telnyx number")} title={tUi("Change Telnyx number")} data-testid="hp-phone-number-change">
                   <IconRefresh className="h-4 w-4" />
                 </Button>
               ) : null}
@@ -1145,45 +1138,45 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
           </div>
           {phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? null : (
             <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-              <span>Configure {phoneAdminPasswordConfigured ? "TELNYX_OUTBOUND_VOICE_PROFILE" : "TELNYX_PHONE_ADMIN_PASSWORD"}{!phoneAdminPasswordConfigured && !outboundVoiceProfileConfigured ? " and TELNYX_OUTBOUND_VOICE_PROFILE" : ""} before adding new hard phones.</span>
+              <span>{tUi("Configure ")}{phoneAdminPasswordConfigured ? tUi("TELNYX_OUTBOUND_VOICE_PROFILE") : tUi("TELNYX_PHONE_ADMIN_PASSWORD")}{!phoneAdminPasswordConfigured && !outboundVoiceProfileConfigured ? tUi(" and TELNYX_OUTBOUND_VOICE_PROFILE") : ""}{tUi(" before adding new hard phones.")}</span>
             </div>
           )}
           <div>
-            <Label>Detected phone IP address</Label>
-            <Input className="mt-1 font-mono" value={editing ? (phone.last_ip || phone.ip_address || "") : "Auto-detected after first phone callback"} readOnly placeholder="Waiting for provisioning/event callback" />
+            <Label>{tUi("Detected phone IP address")}</Label>
+            <Input className="mt-1 font-mono" value={editing ? (phone.last_ip || phone.ip_address || "") : "Auto-detected after first phone callback"} readOnly placeholder={tUi("Waiting for provisioning/event callback")} />
           </div>
         </div>
       </SettingCard>
 
       {editing && phone ? (
-        <SettingCard icon={IconPhoneCall} title="SIP registration">
+        <SettingCard icon={IconPhoneCall} title={tUi("SIP registration")}>
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">SIP username</span>
+              <span className="text-xs text-muted-foreground">{tUi("SIP username")}</span>
               <span className="truncate font-mono text-xs">{phone.sip_username || "—"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">SIP connection ID</span>
+              <span className="text-xs text-muted-foreground">{tUi("SIP connection ID")}</span>
               <span className="truncate font-mono text-xs">{phone.telnyx_connection_id || phone.telnyx_credential_id || "—"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">Assigned number</span>
+              <span className="text-xs text-muted-foreground">{tUi("Assigned number")}</span>
               <span className="truncate font-mono text-xs">{phone.assigned_phone_number || "—"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">SIP server</span>
-              <span className="font-mono text-xs">sip.telnyx.com</span>
+              <span className="text-xs text-muted-foreground">{tUi("SIP server")}</span>
+              <span className="font-mono text-xs">{tUi("sip.telnyx.com")}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">Telnyx registration</span>
-              <Badge variant="outline" className={registrationBadgeClass(phone.sip_registration_status)}>{registrationBadgeLabel(phone.sip_registration_status)}</Badge>
+              <span className="text-xs text-muted-foreground">{tUi("Telnyx registration")}</span>
+              <Badge variant="outline" className={registrationBadgeClass(phone.sip_registration_status)}>{tUi(registrationBadgeLabel(phone.sip_registration_status))}</Badge>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">State</span>
+              <span className="text-xs text-muted-foreground">{tUi("State")}</span>
               <Badge variant="outline" className={stateBadgeClass(phone.provisioning_state)}>{phone.provisioning_state}</Badge>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">Last user agent</span>
+              <span className="text-xs text-muted-foreground">{tUi("Last user agent")}</span>
               <span className="truncate text-xs">{phone.last_user_agent || "—"}</span>
             </div>
             <PhoneMaintenanceActions phone={phone} rebootPhones={rebootPhones} rebooting={rebooting} />
@@ -1195,72 +1188,74 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
 
       <Button className="w-full" onClick={save} disabled={!valid || saving || (!editing && (!phoneAdminPasswordConfigured || !outboundVoiceProfileConfigured))} data-testid="hp-save-phone">
         {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
-        {editing ? "Save phone" : "Add phone"}
+        {editing ? tUi("Save phone") : tUi("Add phone")}
       </Button>
       {!valid ? (
-        <p className="text-xs text-amber-600 dark:text-amber-300">Required: a valid 12-hex-digit MAC address and a vendor.</p>
+        <p className="text-xs text-amber-600 dark:text-amber-300">{tUi("Required: a valid 12-hex-digit MAC address and a vendor.")}</p>
       ) : null}
     </>
   );
 }
 
 function PhoneModelSettingsCard({ vendor, model, settings, updateSettings, draft, update, bridges = [] }) {
+  const tUi = useUiText();
   const useBridge = settings.cti_mode === "local_bridge";
   return (
     <div className="rounded-xl border bg-muted/20 p-3">
-      <div className="mb-3 text-sm font-medium">Context settings view{model ? ` · ${model}` : ""}</div>
+      <div className="mb-3 text-sm font-medium">{tUi("Context settings view")}{model ? tUi(" · {value0}", { value0: model }) : ""}</div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label>Line keys</Label>
+          <Label>{tUi("Line keys")}</Label>
           <Input className="mt-1" value={settings.line_keys || ""} onChange={(e) => updateSettings({ line_keys: e.target.value })} placeholder="1" />
         </div>
         <div>
-          <Label>CTI mode</Label>
+          <Label>{tUi("CTI mode")}</Label>
           <Select value={settings.cti_mode || "direct"} onValueChange={(v) => updateSettings({ cti_mode: v })}>
-            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
+            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder={tUi("CTI mode")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="direct">Direct phone API</SelectItem>
-              <SelectItem value="local_bridge">Local bridge</SelectItem>
-              <SelectItem value="telnyx">Telnyx fallback</SelectItem>
+              <SelectItem value="direct">{tUi("Direct phone API")}</SelectItem>
+              <SelectItem value="local_bridge">{tUi("Local bridge")}</SelectItem>
+              <SelectItem value="telnyx">{tUi("Telnyx fallback")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="sm:col-span-2">
-          <Label>Local bridge</Label>
+          <Label>{tUi("Local bridge")}</Label>
           <Select value={draft.local_bridge_id || "none"} onValueChange={(v) => update({ local_bridge_id: v === "none" ? "" : v })} disabled={!useBridge}>
-            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select local bridge" /></SelectTrigger>
+            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder={tUi("Select local bridge")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">No bridge assigned</SelectItem>
+              <SelectItem value="none">{tUi("No bridge assigned")}</SelectItem>
               {bridges.map((b) => (
-                <SelectItem key={b.bridge_id} value={b.bridge_id}>{b.label || b.bridge_id} · {b.online ? "online" : "offline"}</SelectItem>
+                <SelectItem key={b.bridge_id} value={b.bridge_id}>{b.label || b.bridge_id} · {b.online ? tUi("online") : tUi("offline")}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>SNTP server</Label>
-          <Input className="mt-1 font-mono" value={settings.sntp_server || ""} onChange={(e) => updateSettings({ sntp_server: e.target.value })} placeholder="pool.ntp.org" />
+          <Label>{tUi("SNTP server")}</Label>
+          <Input className="mt-1 font-mono" value={settings.sntp_server || ""} onChange={(e) => updateSettings({ sntp_server: e.target.value })} placeholder={tUi("pool.ntp.org")} />
         </div>
         <div>
-          <Label>NTP timezone offset</Label>
+          <Label>{tUi("NTP timezone offset")}</Label>
           <Select value={settings.ntp_timezone || "UTC"} onValueChange={(v) => updateSettings({ ntp_timezone: v })}>
-            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select timezone offset" /></SelectTrigger>
+            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder={tUi("Select timezone offset")} /></SelectTrigger>
             <SelectContent>
-              {PHONE_TIMEZONES.map((tz) => <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>)}
+              {PHONE_TIMEZONES.map((tz) => <SelectItem key={tz.value} value={tz.value}>{tUi(tz.label)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
       </div>
       <div className="mt-3 space-y-2 text-xs">
-        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.timezone_discovery !== false} onChange={(e) => updateSettings({ timezone_discovery: e.target.checked })} /> Timezone discovery from DHCP / site defaults</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.dynamic_reload !== false} onChange={(e) => updateSettings({ dynamic_reload: e.target.checked })} /> Dynamic reload / periodic provisioning checks</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.automatic_firmware_updates !== false} onChange={(e) => updateSettings({ automatic_firmware_updates: e.target.checked })} /> Automatic firmware updates</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.timezone_discovery !== false} onChange={(e) => updateSettings({ timezone_discovery: e.target.checked })} />{tUi(" Timezone discovery from DHCP / site defaults")}</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.dynamic_reload !== false} onChange={(e) => updateSettings({ dynamic_reload: e.target.checked })} />{tUi(" Dynamic reload / periodic provisioning checks")}</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.automatic_firmware_updates !== false} onChange={(e) => updateSettings({ automatic_firmware_updates: e.target.checked })} />{tUi(" Automatic firmware updates")}</label>
       </div>
     </div>
   );
 }
 
 function PhoneModelPreview({ vendor, model, catalogEntry }) {
+  const tUi = useUiText();
   const vendorLabel = VENDORS.find((v) => v.value === vendor)?.label || vendor;
   return (
     <div className="overflow-hidden rounded-xl border bg-muted/20">
@@ -1269,8 +1264,7 @@ function PhoneModelPreview({ vendor, model, catalogEntry }) {
       </div>
       <div className="border-t px-3 py-2">
         <div className="text-sm font-medium">{model}</div>
-        <a className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:underline dark:text-sky-300" href={catalogEntry.docs} target="_blank" rel="noreferrer">
-          Full manufacturer documentation <IconExternalLink className="h-3 w-3" />
+        <a className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:underline dark:text-sky-300" href={catalogEntry.docs} target="_blank" rel="noreferrer">{tUi("Full manufacturer documentation ")}<IconExternalLink className="h-3 w-3" />
         </a>
       </div>
     </div>
@@ -1402,6 +1396,7 @@ function callStateBadgeClass(info) {
 }
 
 function CtiIconButton({ action, label, icon: Icon, active = false, disabled = false, busy, onClick, testId }) {
+  const tUi = useUiText();
   return (
     <Button
       type="button"
@@ -1410,8 +1405,8 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
       className="h-11 min-w-0 flex-1"
       disabled={disabled || Boolean(busy)}
       onClick={onClick}
-      title={label}
-      aria-label={label}
+      title={tUi(label)}
+      aria-label={tUi(label)}
       data-testid={testId || `hp-cti-${action}`}
     >
       {busy === action ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
@@ -1420,6 +1415,7 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
 }
 
 function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
+  const tUi = useUiText();
   const [busy, setBusy] = useState(null);
   const reachableIp = phone?.last_ip || phone?.ip_address || "";
   const [hostOverride, setHostOverride] = useState("");
@@ -1434,9 +1430,9 @@ function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `${action} failed`);
-      notify({ title: `Phone ${action}`, description: action === "status" ? phoneStatusSummary(data.result, phone) : "Command accepted", variant: "success" });
+      notify({ title: tUi("Phone {value0}", {value0: action}), description: action === "status" ? phoneStatusSummary(data.result, phone) : "Command accepted", variant: "success" });
     } catch (err) {
-      notify({ title: `Phone ${action} failed`, description: err.message, variant: "error" });
+      notify({ title: tUi("Phone {value0} failed", {value0: action}), description: err.message, variant: "error" });
     } finally {
       setBusy(null);
     }
@@ -1449,15 +1445,15 @@ function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
   );
   return (
     <div className="border-t pt-3">
-      <div className="mb-2 text-xs font-medium text-muted-foreground">Phone actions</div>
+      <div className="mb-2 text-xs font-medium text-muted-foreground">{tUi("Phone actions")}</div>
       {!reachableIp ? (
         <Input
           value={hostOverride}
           onChange={(event) => setHostOverride(event.target.value)}
-          placeholder="Temporary phone IP/host"
+          placeholder={tUi("Temporary phone IP/host")}
           className="mb-2 h-9 text-xs"
           data-testid="hp-sip-host-override"
-          aria-label="Temporary phone IP or host for actions"
+          aria-label={tUi("Temporary phone IP or host for actions")}
         />
       ) : null}
       <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
@@ -1473,6 +1469,7 @@ function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
 }
 
 function PhoneCtiCard({ phone }) {
+  const tUi = useUiText();
   const [busy, setBusy] = useState(null);
   const [dialNumber, setDialNumber] = useState("");
   const [lastStatus, setLastStatus] = useState(null);
@@ -1581,21 +1578,19 @@ function PhoneCtiCard({ phone }) {
   const toggleMuteAction = callInfo.isMuted ? "unmute" : "mute";
 
   return (
-    <SettingCard icon={IconActivity} title="CTI control">
+    <SettingCard icon={IconActivity} title={tUi("CTI control")}>
       <div className="space-y-3">
         {!reachableIp && phone.vendor !== "audiocodes" ? (
-          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-            No known phone IP yet — wait for provisioning or bridge discovery before using local CTI.
-          </p>
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">{tUi("No known phone IP yet — wait for provisioning or bridge discovery before using local CTI.")}</p>
         ) : null}
         <div className="space-y-2 rounded-xl border bg-muted/20 p-2" data-testid="hp-cti-toolbar">
           <Input className="h-10 w-full font-mono" value={dialNumber} onChange={(e) => setDialNumber(e.target.value)} placeholder="+48123456789" disabled={hasActiveCall || Boolean(busy)} />
           <div className="grid grid-cols-5 gap-2">
-            <CtiIconButton action="dial" label="Dial" icon={IconPhoneCall} disabled={!canDial} busy={busy} onClick={() => runCti("dial", { number: dialNumber.trim() })} testId="hp-cti-dial" />
-            <CtiIconButton action="answer" label="Answer" icon={IconPhoneIncoming} disabled={!canAnswer} busy={busy} onClick={() => runCti("answer")} />
-            <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? "Resume" : "Hold"} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canHold} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
-            <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : muteDisabledReason} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canMute} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
-            <CtiIconButton action="hangup" label="Hang up" icon={IconPhoneOff} disabled={!canHangup} busy={busy} onClick={() => runCti("hangup")} />
+            <CtiIconButton action="dial" label={tUi("Dial")} icon={IconPhoneCall} disabled={!canDial} busy={busy} onClick={() => runCti("dial", { number: dialNumber.trim() })} testId="hp-cti-dial" />
+            <CtiIconButton action="answer" label={tUi("Answer")} icon={IconPhoneIncoming} disabled={!canAnswer} busy={busy} onClick={() => runCti("answer")} />
+            <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? tUi("Resume") : tUi("Hold", undefined, "phone action")} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canHold} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
+            <CtiIconButton action={toggleMuteAction} label={tUi(callInfo.isMuted ? tUi("Unmute") : muteDisabledReason)} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canMute} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
+            <CtiIconButton action="hangup" label={tUi("Hang up")} icon={IconPhoneOff} disabled={!canHangup} busy={busy} onClick={() => runCti("hangup")} />
           </div>
         </div>
         {ctiError ? (
@@ -1605,25 +1600,25 @@ function PhoneCtiCard({ phone }) {
         ) : null}
         <div className="rounded-xl border bg-muted/20 p-3" data-testid="hp-cti-call-info">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current call</div>
-            <Badge variant="outline" className={callStateBadgeClass(callInfo)}>{callInfo.label}</Badge>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{tUi("Current call")}</div>
+            <Badge variant="outline" className={callStateBadgeClass(callInfo)}>{operationalStatusLabel(tUi, String(callInfo.label).toLowerCase())}</Badge>
           </div>
           <div className="grid gap-2 text-xs sm:grid-cols-2">
             <div className="rounded-lg bg-background/70 px-2 py-1.5">
-              <div className="text-muted-foreground">From</div>
+              <div className="text-muted-foreground">{tUi("From")}</div>
               <div className="truncate font-mono">{callInfo.from}</div>
             </div>
             <div className="rounded-lg bg-background/70 px-2 py-1.5">
-              <div className="text-muted-foreground">To</div>
+              <div className="text-muted-foreground">{tUi("To")}</div>
               <div className="truncate font-mono">{callInfo.to}</div>
             </div>
             <div className="rounded-lg bg-background/70 px-2 py-1.5">
-              <div className="text-muted-foreground">Reachability</div>
-              <div className="font-medium">{callInfo.reachable === null ? "Unknown" : callInfo.reachable ? "Reachable" : "Not reachable"}</div>
+              <div className="text-muted-foreground">{tUi("Reachability")}</div>
+              <div className="font-medium">{callInfo.reachable === null ? tUi("Unknown") : callInfo.reachable ? tUi("Reachable") : tUi("Not reachable")}</div>
             </div>
             <div className="rounded-lg bg-background/70 px-2 py-1.5">
-              <div className="text-muted-foreground">Details</div>
-              <div className="truncate font-medium">{callInfo.duration ? `Duration ${callInfo.duration}` : callInfo.handle ? `Handle ${callInfo.handle}` : "No active call"}</div>
+              <div className="text-muted-foreground">{tUi("Details")}</div>
+              <div className="truncate font-medium">{callInfo.duration ? tUi("Duration {value0}", { value0: callInfo.duration }) : callInfo.handle ? tUi("Handle {value0}", { value0: callInfo.handle }) : tUi("No active call")}</div>
             </div>
           </div>
         </div>
@@ -1633,6 +1628,7 @@ function PhoneCtiCard({ phone }) {
 }
 
 function SettingsSummaryView() {
+  const tUi = useUiText();
   const [origin, setOrigin] = useState("");
   useEffect(() => { try { setOrigin(window.location.origin); } catch {} }, []);
   const provisioningUrl = `${origin || "https://<your-host>"}/api/provisioning/`;
@@ -1640,53 +1636,49 @@ function SettingsSummaryView() {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
-        <h3 className="text-lg font-semibold">Provisioning endpoint</h3>
-        <p className="text-sm text-muted-foreground">Phones download generated config files from this URL at boot and on their polling schedule.</p>
+        <h3 className="text-lg font-semibold">{tUi("Provisioning endpoint")}</h3>
+        <p className="text-sm text-muted-foreground">{tUi("Phones download generated config files from this URL at boot and on their polling schedule.")}</p>
         <div className="mt-3 rounded-lg border bg-muted/30 px-3 py-2 font-mono text-sm">{provisioningUrl}</div>
       </div>
 
-      <SettingCard icon={IconServer} title="Zero-touch setup" subtitle="Point factory phones at the provisioning endpoint">
+      <SettingCard icon={IconServer} title={tUi("Zero-touch setup")} subtitle={tUi("Point factory phones at the provisioning endpoint")}>
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-          <li><span className="font-medium text-foreground">DHCP option 66 / 160</span> — set the value to the provisioning URL above; phones pick it up at boot.</li>
-          <li><span className="font-medium text-foreground">Vendor redirect services</span> — Poly ZTP / Poly Lens, Yealink RPS, AudioCodes Redirect can map phone MACs to this URL for drop-ship deployments.</li>
-          <li><span className="font-medium text-foreground">Manual</span> — enter the URL in the phone menu or web UI (Provisioning Server / Auto Provision).</li>
+          <li><span className="font-medium text-foreground">{tUi("DHCP option 66 / 160")}</span>{tUi(" — set the value to the provisioning URL above; phones pick it up at boot.")}</li>
+          <li><span className="font-medium text-foreground">{tUi("Vendor redirect services")}</span>{tUi(" — Poly ZTP / Poly Lens, Yealink RPS, AudioCodes Redirect can map phone MACs to this URL for drop-ship deployments.")}</li>
+          <li><span className="font-medium text-foreground">{tUi("Manual")}</span>{tUi(" — enter the URL in the phone menu or web UI (Provisioning Server / Auto Provision).")}</li>
         </ul>
       </SettingCard>
 
-      <SettingCard icon={IconRouteAltLeft} title="NAT and local-network CTI" subtitle="Managed hardphones without inbound firewall holes">
+      <SettingCard icon={IconRouteAltLeft} title={tUi("NAT and local-network CTI")} subtitle={tUi("Managed hardphones without inbound firewall holes")}>
         <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            Direct Poly REST and Yealink Action URI need server-to-phone reachability. For phones behind customer NAT, prefer <span className="font-medium text-foreground">Telnyx Call Control fallback</span>: the phone registers outbound to Telnyx, auto-answers the CTI leg, and the Contact Center controls that Telnyx leg instead of opening inbound firewall access to the handset.
-          </p>
-          <p>
-            For true local key-level control with NAT-ed phones, use a small LAN bridge/agent that opens an outbound WebSocket to CC and proxies local phone REST/Action URI calls. A browser plugin is possible but weaker operationally because of credentials, CORS/Private Network Access and enterprise rollout policy.
-          </p>
+          <p>{tUi("Direct Poly REST and Yealink Action URI need server-to-phone reachability. For phones behind customer NAT, prefer ")}<span className="font-medium text-foreground">{tUi("Telnyx Call Control fallback")}</span>{tUi(": the phone registers outbound to Telnyx, auto-answers the CTI leg, and the Contact Center controls that Telnyx leg instead of opening inbound firewall access to the handset.")}</p>
+          <p>{tUi("For true local key-level control with NAT-ed phones, use a small LAN bridge/agent that opens an outbound WebSocket to CC and proxies local phone REST/Action URI calls. A browser plugin is possible but weaker operationally because of credentials, CORS/Private Network Access and enterprise rollout policy.")}</p>
         </div>
       </SettingCard>
 
-      <SettingCard icon={IconDeviceLandlinePhone} title="Served file conventions" subtitle="Files generated per request from the phone inventory">
+      <SettingCard icon={IconDeviceLandlinePhone} title={tUi("Served file conventions")} subtitle={tUi("Files generated per request from the phone inventory")}>
         <div className="space-y-2 text-sm">
           <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <div className="font-medium">Polycom / Poly</div>
-            <div className="font-mono text-xs text-muted-foreground">&lt;mac&gt;.cfg → master config · &lt;mac&gt;-reg.cfg → registration (XML)</div>
+            <div className="font-medium">{tUi("Polycom / Poly")}</div>
+            <div className="font-mono text-xs text-muted-foreground">{tUi("<mac>.cfg → master config · <mac>-reg.cfg → registration (XML)")}</div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <div className="font-medium">Yealink</div>
-            <div className="font-mono text-xs text-muted-foreground">y000000000000.cfg → common defaults · &lt;mac&gt;.cfg → account config</div>
+            <div className="font-medium">{tUi("Yealink")}</div>
+            <div className="font-mono text-xs text-muted-foreground">{tUi("y000000000000.cfg → common defaults · <mac>.cfg → account config")}</div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-3 py-2">
-            <div className="font-medium">AudioCodes</div>
-            <div className="font-mono text-xs text-muted-foreground">&lt;mac&gt;.cfg → INI config (405HD / 445HD / 450HD, UC firmware)</div>
+            <div className="font-medium">{tUi("AudioCodes")}</div>
+            <div className="font-mono text-xs text-muted-foreground">{tUi("<mac>.cfg → INI config (405HD / 445HD / 450HD, UC firmware)")}</div>
           </div>
         </div>
       </SettingCard>
 
-      <SettingCard icon={IconShieldCheck} title="Security model" subtitle="How credentials are protected">
+      <SettingCard icon={IconShieldCheck} title={tUi("Security model")} subtitle={tUi("How credentials are protected")}>
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-          <li>Only phones present in the inventory are served config files — unknown MACs get 404 and are logged.</li>
-          <li>Each phone gets its own Telnyx telephony credential; deleting the phone deletes the credential.</li>
-          <li>Factory admin passwords are replaced during provisioning.</li>
-          <li>Run the endpoint behind HTTPS — config files carry SIP secrets.</li>
+          <li>{tUi("Only phones present in the inventory are served config files — unknown MACs get 404 and are logged.")}</li>
+          <li>{tUi("Each phone gets its own Telnyx telephony credential; deleting the phone deletes the credential.")}</li>
+          <li>{tUi("Factory admin passwords are replaced during provisioning.")}</li>
+          <li>{tUi("Run the endpoint behind HTTPS — config files carry SIP secrets.")}</li>
         </ul>
       </SettingCard>
     </div>
@@ -1703,7 +1695,8 @@ function bridgePhoneCount(bridge, phones = []) {
 }
 
 function BridgesListView({ bridges = [], phones = [], selectedBridgeId, setSelectedBridgeId }) {
-  if (!bridges.length) return <Empty title="No local bridges yet" description="Create a bridge enrollment from Context settings, then run the Docker bridge in the customer LAN." />;
+  const tUi = useUiText();
+  if (!bridges.length) return <Empty title={tUi("No local bridges yet")} description={tUi("Create a bridge enrollment from Context settings, then run the Docker bridge in the customer LAN.")} />;
   return (
     <div className="space-y-3">
       {bridges.map((bridge) => {
@@ -1719,16 +1712,16 @@ function BridgesListView({ bridges = [], phones = [], selectedBridgeId, setSelec
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="truncate text-sm font-semibold">{bridge.label || bridge.bridge_id}</h3>
-                  <Badge variant="outline" className={bridgeStatusBadgeClass(bridge.online)}>{bridge.online ? "online" : "offline"}</Badge>
+                  <Badge variant="outline" className={bridgeStatusBadgeClass(bridge.online)}>{bridge.online ? tUi("online") : tUi("offline")}</Badge>
                 </div>
                 <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{bridge.bridge_id}</p>
               </div>
               <IconRouteAltLeft className="h-5 w-5 shrink-0 text-muted-foreground" />
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <MiniStat label="Bridge status" value={bridge.online ? "online" : "offline"} icon={IconActivity} tone={bridge.online ? "emerald" : "amber"} />
-              <MiniStat label="Connected phones" value={bridgePhoneCount(bridge, phones)} icon={IconDeviceLandlinePhone} tone="blue" />
-              <MiniStat label="Last seen" value={formatTime(bridge.last_seen_at)} icon={IconClockHour4} tone="violet" />
+              <MiniStat label={tUi("Bridge status")} value={bridge.online ? tUi("Online") : tUi("Offline")} icon={IconActivity} tone={bridge.online ? "emerald" : "amber"} />
+              <MiniStat label={tUi("Connected phones")} value={bridgePhoneCount(bridge, phones)} icon={IconDeviceLandlinePhone} tone="blue" />
+              <MiniStat label={tUi("Last seen")} value={formatTime(bridge.last_seen_at)} icon={IconClockHour4} tone="violet" />
             </div>
           </button>
         );
@@ -1755,6 +1748,7 @@ function CopyButton({ value, label = "Copy" }) {
 }
 
 function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) {
+  const tUi = useUiText();
   const [label, setLabel] = useState("Local office bridge");
   const [site, setSite] = useState("");
   const [creating, setCreating] = useState(false);
@@ -1844,49 +1838,43 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
 
   return (
     <div className="space-y-4">
-      <SettingCard icon={IconRouteAltLeft} title="Bridge configuration" subtitle={hasSelectedBridge ? "Update the selected bridge label and location" : "Create an outbound WebSocket bridge enrollment for a LAN site"}>
+      <SettingCard icon={IconRouteAltLeft} title={tUi("Bridge configuration")} subtitle={tUi(hasSelectedBridge ? "Update the selected bridge label and location" : "Create an outbound WebSocket bridge enrollment for a LAN site")}>
         <div className="space-y-3">
           {hasSelectedBridge ? (
             <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
-              <div className="text-muted-foreground">Selected bridge</div>
+              <div className="text-muted-foreground">{tUi("Selected bridge")}</div>
               <div className="mt-1 font-mono text-foreground">{bridge.bridge_id}</div>
             </div>
           ) : null}
           <div>
-            <Label>Bridge label</Label>
-            <Input className="mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Warsaw office bridge" />
+            <Label>{tUi("Bridge label")}</Label>
+            <Input className="mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={tUi("Warsaw office bridge")} />
           </div>
           <div>
-            <Label>Location</Label>
-            <Input className="mt-1" value={site} onChange={(e) => setSite(e.target.value)} placeholder="Warsaw LAN" />
+            <Label>{tUi("Location")}</Label>
+            <Input className="mt-1" value={site} onChange={(e) => setSite(e.target.value)} placeholder={tUi("Warsaw LAN")} />
           </div>
           <div className="flex flex-wrap gap-2">
             {hasSelectedBridge ? (
               <>
                 <Button size="sm" className={neutralActionClass} onClick={updateBridge} disabled={saving || !label.trim()} data-testid="hp-update-local-bridge">
-                  {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
-                  Update
-                </Button>
+                  {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}{tUi("Update")}</Button>
                 <Button size="sm" variant="destructive" onClick={deleteBridge} disabled={deleting || assignedPhones.length > 0} data-testid="hp-delete-local-bridge">
-                  {deleting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconTrash className="mr-2 h-4 w-4" />}
-                  Delete bridge
-                </Button>
+                  {deleting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconTrash className="mr-2 h-4 w-4" />}{tUi("Delete bridge")}</Button>
               </>
             ) : (
               <Button size="sm" className={neutralActionClass} onClick={createBridge} disabled={creating || !label.trim()} data-testid="hp-create-local-bridge">
-                {creating ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconRouteAltLeft className="mr-2 h-4 w-4" />}
-                Create bridge enrollment
-              </Button>
+                {creating ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconRouteAltLeft className="mr-2 h-4 w-4" />}{tUi("Create bridge enrollment")}</Button>
             )}
           </div>
           {hasSelectedBridge && assignedPhones.length ? (
-            <p className="text-xs text-muted-foreground">Remove all phones from this bridge before deleting it.</p>
+            <p className="text-xs text-muted-foreground">{tUi("Remove all phones from this bridge before deleting it.")}</p>
           ) : null}
           {enrollment ? (
             <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-xs">
               <div className="flex items-start justify-between gap-2">
-                <div className="font-semibold text-amber-800 dark:text-amber-200">Copy this token now — it is shown only once.</div>
-                <CopyButton value={enrollment.env || `BRIDGE_ID=${enrollment.bridge_id}\nBRIDGE_TOKEN=${enrollment.token}\nCC_WS_URL=${enrollment.cc_ws_url}`} label="Copy .env" />
+                <div className="font-semibold text-amber-800 dark:text-amber-200">{tUi("Copy this token now — it is shown only once.")}</div>
+                <CopyButton value={enrollment.env || `BRIDGE_ID=${enrollment.bridge_id}\nBRIDGE_TOKEN=${enrollment.token}\nCC_WS_URL=${enrollment.cc_ws_url}`} label={tUi("Copy .env")} />
               </div>
               <pre className="mt-2 max-w-full whitespace-pre-wrap break-all rounded-md border bg-background/70 p-2 font-mono text-[11px] leading-relaxed text-foreground">{enrollment.env || `BRIDGE_ID=${enrollment.bridge_id}\nBRIDGE_TOKEN=${enrollment.token}\nCC_WS_URL=${enrollment.cc_ws_url}`}</pre>
             </div>
@@ -1894,48 +1882,46 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
         </div>
       </SettingCard>
 
-      <SettingCard icon={IconActivity} title="Bridge status" subtitle="Live relay presence and phones assigned to this bridge">
+      <SettingCard icon={IconActivity} title={tUi("Bridge status")} subtitle={tUi("Live relay presence and phones assigned to this bridge")}>
         {bridge ? (
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2">
               <span className="min-w-0 font-mono text-xs">{bridge.bridge_id}</span>
-              <Badge variant="outline" className={bridgeStatusBadgeClass(bridge.online)}>{bridge.online ? "online" : "offline"}</Badge>
+              <Badge variant="outline" className={bridgeStatusBadgeClass(bridge.online)}>{bridge.online ? tUi("online") : tUi("offline")}</Badge>
             </div>
             {assignedPhones.length ? (
               <div className="max-h-[25rem] space-y-1.5 overflow-y-auto pr-1" data-testid="hp-bridge-phone-scroll-list">
                 {assignedPhones.map((phone) => (
                   <div key={phone.id} className="rounded-lg border bg-background/70 px-3 py-2 text-xs">
                     <div className="truncate font-medium">{phone.phone_name || phone.label || formatMacDisplay(phone.mac)}</div>
-                    <div className="mt-0.5 truncate text-muted-foreground">{formatMacDisplay(phone.mac)} · {phone.last_ip || phone.ip_address || "no IP"}</div>
+                    <div className="mt-0.5 truncate text-muted-foreground">{formatMacDisplay(phone.mac)} · {phone.last_ip || phone.ip_address || tUi("no IP")}</div>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-xs text-muted-foreground">No phones are assigned to this bridge yet.</p>}
+            ) : <p className="text-xs text-muted-foreground">{tUi("No phones are assigned to this bridge yet.")}</p>}
           </div>
-        ) : <p className="text-sm text-muted-foreground">Create or select a bridge to see its live status.</p>}
+        ) : <p className="text-sm text-muted-foreground">{tUi("Create or select a bridge to see its live status.")}</p>}
       </SettingCard>
 
       {/* Custom confirm: Delete bridge (replaces native window.confirm) */}
       <AlertDialog open={confirmDeleteBridge} onOpenChange={(open) => { if (!open) setConfirmDeleteBridge(false); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete bridge?</AlertDialogTitle>
+            <AlertDialogTitle>{tUi("Delete bridge?")}</AlertDialogTitle>
             <AlertDialogDescription>
               {bridge
-                ? <>This permanently deletes the bridge <span className="font-medium text-foreground">{bridge.label || bridge.bridge_id}</span>. This action cannot be undone.</>
+                ? <>{tUi("This permanently deletes the bridge ")}<span className="font-medium text-foreground">{bridge.label || bridge.bridge_id}</span>{tUi(". This action cannot be undone.")}</>
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleting}
               onClick={() => { setConfirmDeleteBridge(false); performDeleteBridge(); }}
             >
-              {deleting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconTrash className="mr-2 h-4 w-4" />}
-              Delete bridge
-            </AlertDialogAction>
+              {deleting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconTrash className="mr-2 h-4 w-4" />}{tUi("Delete bridge")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1944,12 +1930,13 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
 }
 
 function SettingsEditor() {
+  const tUi = useUiText();
   return (
     <div className="space-y-4">
-      <SettingCard icon={IconSettings} title="Provisioning defaults" subtitle="Phase 1 serves Telnyx defaults">
+      <SettingCard icon={IconSettings} title={tUi("Provisioning defaults")} subtitle={tUi("Phase 1 serves Telnyx defaults")}>
         <div className="space-y-2 text-sm text-muted-foreground">
-          <p>Config files are generated with <span className="font-mono text-foreground">sip.telnyx.com</span>, UDP transport and hourly re-provisioning polling.</p>
-          <p>Per-phone IP override controls direct Poly REST / Yealink Action URI. For phones behind NAT, use <span className="font-mono text-foreground">settings.cti_mode = &quot;local_bridge&quot;</span> for full local CTI, or <span className="font-mono text-foreground">settings.cti_mode = &quot;telnyx&quot;</span> for Call Control fallback.</p>
+          <p>{tUi("Config files are generated with ")}<span className="font-mono text-foreground">{tUi("sip.telnyx.com")}</span>{tUi(", UDP transport and hourly re-provisioning polling.")}</p>
+          <p>{tUi("Per-phone IP override controls direct Poly REST / Yealink Action URI. For phones behind NAT, use ")}<span className="font-mono text-foreground">{tUi("settings.cti_mode = \"local_bridge\"")}</span>{tUi(" for full local CTI, or ")}<span className="font-mono text-foreground">{tUi("settings.cti_mode = \"telnyx\"")}</span>{tUi(" for Call Control fallback.")}</p>
         </div>
       </SettingCard>
     </div>

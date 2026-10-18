@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
@@ -25,6 +27,7 @@ export function CompactTtsVoiceSelector({
   providerModelFullWidth = false,
   onChange = () => {},
 }) {
+  const tUi = useUiText();
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
@@ -106,7 +109,7 @@ export function CompactTtsVoiceSelector({
           onValueChange={(id) => chooseVoice(providers.find((item) => item.id === id)?.models?.[0]?.voices?.[0])}
           disabled={loading}
         >
-          <SelectTrigger className={providerModelFullWidth ? "w-full" : undefined}><SelectValue placeholder={loading ? "Loading providers…" : "Provider"} /></SelectTrigger>
+          <SelectTrigger className={providerModelFullWidth ? "w-full" : undefined}><SelectValue placeholder={loading ? tUi("Loading providers…") : tUi("Provider")} /></SelectTrigger>
           <SelectContent>{providers.map((item) => <SelectItem key={item.id} value={item.id}>{item.name || item.id}</SelectItem>)}</SelectContent>
         </Select>
         <Select
@@ -114,7 +117,7 @@ export function CompactTtsVoiceSelector({
           onValueChange={(id) => chooseVoice(models.find((item) => item.id === id)?.voices?.[0])}
           disabled={!provider}
         >
-          <SelectTrigger className={providerModelFullWidth ? "w-full" : undefined}><SelectValue placeholder="Model" /></SelectTrigger>
+          <SelectTrigger className={providerModelFullWidth ? "w-full" : undefined}><SelectValue placeholder={tUi("Model")} /></SelectTrigger>
           <SelectContent>{models.map((item) => <SelectItem key={item.id} value={item.id}>{item.name || item.id}</SelectItem>)}</SelectContent>
         </Select>
       </div>
@@ -124,9 +127,9 @@ export function CompactTtsVoiceSelector({
           onValueChange={(id) => chooseVoice(voices.find((item) => item.id === id) || { id })}
           disabled={!model}
         >
-          <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Voice" /></SelectTrigger>
+          <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={tUi("Voice")} /></SelectTrigger>
           <SelectContent>
-            {voices.map((voice) => <SelectItem key={voice.id} value={voice.id}>{voice.language ? `${voice.name || voice.id} (${voice.language})` : voice.name || voice.id}</SelectItem>)}
+            {voices.map((voice) => <SelectItem key={voice.id} value={voice.id}>{voice.language ? tUi("{value0} ({value1})", { value0: voice.name || voice.id, value1: voice.language }) : voice.name || voice.id}</SelectItem>)}
             {!loading && !voices.some((voice) => voice.id === current) && current ? <SelectItem value={current}>{current}</SelectItem> : null}
           </SelectContent>
         </Select>
@@ -134,7 +137,7 @@ export function CompactTtsVoiceSelector({
           {previewing ? <IconPlayerStop className="size-4" /> : <IconPlayerPlay className="size-4" />}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">{language ? `Language: ${language}` : "Select provider, model and voice."}</p>
+      <p className="text-xs text-muted-foreground">{language ? tUi("Language: {value0}", { value0: language }) : tUi("Select provider, model and voice.")}</p>
     </div>
   );
 }

@@ -1,16 +1,19 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import Image from "next/image";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
 export function AuthRightImage() {
+  const tUi = useUiText();
   const { authRightImageUri, loading } = useAppSettings();
 
   if (loading) {
     return (
       <Image
         src="/auth_right_image.png"
-        alt="Contact Center"
+        alt={tUi("Contact Center")}
         className="absolute inset-0 h-full w-full object-cover grayscale"
         width={1000}
         height={1000}
@@ -24,7 +27,7 @@ export function AuthRightImage() {
     return (
       <img
         src={authRightImageUri}
-        alt="Contact Center"
+        alt={tUi("Contact Center")}
         className="absolute inset-0 h-full w-full object-cover grayscale"
         style={{ width: "100%", height: "100%" }}
       />
@@ -34,7 +37,7 @@ export function AuthRightImage() {
   return (
     <Image
       src="/auth_right_image.png"
-      alt="Contact Center"
+      alt={tUi("Contact Center")}
       className="absolute inset-0 h-full w-full object-cover grayscale"
       width={1000}
       height={1000}

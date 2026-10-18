@@ -38,12 +38,12 @@ test("workflow editor exposes Data Action Buttons configuration and loads Form S
   assert.match(page, /form_submit/);
 });
 
-test("workflow editor uses a right-side Sheet for Edit Workflow like Create AI Agent", async () => {
+test("workflow editor uses a direction-aware Sheet for Edit Workflow like Create AI Agent", async () => {
   const page = await readFile(new URL("app/(portal)/admin/workflows/[id]/page.jsx", root), "utf8");
 
   assert.match(page, /from "@\/components\/ui\/sheet"/);
   assert.match(page, /<Sheet open=\{editingWorkflow\} onOpenChange=\{setEditingWorkflow\}>/);
-  assert.match(page, /<SheetContent\s+side="right"\s+className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"/);
+  assert.match(page, /<SheetContent\s+side="end"\s+className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"/);
   assert.match(page, /<SheetHeader className="px-6 py-4 border-b">/);
   assert.match(page, /<SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">/);
   assert.doesNotMatch(page, /<Dialog open=\{editingWorkflow\} onOpenChange=\{setEditingWorkflow\}>/);

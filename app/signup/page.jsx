@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -19,6 +21,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function SignupPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -199,9 +202,7 @@ export default function SignupPage() {
           <div className="flex justify-center w-full">
             <div className="flex flex-col items-center w-full justify-center">
               <AuthBrandLogo />
-              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
-                Contact Center
-              </span>
+              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">{tUi("Contact Center")}</span>
             </div>
           </div>
         </div>
@@ -216,66 +217,43 @@ export default function SignupPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <h2 className="text-2xl font-bold text-brand-primary">
-                        Registration Submitted!
-                      </h2>
-                      <p className="text-muted-foreground">
-                        We've sent a verification link to
-                      </p>
+                      <h2 className="text-2xl font-bold text-brand-primary">{tUi("Registration Submitted!")}</h2>
+                      <p className="text-muted-foreground">{tUi("We've sent a verification link to")}</p>
                       <p className="font-semibold text-foreground">
                         {userEmail}
                       </p>
                     </div>
 
                     <div className="space-y-3 w-full text-left">
-                      <p className="text-sm font-semibold">
-                        Next steps to activate your contact center:
-                      </p>
+                      <p className="text-sm font-semibold">{tUi("Next steps to activate your contact center:")}</p>
                       <div className="space-y-3">
                         <div className="flex gap-3 items-start">
                           <IconCircleCheck className="size-5 text-brand-primary flex-shrink-0 mt-0.5" />
                           <div className="text-sm">
-                            <span className="font-medium">
-                              Check your email
-                            </span>
-                            <p className="text-muted-foreground">
-                              Look for an email from Telnyx Contact Center
-                            </p>
+                            <span className="font-medium">{tUi("Check your email")}</span>
+                            <p className="text-muted-foreground">{tUi("Look for an email from Telnyx Contact Center")}</p>
                           </div>
                         </div>
                         <div className="flex gap-3 items-start">
                           <IconCircleCheck className="size-5 text-brand-primary flex-shrink-0 mt-0.5" />
                           <div className="text-sm">
-                            <span className="font-medium">
-                              Click the verification link
-                            </span>
-                            <p className="text-muted-foreground">
-                              This will verify your email address
-                            </p>
+                            <span className="font-medium">{tUi("Click the verification link")}</span>
+                            <p className="text-muted-foreground">{tUi("This will verify your email address")}</p>
                           </div>
                         </div>
                         <div className="flex gap-3 items-start">
                           <IconCircleCheck className="size-5 text-brand-primary flex-shrink-0 mt-0.5" />
                           <div className="text-sm">
-                            <span className="font-medium">
-                              Access your contact center
-                            </span>
-                            <p className="text-muted-foreground">
-                              You'll be able to access your contact center
-                              account
-                            </p>
+                            <span className="font-medium">{tUi("Access your contact center")}</span>
+                            <p className="text-muted-foreground">{tUi("You'll be able to access your contact center account")}</p>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     <div className="pt-4 border-t w-full space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        Didn't receive the email? Check your spam folder.
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        The verification link will expire in 24 hours.
-                      </p>
+                      <p className="text-xs text-muted-foreground">{tUi("Didn't receive the email? Check your spam folder.")}</p>
+                      <p className="text-xs text-muted-foreground">{tUi("The verification link will expire in 24 hours.")}</p>
                     </div>
 
                     <div className="pt-4">
@@ -283,20 +261,16 @@ export default function SignupPage() {
                         onClick={() => router.push("/signin")}
                         className="w-full"
                         variant="default"
-                      >
-                        Go to Sign In
-                      </Button>
+                      >{tUi("Go to Sign In")}</Button>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             ) : (
               <form onSubmit={onSubmit} className={cn("w-full space-y-4")}>
-                <h1 className="text-2xl font-bold">
-                  Sign up to Contact Center
-                </h1>
+                <h1 className="text-2xl font-bold">{tUi("Sign up to Contact Center")}</h1>
                 <div className="grid gap-2">
-                  <Label htmlFor="username">Email address</Label>
+                  <Label htmlFor="username">{tUi("Email address")}</Label>
                   <Input
                     id="username"
                     name="username"
@@ -307,22 +281,20 @@ export default function SignupPage() {
                   )}
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{tUi("Password")}</Label>
                   <Input
                     id="password"
                     name="password"
                     type="password"
                     aria-invalid={!!errors.password}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    At least 8 chars, upper, lower, special
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("At least 8 chars, upper, lower, special")}</p>
                   {errors.password && (
                     <p className="text-xs text-red-500">{errors.password}</p>
                   )}
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="firstName">First name</Label>
+                  <Label htmlFor="firstName">{tUi("First name")}</Label>
                   <Input
                     id="firstName"
                     name="firstName"
@@ -333,7 +305,7 @@ export default function SignupPage() {
                   )}
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="lastName">Last name</Label>
+                  <Label htmlFor="lastName">{tUi("Last name")}</Label>
                   <Input
                     id="lastName"
                     name="lastName"
@@ -344,7 +316,7 @@ export default function SignupPage() {
                   )}
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="mobile">Mobile phone</Label>
+                  <Label htmlFor="mobile">{tUi("Mobile phone")}</Label>
                   <Input
                     id="mobile"
                     name="mobile"
@@ -356,12 +328,10 @@ export default function SignupPage() {
                   )}
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating..." : "Create account"}
+                  {loading ? tUi("Creating...") : tUi("Create account")}
                 </Button>
                 <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-                  <span className="bg-background text-muted-foreground relative z-10 px-2">
-                    Or
-                  </span>
+                  <span className="bg-background text-muted-foreground relative z-10 px-2">{tUi("Or")}</span>
                 </div>
                 <Button
                   type="button"
@@ -372,43 +342,30 @@ export default function SignupPage() {
                   <IconBrandGoogleFilled
                     className="mr-2 h-5 w-5"
                     aria-hidden="true"
-                  />
-                  Sign up with Google
-                </Button>
+                  />{tUi("Sign up with Google")}</Button>
                 {errors.form && (
                   <p className="text-xs text-red-500 text-center">
                     {errors.form}
                   </p>
                 )}
-                <p className="text-center text-sm">
-                  Already have an account?{" "}
-                  <a href="/signin" className="underline underline-offset-4">
-                    Sign in
-                  </a>
+                <p className="text-center text-sm">{tUi("Already have an account?")}{" "}
+                  <a href="/signin" className="underline underline-offset-4">{tUi("Sign in")}</a>
                 </p>
                 {/* reCAPTCHA notice (required by Google ToS) */}
                 {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY && (
-                  <p className="text-xs text-muted-foreground text-center mt-4">
-                    This site is protected by reCAPTCHA and the Google{" "}
+                  <p className="text-xs text-muted-foreground text-center mt-4">{tUi("This site is protected by reCAPTCHA and the Google")}{" "}
                     <a
                       href="https://policies.google.com/privacy"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline"
-                    >
-                      Privacy Policy
-                    </a>{" "}
-                    and{" "}
+                    >{tUi("Privacy Policy")}</a>{" "}{tUi("and")}{" "}
                     <a
                       href="https://policies.google.com/terms"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline"
-                    >
-                      Terms of Service
-                    </a>{" "}
-                    apply.
-                  </p>
+                    >{tUi("Terms of Service")}</a>{" "}{tUi("apply.")}</p>
                 )}
               </form>
             )}

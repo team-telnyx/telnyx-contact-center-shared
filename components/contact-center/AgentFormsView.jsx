@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +21,7 @@ export function AgentFormsView({
   hideHeader = false,
   showCards = true,
 }) {
+  const tUi = useUiText();
   const [forms, setForms] = useState([]);
   const [internalSelectedId, setInternalSelectedId] = useState("");
   const [renderData, setRenderData] = useState(null);
@@ -161,17 +164,17 @@ export function AgentFormsView({
 
   return <div className="flex flex-col h-full overflow-hidden">
     {!hideHeader ? <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg flex items-center justify-between gap-3">
-      <div className="min-w-0"><h3 className="text-sm font-semibold">Forms</h3><p className="text-xs text-muted-foreground">{queueName ? `Queue: ${queueName}` : "Published agent forms"}</p></div>
+      <div className="min-w-0"><h3 className="text-sm font-semibold">{tUi("Forms")}</h3><p className="text-xs text-muted-foreground">{queueName ? tUi("Queue: {value0}", { value0: queueName }) : tUi("Published agent forms")}</p></div>
       <div className="flex items-center gap-2">
         {forms.length ? <Select value={selectedId || undefined} onValueChange={setSelectedId}>
-          <SelectTrigger className="h-8 w-[220px]"><SelectValue placeholder="Select form" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-[220px]"><SelectValue placeholder={tUi("Select form")} /></SelectTrigger>
           <SelectContent>{forms.map((form) => <SelectItem key={form.id} value={form.id}>{form.name}</SelectItem>)}</SelectContent>
         </Select> : null}
-        {onBackToInteraction ? <Button size="sm" variant="ghost" onClick={onBackToInteraction}>Back</Button> : null}
+        {onBackToInteraction ? <Button size="sm" variant="ghost" onClick={onBackToInteraction}>{tUi("Back")}</Button> : null}
       </div>
     </div> : null}
     <div className="flex-1 overflow-y-auto p-3 space-y-3">
-      {forms.length === 0 ? <p className="text-sm text-muted-foreground">{hasExplicitFormIds ? "No selected published forms are available for this interaction." : "No published forms assigned to this queue."}</p> : showCards ? <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">auto</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div> : null}
+      {forms.length === 0 ? <p className="text-sm text-muted-foreground">{hasExplicitFormIds ? tUi("No selected published forms are available for this interaction.") : tUi("No published forms assigned to this queue.")}</p> : showCards ? <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">{tUi("auto")}</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div> : null}
       {selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={rendererInitialValues} context={renderData.context} onSubmit={submit} submitting={submitting} /></CardContent></Card> : null}
     </div>
   </div>;

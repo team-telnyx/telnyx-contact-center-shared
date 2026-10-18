@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 import { useState } from "react";
 import { Eye } from "lucide-react";
 import { interactionCapabilities } from "@/lib/acd/interaction-channels.mjs";
@@ -7,6 +8,7 @@ import { SupervisionModal } from "./SupervisionModal";
 import VideoSupervisionModal from "./VideoSupervisionModal";
 import LiveInteractionDetails from "./LiveInteractionDetails";
 export default function InteractionPreviewAction({ interaction }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false),
     capabilities =
       interaction.capabilities || interactionCapabilities(interaction);
@@ -19,8 +21,8 @@ export default function InteractionPreviewAction({ interaction }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title={label}
-        aria-label={label}
+        title={tUi(label)}
+        aria-label={tUi(label)}
         data-testid={
           capabilities.conversation ? "preview-conversation" : capabilities.supervision ? "supervise-call" : "preview-interaction"
         }

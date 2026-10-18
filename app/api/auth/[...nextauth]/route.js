@@ -276,12 +276,7 @@ export const authOptions = {
       // Always fetch latest user data from database to ensure we have the correct ID
       if (token?.email) {
         try {
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Database query timeout")), 5000)
-          );
-
-          const dbUserPromise = PgDb.findUserByUsername(token.email);
-          const dbUser = await Promise.race([dbUserPromise, timeoutPromise]);
+          const dbUser = await PgDb.findUserByUsername(token.email, { timeoutMillis: 5000 });
           if (dbUser?.active === false) return null;
 
           if (dbUser) {
@@ -372,24 +367,14 @@ export const authOptions = {
       // Always look up by email first to ensure we get the correct user ID from app's users table
       if (token?.email) {
         try {
-          // Add timeout to prevent hanging requests
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Database query timeout")), 5000)
-          );
-
-          const userPromise = (async () => {
-            // Always look up by email to get the correct user from app's users table
-            let user = await PgDb.findUserByUsername(token.email);
-
-            // If not found by email, try by token.id as fallback
-            if (!user && token?.id) {
-              user = await PgDb.findUserById(token.id);
-            }
-
-            return user;
-          })();
-
-          const user = await Promise.race([userPromise, timeoutPromise]);
+          // Share one deadline between the primary lookup and its fallback.
+          const lookupDeadline = Date.now() + 5000;
+          let user = await PgDb.findUserByUsername(token.email, { timeoutMillis: 5000 });
+          if (!user && token?.id) {
+            const remaining = lookupDeadline - Date.now();
+            if (remaining <= 0) throw new Error("Database query timeout");
+            user = await PgDb.findUserById(token.id, { timeoutMillis: remaining });
+          }
           if (user?.active === false) return null;
 
           if (user) {
@@ -439,12 +424,7 @@ export const authOptions = {
       } else if (token?.id) {
         // Fallback: if no email, try to find by ID
         try {
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Database query timeout")), 5000)
-          );
-
-          const userPromise = PgDb.findUserById(token.id);
-          const user = await Promise.race([userPromise, timeoutPromise]);
+          const user = await PgDb.findUserById(token.id, { timeoutMillis: 5000 });
           if (user?.active === false) return null;
 
           if (user) {

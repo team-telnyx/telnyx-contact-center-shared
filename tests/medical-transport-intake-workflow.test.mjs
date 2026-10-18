@@ -124,12 +124,10 @@ test("the confirm-all read-back item requires the customer's own affirmative (co
   assert.equal(readBackItem.completion_trigger, "agent");
 });
 
-test("llm_model uses the provider-prefixed id convention used everywhere else in the codebase", () => {
-  // The analyze/generate-suggestion routes pass workflow.llm_model straight
-  // through to the Telnyx /ai/chat/completions model field. Every other
-  // default in the codebase is provider-prefixed ("openai/gpt-4o"); a bare
-  // "gpt-4o-mini" (no prefix) can be rejected or silently fall back.
-  assert.equal(MEDICAL_TRANSPORT_INTAKE_WORKFLOW.llm_model, "openai/gpt-4o-mini");
+test("the seeded workflow has no model of its own and inherits the AI Copilot / platform default", () => {
+  // No model is defined in code: an empty workflow model means the Admin →
+  // AI Copilot "Workflow analysis" card, then the platform default model.
+  assert.equal(MEDICAL_TRANSPORT_INTAKE_WORKFLOW.llm_model, null);
 });
 
 test("option slots use slot_type 'select' (the only option-bearing type the admin editor supports) with slot_options as a plain array", () => {

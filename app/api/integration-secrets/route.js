@@ -77,3 +77,18 @@ async function GET_handler(_request, _context, authz) {
 
 // Phase 2 migration: every export goes through the permission guard (the internal documentation).
 export const GET = withPermission("secrets:read", GET_handler, { route: "/api/integration-secrets" });
+
+export const POST = withPermission('secrets:create', async (request) => {
+  const body=await request.json().catch(()=>null);
+  if(!body||body.type!=='bearer'||typeof body.identifier!=='string'||!body.identifier.trim()||typeof body.token!=='string'||!body.token) {
+    return NextResponse.json({ok:false,error:'A secret identifier and bearer token are required.'},{status:400});
+  }
+  if(!process.env.TELNYX_API_KEY)return NextResponse.json({ok:false,error:'Missing TELNYX_API_KEY'},{status:500});
+  try {
+    const response=await fetch(buildTelnyxV2Url('/integration_secrets'),{method:'POST',headers:{Authorization:`Bearer ${process.env.TELNYX_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({identifier:body.identifier.trim(),type:'bearer',token:body.token}),signal:AbortSignal.timeout(15000),cache:'no-store'});
+    // Do not echo an upstream validation response: it can contain submitted credentials.
+    if(!response.ok)return NextResponse.json({ok:false,error:`Telnyx could not create the secret (${response.status}). Check its identifier and your permissions.`},{status:response.status===422?400:502});
+    const data=await response.json();const secret=data.data||data;
+    return NextResponse.json({ok:true,secret:{id:secret.id,identifier:secret.identifier,type:secret.type}},{headers:{'Cache-Control':'no-store'}});
+  }catch{return NextResponse.json({ok:false,error:'Could not create the integration secret.'},{status:502});}
+},{route:'/api/integration-secrets'});

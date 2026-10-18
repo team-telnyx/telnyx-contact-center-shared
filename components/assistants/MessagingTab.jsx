@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 
 export default function MessagingTab({ values, setValues }) {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -344,9 +347,7 @@ export default function MessagingTab({ values, setValues }) {
         <CardContent className="h-full min-h-0 space-y-4 overflow-y-auto pt-6">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold flex items-center gap-2">
-              <IconMessages className="size-6 text-telnyx-green" /> Messaging
-              Numbers
-            </div>
+              <IconMessages className="size-6 text-telnyx-green" />{tUi(" Messaging Numbers")}</div>
           </div>
 
           <div className="flex items-center gap-2 pb-2">
@@ -358,47 +359,11 @@ export default function MessagingTab({ values, setValues }) {
             <Label
               htmlFor="enable-messaging"
               className="text-sm font-medium cursor-pointer"
-            >
-              Enable Messaging
-            </Label>
-          </div>
-
-          {/* Messaging Settings */}
-          <div className="border rounded-md p-4 space-y-3 bg-muted/20">
-            <div className="text-sm font-semibold">Messaging Settings</div>
-            <div>
-              <Label className="text-xs">Conversation Inactivity Timeout</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <Input
-                  type="number"
-                  min={1}
-                  className="w-32"
-                  value={values?.messaging?.conversation_inactivity_minutes ?? ""}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const num = raw === "" ? null : Math.max(1, parseInt(raw, 10) || 1);
-                    setValues((v) => ({
-                      ...v,
-                      messaging: {
-                        ...(v.messaging || {}),
-                        conversation_inactivity_minutes: num,
-                      },
-                    }));
-                  }}
-                  placeholder="e.g. 30"
-                />
-                <span className="text-sm text-muted-foreground">minutes</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Minutes of inactivity before a new conversation session starts. Leave blank to use default.
-              </p>
-            </div>
+            >{tUi("Enable Messaging")}</Label>
           </div>
 
           {!messagingEnabled && (
-            <div className="text-sm text-muted-foreground py-8 text-center border rounded-md">
-              Enable Messaging to assign phone numbers for SMS
-            </div>
+            <div className="text-sm text-muted-foreground py-8 text-center border rounded-md">{tUi("Enable Messaging to assign phone numbers for SMS")}</div>
           )}
 
           {messagingEnabled && (
@@ -407,8 +372,7 @@ export default function MessagingTab({ values, setValues }) {
               {assignedNumbers.length > 0 ? (
                 <div className="border rounded-md p-4 bg-muted/30">
                   <div className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <IconCheck className="size-4 text-telnyx-green" />
-                    Assigned Messaging Numbers ({assignedNumbers.length})
+                    <IconCheck className="size-4 text-telnyx-green" />{tUi("Assigned Messaging Numbers (")}{assignedNumbers.length})
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {assignedNumbers.map((n) => (
@@ -422,7 +386,7 @@ export default function MessagingTab({ values, setValues }) {
                           variant="ghost"
                           className="h-5 w-5 p-0 hover:bg-destructive/10"
                           onClick={() => unassignFromAssistant(n)}
-                          title="Unassign from assistant"
+                          title={tUi("Unassign from assistant")}
                         >
                           <IconUnlink className="size-3 text-destructive" />
                         </Button>
@@ -432,10 +396,7 @@ export default function MessagingTab({ values, setValues }) {
                 </div>
               ) : (
                 <div className="border rounded-md p-4 bg-muted/10 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No numbers assigned yet. Click &quot;Assign Number&quot; below to
-                    assign phone numbers to this assistant.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{tUi("No numbers assigned yet. Click \"Assign Number\" below to assign phone numbers to this assistant.")}</p>
                 </div>
               )}
 
@@ -448,9 +409,7 @@ export default function MessagingTab({ values, setValues }) {
                     variant="default"
                     className="gap-2"
                   >
-                    <IconLink className="size-4" />
-                    Assign Number
-                  </Button>
+                    <IconLink className="size-4" />{tUi("Assign Number")}</Button>
                 </div>
               )}
 
@@ -458,23 +417,23 @@ export default function MessagingTab({ values, setValues }) {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
                     <div>
-                      <label className="text-xs">Digits</label>
+                      <label className="text-xs">{tUi("Digits")}</label>
                       <Input
                         value={filters.q}
                         onChange={(e) =>
                           setFilters((f) => ({ ...f, q: e.target.value }))
                         }
-                        placeholder="e.g. 312"
+                        placeholder={tUi("e.g. 312")}
                       />
                     </div>
                     <div>
-                      <label className="text-xs">Tag</label>
+                      <label className="text-xs">{tUi("Tag")}</label>
                       <Input
                         value={filters.tag}
                         onChange={(e) =>
                           setFilters((f) => ({ ...f, tag: e.target.value }))
                         }
-                        placeholder="tag"
+                        placeholder={tUi("tag")}
                       />
                     </div>
                     <div className="md:col-span-3 flex items-end gap-3 flex-wrap">
@@ -492,9 +451,7 @@ export default function MessagingTab({ values, setValues }) {
                         <label
                           htmlFor="unassigned-switch-msg"
                           className="text-xs"
-                        >
-                          Unassigned
-                        </label>
+                        >{tUi("Unassigned")}</label>
                       </div>
                       <div className="flex items-end gap-2">
                         <Button
@@ -502,11 +459,9 @@ export default function MessagingTab({ values, setValues }) {
                           onClick={() =>
                             setFilters({ q: "", tag: "", assigned: undefined })
                           }
-                        >
-                          Clear
-                        </Button>
+                        >{tUi("Clear")}</Button>
                         <Button onClick={() => load()} disabled={loading}>
-                          {loading ? "Loading…" : "Refresh"}
+                          {loading ? tUi("Loading…") : tUi("Refresh")}
                         </Button>
                       </div>
                     </div>
@@ -515,7 +470,7 @@ export default function MessagingTab({ values, setValues }) {
                         type="button"
                         variant={view === "list" ? "default" : "secondary"}
                         onClick={() => setView("list")}
-                        title="List view"
+                        title={tUi("List view")}
                       >
                         <IconListDetails className="size-5" />
                       </Button>
@@ -523,7 +478,7 @@ export default function MessagingTab({ values, setValues }) {
                         type="button"
                         variant={view === "cards" ? "default" : "secondary"}
                         onClick={() => setView("cards")}
-                        title="Cards view"
+                        title={tUi("Cards view")}
                       >
                         <IconLayoutGrid className="size-5" />
                       </Button>
@@ -546,24 +501,12 @@ export default function MessagingTab({ values, setValues }) {
                       <Table className="table-fixed min-w-[1100px]">
                         <TableHeader>
                           <TableRow className="bg-muted">
-                            <TableHead className="px-[10px] w-[20%]">
-                              Number
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[20%]">
-                              ID
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[15%]">
-                              Type
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[15%]">
-                              Tags
-                            </TableHead>
-                            <TableHead className="px-[10px] w-[15%]">
-                              Messaging Profile
-                            </TableHead>
-                            <TableHead className="px-[10px] text-right w-[15%]">
-                              Actions
-                            </TableHead>
+                            <TableHead className="px-[10px] w-[20%]">{tUi("Number")}</TableHead>
+                            <TableHead className="px-[10px] w-[20%]">{tUi("ID")}</TableHead>
+                            <TableHead className="px-[10px] w-[15%]">{tUi("Type")}</TableHead>
+                            <TableHead className="px-[10px] w-[15%]">{tUi("Tags")}</TableHead>
+                            <TableHead className="px-[10px] w-[15%]">{tUi("Messaging Profile")}</TableHead>
+                            <TableHead className="px-[10px] text-right w-[15%]">{tUi("Actions")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -612,7 +555,7 @@ export default function MessagingTab({ values, setValues }) {
                                     className="truncate inline-flex items-center px-2 py-0.5 rounded-full text-[11px] capitalize"
                                     style={typeBadgeStyle(type)}
                                   >
-                                    {typeLabel(type)}
+                                    {tUi(typeLabel(type))}
                                   </span>
                                 </TableCell>
                                 <TableCell className="px-[10px] text-xs w-[15%]">
@@ -650,7 +593,7 @@ export default function MessagingTab({ values, setValues }) {
                                       <Button
                                         size="sm"
                                         variant="destructive"
-                                        title="Unassign from this assistant"
+                                        title={tUi("Unassign from this assistant")}
                                         onClick={() => unassignFromAssistant(n)}
                                       >
                                         <IconUnlink className="size-4" />
@@ -661,8 +604,8 @@ export default function MessagingTab({ values, setValues }) {
                                         variant="secondary"
                                         title={
                                           defaultProfileId
-                                            ? `Assign to Profile ${defaultProfileId}`
-                                            : "Set Default Messaging Profile ID first"
+                                            ? tUi("Assign to Profile {value0}", { value0: defaultProfileId })
+                                            : tUi("Set Default Messaging Profile ID first")
                                         }
                                         disabled={!defaultProfileId}
                                         onClick={() =>
@@ -682,9 +625,7 @@ export default function MessagingTab({ values, setValues }) {
                               <TableCell
                                 colSpan={6}
                                 className="text-center py-8 text-sm text-muted-foreground"
-                              >
-                                No numbers
-                              </TableCell>
+                              >{tUi("No numbers")}</TableCell>
                             </TableRow>
                           )}
                         </TableBody>
@@ -735,7 +676,7 @@ export default function MessagingTab({ values, setValues }) {
                                       className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] capitalize"
                                       style={typeBadgeStyle(type)}
                                     >
-                                      {typeLabel(type)}
+                                      {tUi(typeLabel(type))}
                                     </span>
                                     {tags.length > 0 && (
                                       <div className="flex flex-wrap gap-1">
@@ -764,7 +705,7 @@ export default function MessagingTab({ values, setValues }) {
                                     <Button
                                       size="sm"
                                       variant="destructive"
-                                      title="Unassign from this assistant"
+                                      title={tUi("Unassign from this assistant")}
                                       onClick={() => unassignFromAssistant(n)}
                                     >
                                       <IconUnlink className="size-4" />
@@ -775,8 +716,8 @@ export default function MessagingTab({ values, setValues }) {
                                       variant="secondary"
                                       title={
                                         defaultProfileId
-                                          ? `Assign to Profile ${defaultProfileId}`
-                                          : "Set Default Messaging Profile ID first"
+                                          ? tUi("Assign to Profile {value0}", { value0: defaultProfileId })
+                                          : tUi("Set Default Messaging Profile ID first")
                                       }
                                       disabled={!defaultProfileId}
                                       onClick={() =>
@@ -791,14 +732,12 @@ export default function MessagingTab({ values, setValues }) {
                               <div
                                 className="mt-1 text-[11px] text-muted-foreground"
                                 title={id}
-                              >
-                                ID: {id}
+                              >{tUi("ID: ")}{id}
                               </div>
                               <div
                                 className="text-[11px] text-muted-foreground"
                                 title={currentName || current || "—"}
-                              >
-                                Messaging Profile:{" "}
+                              >{tUi("Messaging Profile:")}{" "}
                                 {currentName || current || "—"}
                               </div>
                             </CardContent>
@@ -806,9 +745,7 @@ export default function MessagingTab({ values, setValues }) {
                         );
                       })}
                       {items.length === 0 && (
-                        <div className="text-center text-sm text-muted-foreground py-8">
-                          No numbers
-                        </div>
+                        <div className="text-center text-sm text-muted-foreground py-8">{tUi("No numbers")}</div>
                       )}
                     </div>
                   )}
@@ -820,17 +757,14 @@ export default function MessagingTab({ values, setValues }) {
         {messagingEnabled && showNumbersList && (
           <div className="px-6 pb-6">
             <div className="flex items-center justify-between">
-              <div className="text-xs text-muted-foreground">
-                Total: {total}
+              <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}
               </div>
               <div className="flex w-full items-center gap-8 lg:w-fit">
                 <div className="hidden items-center gap-2 lg:flex">
                   <Label
                     htmlFor="rows-per-page"
                     className="text-sm font-medium"
-                  >
-                    Rows per page
-                  </Label>
+                  >{tUi("Rows per page")}</Label>
                   <Select
                     value={`${pageSize}`}
                     onValueChange={(value) => {
@@ -854,8 +788,7 @@ export default function MessagingTab({ values, setValues }) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex w-fit items-center justify-center text-sm font-medium">
-                  Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
+                <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{Math.max(1, Math.ceil(total / pageSize))}
                 </div>
                 <div className="ml-auto flex items-center gap-2 lg:ml-0">
                   <Button
@@ -864,7 +797,7 @@ export default function MessagingTab({ values, setValues }) {
                     onClick={() => setPage(1)}
                     disabled={page <= 1}
                   >
-                    <span className="sr-only">Go to first page</span>
+                    <span className="sr-only">{tUi("Go to first page")}</span>
                     <IconChevronsLeft />
                   </Button>
                   <Button
@@ -874,7 +807,7 @@ export default function MessagingTab({ values, setValues }) {
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
                   >
-                    <span className="sr-only">Go to previous page</span>
+                    <span className="sr-only">{tUi("Go to previous page")}</span>
                     <IconChevronLeft />
                   </Button>
                   <Button
@@ -891,7 +824,7 @@ export default function MessagingTab({ values, setValues }) {
                     }
                     disabled={page >= Math.max(1, Math.ceil(total / pageSize))}
                   >
-                    <span className="sr-only">Go to next page</span>
+                    <span className="sr-only">{tUi("Go to next page")}</span>
                     <IconChevronRight />
                   </Button>
                   <Button
@@ -903,7 +836,7 @@ export default function MessagingTab({ values, setValues }) {
                     }
                     disabled={page >= Math.max(1, Math.ceil(total / pageSize))}
                   >
-                    <span className="sr-only">Go to last page</span>
+                    <span className="sr-only">{tUi("Go to last page")}</span>
                     <IconChevronsRight />
                   </Button>
                 </div>
@@ -929,27 +862,21 @@ export default function MessagingTab({ values, setValues }) {
               onClick={() =>
                 setConfirmDialog((prev) => ({ ...prev, open: false }))
               }
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             {confirmDialog.onConfirm && (
               <Button
                 onClick={() => {
                   confirmDialog.onConfirm();
                   setConfirmDialog((prev) => ({ ...prev, open: false }));
                 }}
-              >
-                Confirm
-              </Button>
+              >{tUi("Confirm")}</Button>
             )}
             {!confirmDialog.onConfirm && (
               <Button
                 onClick={() =>
                   setConfirmDialog((prev) => ({ ...prev, open: false }))
                 }
-              >
-                OK
-              </Button>
+              >{tUi("OK")}</Button>
             )}
           </DialogFooter>
         </DialogContent>

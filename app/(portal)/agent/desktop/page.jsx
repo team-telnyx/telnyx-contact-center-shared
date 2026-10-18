@@ -1,3 +1,4 @@
+import { UiText } from "@/components/i18n/use-ui-text";
 import { AgentDesktop } from "@/components/contact-center/AgentDesktop";
 import {
   AgentPageHeader,
@@ -7,7 +8,7 @@ import {
 export default function DesktopPage() {
   return (
     <AgentPageShell>
-      <AgentPageHeader title="Agent Desktop" />
+      <AgentPageHeader title={<UiText>Agent Desktop</UiText>} />
       <AgentDesktop />
     </AgentPageShell>
   );

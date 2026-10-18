@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { InteractionsList } from "./InteractionsList";
@@ -60,6 +62,7 @@ const END_STATUSES = new Set(["ended", "hangup", "completed", "terminated", "des
 
 
 function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial }) {
+  const tUi = useUiText();
   if (!assignment) return null;
   const record = assignment.contact_record || {};
   const previewFields = Object.entries(record).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").slice(0, 12);
@@ -68,12 +71,12 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
     <details data-testid="campaign-record" data-attempt-id={assignment.id} className="group rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:border-zinc-800 dark:bg-black dark:text-zinc-100" open={false}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:bg-muted/60 dark:hover:bg-zinc-900 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-zinc-400">Outbound Campaign Record</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-zinc-400">{tUi("Outbound Campaign Record")}</p>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h3 className="truncate text-base font-semibold text-foreground dark:text-zinc-50">{assignment.campaign_name || "Campaign"}</h3>
-            <span className="font-mono text-sm text-muted-foreground dark:text-zinc-300">{assignment.to_number || "No phone number"}</span>
+            <h3 className="truncate text-base font-semibold text-foreground dark:text-zinc-50">{assignment.campaign_name || tUi("Campaign")}</h3>
+            <span className="font-mono text-sm text-muted-foreground dark:text-zinc-300">{assignment.to_number || tUi("No phone number")}</span>
             <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold uppercase text-muted-foreground dark:border-zinc-700 dark:text-zinc-400">{assignment.campaign_mode}</span>
-            {isProgressive ? <span className="font-mono text-sm font-semibold text-foreground dark:text-zinc-200">Auto dial in {Math.max(0, countdownSeconds ?? 0)}s</span> : null}
+            {isProgressive ? <span className="font-mono text-sm font-semibold text-foreground dark:text-zinc-200">{tUi("Auto dial in ")}{Math.max(0, countdownSeconds ?? 0)}{tUi("s")}</span> : null}
           </div>
         </div>
         <button
@@ -87,7 +90,7 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
           }}
           disabled={dialing || !assignment.to_number}
         >
-          {dialing ? "Starting outbound call..." : "Start outbound call"}
+          {dialing ? tUi("Starting outbound call...") : tUi("Start outbound call")}
         </button>
       </summary>
       <div className="border-t border-border px-4 pb-4 pt-3 dark:border-zinc-800">
@@ -105,6 +108,7 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
 }
 
 export function AgentDesktop() {
+  const tUi = useUiText();
   const [chatComposerStore]=useState(createChatComposerStore);
   const [selectedInteraction, setSelectedInteraction] = useState(null);
   const [cobrowseFocusId, setCobrowseFocusId] = useState(null);
@@ -1097,9 +1101,11 @@ export function AgentDesktop() {
     },
   } : null;
 
+  const [videoHeaderTarget, setVideoHeaderTarget] = useState(null);
+  const videoSelected = activeView === "desktop" && selectedInteraction && channelDefinition(selectedInteraction.channel || selectedInteraction.interaction_type || "voice").viewer === "video";
   const detailTitle =
     activeView === "desktop"
-      ? "Interaction Details"
+      ? videoSelected ? "Video call" : "Interaction Details"
       : activeView === "dashboard"
       ? "Dashboard"
       : DATA_SOURCE_VIEW_LABELS[activeView] || "Interaction Details";
@@ -1119,7 +1125,7 @@ export function AgentDesktop() {
         items={AGENT_RAIL_ITEMS}
         activeId={activeView}
         onSelect={setActiveView}
-        ariaLabel="Agent workspace sections"
+        ariaLabel={tUi("Agent workspace sections")}
         screenGroup="agent.desktop"
       />
 
@@ -1142,19 +1148,19 @@ export function AgentDesktop() {
 
       <Card className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${activeView === "dashboard" ? "bg-background" : ""}`}>
         <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
-          <div className="flex items-center justify-between gap-3">
+          <div className={`flex items-center justify-between gap-3 ${videoSelected ? "flex-wrap" : ""}`}>
             <div className="flex min-w-0 items-center gap-2">
               <div className="p-1.5 rounded-md bg-primary/10">
                 <DetailIcon className="h-4 w-4 text-primary" />
               </div>
-              <h2 className="truncate text-base font-semibold text-foreground">{detailTitle}</h2>
+              <h2 className="truncate text-base font-semibold text-foreground">{tUi(detailTitle)}</h2>
               {activeView === "forms" && agentForms.length ? (
                 <Select
                   value={selectedAgentFormId || undefined}
                   onValueChange={setSelectedAgentFormId}
                 >
                   <SelectTrigger className="h-8 w-[240px]">
-                    <SelectValue placeholder="Select form" />
+                    <SelectValue placeholder={tUi("Select form")} />
                   </SelectTrigger>
                   <SelectContent>
                     {agentForms.map((form) => (
@@ -1166,7 +1172,7 @@ export function AgentDesktop() {
                 </Select>
               ) : null}
             </div>
-            <div id="interaction-detail-header-actions" className="shrink-0" />
+            <div id="interaction-detail-header-actions" ref={setVideoHeaderTarget} className={videoSelected ? "min-w-0 flex-1" : "shrink-0"} />
           </div>
         </div>
 
@@ -1182,7 +1188,7 @@ export function AgentDesktop() {
               : selectedDefinition.viewer === "email"
                 ? <EmailInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} />
                 : selectedDefinition.viewer === "video"
-                  ? <VideoInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} />
+                  ? <VideoInteractionDetail key={selectedInteraction.id} interaction={selectedInteraction} onChanged={chat.refresh} headerTarget={videoHeaderTarget} />
                   : <InteractionDetail interaction={selectedInteraction} />}
             </CobrowseInteractionWorkspace>
             : selectedDefinition.viewer === "email"
@@ -1201,7 +1207,7 @@ export function AgentDesktop() {
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
               <PhoneCall className="h-10 w-10 text-gray-500" />
-              <p>Waiting for an interaction...</p>
+              <p>{tUi("Waiting for an interaction...")}</p>
             </div>
           )
         ) : (

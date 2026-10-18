@@ -5,9 +5,13 @@ import { bearerToken } from "@/lib/widgets/session-tokens";
 import { getWidgetSession } from "@/lib/widgets/sessions";
 import {
   authorizeWidgetAvatarSession,
+  assertAvatarSessionAllowed,
   avatarErrorResponse,
   createAvatarSessionForSettings,
 } from "@/lib/ai/avatar-extensions.mjs";
+import { assertTelnyxAvatarAssistant } from "@/lib/ai/telnyx-avatar.mjs";
+import { widgetAiRequest } from "@/lib/widgets/ai-provider";
+import { telnyxAvatarSocketUrl } from "@/lib/ai/telnyx-avatar-socket-url.mjs";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -26,11 +30,17 @@ export async function POST(request, context) {
   try {
     const { publicId } = await context.params;
     const body = await request.json().catch(() => ({}));
-    const { settings } = await authorizeWidgetAvatarSession(
+    const { settings, session: widgetSession } = await authorizeWidgetAvatarSession(
       pool,
       { publicId, token: bearerToken(request), assistantId: body.assistantId },
       { getWidgetSession }
     );
+    if (settings.avatarConfig.provider === "telnyx") {
+      assertAvatarSessionAllowed(settings, body);
+      const response = await widgetAiRequest(`/ai/assistants/${encodeURIComponent(widgetSession.assistant_id)}`);
+      assertTelnyxAvatarAssistant(response.data || response, widgetSession.config.channels.voice, { requireMatch: true });
+      return NextResponse.json({ ok: true, provider: "telnyx", url: telnyxAvatarSocketUrl(request.url) }, { headers: NO_STORE });
+    }
     const session = await createAvatarSessionForSettings(settings, {
       avatarId: body.avatarId,
       provider: body.provider,
@@ -38,7 +48,9 @@ export async function POST(request, context) {
     return NextResponse.json({ ok: true, ...session }, { headers: NO_STORE });
   } catch (error) {
     contactCenterRuntimeLogger.error("widget_avatar_session_failed", { ...runtimePayload({ error }) });
-    const response = avatarErrorResponse(error);
+    const response = error.status && error.name !== "AvatarSessionError"
+      ? { status: error.status, body: { ok: false, error: error.message } }
+      : avatarErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status, headers: NO_STORE });
   }
 }

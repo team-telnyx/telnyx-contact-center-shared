@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -11,7 +13,10 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { createTranscriptionOverride } from "@/lib/ai/assistant-transcription.mjs";
+import { enabledAiCousticsSettings } from "@/lib/ai/assistant-audio-ui.mjs";
 import { TRANSCRIPTION_PROVIDERS } from "@/config/voice";
 import {
   IconVolume,
@@ -117,6 +122,7 @@ function buildVoiceString(provider, model, voiceName) {
 
 // SecretsCombobox component for API Key selection
 function SecretsCombobox({ value, onChange }) {
+  const tUi = useUiText();
   const [options, setOptions] = useState([]);
   useEffect(() => {
     let mounted = true;
@@ -144,8 +150,8 @@ function SecretsCombobox({ value, onChange }) {
       value={value}
       onChange={onChange}
       options={options}
-      placeholder="Select API key reference…"
-      emptyLabel="No API keys found"
+      placeholder={tUi("Select API key reference…")}
+      emptyLabel={tUi("No API keys found")}
       triggerClassName="w-full"
       searchable
     />
@@ -195,6 +201,7 @@ const XAI_LANGUAGE_OPTIONS = [
  * Pronunciation Dictionary dropdown — fetches list from API and lets user pick one
  */
 function PronunciationDictSelect({ value, onChange }) {
+  const tUi = useUiText();
   const [dicts, setDicts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -213,25 +220,24 @@ function PronunciationDictSelect({ value, onChange }) {
     >
       <SelectTrigger className="w-full">
         {loading ? (
-          <span className="text-muted-foreground text-sm">Loading…</span>
+          <span className="text-muted-foreground text-sm">{tUi("Loading…")}</span>
         ) : (
-          <SelectValue placeholder="No dictionary selected" />
+          <SelectValue placeholder={tUi("No dictionary selected")} />
         )}
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="__none__">No dictionary selected</SelectItem>
+        <SelectItem value="__none__">{tUi("No dictionary selected")}</SelectItem>
         {dicts.map((d) => (
           <SelectItem key={d.id} value={d.id}>
             {d.name}
             {d.items?.length !== undefined && (
-              <span className="ml-2 text-xs text-muted-foreground">({d.items.length} items)</span>
+              <span className="ml-2 text-xs text-muted-foreground">({d.items.length}{tUi(" items)")}</span>
             )}
           </SelectItem>
         ))}
         {!loading && dicts.length === 0 && (
-          <div className="px-2 py-3 text-xs text-muted-foreground text-center">
-            No dictionaries yet.{" "}
-            <Link href="/admin/ai-assistants/pronunciation-dictionaries" className="underline">Create one</Link>.
+          <div className="px-2 py-3 text-xs text-muted-foreground text-center">{tUi("No dictionaries yet.")}{" "}
+            <Link href="/admin/ai-assistants/pronunciation-dictionaries" className="underline">{tUi("Create one")}</Link>.
           </div>
         )}
       </SelectContent>
@@ -239,7 +245,8 @@ function PronunciationDictSelect({ value, onChange }) {
   );
 }
 
-export default function TtsVoicePicker({ value, onChange }) {
+export default function TtsVoicePicker({ value, onChange, section, callAudioExtras, compact = false, hideNoiseSuppression = false }) {
+  const tUi = useUiText();
   const voice = value?.voice || "";
   const voice_speed = value?.voice_speed ?? 1;
   const voice_api_key_ref = value?.voice_api_key_ref || "";
@@ -247,6 +254,9 @@ export default function TtsVoicePicker({ value, onChange }) {
   const language_boost = value?.language_boost || "";
   const voice_language = value?.voice_language || "";
   const [providers, setProviders] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState(false);
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
   const [voiceName, setVoiceName] = useState("");
@@ -322,15 +332,20 @@ export default function TtsVoicePicker({ value, onChange }) {
   }, [provider, model, voiceName, pInit, mInit, vInit]);
 
   useEffect(() => {
-    async function loadVoices() {
+    let active = true;
+    setCatalogLoading(true);
+    setCatalogError(false);
+    (async () => {
       try {
         const res = await fetch("/api/tts/voices", { cache: "no-store" });
         const data = await res.json();
-        if (res.ok && data?.ok) setProviders(data.providers || []);
-      } catch (_) {}
-    }
-    loadVoices();
-  }, []);
+        if (!res.ok || !data?.ok) throw new Error("catalog");
+        if (active) setProviders(data.providers || []);
+      } catch (_) { if (active) setCatalogError(true); }
+      finally { if (active) setCatalogLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [catalogAttempt]);
 
   // Sync voiceApiKeyRef from props
   useEffect(() => {
@@ -519,7 +534,7 @@ export default function TtsVoicePicker({ value, onChange }) {
     const next = { ...elevenlabs_settings, [key]: val };
     onChange?.({
       voice,
-      voice_speed: key === "speed" ? Number(val) : voice_speed,
+      voice_speed,
       voice_api_key_ref: voiceApiKeyRef,
       elevenlabs_settings: next,
       language_boost: language_boost || undefined,
@@ -671,22 +686,22 @@ export default function TtsVoicePicker({ value, onChange }) {
   // MicOverlay will call onAppend with pre-formatted deltas; simply append.
 
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
-      <section className="overflow-hidden rounded-xl border bg-card shadow-sm xl:col-span-2">
+    <div className={compact || section === "interruptions" ? "space-y-5" : "grid items-start gap-5 lg:grid-cols-2"}>
+      {(!section || section === "voice") && (catalogLoading ? <div className="space-y-4 rounded-xl border p-5" aria-label={tUi("Loading voices")}><Skeleton className="h-5 w-40" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-24 w-full" /></div> : catalogError ? <div role="alert" className="min-w-0 space-y-3 rounded-xl border p-5"><p className="text-sm">{tUi("The voice catalog could not be loaded. Your saved voice settings are preserved.")}</p><Button variant="outline" size="sm" onClick={() => setCatalogAttempt(v => v + 1)}>{tUi("Try again")}</Button></div> : <section className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="flex items-start gap-3 border-b bg-muted/30 px-4 py-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10">
             <IconVolume className="size-5 text-orange-500" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Text-to-Speech (TTS)</h3>
-            <p className="text-xs text-muted-foreground">Choose the assistant voice, delivery style, and pronunciation.</p>
+            <h3 className="text-sm font-semibold">{tUi("Text-to-Speech (TTS)")}</h3>
+            <p className="text-xs text-muted-foreground">{tUi("Choose the assistant voice, delivery style, and pronunciation.")}</p>
           </div>
         </div>
         <div className="space-y-4 p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="col-span-full text-xs font-medium text-muted-foreground">Catalog filters</div>
+        <div className="col-span-full text-xs font-medium text-muted-foreground">{tUi("Catalog filters")}</div>
         <div>
-          <label className="text-xs">Language</label>
+          <label className="text-xs">{tUi("Language")}</label>
           <Popover
             open={languagePopoverOpen}
             onOpenChange={setLanguagePopoverOpen}
@@ -715,7 +730,7 @@ export default function TtsVoicePicker({ value, onChange }) {
                 ) : (
                   <span className="flex items-center gap-2">
                     <IconWorld className="size-4" />
-                    <span>Any</span>
+                    <span>{tUi("Any")}</span>
                   </span>
                 )}
                 <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -724,12 +739,12 @@ export default function TtsVoicePicker({ value, onChange }) {
             <PopoverContent className="w-[320px] p-0">
               <Command>
                 <CommandInput
-                  placeholder="Search languages..."
+                  placeholder={tUi("Search languages...")}
                   value={languageSearch}
                   onValueChange={setLanguageSearch}
                   className="h-9"
                 />
-                <CommandEmpty>No language found.</CommandEmpty>
+                <CommandEmpty>{tUi("No language found.")}</CommandEmpty>
                 <CommandGroup className="max-h-[300px] overflow-auto">
                   <CommandItem
                     value="__any__"
@@ -744,7 +759,7 @@ export default function TtsVoicePicker({ value, onChange }) {
                       }`}
                     />
                     <IconWorld className="size-4 mr-2" />
-                    <span>Any</span>
+                    <span>{tUi("Any")}</span>
                   </CommandItem>
                   {filteredLanguageOptions.map((opt) => (
                     <CommandItem
@@ -772,7 +787,7 @@ export default function TtsVoicePicker({ value, onChange }) {
           </Popover>
         </div>
         <div>
-          <label className="text-xs">Gender</label>
+          <label className="text-xs">{tUi("Gender")}</label>
           <Select
             value={genderFilter === "" ? "__any__" : genderFilter}
             onValueChange={(val) =>
@@ -780,10 +795,10 @@ export default function TtsVoicePicker({ value, onChange }) {
             }
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Any" />
+              <SelectValue placeholder={tUi("Any")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__any__">Any</SelectItem>
+              <SelectItem value="__any__">{tUi("Any")}</SelectItem>
               {genderOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -795,12 +810,12 @@ export default function TtsVoicePicker({ value, onChange }) {
       </div>
 
       {/* Provider, Model, Voice, API Key, and Voice Speed in one row */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="text-xs">Provider</label>
+          <label className="text-xs">{tUi("Provider")}</label>
           <Select value={provider} onValueChange={setProvider}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select provider" />
+              <SelectValue placeholder={tUi("Select provider")} />
             </SelectTrigger>
             <SelectContent>
               {filteredProviders
@@ -817,8 +832,7 @@ export default function TtsVoicePicker({ value, onChange }) {
         {/* Show API Key Ref selector when ElevenLabs is selected */}
         {provider.toLowerCase() === "elevenlabs" && (
           <div>
-            <label className="text-xs">
-              ElevenLabs API Key Reference{" "}
+            <label className="text-xs">{tUi("ElevenLabs API Key Reference")}{" "}
               <span className="text-red-500">*</span>
             </label>
             <SecretsCombobox
@@ -829,17 +843,17 @@ export default function TtsVoicePicker({ value, onChange }) {
         )}
 
         <div>
-          <label className="text-xs">Model</label>
+          <label className="text-xs">{tUi("Model")}</label>
           <Select
             value={model === "" ? "__default__" : model}
             onValueChange={(val) => setModel(val === "__default__" ? "" : val)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select model" />
+              <SelectValue placeholder={tUi("Select model")} />
             </SelectTrigger>
             <SelectContent>
               {models.some((m) => !m?.id) && (
-                <SelectItem value="__default__">Default</SelectItem>
+                <SelectItem value="__default__">{tUi("Default")}</SelectItem>
               )}
               {models
                 .filter((m) => m?.id)
@@ -853,12 +867,11 @@ export default function TtsVoicePicker({ value, onChange }) {
         </div>
 
         <div>
-          <label className="text-xs">
-            Voice <span className="text-red-500">*</span>
+          <label className="text-xs">{tUi("Voice ")}<span className="text-red-500">*</span>
           </label>
           <Select value={voiceName} onValueChange={setVoiceName}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select voice" />
+              <SelectValue placeholder={tUi("Select voice")} />
             </SelectTrigger>
             <SelectContent>
               {voices
@@ -879,13 +892,13 @@ export default function TtsVoicePicker({ value, onChange }) {
 
         {provider.toLowerCase().includes("minimax") && (
           <div>
-            <label className="text-xs">Language Boost</label>
+            <label className="text-xs">{tUi("Language Boost")}</label>
             <Select
               value={language_boost || "auto"}
               onValueChange={handleLanguageBoostChange}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select language boost" />
+                <SelectValue placeholder={tUi("Select language boost")} />
               </SelectTrigger>
               <SelectContent>
                 {MINIMAX_LANGUAGE_BOOST_OPTIONS.map((opt) => (
@@ -900,13 +913,13 @@ export default function TtsVoicePicker({ value, onChange }) {
 
         {provider.toLowerCase() === "xai" && (
           <div>
-            <label className="text-xs">Language</label>
+            <label className="text-xs">{tUi("Language")}</label>
             <Select
               value={voice_language || "auto"}
               onValueChange={handleVoiceLanguageChange}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select language" />
+                <SelectValue placeholder={tUi("Select language")} />
               </SelectTrigger>
               <SelectContent>
                 {XAI_LANGUAGE_OPTIONS.map((opt) => (
@@ -926,10 +939,9 @@ export default function TtsVoicePicker({ value, onChange }) {
             model.toLowerCase() === "ultra") && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs">Voice Speed</label>
+                <label className="text-xs">{tUi("Voice Speed")}</label>
                 <Badge variant="secondary" className="text-xs">
-                  {voice_speed.toFixed(2)}x
-                </Badge>
+                  {voice_speed.toFixed(2)}{tUi("x")}</Badge>
               </div>
               <div className="relative pt-6">
                 <Slider
@@ -968,17 +980,13 @@ export default function TtsVoicePicker({ value, onChange }) {
               }
             />
             <div className="flex items-center gap-1.5">
-              <label htmlFor="expressive-mode" className="text-sm font-medium cursor-pointer">Expressive Mode</label>
+              <label htmlFor="expressive-mode" className="text-sm font-medium cursor-pointer">{tUi("Expressive Mode")}</label>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>
-                    Enables emotionally expressive speech using SSML emotion tags.<br />
-                    The assistant uses tones like excited, content, or calm to add nuance.<br />
-                    Only supported for Telnyx Ultra voices.
-                  </p>
+                  <p>{tUi("Enables emotionally expressive speech using SSML emotion tags.")}<br />{tUi("The assistant uses tones like excited, content, or calm to add nuance.")}<br />{tUi("Only supported for Telnyx Ultra voices.")}</p>
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -988,10 +996,10 @@ export default function TtsVoicePicker({ value, onChange }) {
       {/* ElevenLabs Advanced Settings */}
       {provider.toLowerCase() === "elevenlabs" && (
         <div className="border rounded-md p-4 space-y-4 bg-muted/20">
-          <div className="text-sm font-medium">ElevenLabs Advanced Settings</div>
+          <div className="text-sm font-medium">{tUi("ElevenLabs Advanced Settings")}</div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs">Temperature</label>
+              <label className="text-xs">{tUi("Temperature")}</label>
               <Badge variant="secondary" className="text-xs">
                 {(elevenlabs_settings?.temperature ?? 0.5).toFixed(2)}
               </Badge>
@@ -1009,13 +1017,11 @@ export default function TtsVoicePicker({ value, onChange }) {
               <span>0</span>
               <span>1</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Controls voice stability vs expressiveness.
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Controls voice stability vs expressiveness.")}</p>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs">Similarity Boost</label>
+              <label className="text-xs">{tUi("Similarity Boost")}</label>
               <Badge variant="secondary" className="text-xs">
                 {(elevenlabs_settings?.similarity_boost ?? 0.75).toFixed(2)}
               </Badge>
@@ -1033,16 +1039,13 @@ export default function TtsVoicePicker({ value, onChange }) {
               <span>0</span>
               <span>1</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              How closely the AI voice matches the target voice.
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("How closely the AI voice matches the target voice.")}</p>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs">Speed</label>
+              <label className="text-xs">{tUi("Speed")}</label>
               <Badge variant="secondary" className="text-xs">
-                {(elevenlabs_settings?.speed ?? voice_speed ?? 1.0).toFixed(2)}x
-              </Badge>
+                {(elevenlabs_settings?.speed ?? voice_speed ?? 1.0).toFixed(2)}{tUi("x")}</Badge>
             </div>
             <Slider
               min={0.7}
@@ -1057,13 +1060,11 @@ export default function TtsVoicePicker({ value, onChange }) {
               <span>0.7</span>
               <span>1.3</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Speech velocity (separate from Voice Speed).
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Speech velocity (separate from Voice Speed).")}</p>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs">Style</label>
+              <label className="text-xs">{tUi("Style")}</label>
               <Badge variant="secondary" className="text-xs">
                 {(elevenlabs_settings?.style ?? 0.0).toFixed(2)}
               </Badge>
@@ -1081,16 +1082,12 @@ export default function TtsVoicePicker({ value, onChange }) {
               <span>0</span>
               <span>1</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Controls style exaggeration. Higher values are more expressive.
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Controls style exaggeration. Higher values are more expressive.")}</p>
           </div>
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
-              <label className="text-xs font-medium">Speaker Boost</label>
-              <p className="text-xs text-muted-foreground">
-                Increases similarity to the original speaker voice.
-              </p>
+              <label className="text-xs font-medium">{tUi("Speaker Boost")}</label>
+              <p className="text-xs text-muted-foreground">{tUi("Increases similarity to the original speaker voice.")}</p>
             </div>
             <Switch
               checked={elevenlabs_settings?.use_speaker_boost ?? true}
@@ -1104,10 +1101,8 @@ export default function TtsVoicePicker({ value, onChange }) {
 
       <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <div>
-          <label className="text-xs">
-            Sample text
-            {translating && (
-              <span className="ml-2 text-xs text-blue-500">Translating...</span>
+          <label className="text-xs">{tUi("Sample text")}{translating && (
+              <span className="ml-2 text-xs text-blue-500">{tUi("Translating...")}</span>
             )}
           </label>
           <MicOverlay
@@ -1121,7 +1116,7 @@ export default function TtsVoicePicker({ value, onChange }) {
             <Input
               value={sampleText}
               onChange={(e) => setSampleText(e.target.value)}
-              placeholder="Type text to preview"
+              placeholder={tUi("Type text to preview")}
               disabled={translating}
             />
           </MicOverlay>
@@ -1136,7 +1131,7 @@ export default function TtsVoicePicker({ value, onChange }) {
               (provider === "ElevenLabs" && !voiceApiKeyRef)
             }
           >
-            {loading ? "Generating…" : "Play Sample"}
+            {loading ? tUi("Generating…") : tUi("Play Sample")}
           </Button>
           <audio ref={audioRef} controls className="hidden" />
         </div>
@@ -1145,13 +1140,13 @@ export default function TtsVoicePicker({ value, onChange }) {
       {/* Pronunciation Dictionary */}
       <div className="space-y-1.5 rounded-lg border bg-muted/15 p-3">
         <div className="flex items-center gap-1.5">
-          <label className="text-xs font-medium">Pronunciation Dictionary</label>
+          <label className="text-xs font-medium">{tUi("Pronunciation Dictionary")}</label>
           <Tooltip>
             <TooltipTrigger asChild>
               <IconInfoCircle className="size-3.5 text-gray-400 cursor-help" />
             </TooltipTrigger>
             <TooltipContent>
-              <p>Control how your assistant pronounces specific words.<br />Create and manage dictionaries in Pronunciation Dictionaries.</p>
+              <p>{tUi("Control how your assistant pronounces specific words.")}<br />{tUi("Create and manage dictionaries in Pronunciation Dictionaries.")}</p>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -1169,60 +1164,39 @@ export default function TtsVoicePicker({ value, onChange }) {
             })
           }
         />
-        <p className="text-xs text-muted-foreground">
-          Control how your assistant pronounces specific words.{" "}
-          <Link href="/admin/ai-assistants/pronunciation-dictionaries" className="underline text-primary">
-            Create and manage dictionaries
-          </Link>
+        <p className="text-xs text-muted-foreground">{tUi("Control how your assistant pronounces specific words.")}{" "}
+          <Link href="/admin/ai-assistants/pronunciation-dictionaries" className="underline text-primary">{tUi("Create and manage dictionaries")}</Link>
           .
         </p>
       </div>
         </div>
-      </section>
+      </section>)}
 
-      <section className="overflow-hidden rounded-xl border bg-card shadow-sm xl:col-span-2">
+      {(!section || section === "transcription") && <section className="overflow-hidden rounded-xl border bg-card shadow-sm xl:col-span-2">
         <div className="flex items-start gap-3 border-b bg-muted/30 px-4 py-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
             <IconWaveSine className="size-5 text-sky-500" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Speech-to-Text (STT)</h3>
-            <p className="text-xs text-muted-foreground">Configure transcription, language detection, and endpointing.</p>
+            <h3 className="text-sm font-semibold">{tUi("Speech-to-Text (STT)")}</h3>
+            <p className="text-xs text-muted-foreground">{tUi("Configure transcription, language detection, and endpointing. Changing the model resets its language; review provider-specific advanced settings before saving.")}</p>
           </div>
         </div>
         <div className="space-y-4 p-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
         <div className="w-full">
-          <label className="text-xs">
-            Transcription provider <span className="text-red-500">*</span>
+          <label className="text-xs">{tUi("Transcription provider ")}<span className="text-red-500">*</span>
           </label>
           <Select
             value={String(value?.transcription?.model || "")}
             onValueChange={(val) => {
-              const isDeepgram =
-                val === "deepgram/nova-2" || val === "deepgram/nova-3";
-              const isDeepgramFlux = val === "deepgram/flux";
+              const defaults = createTranscriptionOverride(val);
               const newTranscription = {
-                ...(value?.transcription || {}),
-                model: val,
+                ...(value?.transcription || {}), ...defaults,
+                // Preserve advanced settings for review, but avoid carrying an
+                // incompatible language into a different provider.
+                settings: {...value?.transcription?.settings, ...defaults.settings},
               };
-              // Initialize settings with defaults for Deepgram models
-              if (isDeepgram && !value?.transcription?.settings) {
-                newTranscription.settings = {
-                  smart_format: true,
-                  numerals: true,
-                };
-              }
-              // Initialize settings with defaults for Deepgram Flux
-              if (isDeepgramFlux && !value?.transcription?.settings) {
-                newTranscription.settings = {
-                  smart_format: true,
-                  numerals: true,
-                  eot_threshold: 0.8,
-                  eot_timeout_ms: 5000,
-                  eager_eot_threshold: 0.3,
-                };
-              }
               onChange?.({
                 voice,
                 voice_speed,
@@ -1232,9 +1206,10 @@ export default function TtsVoicePicker({ value, onChange }) {
             }}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select transcription" />
+              <SelectValue placeholder={tUi("Select transcription")} />
             </SelectTrigger>
             <SelectContent>
+              {value?.transcription?.model && !TRANSCRIPTION_PROVIDERS.some(p=>p.model_name===value.transcription.model) ? <SelectItem value={value.transcription.model}>{value.transcription.model}</SelectItem> : null}
               {TRANSCRIPTION_PROVIDERS.map((p) => (
                 <SelectItem key={p.model_name} value={p.model_name}>
                   {p.model_name}
@@ -1513,7 +1488,7 @@ export default function TtsVoicePicker({ value, onChange }) {
 
             return (
               <>
-                <label className="text-xs">Language</label>
+                <label className="text-xs">{tUi("Language")}</label>
                 <Popover
                   open={transcriptionLanguagePopoverOpen}
                   onOpenChange={setTranscriptionLanguagePopoverOpen}
@@ -1541,12 +1516,12 @@ export default function TtsVoicePicker({ value, onChange }) {
                         return hasAuto ? (
                           <span className="flex items-center gap-2">
                             <IconWorld className="size-4" />
-                            <span>Auto</span>
+                            <span>{tUi("Auto")}</span>
                           </span>
                         ) : (
                           <span className="flex items-center gap-2">
                             <IconWorld className="size-4" />
-                            <span>Any</span>
+                            <span>{tUi("Any")}</span>
                           </span>
                         );
                       })()}
@@ -1556,15 +1531,15 @@ export default function TtsVoicePicker({ value, onChange }) {
                   <PopoverContent className="w-[400px] p-0">
                     <Command shouldFilter={false}>
                       <CommandInput
-                        placeholder="Search languages..."
+                        placeholder={tUi("Search languages...")}
                         value={transcriptionLanguageSearch}
                         onValueChange={setTranscriptionLanguageSearch}
                         className="h-9"
                       />
                       <CommandEmpty>
                         {transcriptionLanguageSearch.trim()
-                          ? "No language found."
-                          : "Type to search languages..."}
+                          ? tUi("No language found.")
+                          : tUi("Type to search languages...")}
                       </CommandEmpty>
                       <CommandGroup className="max-h-[300px] overflow-auto">
                         {(() => {
@@ -1613,7 +1588,7 @@ export default function TtsVoicePicker({ value, onChange }) {
                                     }`}
                                   />
                                   <IconWorld className="size-4 mr-2" />
-                                  <span>Any</span>
+                                  <span>{tUi("Any")}</span>
                                 </CommandItem>
                               )}
                               {filteredItems.map((opt) => (
@@ -1684,17 +1659,13 @@ export default function TtsVoicePicker({ value, onChange }) {
             <label
               htmlFor="smart_format"
               className="text-sm font-medium leading-none cursor-pointer"
-            >
-              Smart Format
-            </label>
+            >{tUi("Smart Format")}</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  Automatically formats transcripts for improved readability.
-                </p>
+                <p>{tUi("Automatically formats transcripts for improved readability.")}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1720,15 +1691,13 @@ export default function TtsVoicePicker({ value, onChange }) {
             <label
               htmlFor="numerals"
               className="text-sm font-medium leading-none cursor-pointer"
-            >
-              Numerals
-            </label>
+            >{tUi("Numerals")}</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Converts numbers from written form to numerical digits.</p>
+                <p>{tUi("Converts numbers from written form to numerical digits.")}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1740,19 +1709,13 @@ export default function TtsVoicePicker({ value, onChange }) {
                 <label
                   htmlFor="eot_threshold"
                   className="text-sm font-medium leading-none"
-                >
-                  End-Of-Turn Threshold
-                </label>
+                >{tUi("End-Of-Turn Threshold")}</label>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>
-                      Confidence required to trigger an end of turn. Higher
-                      values = more reliable turn detection but slightly
-                      increased latency.
-                    </p>
+                    <p>{tUi("Confidence required to trigger an end of turn. Higher values = more reliable turn detection but slightly increased latency.")}</p>
                   </TooltipContent>
                 </Tooltip>
                 <Input
@@ -1786,18 +1749,13 @@ export default function TtsVoicePicker({ value, onChange }) {
                 <label
                   htmlFor="eot_timeout_ms"
                   className="text-sm font-medium leading-none"
-                >
-                  End-Of-Turn Timeout (ms)
-                </label>
+                >{tUi("End-Of-Turn Timeout (ms)")}</label>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>
-                      Maximum milliseconds of silence before forcing an end of
-                      turn, regardless of confidence.
-                    </p>
+                    <p>{tUi("Maximum milliseconds of silence before forcing an end of turn, regardless of confidence.")}</p>
                   </TooltipContent>
                 </Tooltip>
                 <Input
@@ -1831,17 +1789,13 @@ export default function TtsVoicePicker({ value, onChange }) {
                 <label
                   htmlFor="eager_eot_threshold"
                   className="text-sm font-medium leading-none"
-                >
-                  Eager EOT Threshold
-                </label>
+                >{tUi("Eager EOT Threshold")}</label>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>
-                      Confidence threshold for eager end-of-turn detection. Must be ≤ EOT Threshold. Setting equal to EOT Threshold disables eager detection. Range: 0.3–0.9.
-                    </p>
+                    <p>{tUi("Confidence threshold for eager end-of-turn detection. Must be ≤ EOT Threshold. Setting equal to EOT Threshold disables eager detection. Range: 0.3–0.9.")}</p>
                   </TooltipContent>
                 </Tooltip>
                 <Input
@@ -1880,20 +1834,18 @@ export default function TtsVoicePicker({ value, onChange }) {
       {(value?.transcription?.model === "deepgram/nova-3" ||
         value?.transcription?.model === "deepgram/flux") && (
         <div className="mt-3">
-          <label className="text-xs flex items-center gap-1">
-            Keyterm Boost
-            <Tooltip>
+          <label className="text-xs flex items-center gap-1">{tUi("Keyterm Boost")}<Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Comma-separated terms to boost recognition accuracy for domain-specific vocabulary, proper nouns, or uncommon words. Example: Telnyx,VoIP,SIP</p>
+                <p>{tUi("Comma-separated terms to boost recognition accuracy for domain-specific vocabulary, proper nouns, or uncommon words. Example: Telnyx,VoIP,SIP")}</p>
               </TooltipContent>
             </Tooltip>
           </label>
           <Input
             className="mt-1 w-full"
-            placeholder="e.g., Telnyx,VoIP,SIP"
+            placeholder={tUi("e.g., Telnyx,VoIP,SIP")}
             value={value?.transcription?.settings?.keyterm || ""}
             onChange={(e) =>
               onChange?.({
@@ -1917,14 +1869,12 @@ export default function TtsVoicePicker({ value, onChange }) {
       {value?.transcription?.model === "assemblyai/universal-streaming" && (
         <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs flex items-center gap-1">
-              End-of-Turn Confidence Threshold
-              <Tooltip>
+            <label className="text-xs flex items-center gap-1">{tUi("End-of-Turn Confidence Threshold")}<Tooltip>
                 <TooltipTrigger asChild>
                   <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Confidence threshold to detect end of turn. Higher = more reliable detection. Range: 0.1–0.9, default: 0.4</p>
+                  <p>{tUi("Confidence threshold to detect end of turn. Higher = more reliable detection. Range: 0.1–0.9, default: 0.4")}</p>
                 </TooltipContent>
               </Tooltip>
             </label>
@@ -1955,14 +1905,12 @@ export default function TtsVoicePicker({ value, onChange }) {
             />
           </div>
           <div>
-            <label className="text-xs flex items-center gap-1">
-              Min Turn Silence (ms)
-              <Tooltip>
+            <label className="text-xs flex items-center gap-1">{tUi("Min Turn Silence (ms)")}<Tooltip>
                 <TooltipTrigger asChild>
                   <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Minimum silence duration (ms) required to consider a turn ended.</p>
+                  <p>{tUi("Minimum silence duration (ms) required to consider a turn ended.")}</p>
                 </TooltipContent>
               </Tooltip>
             </label>
@@ -1993,14 +1941,12 @@ export default function TtsVoicePicker({ value, onChange }) {
             />
           </div>
           <div>
-            <label className="text-xs flex items-center gap-1">
-              Max Turn Silence (ms)
-              <Tooltip>
+            <label className="text-xs flex items-center gap-1">{tUi("Max Turn Silence (ms)")}<Tooltip>
                 <TooltipTrigger asChild>
                   <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Maximum silence duration (ms) before forcing end of turn detection.</p>
+                  <p>{tUi("Maximum silence duration (ms) before forcing end of turn detection.")}</p>
                 </TooltipContent>
               </Tooltip>
             </label>
@@ -2037,7 +1983,7 @@ export default function TtsVoicePicker({ value, onChange }) {
       {value?.transcription?.model?.startsWith("azure/") && (
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs">Azure Region <span className="text-red-500">*</span></label>
+            <label className="text-xs">{tUi("Azure Region ")}<span className="text-red-500">*</span></label>
             <Select
               value={value?.transcription?.region || "__latency__"}
               onValueChange={(val) =>
@@ -2056,21 +2002,19 @@ export default function TtsVoicePicker({ value, onChange }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__latency__">Latency (Auto-select closest region)</SelectItem>
-                <SelectItem value="australiaeast">Australia East</SelectItem>
-                <SelectItem value="centralindia">Central India</SelectItem>
-                <SelectItem value="eastus">East US</SelectItem>
-                <SelectItem value="northcentralus">North Central US</SelectItem>
-                <SelectItem value="westeurope">West Europe</SelectItem>
-                <SelectItem value="westus2">West US 2</SelectItem>
+                <SelectItem value="__latency__">{tUi("Latency (Auto-select closest region)")}</SelectItem>
+                <SelectItem value="australiaeast">{tUi("Australia East")}</SelectItem>
+                <SelectItem value="centralindia">{tUi("Central India")}</SelectItem>
+                <SelectItem value="eastus">{tUi("East US")}</SelectItem>
+                <SelectItem value="northcentralus">{tUi("North Central US")}</SelectItem>
+                <SelectItem value="westeurope">{tUi("West Europe")}</SelectItem>
+                <SelectItem value="westus2">{tUi("West US 2")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Choose the region closest to your users.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Choose the region closest to your users.")}</p>
           </div>
           <div>
-            <label className="text-xs">Azure API Key <span className="text-muted-foreground">(optional)</span></label>
+            <label className="text-xs">{tUi("Azure API Key ")}<span className="text-muted-foreground">{tUi("(optional)")}</span></label>
             <div className="mt-1">
               <SecretsCombobox
                 value={value?.transcription?.api_key_ref || ""}
@@ -2087,29 +2031,27 @@ export default function TtsVoicePicker({ value, onChange }) {
                 }
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Optional — defaults available for some regions.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Optional — defaults available for some regions.")}</p>
           </div>
         </div>
       )}
 
         </div>
-      </section>
+      </section>}
 
-      <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      {(!section || section === "voice") && <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="flex items-start gap-3 border-b bg-muted/30 px-4 py-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
             <IconVolume className="size-5 text-blue-500" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Call audio</h3>
-            <p className="text-xs text-muted-foreground">Clean incoming audio and add an optional ambient track.</p>
+            <h3 className="text-sm font-semibold">{tUi("Call audio")}</h3>
+            <p className="text-xs text-muted-foreground">{tUi("Clean incoming audio and add an optional ambient track.")}</p>
           </div>
         </div>
         <div className="space-y-5 p-4">
       {/* Noise Suppression */}
-      <div className="space-y-2 rounded-lg border bg-muted/15 p-3">
+      {!hideNoiseSuppression && <div className="space-y-2 rounded-lg border bg-muted/15 p-3">
         <div className="flex items-center gap-2">
           <Switch
             id="noise-suppression-toggle"
@@ -2121,14 +2063,13 @@ export default function TtsVoicePicker({ value, onChange }) {
                 voice_api_key_ref: voiceApiKeyRef,
                 telephony: {
                   ...(value?.telephony || {}),
-                  noise_suppression: checked ? "aicoustics" : null,
+                  noise_suppression: checked ? "aicoustics" : "disabled",
+                  ...(checked ? { noise_suppression_config: enabledAiCousticsSettings(value?.telephony) } : {}),
                 },
               })
             }
           />
-          <label htmlFor="noise-suppression-toggle" className="text-sm font-medium leading-none cursor-pointer">
-            Noise Suppression
-          </label>
+          <label htmlFor="noise-suppression-toggle" className="text-sm font-medium leading-none cursor-pointer">{tUi("Noise Suppression")}</label>
         </div>
 
         {!!value?.telephony?.noise_suppression && value?.telephony?.noise_suppression !== "disabled" && (
@@ -2147,9 +2088,9 @@ export default function TtsVoicePicker({ value, onChange }) {
                       ...(value?.telephony || {}),
                       noise_suppression: val,
                       noise_suppression_config: val === "deepfilternet"
-                        ? (value?.telephony?.noise_suppression_config || { attenuation_limit: 100, mode: "advanced" })
+                        ? (value?.telephony?.noise_suppression === val ? value.telephony.noise_suppression_config : { attenuation_limit: 100, mode: "advanced" })
                         : val === "aicoustics"
-                        ? (value?.telephony?.noise_suppression_config || { model: "voice_focus_2.0", enhancement_level: 0.8 })
+                        ? (value?.telephony?.noise_suppression === val ? value.telephony.noise_suppression_config : { family: "quail", size: "vf", enhancement_level: 0.8 })
                         : undefined,
                     },
                   })
@@ -2159,9 +2100,9 @@ export default function TtsVoicePicker({ value, onChange }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="krisp">Krisp</SelectItem>
-                  <SelectItem value="deepfilternet">Deepfilternet</SelectItem>
-                  <SelectItem value="aicoustics">AiCoustics (recommended)</SelectItem>
+                  <SelectItem value="krisp">{tUi("Krisp")}</SelectItem>
+                  <SelectItem value="deepfilternet">{tUi("Deepfilternet")}</SelectItem>
+                  <SelectItem value="aicoustics">{tUi("AiCoustics (recommended)")}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -2169,9 +2110,7 @@ export default function TtsVoicePicker({ value, onChange }) {
               {value?.telephony?.noise_suppression === "deepfilternet" && (
                 <>
                   <div className="flex items-center gap-2 shrink-0">
-                    <label className="text-xs text-muted-foreground whitespace-nowrap">
-                      Advanced
-                    </label>
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">{tUi("Advanced")}</label>
                     <Switch
                       checked={
                         value?.telephony?.noise_suppression_config?.mode ===
@@ -2194,7 +2133,7 @@ export default function TtsVoicePicker({ value, onChange }) {
                     />
                   </div>
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <label className="text-xs text-muted-foreground whitespace-nowrap">Attenuation</label>
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">{tUi("Attenuation")}</label>
                     <Slider
                       min={0}
                       max={100}
@@ -2227,9 +2166,9 @@ export default function TtsVoicePicker({ value, onChange }) {
               {value?.telephony?.noise_suppression === "aicoustics" && (
                 <>
                   <div className="flex items-center gap-2 shrink-0">
-                    <label className="text-xs text-muted-foreground whitespace-nowrap">Model</label>
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">{tUi("Model")}</label>
                     <Select
-                      value={value?.telephony?.noise_suppression_config?.model || "voice_focus_2.0"}
+                      value={value?.telephony?.noise_suppression_config?.size || "vf"}
                       onValueChange={(val) =>
                         onChange?.({
                           voice,
@@ -2239,7 +2178,8 @@ export default function TtsVoicePicker({ value, onChange }) {
                             ...(value?.telephony || {}),
                             noise_suppression_config: {
                               ...(value?.telephony?.noise_suppression_config || {}),
-                              model: val,
+                              family: "quail",
+                              size: val,
                             },
                           },
                         })
@@ -2249,13 +2189,13 @@ export default function TtsVoicePicker({ value, onChange }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="voice_focus_2.0">Voice Focus 2.0</SelectItem>
-                        <SelectItem value="voice_focus_1.0">Voice Focus 1.0</SelectItem>
+                        <SelectItem value="vf">Quail · vf</SelectItem>
+                        <SelectItem value="vf_2_0_l">Quail · vf_2_0_l</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <label className="text-xs text-muted-foreground whitespace-nowrap">Enhancement Level</label>
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">{tUi("Enhancement Level")}</label>
                     <Slider
                       min={0}
                       max={1}
@@ -2286,23 +2226,18 @@ export default function TtsVoicePicker({ value, onChange }) {
             </div>
           </>
         )}
-      </div>
+      </div>}
 
       <div className="flex items-center gap-2 text-sm font-semibold">
-        <span>Background audio</span>
+        <span>{tUi("Background audio")}</span>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs">Background Audio Type</label>
+          <label className="text-xs">{tUi("Background Audio Type")}</label>
           <Select
             value={value?.background_audio?.type || ""}
             onValueChange={(val) => {
-              const currentValue =
-                val === "predefined_media"
-                  ? value?.background_audio?.value || "silence"
-                  : val === "media_url"
-                  ? value?.background_audio?.value || ""
-                  : undefined;
+              const currentValue = val === value?.background_audio?.type ? value.background_audio.value : val === "predefined_media" ? "silence" : "";
               onChange?.({
                 voice,
                 voice_speed,
@@ -2323,17 +2258,18 @@ export default function TtsVoicePicker({ value, onChange }) {
             }}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select background audio type" />
+              <SelectValue placeholder={tUi("Select background audio type")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="predefined_media">Predefined Media</SelectItem>
-              <SelectItem value="media_url">Custom Media URL</SelectItem>
+              <SelectItem value="predefined_media">{tUi("Predefined Media")}</SelectItem>
+              <SelectItem value="media_url">{tUi("Custom Media URL")}</SelectItem>
+              <SelectItem value="media_name">{tUi("Media name")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         {value?.background_audio?.type === "predefined_media" && (
           <div>
-            <label className="text-xs">Predefined Media</label>
+            <label className="text-xs">{tUi("Predefined Media")}</label>
             <Select
               value={value?.background_audio?.value || "silence"}
               onValueChange={(val) =>
@@ -2354,18 +2290,18 @@ export default function TtsVoicePicker({ value, onChange }) {
               }
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select predefined media" />
+                <SelectValue placeholder={tUi("Select predefined media")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="silence">Silence</SelectItem>
-                <SelectItem value="office">Office</SelectItem>
+                <SelectItem value="silence">{tUi("Silence")}</SelectItem>
+                <SelectItem value="office">{tUi("Office")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         )}
         {value?.background_audio?.type === "media_url" && (
           <div>
-            <label className="text-xs">Local Media Files</label>
+            <label className="text-xs">{tUi("Local Media Files")}</label>
             <CustomMediaUrlSelector
               value={value?.background_audio?.value || ""}
               onChange={(url) =>
@@ -2382,13 +2318,14 @@ export default function TtsVoicePicker({ value, onChange }) {
             />
           </div>
         )}
+        {value?.background_audio?.type === "media_name" ? <div className="space-y-1"><label className="text-xs" htmlFor="background-media-name">{tUi("Media name")}</label><Input id="background-media-name" value={value.background_audio.value || ""} onChange={e=>onChange?.({background_audio:{type:"media_name",value:e.target.value}})}/></div> : null}
         {/* Volume Control - only show for predefined_media when not silence */}
         {value?.background_audio?.type === "predefined_media" &&
           value?.background_audio?.value !== "silence" &&
           value?.background_audio?.value && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs">Volume</label>
+                <label className="text-xs">{tUi("Volume")}</label>
                 <Badge variant="secondary" className="text-xs">
                   {(value?.background_audio?.volume ?? 0.5).toFixed(1)}
                 </Badge>
@@ -2432,17 +2369,18 @@ export default function TtsVoicePicker({ value, onChange }) {
         </div>
       )}
 
+        {callAudioExtras}
         </div>
-      </section>
+      </section>}
 
-      <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      {(!section || section === "interruptions") && <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="flex items-start gap-3 border-b bg-muted/30 px-4 py-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
             <IconMicrophone className="size-5 text-emerald-500" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Speaking plan</h3>
-            <p className="text-xs text-muted-foreground">Tune interruptions and response timing for natural turn-taking.</p>
+            <h3 className="text-sm font-semibold">{tUi("Speaking plan")}</h3>
+            <p className="text-xs text-muted-foreground">{tUi("Tune interruptions and response timing for natural turn-taking.")}</p>
           </div>
         </div>
         <div className="p-4">
@@ -2482,15 +2420,13 @@ export default function TtsVoicePicker({ value, onChange }) {
         <label
           htmlFor="enable_interruptions"
           className="text-sm font-medium leading-none cursor-pointer"
-        >
-          Enable Interruptions
-        </label>
+        >{tUi("Enable Interruptions")}</label>
         <Tooltip>
           <TooltipTrigger asChild>
             <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
           </TooltipTrigger>
           <TooltipContent>
-            <p>Allow users to interrupt the assistant while it&apos;s speaking.</p>
+            <p>{tUi("Allow users to interrupt the assistant while it's speaking.")}</p>
           </TooltipContent>
         </Tooltip>
       </div>
@@ -2499,13 +2435,13 @@ export default function TtsVoicePicker({ value, onChange }) {
         {/* Wait Seconds */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Wait Seconds</label>
+            <label className="text-sm font-medium">{tUi("Wait Seconds")}</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Minimum seconds assistant waits before speaking.</p>
+                <p>{tUi("Minimum seconds assistant waits before speaking.")}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -2558,18 +2494,13 @@ export default function TtsVoicePicker({ value, onChange }) {
         {/* On Punctuation Seconds */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">
-              On Punctuation Seconds
-            </label>
+            <label className="text-sm font-medium">{tUi("On Punctuation Seconds")}</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  Minimum seconds assistant waits after transcription ending
-                  with punctuation.
-                </p>
+                <p>{tUi("Minimum seconds assistant waits after transcription ending with punctuation.")}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -2630,18 +2561,13 @@ export default function TtsVoicePicker({ value, onChange }) {
         {/* On No Punctuation Seconds */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">
-              On No Punctuation Seconds
-            </label>
+            <label className="text-sm font-medium">{tUi("On No Punctuation Seconds")}</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  Minimum seconds assistant waits after transcription ending
-                  without punctuation.
-                </p>
+                <p>{tUi("Minimum seconds assistant waits after transcription ending without punctuation.")}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -2702,16 +2628,13 @@ export default function TtsVoicePicker({ value, onChange }) {
         {/* On Number Seconds */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">On Number Seconds</label>
+            <label className="text-sm font-medium">{tUi("On Number Seconds")}</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 text-gray-400 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  Minimum seconds assistant waits after transcription ending
-                  with a number.
-                </p>
+                <p>{tUi("Minimum seconds assistant waits after transcription ending with a number.")}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -2767,12 +2690,13 @@ export default function TtsVoicePicker({ value, onChange }) {
         </div>
       </div>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }
 
 function CustomMediaUrlSelector({ value, onChange }) {
+  const tUi = useUiText();
   const [audioFiles, setAudioFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [customUrl, setCustomUrl] = useState("");
@@ -2833,7 +2757,7 @@ function CustomMediaUrlSelector({ value, onChange }) {
         <SelectTrigger className="w-full">
           <SelectValue
             placeholder={
-              loading ? "Loading audio files..." : "Select from media library"
+              loading ? tUi("Loading audio files...") : tUi("Select from media library")
             }
           />
         </SelectTrigger>
@@ -2846,9 +2770,7 @@ function CustomMediaUrlSelector({ value, onChange }) {
         </SelectContent>
       </Select>
 
-      <div className="text-xs text-gray-500 mb-1">
-        Selected URL (used in AI assistant settings):
-      </div>
+      <div className="text-xs text-gray-500 mb-1">{tUi("Selected URL (used in AI assistant settings):")}</div>
       <Input
         value={customUrl}
         onChange={(e) => handleCustomUrlChange(e.target.value)}
@@ -2860,6 +2782,7 @@ function CustomMediaUrlSelector({ value, onChange }) {
 }
 
 function AudioPreviewButton({ audioUrl, audioType, onFileChange }) {
+  const tUi = useUiText();
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState(null);
   const [duration, setDuration] = useState(0);
@@ -2970,15 +2893,13 @@ function AudioPreviewButton({ audioUrl, audioType, onFileChange }) {
           ) : (
             <Play className="w-4 h-4" />
           )}
-          {isPlaying ? "Pause" : "Play"}
+          {isPlaying ? tUi("Pause") : tUi("Play")}
         </Button>
 
         {error && <span className="text-xs text-red-600">{error}</span>}
 
         {!isValidUrl && (
-          <span className="text-xs text-gray-500">
-            Select a media file or enter a valid URL
-          </span>
+          <span className="text-xs text-gray-500">{tUi("Select a media file or enter a valid URL")}</span>
         )}
       </div>
 

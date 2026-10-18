@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { loadRoute } from "./helpers/route-harness.mjs";
 import { authzGuardStub, roleUtilsStub, USERS } from "./helpers/authz-harness.mjs";
 import { assertPublicHostname } from "../lib/security/outbound-url.mjs";
+import { normalizeAssistantPayload, assistantCreateWirePayload } from "../lib/ai/assistant-payload.mjs";
+import { planAssistantToolSave } from "../lib/ai/shared-tool-sync.mjs";
+import { verifyAssistantWrite } from "../lib/ai/assistant-verification.mjs";
+import { validateAssistantVisionTools } from "../lib/ai/vision-validation.mjs";
 
 const quiet = { error() {}, warn() {}, info() {} };
 const logging = { adminRuntimeLogger: quiet, contactCenterRuntimeLogger: quiet, platformApiLogger: quiet, platformDbLogger: quiet, voiceRuntimeLogger: quiet, runtimePayload: (v) => v };
@@ -13,16 +17,31 @@ function providerFetch(counter) {
 
 async function assistantsRoute({ user }) {
   const counter = { calls: 0 };
+  const fetchAssistant = async (url, options = {}) => {
+    counter.calls += 1;
+    const assistant = { id: "assistant-authz-test", name: "x" };
+    const body = { data: options.method === "POST" || url.endsWith(assistant.id) ? assistant : [] };
+    return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
+  };
   const route = await loadRoute("app/api/ai/assistants/route.js", {
     "@/lib/authz/guard": authzGuardStub({ user }),
     "@/lib/role-utils": roleUtilsStub,
     "@/lib/telnyx": { buildTelnyxV2Url: (path) => `https://provider.test${path}` },
     "@/lib/postgres.mjs": { getPostgresPool: () => null },
     "@/lib/runtime-logging.mjs": logging,
-    "@/lib/ai/assistant-payload.mjs": { normalizeAssistantPayload: (v) => v },
+    "@/lib/ai/assistant-payload.mjs": { normalizeAssistantPayload, assistantCreateWirePayload },
+    "@/lib/ai/shared-tool-sync.mjs": { planAssistantToolSave },
+    "@/lib/ai/vision-validation.mjs": {
+      validateAssistantVisionTools: (assistant) => validateAssistantVisionTools(assistant, {
+        request: async () => { throw new Error("Unexpected Vision lookup for an assistant without tools"); },
+      }),
+    },
+    "@/lib/ai/assistant-verification.mjs": {
+      verifyAssistantWrite: (apiKey, id, payload) => verifyAssistantWrite(apiKey, id, payload, { fetchImpl: fetchAssistant }),
+    },
     "@/lib/telnyx-error.mjs": { telnyxErrorDetail: () => "" },
     env: { TELNYX_API_KEY: "test-only" },
-    fetch: providerFetch(counter),
+    fetch: fetchAssistant,
   });
   return { route, counter };
 }
@@ -43,9 +62,13 @@ test("/api/ai/assistants: anonymous 401, agent 403, supervisor may list, only ad
   assert.equal(supervisor.counter.calls, 1);
   const created = await supervisor.route.POST({ url: "http://test.local/api/ai/assistants", method: "POST", json: async () => ({ name: "x" }) }, {});
   assert.equal(created.status, 403, "creating assistants stays admin-only");
+  assert.equal(supervisor.counter.calls, 1, "a rejected create performs neither a write nor a verification read");
 
   const admin = await assistantsRoute({ user: USERS.admin });
-  assert.equal((await admin.route.POST({ url: "http://test.local/api/ai/assistants", method: "POST", json: async () => ({ name: "x" }) }, {})).status, 200);
+  const saved = await admin.route.POST({ url: "http://test.local/api/ai/assistants", method: "POST", json: async () => ({ name: "x" }) }, {});
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.verification.status, "verified");
+  assert.equal(admin.counter.calls, 2, "an authorized create writes and independently reads the assistant");
 });
 
 test("the permission decides: a conversation designer lists assistants, an agent does not", async () => {

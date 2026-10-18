@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { validateAssistantVision } from "@/lib/ai/vision-validation.mjs";
 
 import { withPermission } from "@/lib/authz/guard";
 export const dynamic = "force-dynamic";
@@ -74,11 +75,16 @@ async function POST_handler(request, context) {
     const toolId = String(tool?.id || id);
     const results = [];
 
-    for (const assistantId of assistantIds) {
-      const assistant = await telnyxJson(
+    const assistants = await Promise.all(assistantIds.map(assistantId => telnyxJson(
         `/ai/assistants/${encodeURIComponent(assistantId)}`,
         { apiKey }
-      );
+      )));
+    // Validate the whole selection before attaching the tool to any assistant.
+    if (tool.type === "vision") {
+      for (const assistant of assistants) await validateAssistantVision(assistant, { buffered: true });
+    }
+    for (const [index, assistantId] of assistantIds.entries()) {
+      const assistant = assistants[index];
 
       if (assistantHasTool(assistant, toolId)) {
         results.push({ assistantId, updated: false, skipped: "already_attached" });

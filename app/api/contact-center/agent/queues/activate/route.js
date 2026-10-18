@@ -4,7 +4,7 @@ import { setAgentQueueActivation } from "@/lib/acd/queue-membership.mjs";
 import { broadcastToAllAgents } from "@/lib/sse";
 import { contactCenterErrorPayload, queuesLogger } from "@/lib/contact-center/logging.mjs";
 import { withPermission } from "@/lib/authz/guard";
-import { agentInScope } from "@/lib/authz/scope.mjs";
+import { agentInScope, queueInScope } from "@/lib/authz/scope.mjs";
 
 async function POST_handler(request, _context, authz) {
   try {
@@ -20,11 +20,15 @@ async function POST_handler(request, _context, authz) {
     if (!Array.isArray(body.queueIds)) {
       return NextResponse.json({ ok: false, error: "queueIds must be an array" }, { status: 400 });
     }
+    if (targetUserId !== String(user.id) && body.queueIds.some(id => !queueInScope(authz.scope, id))) {
+      return NextResponse.json({ ok: false, error: "Queue outside your management scope" }, { status: 403 });
+    }
     const pool = getPostgresPool();
     if (!pool) return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 503 });
     const queues = await setAgentQueueActivation(pool, {
       agentId: targetUserId,
       queueIds: body.queueIds,
+      requireAssigned: targetUserId !== String(user.id) || body.assignedOnly === true,
       enabled: true,
       actor: targetUserId === String(user.id) ? `agent:${user.id}` : `supervisor:${user.id}`,
     });
@@ -46,7 +50,7 @@ async function POST_handler(request, _context, authz) {
         })),
         activated: true,
         timestamp: new Date().toISOString(),
-      }, "queue_changed");
+      }, "queue_changed", { includeSupervisors: true });
     }
     return NextResponse.json({ ok: true, activated });
   } catch (error) {

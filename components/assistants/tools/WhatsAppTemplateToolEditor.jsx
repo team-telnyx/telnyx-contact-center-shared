@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,7 @@ function parseVariableNames(value) {
 }
 
 function VariableNamesInput({ value, onChange, expectedCount }) {
+  const tUi = useUiText();
   const joined = Array.isArray(value) ? value.join(", ") : String(value || "");
   const [text, setText] = useState(joined);
 
@@ -53,7 +56,7 @@ function VariableNamesInput({ value, onChange, expectedCount }) {
 
   return (
     <div className="space-y-2">
-      <Label>Variables</Label>
+      <Label>{tUi("Variables")}</Label>
       <Input
         value={text}
         onChange={(event) => {
@@ -67,16 +70,13 @@ function VariableNamesInput({ value, onChange, expectedCount }) {
                 { length: expectedCount },
                 (_, index) => `variable_${index + 1}`
               ).join(", ")
-            : "No variables"
+            : tUi("No variables")
         }
       />
-      <p className="text-xs text-muted-foreground">
-        Comma-separated names in positional order: {"{{1}}"}, {"{{2}}"}, …
+      <p className="text-xs text-muted-foreground">{tUi("Comma-separated names in positional order: ")}{"{{1}}"}, {"{{2}}"}, …
         {expectedCount > 0
-          ? ` This template has ${expectedCount} runtime value${
-              expectedCount === 1 ? "" : "s"
-            }.`
-          : " Leave empty for templates without variables."}
+          ? tUi(" Runtime values in this template: {value0}.", { value0: expectedCount })
+          : tUi(" Leave empty for templates without variables.")}
       </p>
     </div>
   );
@@ -87,6 +87,7 @@ export default function WhatsAppTemplateToolEditor({
   onChange,
   onValidationChange,
 }) {
+  const tUi = useUiText();
   const config = value?.whatsapp_template || {};
   const configuredTemplates = useMemo(
     () =>
@@ -163,9 +164,9 @@ export default function WhatsAppTemplateToolEditor({
         ? ""
         : validateWhatsAppTemplateVariableCounts(
             configuredTemplates,
-            approvedTemplates
+            approvedTemplates, tUi
           ),
-    [approvedTemplates, configuredTemplates, loadError, loading]
+    [approvedTemplates, configuredTemplates, loadError, loading, tUi]
   );
 
   useEffect(() => {
@@ -195,15 +196,12 @@ export default function WhatsAppTemplateToolEditor({
     <div className="space-y-5">
       <Alert variant="info">
         <IconBrandWhatsapp className="size-4" />
-        <AlertDescription>
-          Approved WhatsApp templates can be sent even when the 24-hour
-          customer-service window is closed.
-        </AlertDescription>
+        <AlertDescription>{tUi("Approved WhatsApp templates can be sent even when the 24-hour customer-service window is closed.")}</AlertDescription>
       </Alert>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="whatsapp-tool-display-name">Display Name</Label>
+          <Label htmlFor="whatsapp-tool-display-name">{tUi("Display Name")}</Label>
           <Input
             id="whatsapp-tool-display-name"
             value={value?.display_name || ""}
@@ -214,11 +212,11 @@ export default function WhatsAppTemplateToolEditor({
                 display_name: event.target.value,
               })
             }
-            placeholder="WhatsApp Templates"
+            placeholder={tUi("WhatsApp Templates")}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="whatsapp-tool-timeout">Timeout (ms)</Label>
+          <Label htmlFor="whatsapp-tool-timeout">{tUi("Timeout (ms)")}</Label>
           <Input
             id="whatsapp-tool-timeout"
             type="number"
@@ -238,10 +236,8 @@ export default function WhatsAppTemplateToolEditor({
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">WhatsApp Templates</h3>
-          <p className="text-xs text-muted-foreground">
-            Add one or more approved templates the assistant may choose from.
-          </p>
+          <h3 className="text-sm font-semibold">{tUi("WhatsApp Templates")}</h3>
+          <p className="text-xs text-muted-foreground">{tUi("Add one or more approved templates the assistant may choose from.")}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -255,9 +251,7 @@ export default function WhatsAppTemplateToolEditor({
               <IconLoader2 className="size-4 animate-spin" />
             ) : (
               <IconRefresh className="size-4" />
-            )}
-            Refresh
-          </Button>
+            )}{tUi("Refresh")}</Button>
           <Button
             type="button"
             size="sm"
@@ -265,9 +259,7 @@ export default function WhatsAppTemplateToolEditor({
               updateTemplates([...configuredTemplates, { ...EMPTY_TEMPLATE }])
             }
           >
-            <IconPlus className="size-4" />
-            Add Template
-          </Button>
+            <IconPlus className="size-4" />{tUi("Add Template")}</Button>
         </div>
       </div>
 
@@ -278,10 +270,7 @@ export default function WhatsAppTemplateToolEditor({
       ) : null}
 
       {!loading && !loadError && approvedTemplates.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-          No approved WhatsApp templates were found. Create a template in
-          Messaging → WhatsApp and wait for approval before selecting it here.
-        </div>
+        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{tUi("No approved WhatsApp templates were found. Create a template in Messaging → WhatsApp and wait for approval before selecting it here.")}</div>
       ) : null}
 
       <div className="space-y-4">
@@ -306,7 +295,7 @@ export default function WhatsAppTemplateToolEditor({
               className="space-y-4 rounded-lg border bg-muted/20 p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Template {index + 1}</p>
+                <p className="text-sm font-medium">{tUi("Template ")}{index + 1}</p>
                 <Button
                   type="button"
                   size="icon"
@@ -319,7 +308,7 @@ export default function WhatsAppTemplateToolEditor({
                       )
                     )
                   }
-                  aria-label={`Remove template ${index + 1}`}
+                  aria-label={tUi("Remove template {value0}", { value0: index + 1 })}
                 >
                   <IconTrash className="size-4" />
                 </Button>
@@ -327,7 +316,7 @@ export default function WhatsAppTemplateToolEditor({
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>WhatsApp template</Label>
+                  <Label>{tUi("WhatsApp template")}</Label>
                   <Combobox
                     value={template?.template_id || ""}
                     onChange={(templateId) => {
@@ -340,9 +329,9 @@ export default function WhatsAppTemplateToolEditor({
                     }}
                     options={options}
                     placeholder={
-                      loading ? "Loading templates…" : "Select a template"
+                      loading ? tUi("Loading templates…") : tUi("Select a template")
                     }
-                    emptyLabel="No approved WhatsApp templates found"
+                    emptyLabel={tUi("No approved WhatsApp templates found")}
                     triggerClassName="w-full"
                     contentClassName="w-[420px]"
                     disabled={loading || options.length === 0}
@@ -350,26 +339,24 @@ export default function WhatsAppTemplateToolEditor({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Name</Label>
+                  <Label>{tUi("Name")}</Label>
                   <Input
                     value={handle}
                     onChange={(event) =>
                       updateTemplate(index, { name: event.target.value })
                     }
-                    placeholder="auth_code"
+                    placeholder={tUi("auth_code")}
                     aria-invalid={Boolean(handleError)}
                   />
                   {handleError ? (
-                    <p className="text-xs text-destructive">{handleError}</p>
+                    <p className="text-xs text-destructive">{tUi(handleError)}</p>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Short handle the assistant uses to choose this template.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tUi("Short handle the assistant uses to choose this template.")}</p>
                   )}
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Description</Label>
+                  <Label>{tUi("Description")}</Label>
                   <Textarea
                     value={template?.description || ""}
                     onChange={(event) =>
@@ -377,12 +364,10 @@ export default function WhatsAppTemplateToolEditor({
                         description: event.target.value,
                       })
                     }
-                    placeholder="Send the customer their login verification code."
+                    placeholder={tUi("Send the customer their login verification code.")}
                     rows={3}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Tell the assistant when it should use this template.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("Tell the assistant when it should use this template.")}</p>
                 </div>
 
                 <div className="md:col-span-2">
@@ -396,10 +381,7 @@ export default function WhatsAppTemplateToolEditor({
                   {selectedTemplate &&
                   Array.isArray(template?.variables) &&
                   template.variables.length !== expectedVariables ? (
-                    <p className="mt-2 text-xs text-destructive">
-                      Enter exactly {expectedVariables} variable name
-                      {expectedVariables === 1 ? "" : "s"} for this template.
-                    </p>
+                    <p className="mt-2 text-xs text-destructive">{tUi("Required number of variable names for this template: {value0}.", {value0: expectedVariables})}</p>
                   ) : null}
                 </div>
               </div>

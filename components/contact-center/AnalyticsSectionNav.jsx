@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { useRouter } from "next/navigation";
 import {
@@ -44,6 +45,7 @@ export function persistAnalyticsSection(sectionId) {
 }
 
 export function AnalyticsSectionRailNav({ activeId = "call-history" }) {
+  const tUi = useUiText();
   const router = useRouter();
   return (
     <SectionRail
@@ -53,7 +55,7 @@ export function AnalyticsSectionRailNav({ activeId = "call-history" }) {
         persistAnalyticsSection(sectionId);
         router.push(`/supervisor/analytics?section=${encodeURIComponent(sectionId)}`);
       }}
-      ariaLabel="Supervisor analytics reports"
+      ariaLabel={tUi("Supervisor analytics reports")}
       screenGroup="supervisor.analytics"
     />
   );

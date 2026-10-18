@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconCheck, IconCopy, IconTerminal2 } from "@tabler/icons-react";
@@ -8,6 +10,7 @@ function toCodeText(children) {
 }
 
 export function DocsTerminal({ children, title = "Terminal" }) {
+  const tUi = useUiText();
   const code = useMemo(() => toCodeText(children), [children]);
   const [copied, setCopied] = useState(false);
 
@@ -46,10 +49,10 @@ export function DocsTerminal({ children, title = "Terminal" }) {
           type="button"
           className="help-terminal-copy"
           onClick={copyCode}
-          aria-label={`Copy ${title} command`}
+          aria-label={tUi("Copy {value0} command", { value0: title })}
         >
           {copied ? <IconCheck className="size-4" /> : <IconCopy className="size-4" />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? tUi("Copied") : tUi("Copy")}
         </button>
       </figcaption>
       <pre>{code}</pre>

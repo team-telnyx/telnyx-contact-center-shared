@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
@@ -161,6 +163,7 @@ export default function CreateAgentSheet({
   stages = [],
   onAgentCreated,
 }) {
+  const tUi = useUiText();
   const workflowId = workflow?.id;
   const [creating, setCreating] = useState(false);
   
@@ -175,7 +178,10 @@ export default function CreateAgentSheet({
   // AI Model settings
   const [llmModels, setLlmModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("openai/gpt-4o");
+  const [selectedModel, setSelectedModel] = useState("");
+  // The platform default is loaded separately; Create waits for it and never
+  // sends an empty model (no model is chosen in code).
+  const [loadingDefaultModel, setLoadingDefaultModel] = useState(false);
   
   // TTS settings (default: Telnyx NaturalHD Astra)
   const DEFAULT_TTS_VOICE = "Telnyx.NaturalHD.astra";
@@ -226,11 +232,30 @@ export default function CreateAgentSheet({
 
   // Reset state when sheet opens
   useEffect(() => {
+    // Cancelled when the sheet closes: a default-model request from an earlier
+    // opening can neither insert its model nor end this opening's loading state.
+    const controller = new AbortController();
     if (open) {
       setAgentName(workflow?.name ? `${workflow.name} Agent` : "Test Agent");
       setCustomInstructions("");
       setCreatedAgent(null);
-      setSelectedModel(workflow?.llm_model || "openai/gpt-4o");
+      setSelectedModel(workflow?.llm_model || "");
+      // No model of its own: start from the platform default model (Admin → AI Copilot).
+      const needsDefaultModel = Boolean(!workflow?.llm_model && workflowId);
+      setLoadingDefaultModel(needsDefaultModel);
+      if (needsDefaultModel) {
+        fetch(`/api/admin/workflows/${workflowId}/model-catalog`, { cache: "no-store", signal: controller.signal })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((data) => {
+            if (controller.signal.aborted) return;
+            const platformModel = data?.platformDefault?.model;
+            if (platformModel) setSelectedModel((current) => current || platformModel);
+          })
+          .catch(() => {})
+          .finally(() => {
+            if (!controller.signal.aborted) setLoadingDefaultModel(false);
+          });
+      }
       setTtsProvider("telnyx");
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);
@@ -246,6 +271,7 @@ export default function CreateAgentSheet({
         { id: "workflow", label: "Link to Workflow", status: "pending" },
       ]);
     }
+    return () => controller.abort();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load LLM models
@@ -577,6 +603,7 @@ export default function CreateAgentSheet({
 
   // Create the AI agent
   async function handleCreate() {
+    if (!selectedModel || loadingDefaultModel) return; // never send an empty model to Telnyx
     setCreating(true);
     let assistantId = null;
     let hasErrors = false;
@@ -790,17 +817,13 @@ export default function CreateAgentSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconRobot className="size-5" />
-            Create AI Agent
-          </SheetTitle>
-          <SheetDescription>
-            Create a Telnyx AI Agent from this workflow for testing
-          </SheetDescription>
+            <IconRobot className="size-5" />{tUi("Create AI Agent")}</SheetTitle>
+          <SheetDescription>{tUi("Create a Telnyx AI Agent from this workflow for testing")}</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto">
@@ -841,9 +864,7 @@ export default function CreateAgentSheet({
                               {step.label}
                             </span>
                             {step.status === "skipped" && (
-                              <Badge variant="secondary" className="text-xs">
-                                Skipped
-                              </Badge>
+                              <Badge variant="secondary" className="text-xs">{tUi("Skipped")}</Badge>
                             )}
                           </div>
                           {step.error && (
@@ -862,22 +883,18 @@ export default function CreateAgentSheet({
                           <IconCheck className="size-6 text-green-600 dark:text-green-400" />
                         </div>
                         <div>
-                          <h3 className="text-lg font-semibold">Agent Created!</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Your AI agent is ready for testing
-                          </p>
+                          <h3 className="text-lg font-semibold">{tUi("Agent Created!")}</h3>
+                          <p className="text-sm text-muted-foreground">{tUi("Your AI agent is ready for testing")}</p>
                         </div>
                       </div>
                       <div className="bg-muted rounded-lg p-4">
-                        <div className="text-xs text-muted-foreground">Agent ID</div>
+                        <div className="text-xs text-muted-foreground">{tUi("Agent ID")}</div>
                         <code className="text-sm font-mono break-all">{createdAgent.id}</code>
                       </div>
                       <Button
                         className="w-full"
                         onClick={() => onOpenChange(false)}
-                      >
-                        Close
-                      </Button>
+                      >{tUi("Close")}</Button>
                     </div>
                   )}
                 </div>
@@ -885,11 +902,11 @@ export default function CreateAgentSheet({
                 <>
                   {/* Agent Name */}
                   <div className="space-y-2">
-                    <Label>Agent Name</Label>
+                    <Label>{tUi("Agent Name")}</Label>
                     <Input
                       value={agentName}
                       onChange={(e) => setAgentName(e.target.value)}
-                      placeholder="Enter agent name"
+                      placeholder={tUi("Enter agent name")}
                     />
                   </div>
 
@@ -899,17 +916,17 @@ export default function CreateAgentSheet({
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       <IconBrain className="size-4 text-purple-500" />
-                      <h3 className="font-semibold">AI Model</h3>
+                      <h3 className="font-semibold">{tUi("AI Model")}</h3>
                     </div>
                     
                     <div className="space-y-2">
-                      <Label>Model</Label>
-                      {loadingModels ? (
+                      <Label>{tUi("Model")}</Label>
+                      {loadingModels || loadingDefaultModel ? (
                         <Skeleton className="h-10 w-full" />
                       ) : (
                         <Select value={selectedModel} onValueChange={setSelectedModel}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select model" />
+                          <SelectTrigger aria-invalid={!selectedModel}>
+                            <SelectValue placeholder={tUi("Select model")} />
                           </SelectTrigger>
                           <SelectContent>
                             {llmModels.map((model) => (
@@ -920,6 +937,9 @@ export default function CreateAgentSheet({
                           </SelectContent>
                         </Select>
                       )}
+                      {!loadingModels && !loadingDefaultModel && !selectedModel && (
+                        <p role="alert" className="text-xs text-amber-600 dark:text-amber-400">{tUi("No model configured")}</p>
+                      )}
                     </div>
                   </div>
 
@@ -929,7 +949,7 @@ export default function CreateAgentSheet({
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       <IconVolume className="size-4 text-blue-500" />
-                      <h3 className="font-semibold">Text-to-Speech (TTS)</h3>
+                      <h3 className="font-semibold">{tUi("Text-to-Speech (TTS)")}</h3>
                     </div>
                     
                     {loadingTts ? (
@@ -942,7 +962,7 @@ export default function CreateAgentSheet({
                         {/* Row 1: Provider + Model */}
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">
-                            <Label>Provider</Label>
+                            <Label>{tUi("Provider")}</Label>
                             <Select 
                               value={ttsProvider} 
                               onValueChange={(v) => {
@@ -957,7 +977,7 @@ export default function CreateAgentSheet({
                               }}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select provider" />
+                                <SelectValue placeholder={tUi("Select provider")} />
                               </SelectTrigger>
                               <SelectContent>
                                 {ttsProviders.map((provider) => (
@@ -970,7 +990,7 @@ export default function CreateAgentSheet({
                           </div>
                           
                           <div className="space-y-2">
-                            <Label>Model</Label>
+                            <Label>{tUi("Model")}</Label>
                             <Select 
                               value={ttsModel} 
                               onValueChange={(v) => {
@@ -980,7 +1000,7 @@ export default function CreateAgentSheet({
                               }}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select model" />
+                                <SelectValue placeholder={tUi("Select model")} />
                               </SelectTrigger>
                               <SelectContent>
                                 {getTtsModels()
@@ -998,7 +1018,7 @@ export default function CreateAgentSheet({
                         {/* Row 2: Language Filter + Voice */}
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">
-                            <Label>Language</Label>
+                            <Label>{tUi("Language")}</Label>
                             <Popover
                               open={ttsLanguagePopoverOpen}
                               onOpenChange={setTtsLanguagePopoverOpen}
@@ -1019,7 +1039,7 @@ export default function CreateAgentSheet({
                                     ) : (
                                       <>
                                         <IconWorld className="h-4 w-4" />
-                                        <span>All languages</span>
+                                        <span>{tUi("All languages")}</span>
                                       </>
                                     )}
                                   </div>
@@ -1031,7 +1051,7 @@ export default function CreateAgentSheet({
                               >
                                 <Command>
                                   <CommandInput
-                                    placeholder="Search languages..."
+                                    placeholder={tUi("Search languages...")}
                                     value={ttsLanguageSearch}
                                     onValueChange={setTtsLanguageSearch}
                                     className="h-9"
@@ -1045,7 +1065,7 @@ export default function CreateAgentSheet({
                                       e.stopPropagation();
                                     }}
                                   >
-                                    <CommandEmpty>No language found.</CommandEmpty>
+                                    <CommandEmpty>{tUi("No language found.")}</CommandEmpty>
                                     <CommandGroup>
                                       <CommandItem
                                         value="__any__"
@@ -1061,7 +1081,7 @@ export default function CreateAgentSheet({
                                           }`}
                                         />
                                         <IconWorld className="size-4 mr-2" />
-                                        <span>All languages</span>
+                                        <span>{tUi("All languages")}</span>
                                       </CommandItem>
                                       {filteredTtsLanguageOptions.map((opt) => (
                                         <CommandItem
@@ -1092,7 +1112,7 @@ export default function CreateAgentSheet({
                           </div>
                           
                           <div className="space-y-2">
-                            <Label>Voice</Label>
+                            <Label>{tUi("Voice")}</Label>
                             <Popover
                               open={ttsVoicePopoverOpen}
                               onOpenChange={setTtsVoicePopoverOpen}
@@ -1107,16 +1127,16 @@ export default function CreateAgentSheet({
                                   <span className="truncate">
                                     {selectedTtsVoiceInfo
                                       ? selectedTtsVoiceInfo.language
-                                        ? `${selectedTtsVoiceInfo.name || selectedTtsVoiceInfo.id} (${selectedTtsVoiceInfo.language})`
+                                        ? tUi("{value0} ({value1})", { value0: selectedTtsVoiceInfo.name || selectedTtsVoiceInfo.id, value1: selectedTtsVoiceInfo.language })
                                         : selectedTtsVoiceInfo.name || selectedTtsVoiceInfo.id
-                                      : "Select voice"}
+                                      : tUi("Select voice")}
                                   </span>
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[300px] p-0" align="start">
                                 <Command>
                                   <CommandInput
-                                    placeholder="Search voices..."
+                                    placeholder={tUi("Search voices...")}
                                     value={ttsVoiceSearch}
                                     onValueChange={setTtsVoiceSearch}
                                     className="h-9"
@@ -1130,7 +1150,7 @@ export default function CreateAgentSheet({
                                       e.stopPropagation();
                                     }}
                                   >
-                                    <CommandEmpty>No voice found.</CommandEmpty>
+                                    <CommandEmpty>{tUi("No voice found.")}</CommandEmpty>
                                     <CommandGroup>
                                       {filteredTtsVoices.map((voice) => (
                                         <CommandItem
@@ -1148,7 +1168,7 @@ export default function CreateAgentSheet({
                                           />
                                           <span>
                                             {voice.language
-                                              ? `${voice.name || voice.id} (${voice.language})`
+                                              ? tUi("{value0} ({value1})", { value0: voice.name || voice.id, value1: voice.language })
                                               : voice.name || voice.id}
                                           </span>
                                         </CommandItem>
@@ -1170,13 +1190,13 @@ export default function CreateAgentSheet({
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       <IconMicrophone className="size-4 text-green-500" />
-                      <h3 className="font-semibold">Speech-to-Text (STT)</h3>
+                      <h3 className="font-semibold">{tUi("Speech-to-Text (STT)")}</h3>
                     </div>
                     
                     <div className="space-y-3">
                       <div className="grid gap-3 grid-cols-1">
                         <div className="space-y-2">
-                          <Label>Model</Label>
+                          <Label>{tUi("Model")}</Label>
                           <Select 
                             value={sttModel} 
                             onValueChange={(v) => {
@@ -1185,7 +1205,7 @@ export default function CreateAgentSheet({
                             }}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Select model" />
+                              <SelectValue placeholder={tUi("Select model")} />
                             </SelectTrigger>
                             <SelectContent>
                               {TRANSCRIPTION_PROVIDERS.map((provider) => (
@@ -1201,7 +1221,7 @@ export default function CreateAgentSheet({
                       {/* Row 2: Language (with searchable popover like TTS) */}
                       {sttLanguageOptions.length > 0 && (
                         <div className="space-y-2">
-                          <Label>Language</Label>
+                          <Label>{tUi("Language")}</Label>
                           <Popover
                             open={sttLanguagePopoverOpen}
                             onOpenChange={setSttLanguagePopoverOpen}
@@ -1221,7 +1241,7 @@ export default function CreateAgentSheet({
                                   ) : (
                                     <>
                                       <IconWorld className="h-4 w-4" />
-                                      <span>Select language</span>
+                                      <span>{tUi("Select language")}</span>
                                     </>
                                   )}
                                 </div>
@@ -1230,7 +1250,7 @@ export default function CreateAgentSheet({
                             <PopoverContent className="w-[300px] p-0" align="start">
                               <Command>
                                 <CommandInput
-                                  placeholder="Search languages..."
+                                  placeholder={tUi("Search languages...")}
                                   value={sttLanguageSearch}
                                   onValueChange={setSttLanguageSearch}
                                   className="h-9"
@@ -1244,7 +1264,7 @@ export default function CreateAgentSheet({
                                     e.stopPropagation();
                                   }}
                                 >
-                                  <CommandEmpty>No language found.</CommandEmpty>
+                                  <CommandEmpty>{tUi("No language found.")}</CommandEmpty>
                                   <CommandGroup>
                                     {filteredSttLanguageOptions.map((opt) => (
                                       <CommandItem
@@ -1272,8 +1292,7 @@ export default function CreateAgentSheet({
                             </PopoverContent>
                           </Popover>
                           <p className="text-xs text-muted-foreground">
-                            {sttLanguageOptions.length} language{sttLanguageOptions.length !== 1 ? "s" : ""} available for this model
-                          </p>
+                            {tUi("Languages available for this model: {value0}", {value0: sttLanguageOptions.length})}</p>
                         </div>
                       )}
                     </div>
@@ -1286,7 +1305,7 @@ export default function CreateAgentSheet({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <IconHeadphones className="size-4 text-orange-500" />
-                        <h3 className="font-semibold">Noise Suppression</h3>
+                        <h3 className="font-semibold">{tUi("Noise Suppression")}</h3>
                       </div>
                       <Switch
                         checked={noiseSuppressionEnabled}
@@ -1296,15 +1315,15 @@ export default function CreateAgentSheet({
                     
                     {noiseSuppressionEnabled && (
                       <div className="space-y-2">
-                        <Label>Engine</Label>
+                        <Label>{tUi("Engine")}</Label>
                         <Select value={noiseSuppressionEngine} onValueChange={setNoiseSuppressionEngine}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select engine" />
+                            <SelectValue placeholder={tUi("Select engine")} />
                           </SelectTrigger>
                           <SelectContent>
                             {assistantNoiseSuppressionProviders.map((engine) => (
                               <SelectItem key={engine.value} value={engine.value}>
-                                {engine.label}
+                                {tUi(engine.label)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1319,21 +1338,19 @@ export default function CreateAgentSheet({
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       <IconPhoneCall className="size-4 text-telnyx-green" />
-                      <h3 className="font-semibold">Transfer Destination</h3>
+                      <h3 className="font-semibold">{tUi("Transfer Destination")}</h3>
                     </div>
                     
                     <div className="space-y-2">
-                      <Label>Call Flow for Agent Transfer</Label>
+                      <Label>{tUi("Call Flow for Agent Transfer")}</Label>
                       {loadingCallFlows ? (
                         <Skeleton className="h-10 w-full" />
                       ) : callFlows.length === 0 ? (
-                        <div className="text-sm text-muted-foreground p-3 border rounded-lg bg-muted/50">
-                          No call flows available. Create a call flow first to enable agent transfers.
-                        </div>
+                        <div className="text-sm text-muted-foreground p-3 border rounded-lg bg-muted/50">{tUi("No call flows available. Create a call flow first to enable agent transfers.")}</div>
                       ) : (
                         <Select value={selectedCallFlowId} onValueChange={setSelectedCallFlowId}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select call flow" />
+                            <SelectValue placeholder={tUi("Select call flow")} />
                           </SelectTrigger>
                           <SelectContent>
                             {callFlows.map((flow) => (
@@ -1344,12 +1361,8 @@ export default function CreateAgentSheet({
                           </SelectContent>
                         </Select>
                       )}
-                      <p className="text-xs text-muted-foreground">
-                        When the AI transfers a call, it will be routed to this call flow.
-                        {selectedCallFlowId && (
-                          <span className="block mt-1 font-mono text-xs">
-                            SIP: sip:username@{selectedCallFlowId}.sip.telnyx.com
-                          </span>
+                      <p className="text-xs text-muted-foreground">{tUi("When the AI transfers a call, it will be routed to this call flow.")}{selectedCallFlowId && (
+                          <span className="block mt-1 font-mono text-xs">{tUi("SIP: sip:username@")}{selectedCallFlowId}{tUi(".sip.telnyx.com")}</span>
                         )}
                       </p>
                     </div>
@@ -1359,16 +1372,14 @@ export default function CreateAgentSheet({
 
                   {/* Custom Instructions (Optional) */}
                   <div className="space-y-2">
-                    <Label>Custom Instructions (Optional)</Label>
+                    <Label>{tUi("Custom Instructions (Optional)")}</Label>
                     <Textarea
                       value={customInstructions}
                       onChange={(e) => setCustomInstructions(e.target.value)}
-                      placeholder="Leave empty to use workflow description, or enter custom instructions..."
+                      placeholder={tUi("Leave empty to use workflow description, or enter custom instructions...")}
                       className="min-h-[100px]"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      If empty, instructions will be generated from the workflow description
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tUi("If empty, instructions will be generated from the workflow description")}</p>
                   </div>
                 </>
               )}
@@ -1382,23 +1393,17 @@ export default function CreateAgentSheet({
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={creating}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               onClick={handleCreate}
-              disabled={creating || !agentName.trim()}
+              disabled={creating || !agentName.trim() || !selectedModel || loadingDefaultModel}
             >
               {creating ? (
                 <>
-                  <IconLoader2 className="size-4 mr-2 animate-spin" />
-                  Creating...
-                </>
+                  <IconLoader2 className="size-4 mr-2 animate-spin" />{tUi("Creating...")}</>
               ) : (
                 <>
-                  <IconRobot className="size-4 mr-2" />
-                  Create Agent
-                </>
+                  <IconRobot className="size-4 mr-2" />{tUi("Create Agent")}</>
               )}
             </Button>
           </SheetFooter>

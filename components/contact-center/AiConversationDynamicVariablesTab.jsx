@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +15,9 @@ export default function AiConversationDynamicVariablesTab({
   useDemoApiKey = false,
   hasAiCallControlId = false,
 }) {
-  const [webhookLoading, setWebhookLoading] = useState(false);
+  const tUi = useUiText();
+  const [webhookLoading, setWebhookLoading] = useState(Boolean(enabled && conversation?.id));
+  const [webhookError, setWebhookError] = useState(false);
   const [webhookLogs, setWebhookLogs] = useState(null);
 
   useEffect(() => {
@@ -22,6 +26,8 @@ export default function AiConversationDynamicVariablesTab({
     let cancelled = false;
     async function loadWebhookLogs() {
       setWebhookLoading(true);
+      setWebhookLogs(null);
+      setWebhookError(false);
       try {
         const sp = new URLSearchParams();
         sp.set("page[number]", "1");
@@ -68,10 +74,10 @@ export default function AiConversationDynamicVariablesTab({
             const demoData = await demoRes.json();
             if (!cancelled && demoRes.ok && demoData?.ok) {
               setWebhookLogs(demoData?.data ?? demoData);
-            }
+            } else if (!cancelled) setWebhookError(true);
           }
-        }
-      } catch (_) {}
+        } else if (!cancelled) setWebhookError(true);
+      } catch (_) { if (!cancelled) setWebhookError(true); }
       if (!cancelled) setWebhookLoading(false);
     }
     loadWebhookLogs();
@@ -89,13 +95,8 @@ export default function AiConversationDynamicVariablesTab({
       </div>
     );
   }
-  if (!webhookLogs) {
-    return <div className="text-sm text-muted-foreground">No logs</div>;
-  }
-  return (
-    <CodeBlock code={JSON.stringify(webhookLogs, null, 2)} language="json">
-      <CodeBlockCopyButton />
-    </CodeBlock>
-  );
+  if (webhookError) return <div role="alert" className="rounded-xl border p-5 text-sm text-muted-foreground">{tUi("Variable lookup history is currently unavailable.")}</div>;
+  const logs = Array.isArray(webhookLogs) ? webhookLogs : Array.isArray(webhookLogs?.data) ? webhookLogs.data : [];
+  if (!logs.length) return <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">{tUi("No variable lookup logs for this conversation.")}</div>;
+  return <div className="space-y-4">{logs.map((log, index) => <section key={log.id || index} className="space-y-3 rounded-xl border p-4"><div className="text-sm font-medium">{tUi("Variable lookup")}</div>{log.created_at ? <p className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString(tUi.locale)}</p> : null}<details><summary className="cursor-pointer text-sm text-muted-foreground">{tUi("Request and response details")}</summary><div className="mt-3"><CodeBlock code={JSON.stringify(log, null, 2)} language="json"><CodeBlockCopyButton /></CodeBlock></div></details></section>)}</div>;
 }
-

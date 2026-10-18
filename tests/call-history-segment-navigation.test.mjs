@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 
 const pagePath = new URL(
   "../app/(portal)/supervisor/call-history/[id]/page.jsx",

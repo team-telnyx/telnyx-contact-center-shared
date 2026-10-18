@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { voiceFetch } from "@/lib/telephony/endpoint-client";
 
 import { useEffect, useState } from "react";
@@ -19,6 +21,7 @@ import {
 } from "@/config/status-icons";
 
 export default function CampaignDispositionSheet({ assignment, open, onClose, onSubmitted }) {
+  const tUi = useUiText();
   const [codes, setCodes] = useState([]);
   const [selectedCode, setSelectedCode] = useState("");
   const [callbackAt, setCallbackAt] = useState("");
@@ -106,33 +109,29 @@ export default function CampaignDispositionSheet({ assignment, open, onClose, on
 
   return (
     <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0">
+      <SheetContent side="end" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0">
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconChecklist className="size-5" />
-            Disposition Codes
-          </SheetTitle>
-          <p className="text-sm text-muted-foreground">
-            Select the campaign outcome for {assignment.to_number}. This updates retry, completion, or suppression state.
-          </p>
+            <IconChecklist className="size-5" />{tUi("Disposition Codes")}</SheetTitle>
+          <p className="text-sm text-muted-foreground">{tUi("Select the campaign outcome for ")}{assignment.to_number}{tUi(". This updates retry, completion, or suppression state.")}</p>
         </SheetHeader>
 
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-4 px-5 py-4">
           <div className="space-y-2 shrink-0">
-            <Label htmlFor="campaign-disposition-notes">Comment</Label>
+            <Label htmlFor="campaign-disposition-notes">{tUi("Comment")}</Label>
             <Textarea
               id="campaign-disposition-notes"
               data-testid="campaign-disposition-notes"
               className="min-h-24 resize-none"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="Add an optional comment for supervisor and reporting"
+              placeholder={tUi("Add an optional comment for supervisor and reporting")}
             />
           </div>
 
           {requiresCallback ? (
             <div className="space-y-2 shrink-0">
-              <Label htmlFor="campaign-disposition-callback">Callback date/time</Label>
+              <Label htmlFor="campaign-disposition-callback">{tUi("Callback date/time")}</Label>
               <input
                 id="campaign-disposition-callback"
                 type="datetime-local"
@@ -144,7 +143,7 @@ export default function CampaignDispositionSheet({ assignment, open, onClose, on
           ) : null}
 
           <div className="flex-1 min-h-0 flex flex-col gap-2">
-            <Label>Disposition code</Label>
+            <Label>{tUi("Disposition code")}</Label>
             <Card className="flex-1 flex flex-col overflow-hidden">
               <CardContent className="p-6 flex-1 flex flex-col min-h-0">
                 {loading ? (
@@ -154,9 +153,7 @@ export default function CampaignDispositionSheet({ assignment, open, onClose, on
                     <Skeleton className="h-9 w-full" />
                   </div>
                 ) : codes.length === 0 ? (
-                  <div className="text-sm text-muted-foreground text-center py-6">
-                    No disposition codes assigned to this campaign.
-                  </div>
+                  <div className="text-sm text-muted-foreground text-center py-6">{tUi("No disposition codes assigned to this campaign.")}</div>
                 ) : (
                   <ScrollArea className="flex-1">
                     <div className="space-y-2 pr-4">
@@ -183,7 +180,7 @@ export default function CampaignDispositionSheet({ assignment, open, onClose, on
                               checked={selectedCode === code.wrapup_code_id}
                               onCheckedChange={() => setSelectedCode(code.wrapup_code_id)}
                               className="mt-0.5 shrink-0"
-                              aria-label={`Select ${codeName}`}
+                              aria-label={tUi("Select {value0}", { value0: codeName })}
                             />
                             <span className="leading-tight flex items-start gap-2 flex-1 min-w-0">
                               {IconComponent ? (
@@ -218,14 +215,14 @@ export default function CampaignDispositionSheet({ assignment, open, onClose, on
         </div>
 
         <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>{tUi("Cancel")}</Button>
           <Button
             type="button"
             data-testid="campaign-disposition-submit"
             onClick={submit}
             disabled={submitting || loading || codes.length === 0}
           >
-            {submitting ? "Saving..." : "Submit disposition"}
+            {submitting ? tUi("Saving...") : tUi("Submit disposition")}
           </Button>
         </SheetFooter>
       </SheetContent>

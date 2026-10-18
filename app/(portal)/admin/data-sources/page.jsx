@@ -1,3 +1,5 @@
+
+import { UiText } from "@/components/i18n/use-ui-text";
 import { Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
@@ -9,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default function DataSourcesPage() {
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Data Sources" badges={<Badge variant="secondary">Knowledge hub</Badge>} />
+      <AdminPageHeader title={<UiText>Data Sources</UiText>} badges={<Badge variant="secondary"><UiText>Knowledge hub</UiText></Badge>} />
       <ConfigurationSectionPage activeId="data-sources">
         <div className="space-y-4">
           <Suspense

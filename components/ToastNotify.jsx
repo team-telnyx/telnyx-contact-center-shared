@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 
@@ -55,6 +57,7 @@ export function notify({
 }
 
 function ToastCard({ toast }) {
+  const tUi = useUiText();
   useEffect(() => {
     if (toast.duration === Infinity) return undefined;
     const timeout = window.setTimeout(() => dismissNotify(toast.id), toast.duration);
@@ -67,10 +70,10 @@ function ToastCard({ toast }) {
         <div className="flex items-start gap-3">
           <div className={`h-2.5 w-2.5 rounded-full mt-2 ${variantDotClass(toast.variant)}`} />
           <div className="flex-1 min-w-0">
-            <div className="font-medium">{toast.title}</div>
+            <div className="font-medium">{tUi(toast.title)}</div>
             {toast.description && (
               <div className="text-sm text-muted-foreground mt-1 break-words">
-                {toast.description}
+                {tUi(toast.description)}
               </div>
             )}
           </div>
@@ -84,9 +87,7 @@ function ToastCard({ toast }) {
               dismissNotify(toast.id);
               toast.onConfirm?.();
             }}
-          >
-            OK
-          </button>
+          >{tUi("OK")}</button>
         </div>
       )}
     </div>

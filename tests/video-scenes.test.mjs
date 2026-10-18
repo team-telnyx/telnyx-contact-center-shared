@@ -11,6 +11,15 @@ const within = (plan, box) => plan.width <= box.width + 1 && plan.height <= box.
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 const disjoint = (rects) => rects.every((a, i) => rects.every((b, j) => i === j || a.kind === "thumb" || b.kind === "thumb" || !overlaps(a, b)));
 
+test("conference layouts retain AI, two cameras and both screen shares", () => {
+  const tiles = [me, agent, cam("ai", "ai"), screen("customer-screen", "customer"), screen("agent-screen", "agent"), supervisor];
+  for (const scene of ["pip", "split", "spotlight"]) for (const orientation of ["row", "column"]) {
+    const box = { width: 352, height: 500 };
+    const plan = planScene({ scene, tiles, viewerRole: "customer", orientation, box });
+    assert.equal(plan.rects.length, 6); assert.ok(within(plan, box)); assert.ok(disjoint(plan.rects));
+  }
+});
+
 test("the focus tile is the shared screen, then the counterpart of the viewer's role, then self", () => {
   assert.equal(focusTile([me, agent], "customer").id, "agent");
   assert.equal(focusTile([cam("self", "agent", true), customer, supervisor], "agent").id, "cust");
@@ -19,7 +28,7 @@ test("the focus tile is the shared screen, then the counterpart of the viewer's 
   assert.equal(focusTile([me], "customer").id, "self");
   assert.equal(focusTile([me, { id: "self:screen", role: "customer", kind: "screen", self: true }, agent], "customer").id, "self:screen", "the sharer sees their own screen as the main frame too");
   assert.deepEqual(orderTiles([me, supervisor, agent], "customer").map((t) => t.id), ["agent", "sup", "self"]);
-  assert.equal(orderTiles([me, agent, supervisor, screen("s", "agent"), cam("x", "agent")], "customer").length, MAX_VISIBLE_TILES);
+  assert.equal(orderTiles([me, agent, supervisor, screen("s", "agent"), cam("x", "agent")], "customer").length, Math.min(5, MAX_VISIBLE_TILES));
   assert.deepEqual(VIDEO_SCENES, ["remote", "split", "pip", "spotlight"]); assert.equal(DEFAULT_VIDEO_SCENE, "pip");
 });
 

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ import {
 } from "@tabler/icons-react";
 
 export default function MCPServersSection({ values, setValues }) {
+  const tUi = useUiText();
   const [availableServers, setAvailableServers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedServerId, setSelectedServerId] = useState("");
@@ -100,24 +103,20 @@ export default function MCPServersSection({ values, setValues }) {
 
   return (
     <section className="space-y-3">
-      <div className="text-sm font-medium">MCP Servers</div>
+      <div className="text-sm font-medium">{tUi("MCP Servers")}</div>
 
       {/* Add Server */}
       <div className="flex items-center gap-2">
         <Select value={selectedServerId} onValueChange={setSelectedServerId}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Select MCP server..." />
+            <SelectValue placeholder={tUi("Select MCP server...")} />
           </SelectTrigger>
           <SelectContent>
             {loading && (
-              <SelectItem value="_loading" disabled>
-                Loading servers...
-              </SelectItem>
+              <SelectItem value="_loading" disabled>{tUi("Loading servers...")}</SelectItem>
             )}
             {!loading && availableToAdd.length === 0 && (
-              <SelectItem value="_none" disabled>
-                No servers available
-              </SelectItem>
+              <SelectItem value="_none" disabled>{tUi("No servers available")}</SelectItem>
             )}
             {availableToAdd.map((server) => (
               <SelectItem key={server.id} value={server.id}>
@@ -130,16 +129,12 @@ export default function MCPServersSection({ values, setValues }) {
           type="button"
           onClick={addServer}
           disabled={!selectedServerId || loading}
-        >
-          Add Server
-        </Button>
+        >{tUi("Add Server")}</Button>
       </div>
 
       {/* List of Added Servers */}
       {mcpServers.length === 0 && (
-        <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">
-          No MCP servers configured for this assistant
-        </div>
+        <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">{tUi("No MCP servers configured for this assistant")}</div>
       )}
 
       {mcpServers.length > 0 && (
@@ -165,6 +160,7 @@ export default function MCPServersSection({ values, setValues }) {
 }
 
 function MCPServerCard({ mcpServer, serverInfo, onUpdateTools, onRemove }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(mcpServer);
   const [toolsData, setToolsData] = useState([]);
@@ -205,12 +201,8 @@ function MCPServerCard({ mcpServer, serverInfo, onUpdateTools, onRemove }) {
         <CardContent className="px-3 py-1">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="text-sm font-medium text-muted-foreground">
-                Unknown Server
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Server may have been deleted
-              </div>
+              <div className="text-sm font-medium text-muted-foreground">{tUi("Unknown Server")}</div>
+              <div className="text-xs text-muted-foreground">{tUi("Server may have been deleted")}</div>
             </div>
             <button
               className="inline-flex items-center text-red-500 hover:text-red-600"
@@ -258,8 +250,7 @@ function MCPServerCard({ mcpServer, serverInfo, onUpdateTools, onRemove }) {
                 variant="outline"
                 className="text-xs bg-telnyx-green/10 text-telnyx-green border-telnyx-green/30"
               >
-                {selectedTools.length} / {totalTools} tools
-              </Badge>
+                {selectedTools.length} / {totalTools}{tUi(" tools")}</Badge>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -276,13 +267,9 @@ function MCPServerCard({ mcpServer, serverInfo, onUpdateTools, onRemove }) {
               <SheetContent className="w-[90vw] sm:w-[800px] h-full overflow-y-auto mb-4">
                 <SheetHeader>
                   <SheetTitle className="inline-flex items-center gap-2">
-                    <IconServer className="size-5 text-telnyx-green" />
-                    MCP Server - {serverInfo.name}
+                    <IconServer className="size-5 text-telnyx-green" />{tUi("MCP Server - ")}{serverInfo.name}
                   </SheetTitle>
-                  <SheetDescription>
-                    Configure which tools from this MCP server are available to
-                    the assistant
-                  </SheetDescription>
+                  <SheetDescription>{tUi("Configure which tools from this MCP server are available to the assistant")}</SheetDescription>
                 </SheetHeader>
 
                 <div className="mt-6 flex flex-col h-full">
@@ -306,18 +293,14 @@ function MCPServerCard({ mcpServer, serverInfo, onUpdateTools, onRemove }) {
                         setOpen(false);
                         setDraft(mcpServer);
                       }}
-                    >
-                      Cancel
-                    </Button>
+                    >{tUi("Cancel")}</Button>
                     <Button
                       type="button"
                       onClick={() => {
                         onUpdateTools(mcpServer.id, draft.allowed_tools || []);
                         setOpen(false);
                       }}
-                    >
-                      Save
-                    </Button>
+                    >{tUi("Save")}</Button>
                   </div>
                 </div>
               </SheetContent>
@@ -342,6 +325,7 @@ function MCPServerToolsEditor({
   toolsData,
   loadingTools,
 }) {
+  const tUi = useUiText();
   const [expandedTools, setExpandedTools] = useState(new Set());
 
   const selectedTools = Array.isArray(draft.allowed_tools)
@@ -380,11 +364,10 @@ function MCPServerToolsEditor({
       {/* Header */}
       {!loadingTools && toolsData.length > 0 && (
         <div className="flex items-center justify-between pb-2 border-b">
-          <div className="text-sm font-medium">Available Tools</div>
+          <div className="text-sm font-medium">{tUi("Available Tools")}</div>
           <div className="flex items-center gap-2">
             <Badge variant="outline">
-              {selectedTools.length} / {toolsData.length} selected
-            </Badge>
+              {selectedTools.length} / {toolsData.length}{tUi(" selected")}</Badge>
             <Button
               type="button"
               variant="ghost"
@@ -393,8 +376,8 @@ function MCPServerToolsEditor({
               className="h-7 text-xs"
             >
               {selectedTools.length === toolsData.length
-                ? "Deselect All"
-                : "Select All"}
+                ? tUi("Deselect All")
+                : tUi("Select All")}
             </Button>
           </div>
         </div>
@@ -403,13 +386,11 @@ function MCPServerToolsEditor({
       {/* Content */}
       <div>
         {loadingTools && (
-          <div className="text-sm text-muted-foreground">Loading tools...</div>
+          <div className="text-sm text-muted-foreground">{tUi("Loading tools...")}</div>
         )}
 
         {!loadingTools && toolsData.length === 0 && (
-          <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">
-            No tools available from this MCP server
-          </div>
+          <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">{tUi("No tools available from this MCP server")}</div>
         )}
 
         {!loadingTools && toolsData.length > 0 && (

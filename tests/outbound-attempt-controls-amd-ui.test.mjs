@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import test from "node:test";
 
 const sourcePromise = readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
@@ -104,7 +104,7 @@ test("time set calendar day checkboxes use high-contrast outbound checked stylin
   const source = await sourcePromise;
   const calendarView = functionSource(source, "TimeSetCalendar", "parseCsvPreview");
 
-  assert.match(calendarView, /aria-label=\{`\$\{enabled \? "Disable" : "Enable"\} \$\{d\.label\}`\}/, "calendar day toggles should remain accessible by weekday label");
+  assert.match(calendarView, /aria-label=\{`\$\{enabled \? tUi\("Disable"\) : tUi\("Enable"\)\} \$\{tUi\(d\.label\)\}`\}/, "calendar day toggles should remain accessible by weekday label");
   assert.match(calendarView, /data-\[state=checked\]:!?bg-emerald-500/, "checked day boxes should use the outbound emerald checked background");
   assert.match(calendarView, /dark:data-\[state=checked\]:!?bg-emerald-500/, "dark mode must keep checked day boxes emerald instead of falling back to muted primary styles");
   assert.match(calendarView, /data-\[state=checked\]:!?text-white/, "checked day boxes should render the checkmark in white");

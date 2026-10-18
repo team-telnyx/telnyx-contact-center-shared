@@ -1,4 +1,6 @@
 "use client"
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import * as React from "react"
 
@@ -8,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 export default function Calendar17() {
+  const tUi = useUiText();
   const [date, setDate] = React.useState(new Date(2025, 5, 12))
 
   return (
@@ -21,9 +24,7 @@ export default function Calendar17() {
       </CardContent>
       <CardFooter className="*:[div]:w-full flex gap-2 border-t px-4 pb-0 pt-4">
         <div className="flex-1">
-          <Label htmlFor="time-from" className="sr-only">
-            Start Time
-          </Label>
+          <Label htmlFor="time-from" className="sr-only">{tUi("Start Time")}</Label>
           <Input
             id="time-from"
             type="time"
@@ -33,9 +34,7 @@ export default function Calendar17() {
         </div>
         <span>-</span>
         <div className="flex-1">
-          <Label htmlFor="time-to" className="sr-only">
-            End Time
-          </Label>
+          <Label htmlFor="time-to" className="sr-only">{tUi("End Time")}</Label>
           <Input
             id="time-to"
             type="time"

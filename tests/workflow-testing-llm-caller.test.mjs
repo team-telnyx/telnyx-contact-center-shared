@@ -8,6 +8,8 @@ import { handleWorkflowTestingFinalTranscription } from "../lib/call-generator/w
 // active generated leg by workflow_id (+ from_number), NOT by call_session_id.
 
 process.env.TELNYX_API_KEY = process.env.TELNYX_API_KEY || "test-key";
+// Platform default model for the AI operation runtime (no model is defined in code).
+process.env.TELNYX_AI_DEFAULT_MODEL ||= "test/platform-model";
 
 function makePool({ ledgerRow, captureUpdates }) {
   return {

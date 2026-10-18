@@ -1,12 +1,14 @@
 import { test, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { prepareAcdTestPool } from "./helpers/acd-test-db.mjs";
+import pg from "pg";
+import { prepareAcdTestPool, readDotEnvPostgres } from "./helpers/acd-test-db.mjs";
 import { createWidget, updateWidgetDraft, publishWidget, preflightWidget } from "../lib/widgets/store.js";
 import { DEFAULT_WIDGET_CONFIG, parseWidgetConfig, publicWidgetConfig } from "../lib/widgets/config.js";
 import { createWidgetBootstrapToken } from "../lib/widgets/session-tokens.js";
 import { startWidgetSession, getWidgetSession } from "../lib/widgets/sessions.js";
 import { updateWidgetVoiceState } from "../lib/widgets/ai-sessions.js";
+import { publishWithTelnyxAvatar, telnyxAvatarSettings } from "../lib/ai/telnyx-avatar.mjs";
 import {
   AvatarSessionError,
   assertAvatarSessionAllowed,
@@ -22,8 +24,16 @@ process.env.LIVEAVATAR_API_KEY = "heygen-test-key";
 process.env.ANAM_API_KEY = "anam-test-key";
 const pool = await prepareAcdTestPool("acd_core_test_widget_avatar");
 after(() => { mock.restoreAll(); return pool.end(); });
-mock.method(globalThis, "fetch", async (url) => {
+const nativeAssistants = new Map();
+mock.method(globalThis, "fetch", async (url, options) => {
+  const avatarId = String(url).split("/ai/avatars/")[1];
+  if (avatarId) return Response.json({id:decodeURIComponent(avatarId),name:"Test avatar",avatar_type:"stock",image_url:"https://example.test/avatar.png"});
   const id = decodeURIComponent(String(url).split("/ai/assistants/")[1]?.split(/[/?]/)[0] || "avatar-assistant");
+  if (nativeAssistants.has(id)) {
+    const assistant = nativeAssistants.get(id);
+    if (options?.method === "POST") assistant.avatar_settings = JSON.parse(options.body).avatar_settings;
+    return Response.json(assistant);
+  }
   return Response.json({ id, greeting: "Welcome", telephony_settings: { supports_unauthenticated_web_calls: true } });
 });
 
@@ -65,8 +75,8 @@ test("the widget config carries the avatar block with defaults and validates the
   delete legacy.components.voice.avatar;
   const parsed = parseWidgetConfig(legacy);
   assert.deepEqual(parsed.channels.voice.avatar, {
-    enabled: false, provider: "heygen", avatarId: null, name: "", previewUrl: "", portraitPreviewUrl: "", landscapePreviewUrl: "",
-    avatarModel: "", displayFormat: "portrait", expandMode: "fullscreen", modalWidthPercent: 75,
+    enabled: false, provider: "telnyx", avatarId: null, name: "", previewUrl: "", portraitPreviewUrl: "", landscapePreviewUrl: "",
+    avatarModel: "", backgroundId: "studio", displayFormat: "portrait", expandMode: "fullscreen", modalWidthPercent: 75,
   });
   assert.deepEqual(parsed.components.voice.avatar, { maxHeight: 260, radius: 16, padding: 12, backgroundColor: "#f4f7f6", fit: "cover", focusY: 25, showExpandButton: true, position: "middle", showSubtitles: false, subtitleFontSize: 12, subtitlePosition: "bottom" });
   const bad = structuredClone(parsed); bad.channels.voice.avatar.modalWidthPercent = 60;
@@ -166,4 +176,65 @@ test("a visitor can only start the avatar of the revision behind an active voice
     authorizeWidgetAvatarSession(pool, { publicId: widget.publicId, token: started.sessionToken, assistantId }, { getWidgetSession }),
     (error) => error.status === 409 && error.reason === "session_ended"
   );
+});
+
+test("Telnyx publication persists only avatar settings and rolls back failed publications", async () => {
+  const config = structuredClone(DEFAULT_WIDGET_CONFIG);
+  config.channels.voice.enabled = true;
+  config.channels.voice.assistantId = `assistant-${randomUUID()}`;
+  config.channels.voice.avatar = { ...config.channels.voice.avatar, enabled: true, provider: "telnyx", avatarId: "elena", backgroundId: "studio" };
+  const remote = { voice_settings: { voice: "Telnyx.Ultra.test" }, avatar_settings: null };
+  const writes = [];
+  const request = async (_, options) => { if (options?.method === "POST") { writes.push(options.body); remote.avatar_settings = options.body.avatar_settings; } return structuredClone(remote); };
+  const options = { widgetId: randomUUID(), config, beforeMutation: async () => {}, request };
+  const value = await publishWithTelnyxAvatar(pool, options, async () => "published");
+  assert.equal(value, "published");
+  assert.deepEqual(writes, [{ avatar_settings: telnyxAvatarSettings(config.channels.voice.avatar) }]);
+  config.channels.voice.avatar.avatarId = "ben";
+  await assert.rejects(publishWithTelnyxAvatar(pool, options, async () => { throw new Error("Draft changed"); }), /Draft changed/);
+  assert.equal(remote.avatar_settings.avatar_id, "elena");
+  assert.equal(remote.voice_settings.voice, "Telnyx.Ultra.test");
+});
+
+test("Telnyx publication completes with one database connection, including handoff and draft guards", async (t) => {
+  const assistantId = `assistant-${randomUUID()}`;
+  const remote = { id: assistantId, voice_settings: { voice: "Telnyx.Ultra.test" }, avatar_settings: null };
+  nativeAssistants.set(assistantId, remote);
+  const single = new pg.Pool({ ...readDotEnvPostgres(), database: "acd_core_test_widget_avatar", max: 1, connectionTimeoutMillis: 1000 });
+  t.after(async () => { nativeAssistants.delete(assistantId); await single.end(); });
+  let { widget } = await voiceWidget(assistantId, { enabled: true, provider: "telnyx", avatarId: "elena", backgroundId: "studio" }, { publish: false });
+  let handoffs = 0;
+  // Cover both changing the remote avatar and republishing an unchanged avatar.
+  for (let version = 1; version <= 2; version++) {
+    widget = await publishWidget(single, { id: widget.id, expectedDraftId: widget.draft.id, expectedEditVersion: widget.draft.editVersion, actor: "admin" }, {
+      verifyAssistant: async () => structuredClone(remote),
+      provisionHandoff: async (db, { beforeMutation }) => {
+        await db.query("SELECT 1");
+        await beforeMutation();
+        handoffs++;
+        return { id: "test-shared-handoff" };
+      },
+    });
+    assert.equal(widget.published.version, version);
+    assert.equal(widget.published.config.channels.voice.avatar.avatarId, "elena");
+    assert.deepEqual(remote.avatar_settings, telnyxAvatarSettings(widget.published.config.channels.voice.avatar));
+    assert.equal(single.waitingCount, 0);
+    assert.equal(single.idleCount, 1);
+  }
+  assert.equal(handoffs, 2);
+});
+
+test("Telnyx rejects another published widget's conflicting avatar without provider mutation", async () => {
+  const assistantId = `assistant-${randomUUID()}`;
+  const existing = await voiceWidget(assistantId, { ...anamAvatar, enabled: false });
+  const config = structuredClone(existing.widget.published.config);
+  config.channels.voice.avatar = { ...config.channels.voice.avatar, provider: "telnyx", enabled: true, avatarId: "elena", avatarModel: "foxtrot-1", backgroundId: "studio" };
+  await pool.query("UPDATE cc_widget_revisions SET config=$2::jsonb WHERE id=$1", [existing.widget.published.id, JSON.stringify(config)]);
+  const candidate = structuredClone(config); candidate.channels.voice.avatar.avatarId = "ben";
+  let requested = false;
+  for (const enabled of [true, false, true]) {
+    await pool.query("UPDATE cc_widgets SET enabled=$2 WHERE id=$1", [existing.widget.id, enabled]);
+    await assert.rejects(publishWithTelnyxAvatar(pool, { widgetId: randomUUID(), config: candidate, beforeMutation: async () => {}, request: async () => { requested = true; } }, async () => {}), /shared with widget/);
+  }
+  assert.equal(requested, false);
 });

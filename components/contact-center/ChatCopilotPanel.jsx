@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect,useRef,useState } from "react";
 import { ArrowDownToLine,ArrowUpRight,BookOpen,Brain,ChevronDown,ChevronUp,Loader2,Sparkles } from "lucide-react";
@@ -8,22 +10,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CopyChatText } from "./ChatMessageBubble";
 
 function Suggestion({suggestion,index,onInsert,disabled}){
+  const tUi = useUiText();
   const [expanded,setExpanded]=useState(false);
   return <article className="rounded-xl border border-border/70 bg-background p-3.5 shadow-sm" data-testid="copilot-suggestion">
     <div className="mb-2.5 flex items-center justify-between gap-2">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{index===0?"Recommended reply":`Alternative ${index}`}</span>
-      <span className="rounded-full bg-teal-500/10 px-2 py-1 text-[10px] font-semibold text-teal-700 dark:text-teal-300" title="AI-estimated confidence, not a verified probability of correctness.">{suggestion.confidence===null?"Unrated":`${Math.round(suggestion.confidence*100)}% confidence`}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{index===0?tUi("Recommended reply"):tUi("Alternative {value0}", { value0: index })}</span>
+      <span className="rounded-full bg-teal-500/10 px-2 py-1 text-[10px] font-semibold text-teal-700 dark:text-teal-300" title={tUi("AI-estimated confidence, not a verified probability of correctness.")}>{suggestion.confidence===null?tUi("Unrated"):tUi("{value0}% confidence", { value0: Math.round(suggestion.confidence*100) })}</span>
     </div>
     <p className={`whitespace-pre-wrap break-words text-[13px] leading-relaxed ${expanded?"":"line-clamp-3"}`}>{suggestion.text}</p>
     {expanded&&suggestion.rationale&&<p className="mt-3 border-t pt-2 text-xs leading-relaxed text-muted-foreground">{suggestion.rationale}</p>}
     <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2">
-      <button type="button" className="flex items-center gap-1 rounded-md py-1 text-[11px] text-muted-foreground hover:text-foreground" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded}>{expanded?<ChevronUp className="size-3.5"/>:<ChevronDown className="size-3.5"/>}{expanded?"Show less":"Full reply"}</button>
-      <div className="flex items-center gap-1"><CopyChatText text={suggestion.text} label="Copy suggested reply"/>
-        <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-[11px] text-violet-700 hover:bg-violet-500/10 dark:text-violet-300" onClick={()=>onInsert(suggestion.text)} disabled={disabled} aria-label={`Insert suggested reply ${index+1} into message input`}><ArrowDownToLine className="size-3.5"/>Use reply</Button></div>
+      <button type="button" className="flex items-center gap-1 rounded-md py-1 text-[11px] text-muted-foreground hover:text-foreground" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded}>{expanded?<ChevronUp className="size-3.5"/>:<ChevronDown className="size-3.5"/>}{expanded?tUi("Show less"):tUi("Full reply")}</button>
+      <div className="flex items-center gap-1"><CopyChatText text={suggestion.text} label={tUi("Copy suggested reply")}/>
+        <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-[11px] text-violet-700 hover:bg-violet-500/10 dark:text-violet-300" onClick={()=>onInsert(suggestion.text)} disabled={disabled} aria-label={tUi("Insert suggested reply {value0} into message input", { value0: index+1 })}><ArrowDownToLine className="size-3.5"/>{tUi("Use reply")}</Button></div>
     </div>
   </article>;
 }
 export default function ChatCopilotPanel({workItemId,seed,onInsert,canInsert,onGenerated,channel="chat"}){
+  const tUi = useUiText();
   const [question,setQuestion]=useState(""),[result,setResult]=useState(null),[settings,setSettings]=useState(null);
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const input=useRef(null),pending=useRef(null),controller=useRef(null),hasSeed=useRef(false);
@@ -51,23 +55,23 @@ export default function ChatCopilotPanel({workItemId,seed,onInsert,canInsert,onG
   }
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="shrink-0 border-b bg-gradient-to-br from-violet-500/[0.06] via-background to-background p-4">
-      <div className="mb-3 flex items-center gap-2.5"><div className="rounded-xl bg-violet-500/10 p-2 text-violet-600 dark:text-violet-300"><Brain className="size-5"/></div><div><h3 className="text-sm font-semibold">AI reply suggestions</h3><p className="text-[11px] text-muted-foreground">Use your conversation and knowledge sources.</p></div></div>
+      <div className="mb-3 flex items-center gap-2.5"><div className="rounded-xl bg-violet-500/10 p-2 text-violet-600 dark:text-violet-300"><Brain className="size-5"/></div><div><h3 className="text-sm font-semibold">{tUi("AI reply suggestions")}</h3><p className="text-[11px] text-muted-foreground">{tUi("Use your conversation and knowledge sources.")}</p></div></div>
       <form onSubmit={e=>{e.preventDefault();void generate();}} className="rounded-xl border bg-background p-2 shadow-sm">
-        <Textarea ref={input} aria-label="Ask AI Copilot" value={question} maxLength={6000} onChange={e=>{hasSeed.current=true;setQuestion(e.target.value);}} placeholder="Ask a question, or tap the brain on a message…"
+        <Textarea ref={input} aria-label={tUi("Ask AI Copilot")} value={question} maxLength={6000} onChange={e=>{hasSeed.current=true;setQuestion(e.target.value);}} placeholder={tUi("Ask a question, or tap the brain on a message…")}
           className="min-h-20 resize-none border-0 bg-transparent px-2 text-[13px] shadow-none focus-visible:ring-0" onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();void generate();}}}/>
-        <div className="flex items-center justify-between gap-2 px-1 pt-1"><span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground"><BookOpen className="size-3"/>{loading?<Skeleton className="h-3 w-24"/>:settings?`${settings.bucketIds.length} knowledge sources`:"Knowledge sources unavailable"}</span>
-          <Button type="submit" size="sm" className="h-8 gap-1.5 rounded-lg bg-violet-600 text-xs text-white hover:bg-violet-700" disabled={busy||loading||!settings||!question.trim()}>{busy?<Loader2 className="size-3.5 animate-spin"/>:<Sparkles className="size-3.5"/>}{busy?"Thinking…":"Suggest replies"}</Button></div>
+        <div className="flex items-center justify-between gap-2 px-1 pt-1"><span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground"><BookOpen className="size-3"/>{loading?<Skeleton className="h-3 w-24"/>:settings?tUi("{value0} knowledge sources", { value0: settings.bucketIds.length }):tUi("Knowledge sources unavailable")}</span>
+          <Button type="submit" size="sm" className="h-8 gap-1.5 rounded-lg bg-violet-600 text-xs text-white hover:bg-violet-700" disabled={busy||loading||!settings||!question.trim()}>{busy?<Loader2 className="size-3.5 animate-spin"/>:<Sparkles className="size-3.5"/>}{busy?tUi("Thinking…"):tUi("Suggest replies")}</Button></div>
       </form>
-      {settings&&<p className="mt-2 truncate text-[10px] text-muted-foreground" title={settings.model}>{settings.model.split("/").at(-1)} · Up to 5 suggestions</p>}
+      {settings&&<p className="mt-2 truncate text-[10px] text-muted-foreground" title={settings.model}>{settings.model.split("/").at(-1)}{tUi(" · Up to 5 suggestions")}</p>}
     </div>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
       {error&&<p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">{error}</p>}
-      {busy||loading?<div className="space-y-3" role="status" aria-label={busy?"Generating suggested replies":"Loading AI Copilot"}>{[0,1,2].map(i=><div key={i} className="space-y-3 rounded-xl border p-4"><Skeleton className="h-2 w-1/3 bg-violet-500/15"/><Skeleton className="h-2 w-full"/><Skeleton className="h-2 w-4/5"/><Skeleton className="h-2 w-2/3"/></div>)}</div>
-        :result?<><div className="flex items-center justify-between text-[10px] text-muted-foreground"><span>{result.suggestions.length} replies · AI-estimated confidence</span><time>{new Date(result.generatedAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</time></div>
-          {result.question!==question.trim()&&<p className="rounded-lg bg-muted/50 p-2 text-xs text-muted-foreground">Replies to: {result.question}</p>}
+      {busy||loading?<div className="space-y-3" role="status" aria-label={busy?tUi("Generating suggested replies"):tUi("Loading AI Copilot")}>{[0,1,2].map(i=><div key={i} className="space-y-3 rounded-xl border p-4"><Skeleton className="h-2 w-1/3 bg-violet-500/15"/><Skeleton className="h-2 w-full"/><Skeleton className="h-2 w-4/5"/><Skeleton className="h-2 w-2/3"/></div>)}</div>
+        :result?<><div className="flex items-center justify-between text-[10px] text-muted-foreground"><span>{result.suggestions.length}{tUi(" replies · AI-estimated confidence")}</span><time>{new Date(result.generatedAt).toLocaleTimeString(tUi.locale,{hour:"2-digit",minute:"2-digit"})}</time></div>
+          {result.question!==question.trim()&&<p className="rounded-lg bg-muted/50 p-2 text-xs text-muted-foreground">{tUi("Replies to: ")}{result.question}</p>}
           {result.suggestions.map((s,i)=><Suggestion key={`${result.requestId}-${i}`} suggestion={s} index={i} onInsert={onInsert} disabled={!canInsert}/>)}
-          <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">Confidence is the model’s estimate based on available context. Review the reply before sending.</p></>
-          :!loading&&!error&&<div className="grid place-items-center px-5 py-12 text-center"><div className="mb-4 rounded-2xl border border-violet-200/60 bg-violet-500/5 p-4 dark:border-violet-800/40"><Sparkles className="size-7 text-violet-400"/></div><h4 className="text-sm font-medium">Your next reply starts here</h4><p className="mt-2 max-w-64 text-xs leading-relaxed text-muted-foreground">Choose a message with <Brain className="inline size-3.5"/> or write your own question. Move any suggestion into your reply with one click.</p><ArrowUpRight className="mt-4 size-4 text-violet-400"/></div>}
+          <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">{tUi("Confidence is the model’s estimate based on available context. Review the reply before sending.")}</p></>
+          :!loading&&!error&&<div className="grid place-items-center px-5 py-12 text-center"><div className="mb-4 rounded-2xl border border-violet-200/60 bg-violet-500/5 p-4 dark:border-violet-800/40"><Sparkles className="size-7 text-violet-400"/></div><h4 className="text-sm font-medium">{tUi("Your next reply starts here")}</h4><p className="mt-2 max-w-64 text-xs leading-relaxed text-muted-foreground">{tUi("Choose a message with ")}<Brain className="inline size-3.5"/>{tUi(" or write your own question. Move any suggestion into your reply with one click.")}</p><ArrowUpRight className="mt-4 size-4 text-violet-400"/></div>}
     </div>
   </div>;
 }

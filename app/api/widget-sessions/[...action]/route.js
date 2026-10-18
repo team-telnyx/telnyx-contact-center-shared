@@ -1,16 +1,19 @@
+import { receiveAiImageMessage } from "@/lib/widgets/ai-images";
 import { updateWidgetVoiceState } from "@/lib/widgets/ai-sessions";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { bearerToken,verifyAttachmentAccessToken,widgetSessionToken } from "@/lib/widgets/session-tokens";
 import { getWidgetSession,readWidgetConversation,actAsWidgetCustomer } from "@/lib/widgets/sessions";
 import { attachmentResponse,receiveTextAttachment } from "@/lib/widgets/attachments";
-import { videoWidgetJoin,videoWidgetLeave,videoWidgetRefreshToken,videoWidgetState } from "@/lib/widgets/video-sessions";
+import { videoWidgetAiAction,videoWidgetJoin,videoWidgetLeave,videoWidgetRefreshToken,videoWidgetState } from "@/lib/widgets/video-sessions";
 import { consentWidgetCobrowse,readWidgetCobrowse } from "@/lib/cobrowse/lifecycle.mjs";
+import { readConferenceBody } from "@/lib/video/request-body.mjs";
 
 async function handle(request,context){
   const pool=getPostgresPool();if(!pool)return NextResponse.json({error:"Service unavailable"},{status:503});
   try{
     const {action}=await context.params;const path=action.join("/");const token=bearerToken(request);
+    if(path==="image-messages" && request.method==="POST") return NextResponse.json(await receiveAiImageMessage(pool,{request,token}),{headers:{"Cache-Control":"no-store"}});
     if(path==="cobrowse-state"&&request.method==="GET")return NextResponse.json({session:await readWidgetCobrowse(pool,{token,clientKey:request.headers.get("x-cobrowse-tab")})},{headers:{"Cache-Control":"no-store"}});
     if(path==="cobrowse/consent"&&request.method==="POST"){
       const body=await request.json().catch(()=>({}));
@@ -20,6 +23,7 @@ async function handle(request,context){
     if(path === "voice-state" && ["GET","POST"].includes(request.method)) {
       return NextResponse.json(await updateWidgetVoiceState(pool,token,request.method === "POST" ? await request.json() : null),{headers:{"Cache-Control":"no-store"}});
     }
+    if(path==="video/ai"&&request.method==="POST") return NextResponse.json(await videoWidgetAiAction(pool,token,await readConferenceBody(request)),{headers:{"Cache-Control":"no-store"}});
     if(path==="video-state"&&request.method==="GET")return NextResponse.json(await videoWidgetState(pool,token),{headers:{"Cache-Control":"no-store"}});
     if(path==="video/join"&&request.method==="POST")return NextResponse.json(await videoWidgetJoin(pool,token),{headers:{"Cache-Control":"no-store"}});
     if(path==="video/token"&&request.method==="POST"){const body=await request.json().catch(()=>({}));return NextResponse.json(await videoWidgetRefreshToken(pool,token,{refreshToken:body.refreshToken}),{headers:{"Cache-Control":"no-store"}});}
@@ -28,7 +32,8 @@ async function handle(request,context){
       let claims;try{claims=verifyAttachmentAccessToken(new URL(request.url).searchParams.get("access"),{attachmentId:action[1]});}
       catch{return NextResponse.json({error:"Attachment link expired"},{status:401});}
       const session=await getWidgetSession(pool,widgetSessionToken(claims.s));
-      const file=(await pool.query("SELECT * FROM acd_text_attachments WHERE id=$1 AND conversation_id=$2",[action[1],session.conversation_id])).rows[0];
+      const file=(await pool.query("SELECT * FROM acd_text_attachments WHERE id=$1 AND conversation_id=$2",[action[1],session.conversation_id])).rows[0]
+        || (await pool.query("SELECT * FROM cc_widget_ai_images WHERE id=$1 AND session_id=$2",[action[1],session.id])).rows[0];
       return file?attachmentResponse(request,file):NextResponse.json({error:"Attachment not found"},{status:404});
     }
     if(request.method==="POST"&&path==="attachments"){

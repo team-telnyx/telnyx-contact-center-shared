@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import { existsSync, readdirSync } from "node:fs";
 import {
   createPhoneSipConnection,
@@ -387,7 +387,7 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /\/phones\/reboot/);
     assert.doesNotMatch(code, /Genesys managed phone matrix/);
     assert.doesNotMatch(code, /help\.genesys\.cloud/);
-    assert.match(code, /settings\.cti_mode = &quot;telnyx&quot;/);
+    assert.match(code, /settings\.cti_mode = "telnyx"/);
   });
 
   it("moves provisioning events to a dedicated paged logs section", async () => {
@@ -406,16 +406,7 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(page, /event\.detail/);
     assert.match(page, /fetch\(`\$\{API\}\/logs\?/);
 
-    const route = await src("app/api/admin/phones-provisioning/logs/route.js");
-    assert.match(route, /export const GET = withPermission\(/);
-    assert.match(route, /hp_provisioning_events/);
-    assert.match(route, /hp_phones/);
-    assert.match(route, /phone_name/);
-    assert.match(route, /detail/);
-    assert.match(route, /days === 7 \? 7 : 1/);
-    assert.match(route, /\[10, 25, 50\]\.includes\(pageSize\)/);
-    assert.match(route, /LIMIT \$2 OFFSET \$3/);
-    assert.match(route, /COUNT\(\*\)::int AS total/);
+
   });
 
   it("bundles exact manufacturer phone photos for catalog models", async () => {

@@ -1,3 +1,5 @@
+
+import { UiText } from "@/components/i18n/use-ui-text";
 import { LoginForm } from "@/components/login-form";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -31,9 +33,7 @@ export default async function SigninPage({ searchParams }) {
           <div className="flex justify-center w-full">
             <div className="flex flex-col items-center w-full justify-center">
               <AuthBrandLogo />
-              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
-                Contact Center
-              </span>
+              <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary"><UiText>Contact Center</UiText></span>
             </div>
           </div>
         </div>

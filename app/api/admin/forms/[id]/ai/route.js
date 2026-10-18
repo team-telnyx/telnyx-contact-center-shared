@@ -1,3 +1,4 @@
+import { prepareAiOperation } from '@/lib/ai-operations/runtime.mjs';
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -63,10 +64,8 @@ function outOfScopeResponse() {
 
 async function getTelnyxOperations({ prompt, currentForm, apiKey }) {
   const endpoint = process.env.TELNYX_CHAT_COMPLETIONS_URL || "https://api.telnyx.com/v2/ai/chat/completions";
-  const model = process.env.FORM_BUILDER_AI_MODEL || process.env.TELNYX_CHAT_MODEL || "meta-llama/Meta-Llama-3.1-8B-Instruct";
   const system = buildFormAiSystemPrompt();
-  const body = {
-    model,
+  const body = await prepareAiOperation("form-builder", {
     stream: false,
     temperature: 0.1,
     max_tokens: 4000,
@@ -76,7 +75,7 @@ async function getTelnyxOperations({ prompt, currentForm, apiKey }) {
       { role: "system", content: system },
       { role: "user", content: buildFormAiUserPayload({ prompt, currentForm }) },
     ],
-  };
+  });
   const callTelnyx = (requestBody) => fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -115,7 +114,7 @@ async function getTelnyxOperations({ prompt, currentForm, apiKey }) {
     }
     return operation;
   }) : [];
-  return { operations, reason: parsed.reason || "Applied AI form edits.", model, rawContent: String(content).slice(0, 1000) };
+  return { operations, reason: parsed.reason || "Applied AI form edits.", model: body.model, rawContent: String(content).slice(0, 1000) };
 }
 
 async function POST_handler(request) {

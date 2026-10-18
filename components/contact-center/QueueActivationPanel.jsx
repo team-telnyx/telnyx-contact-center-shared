@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,7 @@ import { notify } from "@/components/ToastNotify";
 import { subscribeStatusStream } from "@/lib/status-stream-client";
 
 export function QueueActivationPanel({ queues, onUpdate }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const [localQueues, setLocalQueues] = useState(queues);
   const [loading, setLoading] = useState({});
@@ -86,13 +89,12 @@ export function QueueActivationPanel({ queues, onUpdate }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline">
-          Queues ({activatedCount}/{queues.length})
+        <Button variant="outline">{tUi("Queues (")}{activatedCount}/{queues.length})
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80">
         <div className="space-y-3">
-          <div className="font-semibold">Queue Activation</div>
+          <div className="font-semibold">{tUi("Queue Activation")}</div>
           {localQueues.map((queue, index) => (
             <div
               key={queue.id}
@@ -138,7 +140,7 @@ export function QueueActivationPanel({ queues, onUpdate }) {
                   }`}
                   variant="outline"
                 >
-                  {queue.routingStrategy || "FIFO"}
+                  {queue.routingStrategy || tUi("FIFO")}
                 </Badge>
               </div>
             </div>

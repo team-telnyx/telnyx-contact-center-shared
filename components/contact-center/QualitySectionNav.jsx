@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { useRouter } from "next/navigation";
 import {
@@ -29,6 +30,7 @@ export function persistQualitySection(sectionId) {
 }
 
 export function QualitySectionRailNav({ activeId = "evaluations" }) {
+  const tUi = useUiText();
   const router = useRouter();
   return (
     <SectionRail
@@ -38,7 +40,7 @@ export function QualitySectionRailNav({ activeId = "evaluations" }) {
         persistQualitySection(sectionId);
         router.push(`/supervisor/quality?section=${encodeURIComponent(sectionId)}`);
       }}
-      ariaLabel="Supervisor quality management sections"
+      ariaLabel={tUi("Supervisor quality management sections")}
       screenGroup="supervisor.quality"
     />
   );

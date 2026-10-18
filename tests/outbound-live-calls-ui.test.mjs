@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import test from "node:test";
 
 test("live call card renders combined status/reason badges like History and suppresses failure labels for hangups", async () => {

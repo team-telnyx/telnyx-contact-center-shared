@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 
 import {
   AGENT_CAMPAIGN_ACTIVATION_STATUSES,
@@ -131,8 +131,8 @@ test("agent campaign selector matches compact queue activation formatting with i
   assert.match(source, /IconPlayerPause/);
   assert.match(source, /IconPlayerStop/);
   assert.match(source, /campaignModeBadgeClass/);
-  assert.match(source, /PREVIEW/);
-  assert.match(source, /PROGRESSIVE/);
+  assert.match(source, /preview: "Preview"/);
+  assert.match(source, /progressive: "Progressive"/);
   assert.doesNotMatch(source, /text-xl/);
   assert.doesNotMatch(source, /text-lg/);
   assert.doesNotMatch(source, /Activate one or more preview\/progressive campaigns/);

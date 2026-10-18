@@ -21,15 +21,13 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_WORKFLOW_ID = "c0110204-fb91-4ecf-a0d8-b42eb067bda0";
 
 // A workflow row created while this seed's own default was still the bare
-// (invalid, provider-unprefixed) "gpt-4o-mini" — before it was corrected to
-// "openai/gpt-4o-mini" — is stuck passing that invalid id to Telnyx forever,
-// since the update branch below deliberately never re-applies llm_model to
-// an existing row. Narrowly auto-correct ONLY these exact known-legacy
-// values on every run; anything else (including a deliberate admin
-// model-dropdown override) is left untouched.
-const LEGACY_LLM_MODEL_MIGRATIONS = {
-  "gpt-4o-mini": "openai/gpt-4o-mini",
-};
+// (invalid, provider-unprefixed) "gpt-4o-mini" is stuck passing that invalid
+// id to Telnyx forever, since the update branch below deliberately never
+// re-applies llm_model to an existing row. Narrowly clear ONLY these exact
+// known-legacy values on every run, so the workflow inherits the Admin → AI
+// Copilot model (no model is chosen in code). Anything else, including a
+// deliberate admin model-dropdown override, is left untouched.
+const LEGACY_LLM_MODELS = new Set(["gpt-4o-mini"]);
 
 async function insertItem(client, stageId, itemData) {
   const hints = itemData.prompt_hint
@@ -134,13 +132,12 @@ export async function upsertMedicalTransportIntakeWorkflow({
       // One-time migration, narrowly scoped: only correct a row still stuck
       // on the exact old bad default. Never touches any other value, so a
       // deliberate admin override is never clobbered.
-      const migratedModel = LEGACY_LLM_MODEL_MIGRATIONS[workflow.llm_model];
-      if (migratedModel) {
+      if (LEGACY_LLM_MODELS.has(workflow.llm_model)) {
         await client.query(
-          `UPDATE aa_workflows SET llm_model = $2, updated_at = NOW() WHERE id = $1`,
-          [workflow.id, migratedModel],
+          `UPDATE aa_workflows SET llm_model = NULL, updated_at = NOW() WHERE id = $1`,
+          [workflow.id],
         );
-        console.log(`[Intake Workflow] Migrated legacy llm_model "${workflow.llm_model}" -> "${migratedModel}" on workflow ${workflow.id}`);
+        console.log(`[Intake Workflow] Cleared legacy llm_model "${workflow.llm_model}" on workflow ${workflow.id}; it now inherits the AI Copilot model`);
       }
     }
 

@@ -82,6 +82,23 @@ describe('azure-acme.mjs', () => {
   });
 
   describe('buildPfx', () => {
+    it('packages certificates without invoking forge RSA signature verification', (t) => {
+      const { certPem, keyPem } = makeSelfSignedPem();
+      const original = forge.pki.setRsaPublicKey;
+      const keys = [];
+      t.mock.method(forge.pki, 'setRsaPublicKey', (...args) => {
+        const key = original(...args);
+        t.mock.method(key, 'verify', () => { throw new Error('RSA verification must use native crypto, not forge'); });
+        keys.push(key);
+        return key;
+      });
+      const pfx = buildPfx({ certPem, keyPem, password: 'security-regression' });
+      const decoded = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(pfx.toString('binary')), false, 'security-regression');
+      assert.strictEqual(decoded.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag][0].cert.subject.getField('CN').value, 'demo.example.com');
+      assert.ok(keys.length > 0, 'verification guard must be attached to parsed keys');
+      for (const key of keys) assert.strictEqual(key.verify.mock.callCount(), 0);
+    });
+
     it('assembles a PFX whose embedded cert/key match the input PEM (byte-verifiable round trip)', () => {
       const { certPem, keyPem } = makeSelfSignedPem({ commonName: 'demo.example.com' });
       const pfxBuffer = buildPfx({ certPem, keyPem, password: 'test-pw-123' });

@@ -9,7 +9,7 @@ const bundle=await build({entryPoints:['tests/video-device-controls-browser/entr
  plugins:[{name:'network-boundaries',setup(b){
   b.onResolve({filter:/endpoint-client|ToastNotify|MessagingTransferModal|CobrowseAgentModal/},a=>({path:a.path,namespace:'stub'}));
   b.onResolve({filter:/^[^./]/},a=>{if(a.path.startsWith('@/'))return;try{return {path:require.resolve(a.path)};}catch{return;}});
-  b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:a.path.includes('endpoint-client')?'export const voiceFetch=(...a)=>fetch(...a);':a.path.includes('ToastNotify')?'export const notify=()=>{};':'export default function Modal(){return null;}',loader:'js'}));
+  b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:a.path.includes('endpoint-client')?'export const voiceFetch=(...a)=>fetch(...a);export const subscribeVoiceEndpoints=cb=>{cb();window.addEventListener("test:endpoint",cb);return()=>window.removeEventListener("test:endpoint",cb);};':a.path.includes('ToastNotify')?'export const notify=()=>{};':'export default function Modal(){return null;}',loader:'js'}));
  }}]});
 let owner=false,commands=0;
 const server=createServer((req,res)=>{
@@ -25,10 +25,13 @@ const browser=await puppeteer.launch({
 });
 try{
  const page=await browser.newPage();await page.goto(`http://127.0.0.1:${server.address().port}`);
- await page.waitForFunction(()=>document.body.textContent.includes('Video is handled on iPhone'));
+ await page.waitForSelector('button[aria-label="Accept video call"]');
+ assert(!(await page.evaluate(()=>document.body.textContent)).includes('Video is handled on'));
  assert(await page.$eval('button[aria-label="Accept video call"]',b=>b.disabled));
- await page.focus('span[tabindex="0"]');
- await page.waitForFunction(()=>document.querySelector('[role="tooltip"]')?.textContent.includes('Video is handled on iPhone'));
+ owner=true;await page.evaluate(()=>window.dispatchEvent(new Event('test:endpoint')));
+ await page.waitForFunction(()=>!document.querySelector('button[aria-label="Accept video call"]').disabled);
+ owner=false;await page.evaluate(()=>window.dispatchEvent(new Event('test:endpoint')));
+ await page.waitForFunction(()=>document.querySelector('button[aria-label="Accept video call"]').disabled);
  await page.evaluate(()=>window.renderInteraction('active'));
  await page.waitForSelector('button[aria-label="Co-browse"]');
  assert(await page.$$eval('button',bs=>bs.every(b=>b.disabled)));

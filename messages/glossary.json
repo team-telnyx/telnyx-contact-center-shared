@@ -1,0 +1,1151 @@
+{
+  "version": 1,
+  "locales": [
+    "de-DE",
+    "nl-NL",
+    "es-ES",
+    "fr-FR",
+    "pt-PT",
+    "it-IT",
+    "pl-PL"
+  ],
+  "references": {
+    "microsoft-terminology": "https://learn.microsoft.com/en-us/globalization/reference/microsoft-terminology",
+    "project-contact-center-glossary": "the internal documentation"
+  },
+  "entries": [
+    {
+      "source": "Save",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Speichern",
+        "nl-NL": "Opslaan",
+        "es-ES": "Guardar",
+        "fr-FR": "Enregistrer",
+        "pt-PT": "Guardar",
+        "it-IT": "Salva",
+        "pl-PL": "Zapisz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Save changes",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Änderungen speichern",
+        "nl-NL": "Wijzigingen opslaan",
+        "es-ES": "Guardar cambios",
+        "fr-FR": "Enregistrer les modifications",
+        "pt-PT": "Guardar alterações",
+        "it-IT": "Salva modifiche",
+        "pl-PL": "Zapisz zmiany"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Cancel",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Abbrechen",
+        "nl-NL": "Annuleren",
+        "es-ES": "Cancelar",
+        "fr-FR": "Annuler",
+        "pt-PT": "Cancelar",
+        "it-IT": "Annulla",
+        "pl-PL": "Anuluj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Delete",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Löschen",
+        "nl-NL": "Verwijderen",
+        "es-ES": "Eliminar",
+        "fr-FR": "Supprimer",
+        "pt-PT": "Eliminar",
+        "it-IT": "Elimina",
+        "pl-PL": "Usuń"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Remove",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Entfernen",
+        "nl-NL": "Verwijderen",
+        "es-ES": "Eliminar",
+        "fr-FR": "Supprimer",
+        "pt-PT": "Remover",
+        "it-IT": "Rimuovi",
+        "pl-PL": "Usuń"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Edit",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Bearbeiten",
+        "nl-NL": "Bewerk",
+        "es-ES": "Editar",
+        "fr-FR": "Modifier",
+        "pt-PT": "Editar",
+        "it-IT": "Modifica",
+        "pl-PL": "Edytuj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Create",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Erstellen",
+        "nl-NL": "Aanmaken",
+        "es-ES": "Crear",
+        "fr-FR": "Créer",
+        "pt-PT": "Criar",
+        "it-IT": "Crea",
+        "pl-PL": "Utwórz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Add",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Hinzufügen",
+        "nl-NL": "Toevoegen",
+        "es-ES": "Agregar",
+        "fr-FR": "Ajouter",
+        "pt-PT": "Adicionar",
+        "it-IT": "Aggiungi",
+        "pl-PL": "Dodaj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Close",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Schließen",
+        "nl-NL": "Sluiten",
+        "es-ES": "Cerrar",
+        "fr-FR": "Fermer",
+        "pt-PT": "Fechar",
+        "it-IT": "Chiudi",
+        "pl-PL": "Zamknij"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Open",
+      "meaning": "Task state, not an instruction to open something.",
+      "translations": {
+        "de-DE": "Offen",
+        "nl-NL": "Open",
+        "es-ES": "Abierto",
+        "fr-FR": "Ouvert",
+        "pt-PT": "Aberto",
+        "it-IT": "Aperto",
+        "pl-PL": "Otwarte"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Search",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Suchen",
+        "nl-NL": "Zoeken",
+        "es-ES": "Buscar",
+        "fr-FR": "Rechercher",
+        "pt-PT": "Pesquisar",
+        "it-IT": "Cerca",
+        "pl-PL": "Szukaj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Settings",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Einstellungen",
+        "nl-NL": "Instellingen",
+        "es-ES": "Configuración",
+        "fr-FR": "Paramètres",
+        "pt-PT": "Definições",
+        "it-IT": "Impostazioni",
+        "pl-PL": "Ustawienia"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Refresh",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Aktualisieren",
+        "nl-NL": "Vernieuwen",
+        "es-ES": "Actualizar",
+        "fr-FR": "Actualiser",
+        "pt-PT": "Atualizar",
+        "it-IT": "Aggiorna",
+        "pl-PL": "Odśwież"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Reload",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Neu laden",
+        "nl-NL": "Vernieuwen",
+        "es-ES": "Volver a cargar",
+        "fr-FR": "Recharger",
+        "pt-PT": "Recarregar",
+        "it-IT": "Ricarica",
+        "pl-PL": "Przeładuj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Reset",
+      "meaning": "Reset current settings/test state, not restart an application.",
+      "translations": {
+        "de-DE": "Zurücksetzen",
+        "nl-NL": "Opnieuw instellen",
+        "es-ES": "Restablecer",
+        "fr-FR": "Réinitialiser",
+        "pt-PT": "Repor",
+        "it-IT": "Reimposta",
+        "pl-PL": "Resetuj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Restore",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Wiederherstellen",
+        "nl-NL": "Herstellen",
+        "es-ES": "Restablecer",
+        "fr-FR": "Restaurer",
+        "pt-PT": "Restaurar",
+        "it-IT": "Ripristina",
+        "pl-PL": "Przywróć"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Back",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Zurück",
+        "nl-NL": "Terug",
+        "es-ES": "Atrás",
+        "fr-FR": "Retour",
+        "pt-PT": "Voltar",
+        "it-IT": "Indietro",
+        "pl-PL": "Wstecz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Next",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Weiter",
+        "nl-NL": "Volgende",
+        "es-ES": "Siguiente",
+        "fr-FR": "Suivant",
+        "pt-PT": "Seguinte",
+        "it-IT": "Avanti",
+        "pl-PL": "Dalej"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Previous",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Zurück",
+        "nl-NL": "Vorige",
+        "es-ES": "Anterior",
+        "fr-FR": "Précédent",
+        "pt-PT": "Anterior",
+        "it-IT": "Indietro",
+        "pl-PL": "Wstecz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Submit",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Absenden",
+        "nl-NL": "Verzenden",
+        "es-ES": "Enviar",
+        "fr-FR": "Soumettre",
+        "pt-PT": "Enviar",
+        "it-IT": "Invia",
+        "pl-PL": "Wyślij"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Disable",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Deaktivieren",
+        "nl-NL": "Uitschakelen",
+        "es-ES": "Deshabilitar",
+        "fr-FR": "Désactiver",
+        "pt-PT": "Desativar",
+        "it-IT": "Disabilita",
+        "pl-PL": "Wyłącz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Enabled",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Aktiviert",
+        "nl-NL": "Ingeschakeld",
+        "es-ES": "Habilitado",
+        "fr-FR": "Activé",
+        "pt-PT": "Ativado",
+        "it-IT": "Attivato",
+        "pl-PL": "Włączone"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Disabled",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Deaktiviert",
+        "nl-NL": "Uitgeschakeld",
+        "es-ES": "Deshabilitado",
+        "fr-FR": "Désactivé",
+        "pt-PT": "Desativado",
+        "it-IT": "Disattivato",
+        "pl-PL": "Wyłączone"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Available",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Verfügbar",
+        "nl-NL": "Beschikbaar",
+        "es-ES": "Disponible",
+        "fr-FR": "Disponible",
+        "pt-PT": "Disponível",
+        "it-IT": "Disponibile",
+        "pl-PL": "Dostępny"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Busy",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Besetzt",
+        "nl-NL": "Bezig",
+        "es-ES": "Ocupado",
+        "fr-FR": "Occupé",
+        "pt-PT": "Ocupado",
+        "it-IT": "Occupato",
+        "pl-PL": "Zajęty"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Away",
+      "meaning": "Agent temporarily away from desk; distinct from Offline.",
+      "translations": {
+        "de-DE": "Abwesend",
+        "nl-NL": "Afwezig",
+        "es-ES": "Ausente",
+        "fr-FR": "Absent",
+        "pt-PT": "Ausente",
+        "it-IT": "Assente",
+        "pl-PL": "Nieobecny"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Offline",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Offline",
+        "nl-NL": "Offline",
+        "es-ES": "Desconectado",
+        "fr-FR": "Hors ligne",
+        "pt-PT": "Desconectado",
+        "it-IT": "Non in linea",
+        "pl-PL": "Niedostępny"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Queue",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Warteschlange",
+        "nl-NL": "Wachtrij",
+        "es-ES": "Cola",
+        "fr-FR": "File d'attente",
+        "pt-PT": "Fila",
+        "it-IT": "Coda",
+        "pl-PL": "Kolejka"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Agent",
+      "meaning": "Human contact-center agent. Product term; preserve AI agent distinctions.",
+      "translations": {
+        "de-DE": "Agent",
+        "nl-NL": "Medewerker",
+        "es-ES": "Agente",
+        "fr-FR": "Agent",
+        "pt-PT": "Agente",
+        "it-IT": "Operatore",
+        "pl-PL": "Agent"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Supervisor",
+      "meaning": "Person supervising a contact-center team.",
+      "translations": {
+        "de-DE": "Supervisor",
+        "nl-NL": "Supervisor",
+        "es-ES": "Supervisor",
+        "fr-FR": "Superviseur",
+        "pt-PT": "Supervisor",
+        "it-IT": "Supervisore",
+        "pl-PL": "Przełożony"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Hold",
+      "meaning": "Call-hold phase or duration, not queue wait.",
+      "translations": {
+        "de-DE": "Halten",
+        "nl-NL": "Wachtstand",
+        "es-ES": "Espera",
+        "fr-FR": "Mise en attente",
+        "pt-PT": "Espera",
+        "it-IT": "Attesa",
+        "pl-PL": "Zawieszenie"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Resume",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Fortsetzen",
+        "nl-NL": "Hervatten",
+        "es-ES": "Reanudar",
+        "fr-FR": "Reprendre",
+        "pt-PT": "Retomar",
+        "it-IT": "Riprendi",
+        "pl-PL": "Wznów"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Unhold",
+      "meaning": "Resume a held call; do not remove it from a queue.",
+      "translations": {
+        "de-DE": "Fortsetzen",
+        "nl-NL": "Hervatten",
+        "es-ES": "Reanudar",
+        "fr-FR": "Reprendre",
+        "pt-PT": "Retomar",
+        "it-IT": "Riprendi",
+        "pl-PL": "Wznów"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Mute",
+      "meaning": "Audio mute command, not the muted state.",
+      "translations": {
+        "de-DE": "Stummschalten",
+        "nl-NL": "Dempen",
+        "es-ES": "Silenciar",
+        "fr-FR": "Couper le son",
+        "pt-PT": "Desativar som",
+        "it-IT": "Disattiva audio",
+        "pl-PL": "Wycisz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Unmute",
+      "meaning": "Restore audio.",
+      "translations": {
+        "de-DE": "Stummschaltung aufheben",
+        "nl-NL": "Dempen opheffen",
+        "es-ES": "Activar sonido",
+        "fr-FR": "Réactiver le son",
+        "pt-PT": "Ativar som",
+        "it-IT": "Riattiva audio",
+        "pl-PL": "Wyłącz wyciszenie"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Transfer",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Weiterleiten",
+        "nl-NL": "Doorverbinden",
+        "es-ES": "Transferir",
+        "fr-FR": "Transférer",
+        "pt-PT": "Transferir",
+        "it-IT": "Trasferisci",
+        "pl-PL": "Przekaż"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Call",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Anruf",
+        "nl-NL": "Oproep",
+        "es-ES": "Llamada",
+        "fr-FR": "Appel",
+        "pt-PT": "Chamada",
+        "it-IT": "Chiamata",
+        "pl-PL": "Połączenie"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Answer",
+      "meaning": "Answer an incoming telephone call.",
+      "translations": {
+        "de-DE": "Annehmen",
+        "nl-NL": "Opnemen",
+        "es-ES": "Responder",
+        "fr-FR": "Répondre",
+        "pt-PT": "Atender",
+        "it-IT": "Rispondi",
+        "pl-PL": "Odbierz"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Hang up",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Auflegen",
+        "nl-NL": "Ophangen",
+        "es-ES": "Colgar",
+        "fr-FR": "Raccrocher",
+        "pt-PT": "Desligar",
+        "it-IT": "Chiudi la chiamata",
+        "pl-PL": "Rozłącz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Wrap-up",
+      "meaning": "Work after a contact, including notes and outcome coding; distinct from closed/completed.",
+      "translations": {
+        "de-DE": "Nachbearbeitung",
+        "nl-NL": "Nabewerking",
+        "es-ES": "Trabajo posterior al contacto",
+        "fr-FR": "Travail après contact",
+        "pt-PT": "Trabalho após contacto",
+        "it-IT": "Attività post-contatto",
+        "pl-PL": "Obsługa po kontakcie"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Wrapup",
+      "meaning": "Work after a contact, including notes and outcome coding; distinct from closed/completed.",
+      "translations": {
+        "de-DE": "Nachbearbeitung",
+        "nl-NL": "Nabewerking",
+        "es-ES": "Trabajo posterior al contacto",
+        "fr-FR": "Travail après contact",
+        "pt-PT": "Trabalho após contacto",
+        "it-IT": "Attività post-contatto",
+        "pl-PL": "Obsługa po kontakcie"
+      },
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Recording",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Aufzeichnung",
+        "nl-NL": "Opname",
+        "es-ES": "Grabación",
+        "fr-FR": "Enregistrement",
+        "pt-PT": "Gravação",
+        "it-IT": "Registrazione",
+        "pl-PL": "Nagrywanie"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Recordings",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Aufzeichnungen",
+        "nl-NL": "Opnames",
+        "es-ES": "Grabaciones",
+        "fr-FR": "Enregistrements",
+        "pt-PT": "Gravações",
+        "it-IT": "Registrazioni",
+        "pl-PL": "Nagrania"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Calls",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Anrufe",
+        "nl-NL": "Gesprekken",
+        "es-ES": "Llamadas",
+        "fr-FR": "Appels",
+        "pt-PT": "Chamadas",
+        "it-IT": "Chiamate",
+        "pl-PL": "Połączenia"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Contacts",
+      "meaning": "Stored contact records.",
+      "translations": {
+        "de-DE": "Kontakte",
+        "nl-NL": "Contactpersonen",
+        "es-ES": "Contactos",
+        "fr-FR": "Contacts",
+        "pt-PT": "Contactos",
+        "it-IT": "Contatti",
+        "pl-PL": "Kontakty"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Teams",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Teams",
+        "nl-NL": "Teams",
+        "es-ES": "Equipos",
+        "fr-FR": "Équipes",
+        "pt-PT": "Equipas",
+        "it-IT": "Team",
+        "pl-PL": "Zespoły"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Users",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Benutzer",
+        "nl-NL": "Gebruikers",
+        "es-ES": "Usuarios",
+        "fr-FR": "Utilisateurs",
+        "pt-PT": "Utilizadores",
+        "it-IT": "Utenti",
+        "pl-PL": "Użytkownicy"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Role",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Rolle",
+        "nl-NL": "Rol",
+        "es-ES": "Rol",
+        "fr-FR": "Rôle",
+        "pt-PT": "Função",
+        "it-IT": "Ruolo",
+        "pl-PL": "Rola"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Roles",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Rollen",
+        "nl-NL": "Rollen",
+        "es-ES": "Roles",
+        "fr-FR": "Rôles",
+        "pt-PT": "Funções",
+        "it-IT": "Ruoli",
+        "pl-PL": "Role"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Permissions",
+      "meaning": "Access permissions.",
+      "translations": {
+        "de-DE": "Berechtigungen",
+        "nl-NL": "Machtigingen",
+        "es-ES": "Permisos",
+        "fr-FR": "Autorisations",
+        "pt-PT": "Permissões",
+        "it-IT": "Autorizzazioni",
+        "pl-PL": "Uprawnienia"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Default",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Standard",
+        "nl-NL": "Standaard",
+        "es-ES": "Predeterminado",
+        "fr-FR": "Par défaut",
+        "pt-PT": "Predefinição",
+        "it-IT": "Predefinito",
+        "pl-PL": "Domyślnie"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Copy",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Kopieren",
+        "nl-NL": "Kopiëren",
+        "es-ES": "Copiar",
+        "fr-FR": "Copier",
+        "pt-PT": "Copiar",
+        "it-IT": "Copia",
+        "pl-PL": "Kopiuj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Download",
+      "meaning": "Standard UI label; keep action and state meanings distinct.",
+      "translations": {
+        "de-DE": "Herunterladen",
+        "nl-NL": "Downloaden",
+        "es-ES": "Descargar",
+        "fr-FR": "Télécharger",
+        "pt-PT": "Descarregar",
+        "it-IT": "Scarica",
+        "pl-PL": "Pobierz"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Upload",
+      "meaning": "Send a file from the device to the server; distinct from Download.",
+      "translations": {
+        "de-DE": "Hochladen",
+        "nl-NL": "Uploaden",
+        "es-ES": "Subir",
+        "fr-FR": "Téléverser",
+        "pt-PT": "Carregar",
+        "it-IT": "Carica",
+        "pl-PL": "Prześlij"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Import",
+      "meaning": "Import command.",
+      "translations": {
+        "de-DE": "Importieren",
+        "nl-NL": "Importeren",
+        "es-ES": "Importar",
+        "fr-FR": "Importer",
+        "pt-PT": "Importar",
+        "it-IT": "Importa",
+        "pl-PL": "Importuj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Export",
+      "meaning": "Export command.",
+      "translations": {
+        "de-DE": "Exportieren",
+        "nl-NL": "Exporteren",
+        "es-ES": "Exportar",
+        "fr-FR": "Exporter",
+        "pt-PT": "Exportar",
+        "it-IT": "Esporta",
+        "pl-PL": "Eksportuj"
+      },
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Open",
+      "context": "action",
+      "translations": {
+        "de-DE": "Öffnen",
+        "nl-NL": "Openen",
+        "es-ES": "Abrir",
+        "fr-FR": "Ouvrir",
+        "pt-PT": "Abrir",
+        "it-IT": "Apri",
+        "pl-PL": "Otwórz"
+      },
+      "meaning": "Command to open an item.",
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Call",
+      "context": "phone action",
+      "translations": {
+        "de-DE": "Anrufen",
+        "nl-NL": "Bellen",
+        "es-ES": "Llamar",
+        "fr-FR": "Appeler",
+        "pt-PT": "Ligar",
+        "it-IT": "Chiama",
+        "pl-PL": "Zadzwoń"
+      },
+      "meaning": "Command to initiate a telephone call.",
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Hold",
+      "context": "phone action",
+      "translations": {
+        "de-DE": "Halten",
+        "nl-NL": "In de wacht zetten",
+        "es-ES": "Poner en espera",
+        "fr-FR": "Mettre en attente",
+        "pt-PT": "Colocar em espera",
+        "it-IT": "Metti in attesa",
+        "pl-PL": "Zawieś"
+      },
+      "meaning": "Command to put an active call on hold.",
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Recording",
+      "context": "saved media",
+      "translations": {
+        "de-DE": "Aufzeichnung",
+        "nl-NL": "Opname",
+        "es-ES": "Grabación",
+        "fr-FR": "Enregistrement",
+        "pt-PT": "Gravação",
+        "it-IT": "Registrazione",
+        "pl-PL": "Nagranie"
+      },
+      "meaning": "A saved audio/video recording, not the act of recording.",
+      "reference": "microsoft-terminology"
+    },
+    {
+      "source": "Lunch",
+      "translations": {
+        "de-DE": "Mittagspause",
+        "nl-NL": "Lunchpauze",
+        "es-ES": "Pausa para comer",
+        "fr-FR": "Pause déjeuner",
+        "pt-PT": "Pausa para almoço",
+        "it-IT": "Pausa pranzo",
+        "pl-PL": "Przerwa obiadowa"
+      },
+      "meaning": "Built-in agent meal-break status.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Vacation",
+      "translations": {
+        "de-DE": "Urlaub",
+        "nl-NL": "Vakantie",
+        "es-ES": "Vacaciones",
+        "fr-FR": "Congés",
+        "pt-PT": "Férias",
+        "it-IT": "Ferie",
+        "pl-PL": "Urlop"
+      },
+      "meaning": "Built-in agent vacation status.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Sick",
+      "translations": {
+        "de-DE": "Krank",
+        "nl-NL": "Ziek",
+        "es-ES": "Baja por enfermedad",
+        "fr-FR": "Arrêt maladie",
+        "pt-PT": "Baixa médica",
+        "it-IT": "Malattia",
+        "pl-PL": "Zwolnienie chorobowe"
+      },
+      "meaning": "Built-in agent sickness-absence status.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Training",
+      "translations": {
+        "de-DE": "Schulung",
+        "nl-NL": "Training",
+        "es-ES": "Formación",
+        "fr-FR": "Formation",
+        "pt-PT": "Formação",
+        "it-IT": "Formazione",
+        "pl-PL": "Szkolenie"
+      },
+      "meaning": "Agent training status; Dutch Training is a valid local word.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Break",
+      "translations": {
+        "de-DE": "Pause",
+        "nl-NL": "Pauze",
+        "es-ES": "Pausa",
+        "fr-FR": "Pause",
+        "pt-PT": "Pausa",
+        "it-IT": "Pausa",
+        "pl-PL": "Przerwa"
+      },
+      "meaning": "Built-in agent break status.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Agent Not Answering",
+      "translations": {
+        "de-DE": "Agent antwortet nicht",
+        "nl-NL": "Medewerker neemt niet op",
+        "es-ES": "Agente no responde",
+        "fr-FR": "Agent sans réponse",
+        "pt-PT": "Agente não atende",
+        "it-IT": "Operatore non risponde",
+        "pl-PL": "Agent nie odbiera"
+      },
+      "meaning": "System state after failing to answer an offered call.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "On Outbound Call",
+      "translations": {
+        "de-DE": "Im ausgehenden Gespräch",
+        "nl-NL": "In uitgaand gesprek",
+        "es-ES": "En llamada saliente",
+        "fr-FR": "En appel sortant",
+        "pt-PT": "Em chamada de saída",
+        "it-IT": "In chiamata in uscita",
+        "pl-PL": "Rozmowa wychodząca"
+      },
+      "meaning": "Agent handling an outbound call.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Wrapup Codes",
+      "translations": {
+        "de-DE": "Nachbearbeitungscodes",
+        "nl-NL": "Afrondingscodes",
+        "es-ES": "Códigos de cierre",
+        "fr-FR": "Codes de conclusion",
+        "pt-PT": "Códigos de conclusão",
+        "it-IT": "Codici di chiusura",
+        "pl-PL": "Kody zakończenia"
+      },
+      "meaning": "Codes classifying the outcome of an interaction; distinct from campaign disposition mapping.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Wrap-up Codes",
+      "translations": {
+        "de-DE": "Nachbearbeitungscodes",
+        "nl-NL": "Afrondingscodes",
+        "es-ES": "Códigos de cierre",
+        "fr-FR": "Codes de conclusion",
+        "pt-PT": "Códigos de conclusão",
+        "it-IT": "Codici di chiusura",
+        "pl-PL": "Kody zakończenia"
+      },
+      "meaning": "Codes classifying the outcome of an interaction; distinct from campaign disposition mapping.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Wrap-up codes",
+      "translations": {
+        "de-DE": "Nachbearbeitungscodes",
+        "nl-NL": "Afrondingscodes",
+        "es-ES": "Códigos de cierre",
+        "fr-FR": "Codes de conclusion",
+        "pt-PT": "Códigos de conclusão",
+        "it-IT": "Codici di chiusura",
+        "pl-PL": "Kody zakończenia"
+      },
+      "meaning": "Codes classifying the outcome of an interaction; distinct from campaign disposition mapping.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Wrap-up code",
+      "translations": {
+        "de-DE": "Nachbearbeitungscode",
+        "nl-NL": "Afrondingscode",
+        "es-ES": "Código de cierre",
+        "fr-FR": "Code de conclusion",
+        "pt-PT": "Código de conclusão",
+        "it-IT": "Codice di chiusura",
+        "pl-PL": "Kod zakończenia"
+      },
+      "meaning": "Interaction outcome code.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "On Hold",
+      "translations": {
+        "de-DE": "Gehalten",
+        "nl-NL": "In de wacht",
+        "es-ES": "En espera",
+        "fr-FR": "En attente",
+        "pt-PT": "Em espera",
+        "it-IT": "In attesa",
+        "pl-PL": "Połączenie zawieszone"
+      },
+      "meaning": "Connected call placed on hold; not waiting in a queue.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "ON HOLD",
+      "translations": {
+        "de-DE": "Gehalten",
+        "nl-NL": "In de wacht",
+        "es-ES": "En espera",
+        "fr-FR": "En attente",
+        "pt-PT": "Em espera",
+        "it-IT": "In attesa",
+        "pl-PL": "Połączenie zawieszone"
+      },
+      "meaning": "Connected call placed on hold; not waiting in a queue.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Abandoned",
+      "translations": {
+        "de-DE": "Abgebrochen",
+        "nl-NL": "Afgebroken",
+        "es-ES": "Abandonadas",
+        "fr-FR": "Abandonnées",
+        "pt-PT": "Abandonadas",
+        "it-IT": "Abbandonate",
+        "pl-PL": "Porzucone"
+      },
+      "meaning": "Customer leaves before service, or an abandoned run; not rejected by an agent.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Warm Transfer Instructions",
+      "translations": {
+        "de-DE": "Anweisungen zur Weiterleitung mit Rückfrage",
+        "nl-NL": "Instructies voor doorverbinden met overleg",
+        "es-ES": "Instrucciones para transferencia con consulta",
+        "fr-FR": "Instructions de transfert avec consultation",
+        "pt-PT": "Instruções para transferência com consulta",
+        "it-IT": "Istruzioni per il trasferimento con consultazione",
+        "pl-PL": "Instrukcje przekazania z konsultacją"
+      },
+      "meaning": "Warm transfer involves consultation before completing handoff, not temperature.",
+      "reference": "project-contact-center-glossary"
+    },
+    {
+      "source": "Customer first response",
+      "meaning": "Elapsed time until the first human reply TO the customer, not a reply sent BY the customer.",
+      "translations": {
+        "de-DE": "Zeit bis zur ersten Antwort an den Kunden",
+        "nl-NL": "Tijd tot eerste antwoord aan klant",
+        "es-ES": "Tiempo hasta la primera respuesta al cliente",
+        "fr-FR": "Délai de première réponse au client",
+        "pt-PT": "Tempo até à primeira resposta ao cliente",
+        "it-IT": "Tempo alla prima risposta al cliente",
+        "pl-PL": "Czas do pierwszej odpowiedzi dla klienta"
+      }
+    },
+    {
+      "source": "Handling elapsed",
+      "meaning": "Elapsed assignment/handling duration; includes concurrent messaging work. Not voice talk time or occupancy.",
+      "translations": {
+        "de-DE": "Bearbeitungsdauer",
+        "nl-NL": "Afhandelingsduur",
+        "es-ES": "Tiempo de gestión",
+        "fr-FR": "Durée de traitement",
+        "pt-PT": "Tempo de tratamento",
+        "it-IT": "Tempo di gestione",
+        "pl-PL": "Czas obsługi"
+      }
+    },
+    {
+      "source": "Additional live legs",
+      "meaning": "Additional active call legs belonging to interactions, not additional independent customer interactions.",
+      "translations": {
+        "de-DE": "Zusätzliche aktive Gesprächsabschnitte",
+        "nl-NL": "Extra actieve gespreksdelen",
+        "es-ES": "Tramos de llamada activos adicionales",
+        "fr-FR": "Segments d’appel actifs supplémentaires",
+        "pt-PT": "Segmentos de chamada ativos adicionais",
+        "it-IT": "Segmenti di chiamata attivi aggiuntivi",
+        "pl-PL": "Dodatkowe aktywne odcinki połączeń"
+      }
+    },
+    {
+      "source": "Voice talk",
+      "meaning": "Duration of voice conversation, distinct from total handling/wait/wrap-up.",
+      "translations": {
+        "de-DE": "Gesprächsdauer",
+        "nl-NL": "Gespreksduur",
+        "es-ES": "Tiempo de conversación",
+        "fr-FR": "Durée de conversation",
+        "pt-PT": "Tempo de conversação",
+        "it-IT": "Tempo di conversazione",
+        "pl-PL": "Czas rozmowy głosowej"
+      }
+    },
+    {
+      "source": "Resolution",
+      "meaning": "Duration from interaction creation to terminal outcome, a time metric in the channel report.",
+      "translations": {
+        "de-DE": "Zeit bis zur Lösung",
+        "nl-NL": "Tijd tot oplossing",
+        "es-ES": "Tiempo de resolución",
+        "fr-FR": "Délai de résolution",
+        "pt-PT": "Tempo de resolução",
+        "it-IT": "Tempo di risoluzione",
+        "pl-PL": "Czas do rozwiązania"
+      }
+    },
+    {
+      "source": "Desktop",
+      "context": "preview device",
+      "meaning": "Generic desktop-computer preview preset, not the agent workspace and not a device product/model name.",
+      "translations": {
+        "de-DE": "Desktop",
+        "nl-NL": "Desktop",
+        "es-ES": "Ordenador",
+        "fr-FR": "Ordinateur",
+        "pt-PT": "Computador",
+        "it-IT": "Computer",
+        "pl-PL": "Komputer"
+      }
+    }
+  ]
+}

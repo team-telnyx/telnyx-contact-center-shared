@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import {
@@ -51,6 +53,7 @@ export default function NumberEditSheet({
   messagingProfiles = [],
   onUpdate,
 }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     messaging_profile_id: "",
@@ -176,7 +179,7 @@ export default function NumberEditSheet({
   const formatDate = (dateString) => {
     if (!dateString) return "—";
     try {
-      return new Date(dateString).toLocaleDateString("en-US", {
+      return new Date(dateString).toLocaleDateString(tUi.locale, {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -206,7 +209,7 @@ export default function NumberEditSheet({
               <IconPhone className="size-5 text-[#00C08B]" />
             </div>
             <div>
-              <SheetTitle className="text-xl">Edit Phone Number</SheetTitle>
+              <SheetTitle className="text-xl">{tUi("Edit Phone Number")}</SheetTitle>
               <SheetDescription className="text-sm font-mono">
                 {number.phone_number}
               </SheetDescription>
@@ -219,24 +222,18 @@ export default function NumberEditSheet({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <IconInfoCircle className="size-4 text-[#00C08B]" />
-                Details
-              </CardTitle>
+                <IconInfoCircle className="size-4 text-[#00C08B]" />{tUi("Details")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-0">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs text-muted-foreground">
-                    Phone Number
-                  </Label>
+                  <Label className="text-xs text-muted-foreground">{tUi("Phone Number")}</Label>
                   <div className="text-sm font-mono pt-1">
                     {number.phone_number}
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">
-                    Status
-                  </Label>
+                  <Label className="text-xs text-muted-foreground">{tUi("Status")}</Label>
                   <div className="pt-1">
                     <Badge
                       className={statusBadgeColor(number.status)}
@@ -249,7 +246,7 @@ export default function NumberEditSheet({
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Type</Label>
+                  <Label className="text-xs text-muted-foreground">{tUi("Type")}</Label>
                   <div className="pt-1">
                     <Badge
                       className={numberTypeBadgeColor(number.phone_number_type)}
@@ -262,9 +259,7 @@ export default function NumberEditSheet({
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">
-                    Purchased Date
-                  </Label>
+                  <Label className="text-xs text-muted-foreground">{tUi("Purchased Date")}</Label>
                   <div className="text-sm pt-1 flex items-center gap-1.5">
                     <IconCalendar className="size-3.5 text-muted-foreground" />
                     {formatDate(number.purchased_at || number.created_at)}
@@ -273,14 +268,12 @@ export default function NumberEditSheet({
               </div>
               {countryInfo && (
                 <div>
-                  <Label className="text-xs text-muted-foreground">
-                    Country
-                  </Label>
+                  <Label className="text-xs text-muted-foreground">{tUi("Country")}</Label>
                   <div className="text-sm pt-1 flex items-center gap-2">
                     <span className="text-base leading-none">
                       {countryInfo.flag}
                     </span>
-                    <span>{countryInfo.name}</span>
+                    <span>{tUi(countryInfo.name)}</span>
                   </div>
                 </div>
               )}
@@ -291,17 +284,13 @@ export default function NumberEditSheet({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <IconPlugConnected className="size-4 text-[#00C08B]" />
-                Assignment
-              </CardTitle>
+                <IconPlugConnected className="size-4 text-[#00C08B]" />{tUi("Assignment")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               {/* Voice Connection */}
               <div className="space-y-2">
                 <Label className="text-sm flex items-center gap-1.5">
-                  <IconPhone className="size-3.5 text-muted-foreground" />
-                  Voice Connection
-                </Label>
+                  <IconPhone className="size-3.5 text-muted-foreground" />{tUi("Voice Connection")}</Label>
                 <Popover
                   open={connectionPopoverOpen}
                   onOpenChange={setConnectionPopoverOpen}
@@ -317,7 +306,7 @@ export default function NumberEditSheet({
                           ? selectedConnection.connection_name ||
                             selectedConnection.friendly_name ||
                             selectedConnection.id
-                          : "Select connection..."}
+                          : tUi("Select connection...")}
                       </span>
                       <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -325,10 +314,10 @@ export default function NumberEditSheet({
                   <PopoverContent className="w-[400px] p-0">
                     <Command>
                       <CommandInput
-                        placeholder="Search connection..."
+                        placeholder={tUi("Search connection...")}
                         className="h-9"
                       />
-                      <CommandEmpty>No connection found.</CommandEmpty>
+                      <CommandEmpty>{tUi("No connection found.")}</CommandEmpty>
                       <CommandGroup className="max-h-[300px] overflow-y-auto">
                         <CommandItem
                           value="none"
@@ -343,9 +332,7 @@ export default function NumberEditSheet({
                                 ? "opacity-100"
                                 : "opacity-0"
                             }`}
-                          />
-                          None
-                        </CommandItem>
+                          />{tUi("None")}</CommandItem>
                         {connections.map((conn) => (
                           <CommandItem
                             key={conn.id}
@@ -392,9 +379,7 @@ export default function NumberEditSheet({
               {/* Messaging Profile */}
               <div className="space-y-2">
                 <Label className="text-sm flex items-center gap-1.5">
-                  <IconMessageCircle className="size-3.5 text-muted-foreground" />
-                  Messaging Profile
-                </Label>
+                  <IconMessageCircle className="size-3.5 text-muted-foreground" />{tUi("Messaging Profile")}</Label>
                 <Popover
                   open={messagingPopoverOpen}
                   onOpenChange={setMessagingPopoverOpen}
@@ -410,7 +395,7 @@ export default function NumberEditSheet({
                           ? selectedMessagingProfile.name ||
                             selectedMessagingProfile.friendly_name ||
                             selectedMessagingProfile.id
-                          : "Select profile..."}
+                          : tUi("Select profile...")}
                       </span>
                       <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -418,10 +403,10 @@ export default function NumberEditSheet({
                   <PopoverContent className="w-[400px] p-0">
                     <Command>
                       <CommandInput
-                        placeholder="Search profile..."
+                        placeholder={tUi("Search profile...")}
                         className="h-9"
                       />
-                      <CommandEmpty>No profile found.</CommandEmpty>
+                      <CommandEmpty>{tUi("No profile found.")}</CommandEmpty>
                       <CommandGroup className="max-h-[300px] overflow-y-auto">
                         <CommandItem
                           value="none"
@@ -439,9 +424,7 @@ export default function NumberEditSheet({
                                 ? "opacity-100"
                                 : "opacity-0"
                             }`}
-                          />
-                          None
-                        </CommandItem>
+                          />{tUi("None")}</CommandItem>
                         {messagingProfiles.map((profile) => (
                           <CommandItem
                             key={profile.id}
@@ -482,15 +465,11 @@ export default function NumberEditSheet({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <IconMicrophone className="size-4 text-[#00C08B]" />
-                Inbound Call Recording
-              </CardTitle>
+                <IconMicrophone className="size-4 text-[#00C08B]" />{tUi("Inbound Call Recording")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <div className="flex items-center justify-between">
-                <Label htmlFor="recording-enabled" className="text-sm">
-                  Enable Recording
-                </Label>
+                <Label htmlFor="recording-enabled" className="text-sm">{tUi("Enable Recording")}</Label>
                 <Switch
                   id="recording-enabled"
                   checked={formData.inbound_call_recording_enabled}
@@ -506,7 +485,7 @@ export default function NumberEditSheet({
               {formData.inbound_call_recording_enabled && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-sm">Format</Label>
+                    <Label className="text-sm">{tUi("Format")}</Label>
                     <div className="space-y-2">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -524,7 +503,7 @@ export default function NumberEditSheet({
                           }
                           className="size-4 text-[#00C08B] focus:ring-[#00C08B]"
                         />
-                        <span className="text-sm">MP3</span>
+                        <span className="text-sm">{tUi("MP3")}</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -542,13 +521,13 @@ export default function NumberEditSheet({
                           }
                           className="size-4 text-[#00C08B] focus:ring-[#00C08B]"
                         />
-                        <span className="text-sm">WAV</span>
+                        <span className="text-sm">{tUi("WAV")}</span>
                       </label>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm">Channels</Label>
+                    <Label className="text-sm">{tUi("Channels")}</Label>
                     <div className="space-y-2">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -567,7 +546,7 @@ export default function NumberEditSheet({
                           }
                           className="size-4 text-[#00C08B] focus:ring-[#00C08B]"
                         />
-                        <span className="text-sm">Single</span>
+                        <span className="text-sm">{tUi("Single")}</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -585,7 +564,7 @@ export default function NumberEditSheet({
                           }
                           className="size-4 text-[#00C08B] focus:ring-[#00C08B]"
                         />
-                        <span className="text-sm">Dual</span>
+                        <span className="text-sm">{tUi("Dual")}</span>
                       </label>
                     </div>
                   </div>
@@ -598,14 +577,12 @@ export default function NumberEditSheet({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <IconTag className="size-4 text-[#00C08B]" />
-                Tags
-              </CardTitle>
+                <IconTag className="size-4 text-[#00C08B]" />{tUi("Tags")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 pt-0">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Add tag..."
+                  placeholder={tUi("Add tag...")}
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyDown={(e) => {
@@ -615,9 +592,7 @@ export default function NumberEditSheet({
                     }
                   }}
                 />
-                <Button onClick={addTag} size="sm" variant="secondary">
-                  Add
-                </Button>
+                <Button onClick={addTag} size="sm" variant="secondary">{tUi("Add")}</Button>
               </div>
               {formData.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -639,9 +614,7 @@ export default function NumberEditSheet({
                 </div>
               )}
               {formData.tags.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No tags added yet
-                </p>
+                <p className="text-xs text-muted-foreground">{tUi("No tags added yet")}</p>
               )}
             </CardContent>
           </Card>
@@ -650,19 +623,13 @@ export default function NumberEditSheet({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <IconShieldLock className="size-4 text-[#00C08B]" />
-                Protection
-              </CardTitle>
+                <IconShieldLock className="size-4 text-[#00C08B]" />{tUi("Protection")}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label htmlFor="deletion-lock" className="text-sm">
-                    Prevent Deletion
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    When enabled, this number cannot be deleted
-                  </p>
+                  <Label htmlFor="deletion-lock" className="text-sm">{tUi("Prevent Deletion")}</Label>
+                  <p className="text-xs text-muted-foreground">{tUi("When enabled, this number cannot be deleted")}</p>
                 </div>
                 <Switch
                   id="deletion-lock"
@@ -684,11 +651,9 @@ export default function NumberEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={loading}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={handleSave} disabled={loading}>
-            {loading ? "Saving..." : "Save Changes"}
+            {loading ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

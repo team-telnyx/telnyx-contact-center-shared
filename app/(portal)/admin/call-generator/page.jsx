@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -156,6 +158,7 @@ function PanelHeader({ title, description }) {
 }
 
 function SettingCard({ icon: Icon, title, subtitle, children }) {
+  const tUi = useUiText();
   return (
     <div className="rounded-2xl border bg-background/85 p-4 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
@@ -164,7 +167,7 @@ function SettingCard({ icon: Icon, title, subtitle, children }) {
         </span>
         <div>
           <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          <p className="text-xs text-muted-foreground">{tUi(subtitle)}</p>
         </div>
       </div>
       {children}
@@ -246,6 +249,7 @@ function Empty({ title, description }) {
 }
 
 function MultiSelect({ label, values = [], options = [], onChange = () => {}, emptyLabel = "No options available", showBadges = true }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const normalized = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
   const selected = normalized.filter((o) => values.includes(o.value));
@@ -256,7 +260,7 @@ function MultiSelect({ label, values = [], options = [], onChange = () => {}, em
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" className="w-full justify-between">
-            <span className="truncate">{selected.length ? `${selected.length} selected` : "Select values"}</span>
+            <span className="truncate">{selected.length ? tUi("{value0} selected", { value0: selected.length }) : tUi("Select values")}</span>
             <IconChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
           </Button>
         </PopoverTrigger>
@@ -274,7 +278,7 @@ function MultiSelect({ label, values = [], options = [], onChange = () => {}, em
                   </button>
                 );
               }) : (
-                <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">{emptyLabel}</div>
+                <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">{tUi(emptyLabel)}</div>
               )}
             </div>
           </div>
@@ -285,7 +289,7 @@ function MultiSelect({ label, values = [], options = [], onChange = () => {}, em
           <div className="flex flex-wrap gap-1">
             {selected.map((o) => <Badge key={o.value} variant="outline" className="font-normal">{o.label}</Badge>)}
           </div>
-        ) : <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+        ) : <p className="text-xs text-muted-foreground">{tUi(emptyLabel)}</p>
       ) : null}
     </div>
   );
@@ -331,13 +335,14 @@ function useAudioPreview() {
 // Small square play/stop button — same affordance as the Speak Text node
 // and the queue position-in-queue message preview.
 function PreviewButton({ playing, busy, onClick, title: buttonTitle = "Play preview" }) {
+  const tUi = useUiText();
   return (
     <Button
       type="button"
       size="icon"
       variant="outline"
       className="h-9 w-9 shrink-0"
-      title={playing ? "Stop preview" : buttonTitle}
+      title={playing ? tUi("Stop preview") : buttonTitle}
       onClick={onClick}
       disabled={busy}
       data-testid="cg-preview-button"
@@ -353,6 +358,7 @@ function PreviewButton({ playing, busy, onClick, title: buttonTitle = "Play prev
 // preview Play button on the right that speaks `previewText` via
 // /api/tts/speech — same pattern as the call flow Speak Text node.
 function VoiceSelector({ value, onChange, previewText = "" }) {
+  const tUi = useUiText();
   const [providers, setProviders] = useState([]);
   const [voicesLoading, setVoicesLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -411,7 +417,7 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
           const firstVoice = nextProvider?.models?.[0]?.voices?.[0];
           onChange(firstVoice?.id || `${pid}.`);
         }}>
-          <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? "Loading…" : "Provider"} /></SelectTrigger>
+          <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? tUi("Loading…") : tUi("Provider")} /></SelectTrigger>
           <SelectContent>
             {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name || p.id}</SelectItem>)}
           </SelectContent>
@@ -421,7 +427,7 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
           const firstVoice = nextModel?.voices?.[0];
           onChange(firstVoice?.id || `${providerId}.${mid}.`);
         }}>
-          <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? "Loading…" : "Model"} /></SelectTrigger>
+          <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? tUi("Loading…") : tUi("Model")} /></SelectTrigger>
           <SelectContent>
             {models.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.id}</SelectItem>)}
           </SelectContent>
@@ -434,14 +440,14 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
               voice ID via the fallback item and stretch the trigger beyond
               the card. */}
           <Select value={voicesLoading ? "" : current} disabled={voicesLoading} onValueChange={onChange}>
-            <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? "Loading voices…" : "Voice"} /></SelectTrigger>
+            <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? tUi("Loading voices…") : tUi("Voice")} /></SelectTrigger>
             <SelectContent>
               {voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.name || v.id}</SelectItem>)}
               {!voicesLoading && !voices.length && current ? <SelectItem value={current}>{current}</SelectItem> : null}
             </SelectContent>
           </Select>
         </div>
-        <PreviewButton playing={playing} busy={busy} onClick={preview} title="Play text with selected voice" />
+        <PreviewButton playing={playing} busy={busy} onClick={preview} title={tUi("Play text with selected voice")} />
       </div>
     </div>
   );
@@ -450,6 +456,7 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
 // Media Library file picker with an inline square Play button streaming the
 // file through /api/admin/media-library/[mediaName]/stream.
 function MediaFileSelector({ value, onChange, media = [] }) {
+  const tUi = useUiText();
   const { playing, playUrl, stop } = useAudioPreview();
 
   const preview = () => {
@@ -465,13 +472,13 @@ function MediaFileSelector({ value, onChange, media = [] }) {
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">
         <Select value={value || ""} onValueChange={onChange}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Select from Media Library" /></SelectTrigger>
+          <SelectTrigger className="w-full"><SelectValue placeholder={tUi("Select from Media Library")} /></SelectTrigger>
           <SelectContent>
             {media.map((m) => <SelectItem key={m.media_name} value={m.media_name}>{m.media_name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
-      <PreviewButton playing={playing} onClick={preview} title="Play media file" />
+      <PreviewButton playing={playing} onClick={preview} title={tUi("Play media file")} />
     </div>
   );
 }
@@ -496,6 +503,7 @@ function flowWorkflowTestingInfo(flows, flowId) {
 }
 
 export default function AdminCallGeneratorPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const [active, setActive] = useState("dashboard");
   const [loading, setLoading] = useState(true);
@@ -771,36 +779,34 @@ export default function AdminCallGeneratorPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Call Generator"
+        title={tUi("Call Generator")}
         badges={(
           <Badge variant="outline" className={settings.enabled ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"}>
-            {settings.enabled ? "Enabled" : "Disabled"}
+            {settings.enabled ? tUi("Enabled") : tUi("Disabled")}
           </Badge>
         )}
         actions={(
           <>
             <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={loading}>
-              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
+              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />{tUi("Refresh")}</Button>
             {headerCreate ? (
               <Button size="sm" className={neutralActionClass} onClick={headerCreate.onClick} disabled={saving}>
                 <IconWand className="mr-2 h-4 w-4" />
-                {headerCreate.label}
+                {tUi(headerCreate.label)}
               </Button>
             ) : null}
           </>
         )}
       />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
-        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel="Call generator sections" />
+        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel={tUi("Call generator sections")} />
 
         {/* Main panel */}
         <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">
           <div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold">{activeMeta.label}</h2>
-              <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
+              <h2 className="text-sm font-semibold">{tUi(activeMeta.label)}</h2>
+              <p className="text-xs text-muted-foreground">{tUi(activeMeta.description)}</p>
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-5">
@@ -834,18 +840,14 @@ export default function AdminCallGeneratorPage() {
         {/* Right panel — Context Settings */}
         <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
           <PanelHeader
-            title={active === "dashboard" ? "Run monitor" : active === "logs" ? "Run history" : "Context settings"}
-            description={active === "dashboard" ? "Live execution overview" : active === "logs" ? "Completed run archive" : `${activeMeta.label} configuration`}
+            title={active === "dashboard" ? tUi("Run monitor") : active === "logs" ? tUi("Run history") : tUi("Context settings")}
+            description={active === "dashboard" ? tUi("Live execution overview") : active === "logs" ? tUi("Completed run archive") : tUi("{value0} configuration", { value0: activeMeta.label })}
           />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {active === "dashboard" ? (
-              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
-                Live calls and run progress update automatically every 2 seconds. Use Stop or Panic on a running run to halt traffic.
-              </div>
+              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">{tUi("Live calls and run progress update automatically every 2 seconds. Use Stop or Panic on a running run to halt traffic.")}</div>
             ) : active === "logs" ? (
-              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
-                Historical runs that have finished, stopped, failed or been abandoned. Expand any run to see its full report — the same stat tiles as the live report. Use the pager at the bottom to change page size (10/25/50).
-              </div>
+              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">{tUi("Historical runs that have finished, stopped, failed or been abandoned. Expand any run to see its full report — the same stat tiles as the live report. Use the pager at the bottom to change page size (10/25/50).")}</div>
             ) : active === "scenarios" ? (
               <ScenarioEditor
                 draft={scenarioDraft}
@@ -887,21 +889,19 @@ export default function AdminCallGeneratorPage() {
       <AlertDialog open={confirmDeleteScenario !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteScenario(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete scenario?</AlertDialogTitle>
+            <AlertDialogTitle>{tUi("Delete scenario?")}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDeleteScenario
-                ? <>This permanently deletes the scenario <span className="font-medium text-foreground">&quot;{confirmDeleteScenario.name}&quot;</span>. This action cannot be undone.</>
+                ? <>{tUi("This permanently deletes the scenario ")}<span className="font-medium text-foreground">&quot;{confirmDeleteScenario.name}&quot;</span>{tUi(". This action cannot be undone.")}</>
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { const item = confirmDeleteScenario; setConfirmDeleteScenario(null); performDeleteScenario(item); }}
-            >
-              Delete scenario
-            </AlertDialogAction>
+            >{tUi("Delete scenario")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -910,21 +910,19 @@ export default function AdminCallGeneratorPage() {
       <AlertDialog open={confirmDeleteAction !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteAction(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete action?</AlertDialogTitle>
+            <AlertDialogTitle>{tUi("Delete action?")}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDeleteAction
-                ? <>This permanently deletes the action <span className="font-medium text-foreground">&quot;{confirmDeleteAction.name}&quot;</span>. This action cannot be undone.</>
+                ? <>{tUi("This permanently deletes the action ")}<span className="font-medium text-foreground">&quot;{confirmDeleteAction.name}&quot;</span>{tUi(". This action cannot be undone.")}</>
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { const item = confirmDeleteAction; setConfirmDeleteAction(null); performDeleteAction(item); }}
-            >
-              Delete action
-            </AlertDialogAction>
+            >{tUi("Delete action")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -933,21 +931,22 @@ export default function AdminCallGeneratorPage() {
 }
 
 function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioId, flowName, startRun, deleteScenario, globalMaxCallDurationSecs }) {
+  const tUi = useUiText();
   if (!scenarios.length) {
-    return <Empty title="No scenarios yet" description="Use New scenario in the header, configure targets in Context Settings on the right, then save." />;
+    return <Empty title={tUi("No scenarios yet")} description={tUi("Use New scenario in the header, configure targets in Context Settings on the right, then save.")} />;
   }
   return (
     <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold">Scenario inventory</h3>
-          <p className="text-sm text-muted-foreground">Rows select configuration in the right Context Settings panel.</p>
+          <h3 className="text-lg font-semibold">{tUi("Scenario inventory")}</h3>
+          <p className="text-sm text-muted-foreground">{tUi("Rows select configuration in the right Context Settings panel.")}</p>
         </div>
-        <Badge variant="outline" className="bg-card">{scenarios.length} total</Badge>
+        <Badge variant="outline" className="bg-card">{scenarios.length}{tUi(" total")}</Badge>
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border">
         <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 96px" }}>
-          <span>Name</span><span>Targets</span><span>Calls</span><span>Numbers</span><span>Max duration</span><span className="text-right">Actions</span>
+          <span>{tUi("Name")}</span><span>{tUi("Targets")}</span><span>{tUi("Calls")}</span><span>{tUi("Numbers")}</span><span>{tUi("Max duration")}</span><span className="text-right">{tUi("Actions")}</span>
         </div>
         {scenarios.map((s) => {
           const targets = Array.isArray(s.config?.targets) ? s.config.targets : [];
@@ -971,14 +970,14 @@ function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioI
               <span className="tabular-nums">{numbersCount || "—"}</span>
               <span className="tabular-nums text-xs">
                 {scenarioMaxDuration
-                  ? `${scenarioMaxDuration}s`
-                  : <span className="text-muted-foreground">{globalMaxDuration}s <span className="opacity-70">(global)</span></span>}
+                  ? tUi("{value0}s", { value0: scenarioMaxDuration })
+                  : <span className="text-muted-foreground">{globalMaxDuration}{tUi("s ")}<span className="opacity-70">{tUi("(global)")}</span></span>}
               </span>
               <span className="flex items-center justify-end gap-1">
-                <Button size="icon" variant="ghost" className="h-7 w-7" title="Start run" onClick={(e) => { e.stopPropagation(); startRun(s); }}>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title={tUi("Start run")} onClick={(e) => { e.stopPropagation(); startRun(s); }}>
                   <IconPlayerPlay className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7" title="Delete" onClick={(e) => { e.stopPropagation(); deleteScenario(s); }}>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title={tUi("Delete")} onClick={(e) => { e.stopPropagation(); deleteScenario(s); }}>
                   <IconTrash className="h-3.5 w-3.5" />
                 </Button>
               </span>
@@ -991,6 +990,7 @@ function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioI
 }
 
 function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, actions, allowedFromNumbers, globalMaxCallDurationSecs }) {
+  const tUi = useUiText();
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const selectableActions = actions.filter((a) => a.id !== WORKFLOW_TESTING_ACTION_ID);
   const updateTarget = (index, patch) => setDraft((d) => ({
@@ -1031,18 +1031,18 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
 
   return (
     <>
-      <SettingCard icon={IconList} title={editing ? "Edit scenario" : "New scenario"} subtitle="Persisted scenario details">
+      <SettingCard icon={IconList} title={editing ? tUi("Edit scenario") : tUi("New scenario")} subtitle={tUi("Persisted scenario details")}>
         <div className="space-y-3">
           <div>
-            <Label>Name<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-            <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Scenario name" />
+            <Label>{tUi("Name")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+            <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder={tUi("Scenario name")} />
           </div>
           <div>
-            <Label>Description</Label>
-            <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
+            <Label>{tUi("Description")}</Label>
+            <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder={tUi("Optional description")} />
           </div>
           <div>
-            <Label>Max call duration (seconds)</Label>
+            <Label>{tUi("Max call duration (seconds)")}</Label>
             <Input
               type="number"
               min={10}
@@ -1050,12 +1050,9 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
               className="mt-1"
               value={draft.maxCallDurationSecs}
               onChange={(e) => update({ maxCallDurationSecs: e.target.value })}
-              placeholder={`Default: ${globalMaxCallDurationSecs}s (global setting)`}
+              placeholder={tUi("Default: {value0}s (global setting)", { value0: globalMaxCallDurationSecs })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Per-scenario override. Leave empty to use the global setting ({globalMaxCallDurationSecs}s).
-              Telnyx enforces the hangup on the dial via time_limit_secs.
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{tUi("Per-scenario override. Leave empty to use the global setting (")}{globalMaxCallDurationSecs}{tUi("s). Telnyx enforces the hangup on the dial via time_limit_secs.")}</p>
           </div>
         </div>
       </SettingCard>
@@ -1066,12 +1063,12 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
         const hasWorkflowAssist = workflowInfo.capable === true;
         const missingTranscription = hasWorkflowAssist && workflowInfo.transcription_active !== true;
         return (
-        <SettingCard key={index} icon={IconPhoneCall} title={`Target ${index + 1}`} subtitle="Flow destination and dialing volume">
+        <SettingCard key={index} icon={IconPhoneCall} title={tUi("Target {value0}", { value0: index + 1 })} subtitle={tUi("Flow destination and dialing volume")}>
           <div className="space-y-3">
             <div>
-              <Label>Target Flow<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Label>{tUi("Target Flow")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
               <Select value={target.flow_id || ""} onValueChange={(v) => selectTargetFlow(index, v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select call flow" /></SelectTrigger>
+                <SelectTrigger className="mt-1"><SelectValue placeholder={tUi("Select call flow")} /></SelectTrigger>
                 <SelectContent>
                   {flows.map((f) => <SelectItem key={f.id} value={f.id}>{f.name || f.id}</SelectItem>)}
                 </SelectContent>
@@ -1080,56 +1077,56 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
                 <div className={`mt-3 rounded-xl border p-3 ${canEnableWorkflowTesting ? "bg-emerald-500/5 border-emerald-500/25" : "bg-amber-500/5 border-amber-500/25"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <Label className="text-sm font-medium">Test Workflow</Label>
+                      <Label className="text-sm font-medium">{tUi("Test Workflow")}</Label>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {canEnableWorkflowTesting
-                          ? `LLM caller simulator will test workflow: ${workflowInfo.workflow_name || workflowInfo.workflow_id}.`
+                          ? tUi("LLM caller simulator will test workflow: {value0}.", { value0: workflowInfo.workflow_name || workflowInfo.workflow_id })
                           : missingTranscription
-                            ? "This flow has Agent Assist workflow configured, but call transcription is not active on Answer or Streaming Start. Enable transcription before testing the workflow."
-                            : "This flow is not ready for workflow testing."}
+                            ? tUi("This flow has Agent Assist workflow configured, but call transcription is not active on Answer or Streaming Start. Enable transcription before testing the workflow.")
+                            : tUi("This flow is not ready for workflow testing.")}
                       </p>
                     </div>
                     <Switch checked={target.workflow_testing === true} disabled={!canEnableWorkflowTesting} onCheckedChange={(checked) => toggleWorkflowTesting(index, checked)} />
                   </div>
                   {target.workflow_testing === true ? (
-                    <Badge variant="outline" className="mt-3 bg-card">Workflow: {workflowInfo.workflow_name || target.workflow_name || target.workflow_id}</Badge>
+                    <Badge variant="outline" className="mt-3 bg-card">{tUi("Workflow: ")}{workflowInfo.workflow_name || target.workflow_name || target.workflow_id}</Badge>
                   ) : null}
                 </div>
               ) : target.flow_id ? (
-                <p className="mt-2 text-xs text-muted-foreground">Test Workflow appears when the selected flow has an active Agent Assist node connected to a workflow.</p>
+                <p className="mt-2 text-xs text-muted-foreground">{tUi("Test Workflow appears when the selected flow has an active Agent Assist node connected to a workflow.")}</p>
               ) : null}
             </div>
             <div>
-              <Label>Number of calls<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Label>{tUi("Number of calls")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
               <Input className="mt-1" type="number" min={1} max={1000} value={target.total_calls} onChange={(e) => updateTarget(index, { total_calls: Number(e.target.value) || 1 })} />
             </div>
             <div>
-              <Label>From numbers<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Label>{tUi("From numbers")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
               <div className="mt-1">
                 <MultiSelect
                   values={target.from_numbers}
                   options={fromNumberOptions}
-                  emptyLabel="No numbers enabled. Pick From Numbers in Settings first."
+                  emptyLabel={tUi("No numbers enabled. Pick From Numbers in Settings first.")}
                   onChange={(values) => updateTarget(index, { from_numbers: values })}
                 />
               </div>
-              {target.from_numbers.length > 1 ? <p className="mt-1 text-xs text-muted-foreground">Calls rotate through selected numbers round-robin.</p> : null}
+              {target.from_numbers.length > 1 ? <p className="mt-1 text-xs text-muted-foreground">{tUi("Calls rotate through selected numbers round-robin.")}</p> : null}
             </div>
             {target.workflow_testing !== true ? (
               <>
                 <div>
-                  <Label>Action sequence<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                  <Label>{tUi("Action sequence")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
                   <Select value={target.action_id || ""} onValueChange={(v) => updateTarget(index, { action_id: v })}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select action sequence" /></SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder={tUi("Select action sequence")} /></SelectTrigger>
                     <SelectContent>
                       {selectableActions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {!selectableActions.length ? <p className="mt-1 text-xs text-muted-foreground">No manual action sequences defined yet — create one in the Actions section first, or enable Test Workflow above.</p> : null}
+                  {!selectableActions.length ? <p className="mt-1 text-xs text-muted-foreground">{tUi("No manual action sequences defined yet — create one in the Actions section first, or enable Test Workflow above.")}</p> : null}
                 </div>
                 <div>
-                  <Label>Run actions on</Label>
-                  <div className="mt-1 grid gap-1 rounded-xl border bg-muted/25 p-1" role="radiogroup" aria-label="Run actions on">
+                  <Label>{tUi("Run actions on")}</Label>
+                  <div className="mt-1 grid gap-1 rounded-xl border bg-muted/25 p-1" role="radiogroup" aria-label={tUi("Run actions on")}>
                     {[
                       { value: "call_answer", label: "Call Answer", description: "Start immediately when the flow answers — best for IVR and flow tests." },
                       { value: "agent_bridge", label: "Agent Bridge", description: "Wait until the caller is bridged to an agent — best when audio or DTMF must be heard by the live agent." },
@@ -1144,8 +1141,8 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
                           onClick={() => updateTarget(index, { action_trigger: option.value })}
                           className={`rounded-lg border px-3 py-2 text-left transition ${activeTrigger ? "border-sky-500/50 bg-sky-500/10 shadow-sm" : "border-transparent hover:bg-background/70"}`}
                         >
-                          <span className="block text-sm font-medium">{option.label}</span>
-                          <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
+                          <span className="block text-sm font-medium">{tUi(option.label)}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">{tUi(option.description)}</span>
                         </button>
                       );
                     })}
@@ -1155,9 +1152,7 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
             ) : null}
             {draft.targets.length > 1 ? (
               <Button size="sm" variant="outline" className="text-rose-600" onClick={() => removeTarget(index)}>
-                <IconTrash className="mr-2 h-3.5 w-3.5" />
-                Remove target
-              </Button>
+                <IconTrash className="mr-2 h-3.5 w-3.5" />{tUi("Remove target")}</Button>
             ) : null}
           </div>
         </SettingCard>
@@ -1165,27 +1160,25 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
       })}
 
       <Button size="sm" variant="outline" className="w-full" onClick={addTarget}>
-        <IconPlus className="mr-2 h-4 w-4" />
-        Add target
-      </Button>
+        <IconPlus className="mr-2 h-4 w-4" />{tUi("Add target")}</Button>
 
-      <SettingCard icon={IconShieldCheck} title="Assertions" subtitle="Optional pass/fail checks evaluated in the run report">
+      <SettingCard icon={IconShieldCheck} title={tUi("Assertions")} subtitle={tUi("Optional pass/fail checks evaluated in the run report")}>
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">Routed to queue</Label>
-            <Input className="mt-1" value={draft.assert_queue} onChange={(e) => update({ assert_queue: e.target.value })} placeholder="queue name" />
+            <Label className="text-xs">{tUi("Routed to queue")}</Label>
+            <Input className="mt-1" value={draft.assert_queue} onChange={(e) => update({ assert_queue: e.target.value })} placeholder={tUi("queue name")} />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <Label className="text-xs">Answer ≤ (s)</Label>
+              <Label className="text-xs">{tUi("Answer ≤ (s)")}</Label>
               <Input className="mt-1" type="number" min={1} max={600} value={draft.assert_answer_within} onChange={(e) => update({ assert_answer_within: e.target.value })} placeholder="20" />
             </div>
             <div>
-              <Label className="text-xs">Abandon ≤ (%)</Label>
+              <Label className="text-xs">{tUi("Abandon ≤ (%)")}</Label>
               <Input className="mt-1" type="number" min={0} max={100} value={draft.assert_max_abandon} onChange={(e) => update({ assert_max_abandon: e.target.value })} placeholder="5" />
             </div>
             <div>
-              <Label className="text-xs">Answer ≥ (%)</Label>
+              <Label className="text-xs">{tUi("Answer ≥ (%)")}</Label>
               <Input className="mt-1" type="number" min={0} max={100} value={draft.assert_min_answer} onChange={(e) => update({ assert_min_answer: e.target.value })} placeholder="80" />
             </div>
           </div>
@@ -1194,29 +1187,28 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
 
       <Button className="w-full" onClick={save} disabled={!valid || saving} data-testid="cg-save-scenario">
         {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
-        {editing ? "Save scenario" : "Create scenario"}
+        {editing ? tUi("Save scenario") : tUi("Create scenario")}
       </Button>
       {!valid ? (
-        <p className="text-xs text-amber-600 dark:text-amber-300">
-          Required: scenario name and at least one target with a Target Flow, at least 1 call, at least one From number, and either an Action sequence or enabled Test Workflow with active call-flow transcription.
-        </p>
+        <p className="text-xs text-amber-600 dark:text-amber-300">{tUi("Required: scenario name and at least one target with a Target Flow, at least 1 call, at least one From number, and either an Action sequence or enabled Test Workflow with active call-flow transcription.")}</p>
       ) : null}
     </>
   );
 }
 
 function ActionsListView({ actions, selectedActionId, setSelectedActionId, deleteAction }) {
+  const tUi = useUiText();
   if (!actions.length) {
-    return <Empty title="No actions yet" description="Use New action in the header to define a sequence: play media, speak text, or send DTMF." />;
+    return <Empty title={tUi("No actions yet")} description={tUi("Use New action in the header to define a sequence: play media, speak text, or send DTMF.")} />;
   }
   return (
     <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold">Action sequences</h3>
-          <p className="text-sm text-muted-foreground">Sequences for generated calls. Attach them to scenario targets and choose whether they run on answer or agent bridge.</p>
+          <h3 className="text-lg font-semibold">{tUi("Action sequences")}</h3>
+          <p className="text-sm text-muted-foreground">{tUi("Sequences for generated calls. Attach them to scenario targets and choose whether they run on answer or agent bridge.")}</p>
         </div>
-        <Badge variant="outline" className="bg-card">{actions.length} total</Badge>
+        <Badge variant="outline" className="bg-card">{actions.length}{tUi(" total")}</Badge>
       </div>
       <div className="mt-5 space-y-2">
         {actions.map((a) => {
@@ -1231,14 +1223,14 @@ function ActionsListView({ actions, selectedActionId, setSelectedActionId, delet
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{a.name}</span>
-                  <Badge variant="outline" className="bg-card text-xs">{a.id === WORKFLOW_TESTING_ACTION_ID ? "Protected" : `${steps.length} steps`}</Badge>
+                  <Badge variant="outline" className="bg-card text-xs">{a.id === WORKFLOW_TESTING_ACTION_ID ? tUi("Protected") : tUi("{value0} steps", { value0: steps.length })}</Badge>
                 </div>
                 <div className="mt-1 truncate text-xs text-muted-foreground">
-                  {steps.map((s, i) => `${i + 1}. ${s.type === "play_media" ? `Play ${s.media_name}` : s.type === "speak" ? `Speak "${String(s.text || "").slice(0, 24)}…"` : s.type === "workflow_testing" ? `Workflow Testing voice ${s.voice || "AWS.Polly.Joanna"}` : s.type === "delay" ? `Delay ${(Number(s.delay_ms) || 0) / 1000}s` : `DTMF ${s.digits}`}`).join("  ·  ") || "No steps"}
+                  {steps.map((s, i) => `${i + 1}. ${s.type === "play_media" ? `Play ${s.media_name}` : s.type === "speak" ? `Speak "${String(s.text || "").slice(0, 24)}…"` : s.type === "workflow_testing" ? `Workflow Testing voice ${s.voice || "AWS.Polly.Joanna"}` : s.type === "delay" ? `Delay ${(Number(s.delay_ms) || 0) / 1000}s` : `DTMF ${s.digits}`}`).join("  ·  ") || tUi("No steps")}
                 </div>
               </div>
               {a.id === WORKFLOW_TESTING_ACTION_ID ? null : (
-                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Delete" onClick={(e) => { e.stopPropagation(); deleteAction(a); }}>
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title={tUi("Delete")} onClick={(e) => { e.stopPropagation(); deleteAction(a); }}>
                   <IconTrash className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -1251,6 +1243,7 @@ function ActionsListView({ actions, selectedActionId, setSelectedActionId, delet
 }
 
 function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save, media }) {
+  const tUi = useUiText();
   const protectedWorkflowTesting = actionId === WORKFLOW_TESTING_ACTION_ID;
   const [generatingSample, setGeneratingSample] = useState(false);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
@@ -1294,24 +1287,22 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
   return (
     <>
       {protectedWorkflowTesting ? (
-        <SettingCard icon={IconWand} title="Workflow Testing" subtitle="Protected system action">
+        <SettingCard icon={IconWand} title={tUi("Workflow Testing")} subtitle={tUi("Protected system action")}>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span>Managed by the application</span>
-            <InfoHint label="About this protected action">
-              Only the caller simulation TTS voice and preview sample text can be changed here. This protected action is auto-seeded on startup. It uses finalized agent-side transcription and the selected Agent Assist workflow to generate the next customer utterance.
-            </InfoHint>
+            <span>{tUi("Managed by the application")}</span>
+            <InfoHint label={tUi("About this protected action")}>{tUi("Only the caller simulation TTS voice and preview sample text can be changed here. This protected action is auto-seeded on startup. It uses finalized agent-side transcription and the selected Agent Assist workflow to generate the next customer utterance.")}</InfoHint>
           </div>
         </SettingCard>
       ) : (
-        <SettingCard icon={IconListDetails} title={editing ? "Edit action" : "New action"} subtitle="Sequential steps executed after answer">
+        <SettingCard icon={IconListDetails} title={editing ? tUi("Edit action") : tUi("New action")} subtitle={tUi("Sequential steps executed after answer")}>
           <div className="space-y-3">
             <div>
-              <Label>Name<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-              <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Action name" />
+              <Label>{tUi("Name")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder={tUi("Action name")} />
             </div>
             <div>
-              <Label>Description</Label>
-              <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
+              <Label>{tUi("Description")}</Label>
+              <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder={tUi("Optional description")} />
             </div>
           </div>
         </SettingCard>
@@ -1321,13 +1312,13 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
         <SettingCard
           key={index}
           icon={step.type === "play_media" ? IconMusic : step.type === "speak" ? IconSpeakerphone : step.type === "workflow_testing" ? IconWand : step.type === "delay" ? IconClockHour4 : IconActivity}
-          title={`Step ${index + 1} — ${step.type === "play_media" ? "Play media" : step.type === "speak" ? "Speak text" : step.type === "workflow_testing" ? "Workflow Testing" : step.type === "delay" ? "Delay" : "Send DTMF"}`}
-          subtitle={step.type === "workflow_testing" ? "Dynamic LLM caller replies for workflow testing" : step.type === "delay" ? "Pause between surrounding steps" : "Executed in order"}
+          title={tUi("Step {value0} — {value1}", { value0: index + 1, value1: step.type === "play_media" ? tUi("Play media") : step.type === "speak" ? tUi("Speak text") : step.type === "workflow_testing" ? tUi("Workflow Testing") : step.type === "delay" ? tUi("Delay") : tUi("Send DTMF") })}
+          subtitle={tUi(step.type === "workflow_testing" ? "Dynamic LLM caller replies for workflow testing" : step.type === "delay" ? "Pause between surrounding steps" : "Executed in order")}
         >
           <div className="space-y-3">
             {step.type === "play_media" ? (
               <div>
-                <Label>Media file<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                <Label>{tUi("Media file")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
                 <div className="mt-1">
                   <MediaFileSelector value={step.media_name || ""} onChange={(v) => updateStep(index, { media_name: v })} media={media} />
                 </div>
@@ -1335,11 +1326,11 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
             ) : step.type === "speak" ? (
               <>
                 <div>
-                  <Label>Text to speak<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-                  <Textarea className="mt-1" rows={3} value={step.text || ""} onChange={(e) => updateStep(index, { text: e.target.value })} placeholder="This is a test call" />
+                  <Label>{tUi("Text to speak")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                  <Textarea className="mt-1" rows={3} value={step.text || ""} onChange={(e) => updateStep(index, { text: e.target.value })} placeholder={tUi("This is a test call")} />
                 </div>
                 <div>
-                  <Label>Voice</Label>
+                  <Label>{tUi("Voice")}</Label>
                   <div className="mt-1">
                     <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} previewText={step.text || ""} />
                   </div>
@@ -1348,9 +1339,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
             ) : step.type === "workflow_testing" ? (
               <div className="space-y-3">
                 <div>
-                  <LabelWithHint hint="Used by the Play preview button to test the selected voice. Click Generate sample to get an LLM one-liner (≤20 words) in the chosen persona, with the matching Expressive Mode tags embedded.">
-                    Preview sample text
-                  </LabelWithHint>
+                  <LabelWithHint hint={tUi("Used by the Play preview button to test the selected voice. Click Generate sample to get an LLM one-liner (≤20 words) in the chosen persona, with the matching Expressive Mode tags embedded.")}>{tUi("Preview sample text")}</LabelWithHint>
                   <Textarea className="mt-1" rows={3} value={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} onChange={(e) => updateStep(index, { sample_text: e.target.value })} placeholder={DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
                   <div className="mt-2 flex justify-end">
                     <Button
@@ -1359,28 +1348,24 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                       className="h-7"
                       disabled={generatingSample}
                       onClick={() => generateSample(index, step)}
-                      title="Generate a short sample line for the selected persona, voice and Expressive Mode"
+                      title={tUi("Generate a short sample line for the selected persona, voice and Expressive Mode")}
                     >
-                      {generatingSample ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconWand className="mr-1 h-3.5 w-3.5" />}
-                      Generate sample
-                    </Button>
+                      {generatingSample ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconWand className="mr-1 h-3.5 w-3.5" />}{tUi("Generate sample")}</Button>
                   </div>
                 </div>
                 <div>
-                  <Label>Caller simulation voice</Label>
+                  <Label>{tUi("Caller simulation voice")}</Label>
                   <div className="mt-1">
                     <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice, ...(voiceSupportsExpressive(voice) ? {} : { expressive: false }) })} previewText={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
                   </div>
                 </div>
                 <div>
-                  <LabelWithHint hint="Shapes how the simulated caller behaves (tone, cooperation) while still providing the information the workflow needs.">
-                    Caller persona
-                  </LabelWithHint>
+                  <LabelWithHint hint={tUi("Shapes how the simulated caller behaves (tone, cooperation) while still providing the information the workflow needs.")}>{tUi("Caller persona")}</LabelWithHint>
                   <div className="mt-1">
                     <Select value={step.persona || "neutral"} onValueChange={(v) => updateStep(index, { persona: v })}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Neutral / cooperative" /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder={tUi("Neutral / cooperative")} /></SelectTrigger>
                       <SelectContent>
-                        {WORKFLOW_TESTING_PERSONAS.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                        {WORKFLOW_TESTING_PERSONAS.map((p) => <SelectItem key={p.id} value={p.id}>{tUi(p.label)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1388,17 +1373,13 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                 {voiceSupportsExpressive(step.voice) ? (
                   <div className="flex items-center justify-between rounded-md border p-3">
                     <div className="pr-3">
-                      <LabelWithHint hint="xAI Grok voice: adds inline speech tags ([pause], [laugh], <whisper>…) so the caller's delivery matches the persona. When off, the LLM still role-plays the persona but the voice stays neutral (no tags).">
-                        Expressive Mode
-                      </LabelWithHint>
+                      <LabelWithHint hint={tUi("xAI Grok voice: adds inline speech tags ([pause], [laugh], <whisper>…) so the caller's delivery matches the persona. When off, the LLM still role-plays the persona but the voice stays neutral (no tags).")}>{tUi("Expressive Mode")}</LabelWithHint>
                     </div>
                     <Switch checked={step.expressive === true} onCheckedChange={(checked) => updateStep(index, { expressive: checked === true })} />
                   </div>
                 ) : null}
                 <div>
-                  <LabelWithHint hint="Pause (in seconds) after the agent finishes speaking before the generator starts the caller's reply. Use it when the simulated caller jumps in too fast. 0 = reply immediately.">
-                    Reply delay (seconds)
-                  </LabelWithHint>
+                  <LabelWithHint hint={tUi("Pause (in seconds) after the agent finishes speaking before the generator starts the caller's reply. Use it when the simulated caller jumps in too fast. 0 = reply immediately.")}>{tUi("Reply delay (seconds)")}</LabelWithHint>
                   <Input
                     type="number"
                     min={0}
@@ -1413,9 +1394,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                   />
                 </div>
                 <div>
-                  <LabelWithHint hint="How many distinct pieces of information the caller may give in one sentence. 1 = one slot per turn (default). Higher values test parallel multi-slot filling (e.g. name + facility + date of birth at once).">
-                    Max answers per turn
-                  </LabelWithHint>
+                  <LabelWithHint hint={tUi("How many distinct pieces of information the caller may give in one sentence. 1 = one slot per turn (default). Higher values test parallel multi-slot filling (e.g. name + facility + date of birth at once).")}>{tUi("Max answers per turn")}</LabelWithHint>
                   <Input
                     type="number"
                     min={1}
@@ -1431,9 +1410,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                 {Number(step.max_slots_per_turn) > 1 ? (
                   <div className="flex items-center justify-between rounded-md border p-3">
                     <div className="pr-3">
-                      <LabelWithHint hint="When on, each turn reveals a random number of pieces (1 to the max above), never exceeding the max.">
-                        Randomize answers per turn
-                      </LabelWithHint>
+                      <LabelWithHint hint={tUi("When on, each turn reveals a random number of pieces (1 to the max above), never exceeding the max.")}>{tUi("Randomize answers per turn")}</LabelWithHint>
                     </div>
                     <Switch checked={step.randomize_slots === true} onCheckedChange={(checked) => updateStep(index, { randomize_slots: checked === true })} />
                   </div>
@@ -1441,7 +1418,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
               </div>
             ) : step.type === "delay" ? (
               <div>
-                <Label>Delay (seconds)<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                <Label>{tUi("Delay (seconds)")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
                 <Input
                   type="number"
                   min={0.1}
@@ -1454,23 +1431,23 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                     updateStep(index, { delay_ms: Math.round(secs * 1000) });
                   }}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Pauses the sequence before the next step (Media, Speak, DTMF…). 0.1–30s.</p>
+                <p className="mt-1 text-xs text-muted-foreground">{tUi("Pauses the sequence before the next step (Media, Speak, DTMF…). 0.1–30s.")}</p>
               </div>
             ) : (
               <div>
-                <Label>DTMF digits<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-                <Input className="mt-1 font-mono" value={step.digits || ""} onChange={(e) => updateStep(index, { digits: e.target.value })} placeholder="3467 or 1w2w3#" />
-                <p className="mt-1 text-xs text-muted-foreground">Allowed: 0-9 A-D # * and w (0.5s pause).</p>
+                <Label>{tUi("DTMF digits")}<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                <Input className="mt-1 font-mono" value={step.digits || ""} onChange={(e) => updateStep(index, { digits: e.target.value })} placeholder={tUi("3467 or 1w2w3#")} />
+                <p className="mt-1 text-xs text-muted-foreground">{tUi("Allowed: 0-9 A-D # * and w (0.5s pause).")}</p>
               </div>
             )}
             {protectedWorkflowTesting ? null : <div className="flex items-center gap-1">
-              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move up" disabled={index === 0 || step.type === "workflow_testing"} onClick={() => moveStep(index, -1)}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title={tUi("Move up")} disabled={index === 0 || step.type === "workflow_testing"} onClick={() => moveStep(index, -1)}>
                 <IconArrowUp className="h-3.5 w-3.5" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move down" disabled={index === draft.steps.length - 1 || step.type === "workflow_testing"} onClick={() => moveStep(index, 1)}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title={tUi("Move down")} disabled={index === draft.steps.length - 1 || step.type === "workflow_testing"} onClick={() => moveStep(index, 1)}>
                 <IconArrowDown className="h-3.5 w-3.5" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" title="Remove step" disabled={step.type === "workflow_testing"} onClick={() => removeStep(index)}>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" title={tUi("Remove step")} disabled={step.type === "workflow_testing"} onClick={() => removeStep(index)}>
                 <IconTrash className="h-3.5 w-3.5" />
               </Button>
             </div>}
@@ -1480,66 +1457,60 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
 
       {protectedWorkflowTesting ? null : <div className="grid grid-cols-2 gap-2">
         <Button size="sm" variant="outline" onClick={() => addStep("play_media")}>
-          <IconMusic className="mr-1 h-3.5 w-3.5" />
-          Media
-        </Button>
+          <IconMusic className="mr-1 h-3.5 w-3.5" />{tUi("Media")}</Button>
         <Button size="sm" variant="outline" onClick={() => addStep("speak")}>
-          <IconSpeakerphone className="mr-1 h-3.5 w-3.5" />
-          Speak
-        </Button>
+          <IconSpeakerphone className="mr-1 h-3.5 w-3.5" />{tUi("Speak")}</Button>
         <Button size="sm" variant="outline" onClick={() => addStep("send_dtmf")}>
-          <IconActivity className="mr-1 h-3.5 w-3.5" />
-          DTMF
-        </Button>
+          <IconActivity className="mr-1 h-3.5 w-3.5" />{tUi("DTMF")}</Button>
         <Button size="sm" variant="outline" onClick={() => addStep("delay")}>
-          <IconClockHour4 className="mr-1 h-3.5 w-3.5" />
-          Delay
-        </Button>
+          <IconClockHour4 className="mr-1 h-3.5 w-3.5" />{tUi("Delay")}</Button>
       </div>}
 
       <Button className="w-full" onClick={save} disabled={!valid || saving} data-testid="cg-save-action">
         {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
-        {editing ? "Save action" : "Create action"}
+        {editing ? tUi("Save action") : tUi("Create action")}
       </Button>
-      {!valid ? <p className="text-xs text-amber-600 dark:text-amber-300">Required: action name and at least one step.</p> : null}
+      {!valid ? <p className="text-xs text-amber-600 dark:text-amber-300">{tUi("Required: action name and at least one step.")}</p> : null}
     </>
   );
 }
 
 function SettingsSummaryView({ settings }) {
+  const tUi = useUiText();
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
-        <h3 className="text-lg font-semibold">Call generator settings</h3>
-        <p className="text-sm text-muted-foreground">Global generator defaults. Edit and persist these from Context Settings on the right.</p>
+        <h3 className="text-lg font-semibold">{tUi("Call generator settings")}</h3>
+        <p className="text-sm text-muted-foreground">{tUi("Global generator defaults. Edit and persist these from Context Settings on the right.")}</p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <MiniStat label="Status" value={settings.enabled ? "Enabled" : "Disabled"} icon={IconActivity} tone={settings.enabled ? "emerald" : "rose"} />
-        <MiniStat label="Max concurrent calls" value={settings.max_concurrent_calls ?? 10} icon={IconPhoneCall} tone="blue" />
-        <MiniStat label="Max CPS" value={settings.max_cps ?? 2} icon={IconChartBar} tone="violet" />
-        <MiniStat label="Dial timeout (sec)" value={settings.dial_timeout_secs ?? 30} icon={IconClockHour4} tone="amber" />
-        <MiniStat label="Max call duration (sec)" value={settings.max_call_duration_secs ?? 120} icon={IconClockHour4} tone="rose" />
-        <MiniStat label="From numbers" value={(settings.from_numbers || []).length} icon={IconPhoneCall} tone="emerald" />
+        <MiniStat label={tUi("Status")} value={settings.enabled ? tUi("Enabled") : tUi("Disabled")} icon={IconActivity} tone={settings.enabled ? "emerald" : "rose"} />
+        <MiniStat label={tUi("Max concurrent calls")} value={settings.max_concurrent_calls ?? 10} icon={IconPhoneCall} tone="blue" />
+        <MiniStat label={tUi("Max CPS")} value={settings.max_cps ?? 2} icon={IconChartBar} tone="violet" />
+        <MiniStat label={tUi("Dial timeout (sec)")} value={settings.dial_timeout_secs ?? 30} icon={IconClockHour4} tone="amber" />
+        <MiniStat label={tUi("Max call duration (sec)")} value={settings.max_call_duration_secs ?? 120} icon={IconClockHour4} tone="rose" />
+        <MiniStat label={tUi("From numbers")} value={(settings.from_numbers || []).length} icon={IconPhoneCall} tone="emerald" />
       </div>
-      <SettingCard icon={IconPhoneCall} title="From Numbers" subtitle="Telnyx inventory numbers enabled as generator caller IDs">
+      <SettingCard icon={IconPhoneCall} title={tUi("From Numbers")} subtitle={tUi("Telnyx inventory numbers enabled as generator caller IDs")}>
         {(settings.from_numbers || []).length ? (
           <div className="flex flex-wrap gap-2">
             {settings.from_numbers.map((n) => <Badge key={n} className={telnyxNumberBadgeClass}>{n}</Badge>)}
           </div>
-        ) : <p className="text-sm text-muted-foreground">No numbers enabled yet — select them in Context Settings.</p>}
+        ) : <p className="text-sm text-muted-foreground">{tUi("No numbers enabled yet — select them in Context Settings.")}</p>}
       </SettingCard>
-      <SettingCard icon={IconShieldCheck} title="PSTN whitelist" subtitle="Generated PSTN destinations allowed by the safety rail">
+      <SettingCard icon={IconShieldCheck} title={tUi("PSTN whitelist")} subtitle={tUi("Generated PSTN destinations allowed by the safety rail")}>
         {(settings.pstn_whitelist || []).length ? (
           <div className="flex flex-wrap gap-2">
             {settings.pstn_whitelist.map((n) => <Badge key={n} className={telnyxNumberBadgeClass}>{n}</Badge>)}
           </div>
-        ) : <p className="text-sm text-muted-foreground">Empty — generated PSTN calls are fully blocked.</p>}
+        ) : <p className="text-sm text-muted-foreground">{tUi("Empty — generated PSTN calls are fully blocked.")}</p>}
       </SettingCard>
     </div>
   );
 }
 
 function SettingsEditor({ draft, setDraft, saving, save, inventoryNumbers }) {
+  const tUi = useUiText();
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const fromNumberOptions = inventoryNumbers.map((item) => ({
     value: item.phone_number,
@@ -1550,49 +1521,49 @@ function SettingsEditor({ draft, setDraft, saving, save, inventoryNumbers }) {
 
   return (
     <>
-      <SettingCard icon={IconSettings} title="Generator" subtitle="Master switch and pacing caps">
+      <SettingCard icon={IconSettings} title={tUi("Generator")} subtitle={tUi("Master switch and pacing caps")}>
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 p-3">
             <div>
-              <div className="text-sm font-medium">Enable Call Generator</div>
-              <div className="text-xs text-muted-foreground">Master switch — no run can originate calls while disabled.</div>
+              <div className="text-sm font-medium">{tUi("Enable Call Generator")}</div>
+              <div className="text-xs text-muted-foreground">{tUi("Master switch — no run can originate calls while disabled.")}</div>
             </div>
             <Switch checked={draft.enabled === true} onCheckedChange={(checked) => update({ enabled: checked === true })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Max concurrent</Label>
+              <Label>{tUi("Max concurrent")}</Label>
               <Input className="mt-1" type="number" min={1} max={100} value={draft.max_concurrent_calls} onChange={(e) => update({ max_concurrent_calls: Number(e.target.value) || 1 })} />
             </div>
             <div>
-              <Label>Max CPS</Label>
+              <Label>{tUi("Max CPS")}</Label>
               <Input className="mt-1" type="number" min={1} max={20} value={draft.max_cps} onChange={(e) => update({ max_cps: Number(e.target.value) || 1 })} />
             </div>
             <div>
-              <Label>Dial timeout (sec)</Label>
+              <Label>{tUi("Dial timeout (sec)")}</Label>
               <Input className="mt-1" type="number" min={10} max={120} value={draft.dial_timeout_secs} onChange={(e) => update({ dial_timeout_secs: Number(e.target.value) || 30 })} />
             </div>
             <div>
-              <Label>Max duration (sec)</Label>
+              <Label>{tUi("Max duration (sec)")}</Label>
               <Input className="mt-1" type="number" min={10} max={3600} value={draft.max_call_duration_secs} onChange={(e) => update({ max_call_duration_secs: Number(e.target.value) || 120 })} />
             </div>
           </div>
         </div>
       </SettingCard>
 
-      <SettingCard icon={IconPhoneCall} title="From Numbers" subtitle="Telnyx inventory numbers usable as caller IDs">
+      <SettingCard icon={IconPhoneCall} title={tUi("From Numbers")} subtitle={tUi("Telnyx inventory numbers usable as caller IDs")}>
         <MultiSelect
           values={Array.isArray(draft.from_numbers) ? draft.from_numbers : []}
           options={fromNumberOptions}
-          emptyLabel="No active numbers found in the Telnyx inventory."
+          emptyLabel={tUi("No active numbers found in the Telnyx inventory.")}
           onChange={(values) => update({ from_numbers: values })}
           showBadges={false}
         />
-        <p className="mt-2 text-xs text-muted-foreground">Selected numbers are shown on the Settings card in the main panel.</p>
+        <p className="mt-2 text-xs text-muted-foreground">{tUi("Selected numbers are shown on the Settings card in the main panel.")}</p>
       </SettingCard>
 
-      <SettingCard icon={IconShieldCheck} title="PSTN Safety" subtitle="Whitelist for generated PSTN destinations">
-        <Label>One E.164 number per line</Label>
+      <SettingCard icon={IconShieldCheck} title={tUi("PSTN Safety")} subtitle={tUi("Whitelist for generated PSTN destinations")}>
+        <Label>{tUi("One E.164 number per line")}</Label>
         <Textarea
           className="mt-2 font-mono text-xs"
           rows={4}
@@ -1603,9 +1574,7 @@ function SettingsEditor({ draft, setDraft, saving, save, inventoryNumbers }) {
       </SettingCard>
 
       <Button className="w-full" onClick={save} disabled={saving} data-testid="cg-save-settings">
-        {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
-        Save settings
-      </Button>
+        {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}{tUi("Save settings")}</Button>
     </>
   );
 }

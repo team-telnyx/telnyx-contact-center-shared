@@ -1,7 +1,9 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo } from "react";
-import { DeviceHandoff } from "./DeviceHandoff";
+import { HandoffEntryCard } from "./handoff/HandoffEntry";
 import { AgentAssist } from "./AgentAssist";
 import { AgentAssistWorkflow } from "./AgentAssistWorkflow";
 import { AgentFormsView } from "./AgentFormsView";
@@ -27,11 +29,12 @@ export function InteractionDetail({ interaction }) {
     && ['active','connected','answered','held'].includes(interaction.state || interaction.status)
     && !interaction.completed_at && !interaction.abandoned_at;
   return <div className="flex h-full min-h-0 flex-col">
-    {activeVoice && <div className="shrink-0 p-3"><DeviceHandoff key={interaction.id} interactionId={interaction.id}/></div>}
+    {activeVoice && <div className="shrink-0 p-3"><HandoffEntryCard key={interaction.id} callInteractionId={interaction.id}/></div>}
     <div className="min-h-0 flex-1"><InteractionAssistDetail interaction={interaction}/></div>
   </div>;
 }
 function InteractionAssistDetail({ interaction }) {
+  const tUi = useUiText();
   const assistConfig = useMemo(() => interaction
     ? interaction.metadata?.agent_assist_config || {
       enabled: true, assist_type: "kb_articles", kb_auto_suggest: true, kb_max_suggestions: 3,
@@ -40,7 +43,7 @@ function InteractionAssistDetail({ interaction }) {
   if (!interaction) {
     return (
       <div className="flex items-center justify-center flex-1 text-muted-foreground">
-        <p>Select an interaction to view details</p>
+        <p>{tUi("Select an interaction to view details")}</p>
       </div>
     );
   }
@@ -51,7 +54,7 @@ function InteractionAssistDetail({ interaction }) {
       <div className="flex items-center justify-center flex-1 text-muted-foreground">
         <div className="text-center">
           <Sparkles className="h-10 w-10 mx-auto mb-2 opacity-30" />
-          <p>Agent Assist is disabled for this call</p>
+          <p>{tUi("Agent Assist is disabled for this call")}</p>
         </div>
       </div>
     );

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -31,6 +33,7 @@ import WebPageEditSheet from "@/components/web-pages/EditSheet";
 import { Can } from "@/components/auth-provider";
 
 export default function AdminWebPagesPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editPageId, setEditPageId] = useState(null);
@@ -89,17 +92,15 @@ export default function AdminWebPagesPage() {
       onClick={() => load()}
       disabled={loading}
     >
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
     <Can permission="web_pages:create"><Button onClick={handleNewPage}>
-      <IconPlus className="size-4 mr-2" />
-      New Web Page
-    </Button></Can>
+      <IconPlus className="size-4 mr-2" />{tUi("New Web Page")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Web Pages" badges={<Badge variant="secondary">{items.length} pages</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Web Pages")} badges={<Badge variant="secondary">{items.length}{tUi(" pages")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="web-pages">
         <div className="space-y-4">
       <Card className="w-full">
@@ -117,14 +118,12 @@ export default function AdminWebPagesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">URL</TableHead>
-                    <TableHead className="px-[10px]">Description</TableHead>
-                    <TableHead className="px-[10px]">Status</TableHead>
-                    <TableHead className="px-[10px]">Order</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("URL")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Description")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Status")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Order")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -152,7 +151,7 @@ export default function AdminWebPagesPage() {
                             <Badge
                               variant={page.is_active ? "default" : "secondary"}
                             >
-                              {page.is_active ? "Active" : "Inactive"}
+                              {page.is_active ? tUi("Active") : tUi("Inactive")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
@@ -167,7 +166,7 @@ export default function AdminWebPagesPage() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit web page"
+                                title={tUi("Edit web page")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -176,31 +175,26 @@ export default function AdminWebPagesPage() {
                                   <Can permission="web_pages:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete web page"
+                                    title={tUi("Delete web page")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete web page?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the web page "
-                                      {page.name}".
+                                    <DialogTitle>{tUi("Delete web page?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the web page \"")}{page.name}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(page.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -216,9 +210,7 @@ export default function AdminWebPagesPage() {
                       <TableCell
                         colSpan={6}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No web pages configured
-                      </TableCell>
+                      >{tUi("No web pages configured")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>

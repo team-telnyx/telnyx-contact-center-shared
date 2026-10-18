@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import SlaSettings from "@/components/contact-center/SlaSettings";
 import ChannelUtilization, { useChannelUtilization } from "@/components/admin/ChannelUtilization";
 
@@ -126,6 +128,7 @@ function buildVoiceString(provider, model, voiceName) {
 
 // Star rating component for call priority (1-5 stars)
 function StarRating({ value, onChange, maxStars = 5 }) {
+  const tUi = useUiText();
   return (
     <div className="flex gap-1">
       {Array.from({ length: maxStars }, (_, i) => {
@@ -137,7 +140,7 @@ function StarRating({ value, onChange, maxStars = 5 }) {
             type="button"
             onClick={() => onChange(starValue)}
             className="focus:outline-none"
-            aria-label={`Set rating to ${starValue} stars`}
+            aria-label={tUi("Set rating to {value0} stars", { value0: starValue })}
           >
             {filled ? (
               <IconStarFilled className="w-5 h-5 text-yellow-400" />
@@ -153,6 +156,7 @@ function StarRating({ value, onChange, maxStars = 5 }) {
 
 // Star rating component for queue priority (1-5 stars, minimum 1 star)
 function QueuePriorityStarRating({ value = 1, onChange, maxStars = 5 }) {
+  const tUi = useUiText();
   const currentValue = value && value >= 1 ? value : 1; // Ensure minimum is 1
   return (
     <div className="flex gap-1 items-center">
@@ -168,7 +172,7 @@ function QueuePriorityStarRating({ value = 1, onChange, maxStars = 5 }) {
               onChange(starValue);
             }}
             className="focus:outline-none"
-            aria-label={`Set priority to ${starValue} stars`}
+            aria-label={tUi("Set priority to {value0} stars", { value0: starValue })}
           >
             {filled ? (
               <IconStarFilled className="w-4 h-4 text-yellow-400" />
@@ -196,6 +200,7 @@ export default function EditSheet({
   queueId,
   onSaveComplete,
 }) {
+  const tUi = useUiText();
   const { openHelp, registerHelpPortalContainer } = useHelp();
   const [name, setName] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
@@ -813,7 +818,7 @@ export default function EditSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         ref={registerHelpPortalContainer}
-        side="right"
+        side="end"
         data-context-help-host="true"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
@@ -821,7 +826,7 @@ export default function EditSheet({
           <div className="flex items-center justify-between gap-3">
             <SheetTitle className="flex items-center gap-2 text-xl font-bold text-telnyx-green">
               <IconEdit className="size-5" />
-              {queueId ? "Edit Queue" : "Create Queue"}
+              {queueId ? tUi("Edit Queue") : tUi("Create Queue")}
             </SheetTitle>
             <Button
               type="button"
@@ -829,13 +834,11 @@ export default function EditSheet({
               size="sm"
               aria-controls="context-help-sheet"
               aria-keyshortcuts="F1"
-              title="Help for the focused field (F1)"
+              title={tUi("Help for the focused field (F1)")}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => openHelp()}
             >
-              <IconHelpCircle aria-hidden="true" />
-              Help
-            </Button>
+              <IconHelpCircle aria-hidden="true" />{tUi("Help")}</Button>
           </div>
         </SheetHeader>
 
@@ -854,21 +857,17 @@ export default function EditSheet({
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Settings */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Queue Settings
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Queue Settings")}</h3>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Enabled</Label>
+                        <Label className="text-sm font-medium">{tUi("Enabled")}</Label>
                         <Switch
                           checked={enabled}
                           onCheckedChange={(v) => setEnabled(Boolean(v))}
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="active" className="text-sm font-medium">
-                          Active
-                        </Label>
+                        <Label htmlFor="active" className="text-sm font-medium">{tUi("Active")}</Label>
                         <Switch
                           checked={active}
                           onCheckedChange={(v) => setActive(Boolean(v))}
@@ -881,35 +880,33 @@ export default function EditSheet({
 
                   {/* Basic Information */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Basic Information
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Basic Information")}</h3>
                     <div className="space-y-3">
                       <div
                         className="grid gap-2"
                         data-help-id="admin.queues.form.name"
                       >
-                        <Label className="text-sm">Name *</Label>
+                        <Label className="text-sm">{tUi("Name *")}</Label>
                         <Input
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          placeholder="queue-name"
+                          placeholder={tUi("queue-name")}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Display Name</Label>
+                        <Label className="text-sm">{tUi("Display Name")}</Label>
                         <Input
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
-                          placeholder="Queue Display Name"
+                          placeholder={tUi("Queue Display Name")}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Description</Label>
+                        <Label className="text-sm">{tUi("Description")}</Label>
                         <Input
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
-                          placeholder="Queue description"
+                          placeholder={tUi("Queue description")}
                         />
                       </div>
                     </div>
@@ -920,20 +917,18 @@ export default function EditSheet({
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Routing Settings */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Routing Settings
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Routing Settings")}</h3>
                     <div className="space-y-3">
                       <div
                         className="grid gap-2"
                         data-help-id="admin.queues.form.routing-strategy"
                       >
-                        <Label className="text-sm">Routing Strategy</Label>
+                        <Label className="text-sm">{tUi("Routing Strategy")}</Label>
                         <Combobox
                           value={routingStrategy}
                           onChange={(v) => setRoutingStrategy(v)}
                           options={ROUTING_STRATEGIES}
-                          placeholder="Select routing strategy"
+                          placeholder={tUi("Select routing strategy")}
                           searchable={false}
                         />
                       </div>
@@ -942,9 +937,7 @@ export default function EditSheet({
                           className="grid gap-2"
                           data-help-id="admin.queues.form.max-wait-time"
                         >
-                          <Label className="text-sm">
-                            Max Wait Time (secs)
-                          </Label>
+                          <Label className="text-sm">{tUi("Max Wait Time (secs)")}</Label>
                           <Input
                             type="number"
                             value={maxWaitTimeSecs}
@@ -957,7 +950,7 @@ export default function EditSheet({
                           className="grid gap-2"
                           data-help-id="admin.queues.form.max-size"
                         >
-                          <Label className="text-sm">Max Size</Label>
+                          <Label className="text-sm">{tUi("Max Size")}</Label>
                           <Input
                             type="number"
                             value={maxSize}
@@ -966,7 +959,7 @@ export default function EditSheet({
                         </div>
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Timeout (secs)</Label>
+                        <Label className="text-sm">{tUi("Timeout (secs)")}</Label>
                         <Input
                           type="number"
                           value={timeoutSecs}
@@ -979,24 +972,17 @@ export default function EditSheet({
                         className="grid gap-2"
                         data-help-id="admin.queues.form.agent-answer-timeout"
                       >
-                        <Label className="text-sm">
-                          Agent Answer Timeout (secs)
-                        </Label>
+                        <Label className="text-sm">{tUi("Agent Answer Timeout (secs)")}</Label>
                         <Input
                           type="number"
                           min="1"
                           value={agentAnswerTimeoutSecs}
-                          placeholder="Inherit global setting"
+                          placeholder={tUi("Inherit global setting")}
                           onChange={(e) => setAgentAnswerTimeoutSecs(
                             e.target.value === "" ? "" : Number(e.target.value),
                           )}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Leave blank to inherit the global Agent lifecycle
-                          setting. If not answered in time, the call will be
-                          re-enqueued and agent status will be set to &quot;Agent
-                          Not Answering&quot;.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Leave blank to inherit the global Agent lifecycle setting. If not answered in time, the call will be re-enqueued and agent status will be set to \"Agent Not Answering\".")}</p>
                       </div>
                     </div>
                   </div>
@@ -1005,15 +991,13 @@ export default function EditSheet({
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Priority Settings */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Queue Priority Settings
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Queue Priority Settings")}</h3>
                     <div className="space-y-3">
                       <div
                         className="grid gap-2"
                         data-help-id="admin.queues.form.queue-priority"
                       >
-                        <Label className="text-sm">Queue Priority</Label>
+                        <Label className="text-sm">{tUi("Queue Priority")}</Label>
                         <div className="flex items-center gap-3">
                           <StarRating
                             value={
@@ -1025,17 +1009,14 @@ export default function EditSheet({
                             maxStars={5}
                           />
                           <span className="text-sm text-muted-foreground">
-                            {queuePriority === 1 && "Low"}
-                            {queuePriority === 2 && "Below Normal"}
-                            {queuePriority === 3 && "Normal"}
-                            {queuePriority === 4 && "Above Normal"}
-                            {queuePriority === 5 && "High"}
+                            {queuePriority === 1 && tUi("Low")}
+                            {queuePriority === 2 && tUi("Below Normal")}
+                            {queuePriority === 3 && tUi("Normal")}
+                            {queuePriority === 4 && tUi("Above Normal")}
+                            {queuePriority === 5 && tUi("High")}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Queue-level priority for routing (★=Low, ★★★=Normal,
-                          ★★★★★=High). Higher priority queues are routed first.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Queue-level priority for routing (★=Low, ★★★=Normal, ★★★★★=High). Higher priority queues are routed first.")}</p>
                       </div>
                     </div>
                   </div>
@@ -1044,12 +1025,10 @@ export default function EditSheet({
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Call Priority Settings */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Call Priority Settings
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Call Priority Settings")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Default Call Priority</Label>
+                        <Label className="text-sm">{tUi("Default Call Priority")}</Label>
                         <div className="flex items-center gap-3">
                           <StarRating
                             value={defaultCallPriority}
@@ -1057,17 +1036,14 @@ export default function EditSheet({
                             maxStars={5}
                           />
                           <span className="text-sm text-muted-foreground">
-                            {defaultCallPriority === 1 && "Low"}
-                            {defaultCallPriority === 2 && "Below Normal"}
-                            {defaultCallPriority === 3 && "Normal"}
-                            {defaultCallPriority === 4 && "Above Normal"}
-                            {defaultCallPriority === 5 && "High"}
+                            {defaultCallPriority === 1 && tUi("Low")}
+                            {defaultCallPriority === 2 && tUi("Below Normal")}
+                            {defaultCallPriority === 3 && tUi("Normal")}
+                            {defaultCallPriority === 4 && tUi("Above Normal")}
+                            {defaultCallPriority === 5 && tUi("High")}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Default priority for calls entering this queue (★=Low,
-                          ★★★=Normal, ★★★★★=High)
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Default priority for calls entering this queue (★=Low, ★★★=Normal, ★★★★★=High)")}</p>
                       </div>
                     </div>
                   </div>
@@ -1078,19 +1054,12 @@ export default function EditSheet({
                   {routingStrategy === "Skill-based" && (
                     <>
                       <div>
-                        <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                          Skill Relaxation Settings
-                        </h3>
+                        <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Skill Relaxation Settings")}</h3>
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <div>
-                              <Label className="text-sm font-medium">
-                                Enable Skill Relaxation
-                              </Label>
-                              <p className="text-xs text-muted-foreground">
-                                Gradually reduce skill requirements for calls
-                                waiting beyond threshold
-                              </p>
+                              <Label className="text-sm font-medium">{tUi("Enable Skill Relaxation")}</Label>
+                              <p className="text-xs text-muted-foreground">{tUi("Gradually reduce skill requirements for calls waiting beyond threshold")}</p>
                             </div>
                             <Switch
                               checked={skillRelaxationEnabled}
@@ -1100,9 +1069,7 @@ export default function EditSheet({
                           {skillRelaxationEnabled && (
                             <>
                               <div className="grid gap-2">
-                                <Label className="text-sm">
-                                  Relaxation After (seconds)
-                                </Label>
+                                <Label className="text-sm">{tUi("Relaxation After (seconds)")}</Label>
                                 <Input
                                   type="number"
                                   min="0"
@@ -1113,15 +1080,10 @@ export default function EditSheet({
                                     )
                                   }
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                  Wait time threshold before skill relaxation
-                                  begins
-                                </p>
+                                <p className="text-xs text-muted-foreground">{tUi("Wait time threshold before skill relaxation begins")}</p>
                               </div>
                               <div className="grid gap-2">
-                                <Label className="text-sm">
-                                  Relaxation Strategy
-                                </Label>
+                                <Label className="text-sm">{tUi("Relaxation Strategy")}</Label>
                                 <Select
                                   value={skillRelaxationStrategy}
                                   onValueChange={setSkillRelaxationStrategy}
@@ -1130,27 +1092,15 @@ export default function EditSheet({
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="progressive">
-                                      Progressive
-                                    </SelectItem>
-                                    <SelectItem value="fallback">
-                                      Fallback
-                                    </SelectItem>
+                                    <SelectItem value="progressive">{tUi("Progressive")}</SelectItem>
+                                    <SelectItem value="fallback">{tUi("Fallback")}</SelectItem>
                                   </SelectContent>
                                 </Select>
                                 <p className="text-xs text-muted-foreground">
                                   {skillRelaxationStrategy === "fallback" ? (
-                                    <>
-                                      Fallback: Drop skills above 3 stars to 3
-                                      stars (intermediate level) immediately
-                                      after threshold. Skills at or below 3
-                                      stars remain unchanged.
-                                    </>
+                                    <>{tUi("Fallback: Drop skills above 3 stars to 3 stars (intermediate level) immediately after threshold. Skills at or below 3 stars remain unchanged.")}</>
                                   ) : (
-                                    <>
-                                      Progressive: Reduce by 1 star every 30
-                                      seconds (minimum 1 star)
-                                    </>
+                                    <>{tUi("Progressive: Reduce by 1 star every 30 seconds (minimum 1 star)")}</>
                                   )}
                                 </p>
                               </div>
@@ -1162,39 +1112,37 @@ export default function EditSheet({
                     </>
                   )}
 
-                  {queueId ? <SlaSettings queueId={queueId} /> : <p className="text-xs text-muted-foreground">Save the queue to configure channel SLA policies.</p>}
+                  {queueId ? <SlaSettings queueId={queueId} /> : <p className="text-xs text-muted-foreground">{tUi("Save the queue to configure channel SLA policies.")}</p>}
 
                   </CardContent></Card>
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Overflow Settings */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Overflow Settings
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Overflow Settings")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Overflow Queue</Label>
+                        <Label className="text-sm">{tUi("Overflow Queue")}</Label>
                         <Combobox
                           value={overflowQueueId}
                           onChange={(v) => setOverflowQueueId(v)}
                           options={[
-                            { value: "", label: "None" },
+                            { value: "", label: tUi("None") },
                             ...availableQueues.map((q) => ({
                               value: q.id,
                               label: q.display_name || q.name,
                             })),
                           ]}
-                          placeholder="Select overflow queue"
+                          placeholder={tUi("Select overflow queue")}
                           searchable={false}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Overflow Action</Label>
+                        <Label className="text-sm">{tUi("Overflow Action")}</Label>
                         <Combobox
                           value={overflowAction}
                           onChange={(v) => setOverflowAction(v)}
                           options={OVERFLOW_ACTIONS}
-                          placeholder="Select overflow action"
+                          placeholder={tUi("Select overflow action")}
                           searchable={false}
                         />
                       </div>
@@ -1206,9 +1154,7 @@ export default function EditSheet({
                   {/* Wrapup Codes */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground">
-                        Wrapup Codes
-                      </h3>
+                      <h3 className="text-sm font-semibold text-muted-foreground">{tUi("Wrapup Codes")}</h3>
                       {availableWrapupCodes.length > 0 && (
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
                           <Checkbox
@@ -1220,16 +1166,12 @@ export default function EditSheet({
                             }
                             onCheckedChange={toggleAllWrapupCodes}
                           />
-                          <span className="text-xs text-muted-foreground">
-                            Select All
-                          </span>
+                          <span className="text-xs text-muted-foreground">{tUi("Select All")}</span>
                         </label>
                       )}
                     </div>
                     {availableWrapupCodes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No wrapup codes available.
-                      </p>
+                      <p className="text-sm text-muted-foreground">{tUi("No wrapup codes available.")}</p>
                     ) : (
                       <div className="rounded border overflow-hidden">
                         <ScrollArea className="h-[300px]">
@@ -1269,13 +1211,11 @@ export default function EditSheet({
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Audio Settings */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Queue Audio
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Queue Audio")}</h3>
                     <div className="space-y-3">
                       {/* Media File Selection */}
                       <div className="grid gap-2">
-                        <Label className="text-sm">Queue Hold Music</Label>
+                        <Label className="text-sm">{tUi("Queue Hold Music")}</Label>
                         <div className="flex items-center gap-2">
                           <Select
                             key={`media-select-${mediaFiles.length}`}
@@ -1291,10 +1231,10 @@ export default function EditSheet({
                             }}
                           >
                             <SelectTrigger className="flex-1">
-                              <SelectValue placeholder="Select media file (optional)" />
+                              <SelectValue placeholder={tUi("Select media file (optional)")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="__none__">None</SelectItem>
+                              <SelectItem value="__none__">{tUi("None")}</SelectItem>
                               {mediaFiles.length > 0 ? (
                                 mediaFiles
                                   .filter((file) => file && file.media_name)
@@ -1312,8 +1252,8 @@ export default function EditSheet({
                               ) : (
                                 <SelectItem value="__loading__" disabled>
                                   {loading
-                                    ? "Loading media files..."
-                                    : "No media files available"}
+                                    ? tUi("Loading media files...")
+                                    : tUi("No media files available")}
                                 </SelectItem>
                               )}
                             </SelectContent>
@@ -1371,10 +1311,7 @@ export default function EditSheet({
                             </Button>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Audio file to play on loop while call is waiting in
-                          queue
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Audio file to play on loop while call is waiting in queue")}</p>
                       </div>
 
                       {/* Position Announcements */}
@@ -1382,12 +1319,8 @@ export default function EditSheet({
                         <>
                           <div className="flex items-center justify-between">
                             <div>
-                              <Label className="text-sm font-medium">
-                                Queue Position Announcements
-                              </Label>
-                              <p className="text-xs text-muted-foreground">
-                                Announce caller&apos;s position in queue using TTS
-                              </p>
+                              <Label className="text-sm font-medium">{tUi("Queue Position Announcements")}</Label>
+                              <p className="text-xs text-muted-foreground">{tUi("Announce caller's position in queue using TTS")}</p>
                             </div>
                             <Switch
                               checked={queueAudioEnablePosition}
@@ -1399,9 +1332,7 @@ export default function EditSheet({
                             <>
                               {/* Position Announcement Interval */}
                               <div className="grid gap-2">
-                                <Label className="text-sm">
-                                  Announcement Interval
-                                </Label>
+                                <Label className="text-sm">{tUi("Announcement Interval")}</Label>
                                 <Select
                                   value={String(queueAudioPositionInterval)}
                                   onValueChange={(value) =>
@@ -1417,26 +1348,21 @@ export default function EditSheet({
                                         key={interval.value}
                                         value={String(interval.value)}
                                       >
-                                        {interval.label}
+                                        {tUi(interval.label)}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                                <p className="text-xs text-muted-foreground">
-                                  How often to announce position in queue
-                                </p>
+                                <p className="text-xs text-muted-foreground">{tUi("How often to announce position in queue")}</p>
                               </div>
 
                               {/* TTS Voice */}
                               <div className="space-y-3 pt-2 border-t">
-                                <Label className="text-sm font-medium">
-                                  TTS Voice
-                                </Label>
+                                <Label className="text-sm font-medium">{tUi("TTS Voice")}</Label>
 
                                 {/* Provider */}
                                 <div className="grid gap-2">
-                                  <Label className="text-sm">
-                                    Provider{" "}
+                                  <Label className="text-sm">{tUi("Provider")}{" "}
                                     <span className="text-red-500">*</span>
                                   </Label>
                                   <Select
@@ -1453,8 +1379,8 @@ export default function EditSheet({
                                       <SelectValue
                                         placeholder={
                                           ttsLoading
-                                            ? "Loading providers..."
-                                            : "Select provider"
+                                            ? tUi("Loading providers...")
+                                            : tUi("Select provider")
                                         }
                                       />
                                     </SelectTrigger>
@@ -1512,8 +1438,7 @@ export default function EditSheet({
                                   if (models.length > 0) {
                                     return (
                                       <div className="grid gap-2">
-                                        <Label className="text-sm">
-                                          Model{" "}
+                                        <Label className="text-sm">{tUi("Model")}{" "}
                                           <span className="text-red-500">
                                             *
                                           </span>
@@ -1536,15 +1461,13 @@ export default function EditSheet({
                                           disabled={ttsLoading}
                                         >
                                           <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select model" />
+                                            <SelectValue placeholder={tUi("Select model")} />
                                           </SelectTrigger>
                                           <SelectContent>
                                             {selectedProvider?.models?.some(
                                               (m) => !m?.id && !m,
                                             ) && (
-                                              <SelectItem value="__default__">
-                                                Default
-                                              </SelectItem>
+                                              <SelectItem value="__default__">{tUi("Default")}</SelectItem>
                                             )}
                                             {models.map((m) => (
                                               <SelectItem
@@ -1565,7 +1488,7 @@ export default function EditSheet({
                                 {/* Language Filter */}
                                 {ttsLanguageOptions.length > 0 && (
                                   <div className="grid gap-2">
-                                    <Label className="text-sm">Language Filter</Label>
+                                    <Label className="text-sm">{tUi("Language Filter")}</Label>
                                     <Popover
                                       open={ttsLanguagePopoverOpen}
                                       onOpenChange={setTtsLanguagePopoverOpen}
@@ -1586,7 +1509,7 @@ export default function EditSheet({
                                             ) : (
                                               <>
                                                 <IconWorld className="h-4 w-4" />
-                                                <span>All languages</span>
+                                                <span>{tUi("All languages")}</span>
                                               </>
                                             )}
                                           </div>
@@ -1595,13 +1518,13 @@ export default function EditSheet({
                                       <PopoverContent className="w-[300px] p-0" align="start">
                                         <Command>
                                           <CommandInput
-                                            placeholder="Search languages..."
+                                            placeholder={tUi("Search languages...")}
                                             value={ttsLanguageSearch}
                                             onValueChange={setTtsLanguageSearch}
                                             className="h-9"
                                           />
                                           <CommandList>
-                                            <CommandEmpty>No language found.</CommandEmpty>
+                                            <CommandEmpty>{tUi("No language found.")}</CommandEmpty>
                                             <CommandGroup>
                                               <CommandItem
                                                 value="__any__"
@@ -1617,7 +1540,7 @@ export default function EditSheet({
                                                   }`}
                                                 />
                                                 <IconWorld className="size-4 mr-2" />
-                                                <span>Any</span>
+                                                <span>{tUi("Any")}</span>
                                               </CommandItem>
                                               {filteredTtsLanguageOptions.map((opt) => (
                                                 <CommandItem
@@ -1645,18 +1568,14 @@ export default function EditSheet({
                                         </Command>
                                       </PopoverContent>
                                     </Popover>
-                                    <p className="text-xs text-muted-foreground">
-                                      Filter voices by language ({ttsLanguageOptions.length} language
-                                      {ttsLanguageOptions.length !== 1 ? "s" : ""} available)
-                                    </p>
+                                    <p className="text-xs text-muted-foreground">{tUi("Filter voices by language (available languages: {value0})", {value0: ttsLanguageOptions.length})}</p>
                                   </div>
                                 )}
 
                                 {/* Voice */}
                                 {filteredTtsVoices.length > 0 && (
                                   <div className="grid gap-2">
-                                    <Label className="text-sm">
-                                      Voice{" "}
+                                    <Label className="text-sm">{tUi("Voice")}{" "}
                                       <span className="text-red-500">*</span>
                                     </Label>
                                     <div className="flex items-center gap-2">
@@ -1680,7 +1599,7 @@ export default function EditSheet({
                                                 ? `${v.name || v.id} (${v.language})`
                                                 : v.name || v.id,
                                             }))}
-                                          placeholder="Select voice"
+                                          placeholder={tUi("Select voice")}
                                           searchable={true}
                                         />
                                       </div>
@@ -1832,10 +1751,7 @@ export default function EditSheet({
                                       )}
                                     </div>
                                     {ttsLanguageFilter && (
-                                      <p className="text-xs text-muted-foreground">
-                                        Showing {filteredTtsVoices.length} voice
-                                        {filteredTtsVoices.length !== 1 ? "s" : ""} for{" "}
-                                        {selectedTtsLanguageInfo?.label || ttsLanguageFilter}
+                                      <p className="text-xs text-muted-foreground">{tUi("Voices for {value0}: {value1}", {value0: selectedTtsLanguageInfo?.label || ttsLanguageFilter, value1: filteredTtsVoices.length})}
                                       </p>
                                     )}
                                   </div>
@@ -1853,9 +1769,7 @@ export default function EditSheet({
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* User Assignments */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      User Assignments
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("User Assignments")}</h3>
                     {loading ? (
                       <div className="space-y-2">
                         <Skeleton className="h-9 w-full" />
@@ -1864,20 +1778,14 @@ export default function EditSheet({
                     ) : (
                       <div className="space-y-2">
                         {availableUsers.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            No users available.
-                          </p>
+                          <p className="text-sm text-muted-foreground">{tUi("No users available.")}</p>
                         ) : (
                           <div className="rounded border overflow-hidden">
                             <div className="p-3 max-h-[300px] overflow-y-auto">
                               <div className="grid grid-cols-2 gap-4">
                                 {/* Header row */}
-                                <div className="font-semibold text-sm text-muted-foreground pb-2 border-b">
-                                  User
-                                </div>
-                                <div className="font-semibold text-sm text-muted-foreground pb-2 border-b">
-                                  Priority
-                                </div>
+                                <div className="font-semibold text-sm text-muted-foreground pb-2 border-b">{tUi("User")}</div>
+                                <div className="font-semibold text-sm text-muted-foreground pb-2 border-b">{tUi("Priority")}</div>
 
                                 {/* User rows */}
                                 {availableUsers.map((user) => {
@@ -1963,20 +1871,14 @@ export default function EditSheet({
                                             maxStars={5}
                                           />
                                         ) : (
-                                          <span className="text-xs text-muted-foreground">
-                                            Not assigned
-                                          </span>
+                                          <span className="text-xs text-muted-foreground">{tUi("Not assigned")}</span>
                                         )}
                                       </div>
                                     </React.Fragment>
                                   );
                                 })}
                               </div>
-                              <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
-                                Click stars to set agent priority within this
-                                queue (1-5 stars). Higher priority agents are
-                                routed calls first. Minimum is 1 star.
-                              </p>
+                              <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">{tUi("Click stars to set agent priority within this queue (1-5 stars). Higher priority agents are routed calls first. Minimum is 1 star.")}</p>
                             </div>
                           </div>
                         )}
@@ -1995,11 +1897,9 @@ export default function EditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={onSave} disabled={saving || loading || !utilization.ready}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

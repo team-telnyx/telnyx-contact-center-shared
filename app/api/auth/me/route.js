@@ -6,6 +6,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { readEffectiveAgentStatus } from "@/lib/acd/agent-state.mjs";
 import { authErrorPayload, authUserPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
 import { loadUserAccess } from "@/lib/authz/effective.mjs";
+import { normalizeUiLocale } from "@/lib/i18n/locales.mjs";
 
 async function describeAccessSafely(user) {
   try {
@@ -70,6 +71,7 @@ export async function GET(request) {
         nick: user.nick || "",
         email,
         language,
+        uiLocale: normalizeUiLocale(user.ui_locale),
         theme,
         roles,
         permissions: access?.permissions || [],

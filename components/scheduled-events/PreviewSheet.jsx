@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useEffect, useState } from "react";
 import {
@@ -23,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  * @param {function} props.onOpenConversation - Optional callback to open AI conversation sheet
  */
 export default function PreviewSheet({ open, onOpenChange, event, onOpenConversation }) {
+  const tUi = useUiText();
   const [fullEvent, setFullEvent] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
@@ -90,7 +94,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
     if (!dateStr) return "—";
     try {
       const date = new Date(dateStr);
-      return date.toLocaleString("en-US", {
+      return date.toLocaleString(tUi.locale, {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -118,12 +122,12 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
   function formatChannelName(channel) {
     switch (channel) {
       case "phone_call":
-        return "PHONE CALL";
+        return tUi("Phone call");
       case "sms_chat":
       case "sms":
-        return "SMS";
+        return tUi("SMS");
       default:
-        return String(channel || "—").toUpperCase();
+        return operationalStatusLabel(tUi, channel) || "—";
     }
   }
 
@@ -150,26 +154,22 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
       case "completed":
         return (
           <Badge className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-300">
-            <IconCheck className="size-3 mr-1" /> Completed
-          </Badge>
+            <IconCheck className="size-3 mr-1" />{tUi(" Completed")}</Badge>
         );
       case "pending":
         return (
           <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-300">
-            <IconClock className="size-3 mr-1" /> Pending
-          </Badge>
+            <IconClock className="size-3 mr-1" />{tUi(" Pending")}</Badge>
         );
       case "in_progress":
         return (
           <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-300">
-            <IconClock className="size-3 mr-1" /> In Progress
-          </Badge>
+            <IconClock className="size-3 mr-1" />{tUi(" In Progress")}</Badge>
         );
       case "failed":
         return (
           <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-300">
-            <IconX className="size-3 mr-1" /> Failed
-          </Badge>
+            <IconX className="size-3 mr-1" />{tUi(" Failed")}</Badge>
         );
       default:
         return (
@@ -183,23 +183,19 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconEye className="size-5" />
-            Scheduled Event Details
-          </SheetTitle>
+            <IconEye className="size-5" />{tUi("Scheduled Event Details")}</SheetTitle>
         </SheetHeader>
 
         {/* Fixed Metadata Section */}
         <div className="px-6 py-3 border-b bg-muted/30 space-y-3">
           <div className="grid grid-cols-3 gap-3 text-xs">
             <div>
-              <div className="font-semibold text-muted-foreground uppercase mb-1">
-                Channel
-              </div>
+              <div className="font-semibold text-muted-foreground uppercase mb-1">{tUi("Channel")}</div>
               <Badge
                 variant="outline"
                 className={`text-xs ${channelBadgeColor(
@@ -210,9 +206,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
               </Badge>
             </div>
             <div>
-              <div className="font-semibold text-muted-foreground uppercase mb-1">
-                Status
-              </div>
+              <div className="font-semibold text-muted-foreground uppercase mb-1">{tUi("Status")}</div>
               {loading ? (
                 <Skeleton className="h-5 w-20" />
               ) : (
@@ -220,9 +214,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
               )}
             </div>
             <div>
-              <div className="font-semibold text-muted-foreground uppercase mb-1">
-                Duration
-              </div>
+              <div className="font-semibold text-muted-foreground uppercase mb-1">{tUi("Duration")}</div>
               {displayEvent.call_duration !== null && displayEvent.call_duration !== undefined ? (
                 <Badge variant="outline" className="text-xs text-orange-600 border-orange-500 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-400 font-mono">
                   {formatCallDuration(displayEvent.call_duration)}
@@ -236,9 +228,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
           {/* AI Assistant Name and ID */}
           {displayEvent.assistant_name && (
             <div className="text-xs">
-              <div className="font-semibold text-muted-foreground uppercase mb-1">
-                AI Assistant
-              </div>
+              <div className="font-semibold text-muted-foreground uppercase mb-1">{tUi("AI Assistant")}</div>
               <div className="text-sm font-medium mb-1">
                 {displayEvent.assistant_name}
               </div>
@@ -257,7 +247,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
                       handleCopy(displayEvent.assistant_id, "assistant_id")
                     }
                     title={
-                      copiedField === "assistant_id" ? "Copied" : "Copy Assistant ID"
+                      copiedField === "assistant_id" ? tUi("Copied") : tUi("Copy Assistant ID")
                     }
                   >
                     {copiedField === "assistant_id" ? (
@@ -273,9 +263,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
           
           {/* Event ID */}
           <div className="text-xs">
-            <div className="font-semibold text-muted-foreground uppercase mb-1">
-              Event ID
-            </div>
+            <div className="font-semibold text-muted-foreground uppercase mb-1">{tUi("Event ID")}</div>
             <div className="flex items-center gap-2">
               <div className="text-xs font-mono truncate flex-1">
                 {displayEvent.scheduled_event_id || displayEvent.id || "—"}
@@ -293,7 +281,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
                       "event_id"
                     )
                   }
-                  title={copiedField === "event_id" ? "Copied" : "Copy Event ID"}
+                  title={copiedField === "event_id" ? tUi("Copied") : tUi("Copy Event ID")}
                 >
                   {copiedField === "event_id" ? (
                     <IconCheck className="size-3 text-telnyx-green" />
@@ -308,9 +296,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
           {/* Conversation ID */}
           {displayEvent.conversation_id && (
             <div className="text-xs">
-              <div className="font-semibold text-muted-foreground uppercase mb-1">
-                Conversation ID
-              </div>
+              <div className="font-semibold text-muted-foreground uppercase mb-1">{tUi("Conversation ID")}</div>
               <div className="flex items-center gap-2">
                 <div className="text-xs font-mono truncate flex-1">
                   {displayEvent.conversation_id}
@@ -324,7 +310,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
                       onOpenConversation(displayEvent.conversation_id);
                       onOpenChange(false); // Close preview sheet when opening conversation
                     }}
-                    title="View AI conversation with recording"
+                    title={tUi("View AI conversation with recording")}
                   >
                     <IconRobot className="size-3" />
                   </Button>
@@ -340,8 +326,8 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
                   }
                   title={
                     copiedField === "conversation_id"
-                      ? "Copied"
-                      : "Copy Conversation ID"
+                      ? tUi("Copied")
+                      : tUi("Copy Conversation ID")
                   }
                 >
                   {copiedField === "conversation_id" ? (
@@ -368,9 +354,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
 
               {/* Scheduled Date/Time */}
               <div className="space-y-2">
-                <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                  Scheduled Date & Time
-                </Label>
+                <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("Scheduled Date & Time")}</Label>
                 <div className="text-sm flex items-center gap-2">
                   <IconCalendar className="size-4 text-telnyx-green" />
                   {formatDateTime(displayEvent.scheduled_at_fixed_datetime)}
@@ -380,9 +364,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
               {/* Created At */}
               {displayEvent.created_at && (
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                    Created At
-                  </Label>
+                  <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("Created At")}</Label>
                   <div className="text-sm flex items-center gap-2">
                     <IconClock className="size-4 text-muted-foreground" />
                     {formatDateTime(displayEvent.created_at)}
@@ -393,26 +375,18 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
               {/* Phone Numbers */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                    From Number
-                  </Label>
+                  <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("From Number")}</Label>
                   <div className="text-sm font-mono">
                     {displayEvent.telnyx_agent_target || "—"}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Agent phone number
-                  </div>
+                  <div className="text-xs text-muted-foreground">{tUi("Agent phone number")}</div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                    To Number
-                  </Label>
+                  <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("To Number")}</Label>
                   <div className="text-sm font-mono">
                     {displayEvent.telnyx_end_user_target || "—"}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Recipient phone number
-                  </div>
+                  <div className="text-xs text-muted-foreground">{tUi("Recipient phone number")}</div>
                 </div>
               </div>
 
@@ -424,55 +398,38 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
                 <div className="grid grid-cols-2 gap-4">
                   {displayEvent.max_retries_client_errors !== undefined && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                        Max Client Error Retries
-                      </Label>
+                      <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("Max Client Error Retries")}</Label>
                       <div className="text-sm">
                         {displayEvent.max_retries_client_errors}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Configured retries for busy, no-answer, failed, or
-                        canceled calls
-                      </div>
+                      <div className="text-xs text-muted-foreground">{tUi("Configured retries for busy, no-answer, failed, or canceled calls")}</div>
                     </div>
                   )}
                   {displayEvent.retry_interval_secs !== undefined && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                        Retry Interval
-                      </Label>
+                      <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("Retry Interval")}</Label>
                       <div className="text-sm">
                         {formatRetryInterval(displayEvent.retry_interval_secs)}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Delay between retry attempts
-                      </div>
+                      <div className="text-xs text-muted-foreground">{tUi("Delay between retry attempts")}</div>
                     </div>
                   )}
                   {displayEvent.retry_count !== undefined && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                        Retry Count
-                      </Label>
+                      <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("Retry Count")}</Label>
                       <div className="text-sm">
                         {displayEvent.retry_count}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Number of retries attempted
-                      </div>
+                      <div className="text-xs text-muted-foreground">{tUi("Number of retries attempted")}</div>
                     </div>
                   )}
                   {displayEvent.retry_attempts !== undefined && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                        Retry Attempts
-                      </Label>
+                      <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("Retry Attempts")}</Label>
                       <div className="text-sm">
                         {displayEvent.retry_attempts}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Maximum retry attempts
-                      </div>
+                      <div className="text-xs text-muted-foreground">{tUi("Maximum retry attempts")}</div>
                     </div>
                   )}
                 </div>
@@ -483,9 +440,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
                 displayEvent.telnyx_conversation_channel === "sms") &&
                 displayEvent.text && (
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                      SMS Message Text
-                    </Label>
+                    <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("SMS Message Text")}</Label>
                     <div className="p-3 bg-muted/50 rounded-md text-sm border">
                       {displayEvent.text}
                     </div>
@@ -496,9 +451,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
               {displayEvent.conversation_metadata &&
                 Object.keys(displayEvent.conversation_metadata).length > 0 && (
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold text-muted-foreground uppercase">
-                      Conversation Metadata
-                    </Label>
+                    <Label className="text-sm font-semibold text-muted-foreground uppercase">{tUi("Conversation Metadata")}</Label>
                     <div className="p-3 bg-muted/50 rounded-md text-xs border font-mono overflow-x-auto">
                       <pre className="whitespace-pre-wrap break-words">
                         {JSON.stringify(displayEvent.conversation_metadata, null, 2)}
@@ -513,9 +466,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
                 displayEvent.errors.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold text-red-600 uppercase flex items-center gap-2">
-                      <IconAlertCircle className="size-4" />
-                      Errors
-                    </Label>
+                      <IconAlertCircle className="size-4" />{tUi("Errors")}</Label>
                     <div className="space-y-2">
                       {displayEvent.errors.map((error, idx) => (
                         <div
@@ -534,9 +485,7 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
 
         {/* Fixed Footer */}
         <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{tUi("Close")}</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>

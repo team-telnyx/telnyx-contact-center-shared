@@ -22,6 +22,8 @@ import { normalizeSteps } from "../lib/call-generator/actions.mjs";
 // and Expressive Mode (Telnyx Ultra SSML emotion tags / xAI speech tags).
 
 process.env.TELNYX_API_KEY = process.env.TELNYX_API_KEY || "test-key";
+// Platform default model for the AI operation runtime (no model is defined in code).
+process.env.TELNYX_AI_DEFAULT_MODEL ||= "test/platform-model";
 
 test("normalizePersona accepts the Ultra emotion ids and falls back to neutral", () => {
   assert.equal(normalizePersona("angry"), "angry");

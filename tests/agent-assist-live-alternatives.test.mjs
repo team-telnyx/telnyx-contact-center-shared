@@ -54,7 +54,7 @@ test("live analyze route PERSISTS alternatives on the suggested branch (not NULL
 });
 
 test("analyze-test route returns alternatives for suggested slots", async () => {
-  const route = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
+  const route = await read("../lib/agent-assist/test-workflow-analysis.mjs");
   assert.match(route, /alternatives:\s*Array\.isArray\(completed\.alternatives\)\s*\?\s*completed\.alternatives\s*:\s*\[\]/);
 });
 

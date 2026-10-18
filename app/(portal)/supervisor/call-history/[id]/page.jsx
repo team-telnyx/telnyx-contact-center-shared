@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { ConversationReader } from "@/components/contact-center/ConversationPreview";
 import { InteractionChannel } from "@/components/contact-center/InteractionChannel";
@@ -67,6 +69,7 @@ function formatDuration(seconds) {
 }
 
 function SegmentNavigator({ index, count, onChange }) {
+  const tUi = useUiText();
   if (count <= 1) return null;
 
   return (
@@ -80,12 +83,11 @@ function SegmentNavigator({ index, count, onChange }) {
         className="h-6 w-6"
         disabled={index === 0}
         onClick={() => onChange(index - 1)}
-        aria-label="Previous interaction segment"
+        aria-label={tUi("Previous interaction segment")}
       >
         <IconChevronLeft className="h-3.5 w-3.5" />
       </Button>
-      <span className="min-w-[5.5rem] text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        Segment {index + 1} of {count}
+      <span className="min-w-[5.5rem] text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{tUi("Segment ")}{index + 1}{tUi(" of ")}{count}
       </span>
       <Button
         variant="ghost"
@@ -93,7 +95,7 @@ function SegmentNavigator({ index, count, onChange }) {
         className="h-6 w-6"
         disabled={index >= count - 1}
         onClick={() => onChange(index + 1)}
-        aria-label="Next interaction segment"
+        aria-label={tUi("Next interaction segment")}
       >
         <IconChevronRight className="h-3.5 w-3.5" />
       </Button>
@@ -102,6 +104,7 @@ function SegmentNavigator({ index, count, onChange }) {
 }
 
 export default function SupervisorCallHistoryDetailPage() {
+  const tUi = useUiText();
   const params = useParams();
   const interactionId = params?.id;
   const [interaction, setInteraction] = useState(null);
@@ -277,29 +280,25 @@ export default function SupervisorCallHistoryDetailPage() {
   return (
     <SupervisorPageShell>
       <SupervisorPageHeader
-        title="Interaction Details"
+        title={tUi("Interaction Details")}
         badges={(
           <>
             <Badge
               variant="outline"
               className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-            >
-              Interaction record
-            </Badge>
+            >{tUi("Interaction record")}</Badge>
             <Badge
               variant="outline"
               className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
             >
-              {isMessaging ? "Timeline · Preview" : "Timeline · Recordings"}
+              {isMessaging ? tUi("Timeline · Preview") : tUi("Timeline · Recordings")}
             </Badge>
           </>
         )}
         actions={(
           <Button variant="outline" size="sm" asChild>
             <Link href="/supervisor/interactions-history">
-              <IconArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Link>
+              <IconArrowLeft className="h-4 w-4 mr-2" />{tUi("Back")}</Link>
           </Button>
         )}
       />
@@ -312,16 +311,14 @@ export default function SupervisorCallHistoryDetailPage() {
         <Card className="shadow-sm">
           <CardContent className="space-y-6 py-6">
           {loading ? (
-            <div className="space-y-6" aria-label="Loading interaction details">
+            <div className="space-y-6" aria-label={tUi("Loading interaction details")}>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0,1,2].map(index => <Skeleton key={index} className="h-64" />)}</div>
               <Skeleton className="h-10 w-full" /><Skeleton className="h-64 w-full" />
             </div>
           ) : loadError ? (
             <div role="alert" className="rounded-xl border border-destructive/30 p-5 text-sm text-destructive">{loadError}</div>
           ) : !interaction ? (
-            <div className="py-2 text-sm text-muted-foreground">
-              Interaction not found.
-            </div>
+            <div className="py-2 text-sm text-muted-foreground">{tUi("Interaction not found.")}</div>
           ) : (
             <>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -333,9 +330,7 @@ export default function SupervisorCallHistoryDetailPage() {
                       <CardTitle className="flex items-center gap-2.5 text-base">
                         <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
                           <IconUsers className="h-5 w-5" />
-                        </span>
-                        Participants
-                      </CardTitle>
+                        </span>{tUi("Participants")}</CardTitle>
                       <SegmentNavigator
                         index={activeSegmentIndex}
                         count={callSegments.length}
@@ -350,15 +345,13 @@ export default function SupervisorCallHistoryDetailPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold">
-                          {interaction.from_name || "Unknown customer"}
+                          {interaction.from_name || tUi("Unknown customer")}
                         </div>
                         <div className="truncate font-mono text-xs text-muted-foreground">
                           {interaction.from_number || "-"}
                         </div>
                       </div>
-                      <Badge variant="outline" className="shrink-0 border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Customer
-                      </Badge>
+                      <Badge variant="outline" className="shrink-0 border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">{tUi("Customer")}</Badge>
                     </div>
                     <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-3">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
@@ -366,21 +359,17 @@ export default function SupervisorCallHistoryDetailPage() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold">
-                          {activeSegment?.agent_name || activeSegment?.agent_username || "Unassigned"}
+                          {activeSegment?.agent_name || activeSegment?.agent_username || tUi("Unassigned")}
                         </div>
                         <div className="truncate text-xs text-muted-foreground">
                           {activeSegment?.agent_username || "-"}
                         </div>
                       </div>
-                      <Badge variant="outline" className="shrink-0 border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Agent
-                      </Badge>
+                      <Badge variant="outline" className="shrink-0 border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">{tUi("Agent")}</Badge>
                     </div>
                     <div className="flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
                       <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <IconUsersGroup className="h-3.5 w-3.5" />
-                        Queue
-                      </span>
+                        <IconUsersGroup className="h-3.5 w-3.5" />{tUi("Queue")}</span>
                       <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-xs text-sky-700 dark:text-sky-300">
                         {activeSegment?.queue_name || "-"}
                       </Badge>
@@ -396,9 +385,7 @@ export default function SupervisorCallHistoryDetailPage() {
                       <CardTitle className="flex items-center gap-2.5 text-base">
                         <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
                           <InteractionChannel channel={channel} />
-                        </span>
-                        Interaction Details
-                      </CardTitle>
+                        </span>{tUi("Interaction Details")}</CardTitle>
                       <SegmentNavigator
                         index={activeSegmentIndex}
                         count={callSegments.length}
@@ -408,16 +395,16 @@ export default function SupervisorCallHistoryDetailPage() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span>{channelDefinition(channel).label}</span><InteractionSla sla={interaction.sla} />
+                      <span>{tUi(channelDefinition(channel).label)}</span><InteractionSla sla={interaction.sla} />
                     </div>
                     {interaction.subject && <p className="truncate text-sm font-medium" title={interaction.subject}>{interaction.subject}</p>}
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
-                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</div>
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{tUi("Status")}</div>
                         <InteractionStateBadge state={activeSegmentStatus} className="mt-1.5" />
                       </div>
                       <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
-                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Direction</div>
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{tUi("Direction")}</div>
                         <div className="mt-1.5 flex items-center justify-center gap-1.5 text-sm font-semibold capitalize">
                           {String(interaction.direction || "").includes("out") ? (
                             <IconPhoneOutgoing className="h-4 w-4 text-violet-500" />
@@ -428,13 +415,13 @@ export default function SupervisorCallHistoryDetailPage() {
                         </div>
                       </div>
                       <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
-                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Handling duration</div>
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{tUi("Handling duration")}</div>
                         <div className="mt-1.5 font-mono text-sm font-semibold tabular-nums">
                           {formatDuration(activeSegmentDurationSeconds)}
                         </div>
                       </div>
                       <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
-                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Started</div>
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{tUi("Started")}</div>
                         <div className="mt-1.5 text-xs font-medium leading-snug">
                           {formatDateTime(activeSegmentStartedAt)}
                         </div>
@@ -442,9 +429,7 @@ export default function SupervisorCallHistoryDetailPage() {
                     </div>
                     <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <IconTag className="h-3.5 w-3.5" />
-                        Wrap-up codes
-                      </div>
+                        <IconTag className="h-3.5 w-3.5" />{tUi("Wrap-up codes")}</div>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {activeSegmentWrapupCodes.length > 0 ? (
                           activeSegmentWrapupCodes.map((name) => (
@@ -457,7 +442,7 @@ export default function SupervisorCallHistoryDetailPage() {
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-xs text-muted-foreground">No codes recorded</span>
+                          <span className="text-xs text-muted-foreground">{tUi("No codes recorded")}</span>
                         )}
                       </div>
                     </div>
@@ -472,9 +457,7 @@ export default function SupervisorCallHistoryDetailPage() {
                       <CardTitle className="flex items-center gap-2.5 text-base">
                         <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300">
                           <IconId className="h-5 w-5" />
-                        </span>
-                        Identifiers
-                      </CardTitle>
+                        </span>{tUi("Identifiers")}</CardTitle>
                       <SegmentNavigator
                         index={activeSegmentIndex}
                         count={callSegments.length}
@@ -487,7 +470,7 @@ export default function SupervisorCallHistoryDetailPage() {
                       <div key={label} className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            {label}
+                            {tUi(label)}
                           </span>
                           {value ? (
                             <Button
@@ -495,7 +478,7 @@ export default function SupervisorCallHistoryDetailPage() {
                               size="icon"
                               className="h-6 w-6 shrink-0 opacity-60 transition group-hover:opacity-100"
                               onClick={() => handleCopy(value, label)}
-                              aria-label={`Copy ${label}`}
+                              aria-label={tUi("Copy {value0}", { value0: label })}
                             >
                               {copiedField === label ? (
                                 <IconCheck className="h-3.5 w-3.5 text-green-500" />
@@ -515,18 +498,14 @@ export default function SupervisorCallHistoryDetailPage() {
               </div>
 
               <Tabs defaultValue="timeline" className="w-full">
-                <TabsList
-                  className={`grid w-full ${
-                    isMessaging ? "grid-cols-2" : aiCallControlId ? "grid-cols-4" : "grid-cols-3"
-                  }`}
-                >
-                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                  {isMessaging ? <TabsTrigger value="preview">Preview</TabsTrigger> : <>
-                    <TabsTrigger value="recording">Recording</TabsTrigger>
-                    <TabsTrigger value="transcript">Transcript</TabsTrigger>
+                <TabsList>
+                  <TabsTrigger value="timeline">{tUi("Timeline")}</TabsTrigger>
+                  {isMessaging ? <TabsTrigger value="preview">{tUi("Preview")}</TabsTrigger> : <>
+                    <TabsTrigger value="recording">{tUi("Recording", undefined, "saved media")}</TabsTrigger>
+                    <TabsTrigger value="transcript">{tUi("Transcript")}</TabsTrigger>
                   </>}
                   {!isMessaging && aiCallControlId && (
-                    <TabsTrigger value="ai">AI Assistant</TabsTrigger>
+                    <TabsTrigger value="ai">{tUi("AI Assistant")}</TabsTrigger>
                   )}
                 </TabsList>
 
@@ -534,11 +513,9 @@ export default function SupervisorCallHistoryDetailPage() {
                   <Card className="border-border/70 bg-card shadow-sm">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <IconTimeline className="h-5 w-5 text-sky-500" />
-                        Interaction Phases
-                      </CardTitle>
+                        <IconTimeline className="h-5 w-5 text-sky-500" />{tUi("Interaction Phases")}</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {isVoice ? "Time across IVR, queue, agent handling and wrap-up." : "Time across intake, queue, agent handling and wrap-up."}
+                        {isVoice ? tUi("Time across IVR, queue, agent handling and wrap-up.") : tUi("Time across intake, queue, agent handling and wrap-up.")}
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -552,12 +529,8 @@ export default function SupervisorCallHistoryDetailPage() {
                       <Card className="border-border/70 bg-card shadow-sm">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            <IconHistory className="h-5 w-5 text-violet-500" />
-                            Event Journey
-                          </CardTitle>
-                          <p className="text-sm text-muted-foreground">
-                            Routing events from arrival to wrap-up, with timing between steps.
-                          </p>
+                            <IconHistory className="h-5 w-5 text-violet-500" />{tUi("Event Journey")}</CardTitle>
+                          <p className="text-sm text-muted-foreground">{tUi("Routing events from arrival to wrap-up, with timing between steps.")}</p>
                         </CardHeader>
                         <CardContent>
                           <RoutingMetadataTimeline
@@ -607,11 +580,11 @@ export default function SupervisorCallHistoryDetailPage() {
                           <IconMicrophoneOff className="h-6 w-6" />
                         </span>
                         <div>
-                          <div className="text-sm font-semibold">No recording available</div>
+                          <div className="text-sm font-semibold">{tUi("No recording available")}</div>
                           <p className="mt-1 text-sm text-muted-foreground">
                             {channel === "video"
-                              ? "The composed video recording is not ready yet, or recording was disabled for this widget."
-                              : "This interaction was not recorded or the recording has not been stored yet."}
+                              ? tUi("The composed video recording is not ready yet, or recording was disabled for this widget.")
+                              : tUi("This interaction was not recorded or the recording has not been stored yet.")}
                           </p>
                         </div>
                       </CardContent>
@@ -627,9 +600,7 @@ export default function SupervisorCallHistoryDetailPage() {
                     <TranscriptionHistory transcriptions={transcriptions} />
                   ) : (
                     <Card>
-                      <CardContent className="py-8 text-sm text-muted-foreground">
-                        No transcription data stored for this interaction.
-                      </CardContent>
+                      <CardContent className="py-8 text-sm text-muted-foreground">{tUi("No transcription data stored for this interaction.")}</CardContent>
                     </Card>
                   )}
                 </TabsContent>
@@ -639,15 +610,11 @@ export default function SupervisorCallHistoryDetailPage() {
                     <Card>
                       <CardHeader className="flex-row items-center justify-between gap-2">
                         <CardTitle className="flex items-center gap-2">
-                          <IconRobot className="h-5 w-5 text-violet-500" />
-                          AI Assistant
-                        </CardTitle>
+                          <IconRobot className="h-5 w-5 text-violet-500" />{tUi("AI Assistant")}</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
                         <div className="grid grid-cols-[160px_1fr] gap-2 items-start">
-                          <span className="text-sm text-muted-foreground">
-                            AI Call Control ID
-                          </span>
+                          <span className="text-sm text-muted-foreground">{tUi("AI Call Control ID")}</span>
                           <div className="flex items-center gap-2">
                             <code className="bg-muted px-2 py-1 rounded text-xs font-mono w-fit">
                               {aiCallControlId}
@@ -675,9 +642,7 @@ export default function SupervisorCallHistoryDetailPage() {
                           size="sm"
                           className="bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
                           onClick={() => setAiSheetOpen(true)}
-                        >
-                          Open AI Conversation
-                        </Button>
+                        >{tUi("Open AI Conversation")}</Button>
                         {aiSheetOpen && (
                           <AiConversationSheet
                             interaction={interaction}

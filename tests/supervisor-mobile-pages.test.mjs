@@ -1,3 +1,4 @@
+import { mobileReport } from "../lib/acd/mobile-monitor-pages.mjs";
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -125,4 +126,19 @@ test('dialer preserves campaign/channel pairings across role grants in every vie
    assert.equal(result.pagination.total, 0);
    assert.equal(result.rows.length, 0);
  }
+});
+
+
+test("mobile report detail paging preserves full cohort totals and leaves web data intact", () => {
+  for (const [kind, key] of Object.entries({"queue-performance":"queues", "agent-performance":"agents", abandonment:"queues", "wrapup-codes":"codes"})) {
+    const source = { queues: [], detail: { report: kind, [key]: Array.from({length:31}, (_,id)=>({id})), totals: {total:800}, timing:{avg_wait_seconds:12} } };
+    const page = mobileReport(source, new URLSearchParams("mobilePageSize=25&page=2"));
+    assert.equal(page.detail.rows.length, 6);
+    assert.equal(page.detail.pagination.total, 31);
+    assert.equal(page.detail.rows[0].id, 25);
+    assert.equal(page.detail.totals.total, 800);
+    assert.equal(page.detail.timing.avg_wait_seconds, 12);
+    assert.equal(mobileReport(source,new URLSearchParams()),source);
+    assert.equal(source.detail[key].length,31);
+  }
 });

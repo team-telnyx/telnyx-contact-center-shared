@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Label } from "@/components/ui/label";
@@ -37,14 +39,14 @@ function getQueueTypeBadgeColor(routingStrategy) {
 }
 
 // Helper function to get display name for queue type
-function getQueueTypeDisplayName(routingStrategy) {
+function getQueueTypeDisplayName(routingStrategy, tUi) {
   switch (routingStrategy) {
     case "FIFO":
       return "FIFO";
     case "Skill-based":
-      return "SKILLS";
+      return tUi("Skill-based");
     case "Priority-based":
-      return "PRIORITY";
+      return tUi("Priority-based");
     default:
       return routingStrategy || "FIFO";
   }
@@ -52,6 +54,7 @@ function getQueueTypeDisplayName(routingStrategy) {
 
 // Star rating component
 function StarRating({ value, onChange, maxStars = 5, disabled = false }) {
+  const tUi = useUiText();
   return (
     <div className={`flex gap-1 ${disabled ? "opacity-60 pointer-events-none" : ""}`}>
       {Array.from({ length: maxStars }, (_, i) => {
@@ -63,7 +66,7 @@ function StarRating({ value, onChange, maxStars = 5, disabled = false }) {
             type="button"
             onClick={() => onChange(starValue)}
             className="focus:outline-none"
-            aria-label={`Set rating to ${starValue} stars`}
+            aria-label={tUi("Set rating to {value0} stars", { value0: starValue })}
             disabled={disabled}
           >
             {filled ? (
@@ -85,6 +88,7 @@ export default function SetQueueOptionsNodeEditor({
   availableVariables = [],
   onValidationChange,
 }) {
+  const tUi = useUiText();
   // Queue Name
   const [queueNameUseVariable, setQueueNameUseVariable] = useState(
     config.queue_name_use_variable !== undefined
@@ -425,13 +429,10 @@ export default function SetQueueOptionsNodeEditor({
       {/* Queue Name */}
       <div className="mt-4">
         <div className="flex items-center justify-between mb-2">
-          <Label htmlFor="queue_name">
-            Queue Name <span className="text-red-500 mt-0.5">*</span>
+          <Label htmlFor="queue_name">{tUi("Queue Name ")}<span className="text-red-500 mt-0.5">*</span>
           </Label>
           <div className="flex items-center gap-2">
-            <Label htmlFor="queue_name_use_variable" className="text-xs">
-              Use Variable
-            </Label>
+            <Label htmlFor="queue_name_use_variable" className="text-xs">{tUi("Use Variable")}</Label>
             <Switch
               id="queue_name_use_variable"
               checked={queueNameUseVariable}
@@ -444,13 +445,13 @@ export default function SetQueueOptionsNodeEditor({
             value={queueNameVariable}
             onChange={setQueueNameVariable}
             availableVariables={availableVariables}
-            placeholder="{{queue_name}}"
+            placeholder={tUi("{{queue_name}}")}
             className="mt-1 w-full"
           />
         ) : (
           <Select value={queueName} onValueChange={setQueueName}>
             <SelectTrigger className="mt-1 w-full">
-              <SelectValue placeholder="Select a queue" />
+              <SelectValue placeholder={tUi("Select a queue")} />
             </SelectTrigger>
             <SelectContent>
               {queues.length > 0 ? (
@@ -464,36 +465,30 @@ export default function SetQueueOptionsNodeEditor({
                           getQueueTypeBadgeColor(queue.routing_strategy)
                         )}
                       >
-                        {getQueueTypeDisplayName(queue.routing_strategy)}
+                        {getQueueTypeDisplayName(queue.routing_strategy, tUi)}
                       </Badge>
                     </div>
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value="__no_queues__" disabled>
-                  No enabled queues available
-                </SelectItem>
+                <SelectItem value="__no_queues__" disabled>{tUi("No enabled queues available")}</SelectItem>
               )}
             </SelectContent>
           </Select>
         )}
         <p className="text-xs text-muted-foreground mt-1">
           {queueNameUseVariable
-            ? "Enter a variable name (e.g., {{queue_name}})"
-            : "Select the queue name"}
+            ? tUi("Enter a variable name (e.g., {{queue_name}})")
+            : tUi("Select the queue name")}
         </p>
       </div>
 
       {/* Call Priority (1-5 stars) */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <Label htmlFor="call_priority">
-            Call Priority
-          </Label>
+          <Label htmlFor="call_priority">{tUi("Call Priority")}</Label>
           <div className="flex items-center gap-2">
-            <Label htmlFor="call_priority_use_variable" className="text-xs">
-              Use Variable
-            </Label>
+            <Label htmlFor="call_priority_use_variable" className="text-xs">{tUi("Use Variable")}</Label>
             <Switch
               id="call_priority_use_variable"
               checked={callPriorityUseVariable}
@@ -507,7 +502,7 @@ export default function SetQueueOptionsNodeEditor({
             value={callPriorityVariable}
             onChange={setCallPriorityVariable}
             availableVariables={availableVariables}
-            placeholder="{{call_priority}}"
+            placeholder={tUi("{{call_priority}}")}
             className="mt-1 w-full"
             disabled={queueRoutingStrategy === "FIFO"}
           />
@@ -520,21 +515,21 @@ export default function SetQueueOptionsNodeEditor({
               disabled={queueRoutingStrategy === "FIFO"}
             />
             <span className="text-sm text-muted-foreground">
-              {callPriority === 1 && "Low"}
-              {callPriority === 2 && "Below Normal"}
-              {callPriority === 3 && "Normal"}
-              {callPriority === 4 && "Above Normal"}
-              {callPriority === 5 && "High"}
+              {callPriority === 1 && tUi("Low")}
+              {callPriority === 2 && tUi("Below Normal")}
+              {callPriority === 3 && tUi("Normal")}
+              {callPriority === 4 && tUi("Above Normal")}
+              {callPriority === 5 && tUi("High")}
             </span>
           </div>
         )}
         <p className="text-xs text-muted-foreground mt-1">
           {queueRoutingStrategy === "FIFO" ? (
-            "Call priority is set to Normal (3 stars) by default for FIFO queues. Priority-based routing is not used in FIFO strategy."
+            tUi("Call priority is set to Normal (3 stars) by default for FIFO queues. Priority-based routing is not used in FIFO strategy.")
           ) : callPriorityUseVariable ? (
-            "Enter a variable name (e.g., {{call_priority}})"
+            tUi("Enter a variable name (e.g., {{call_priority}})")
           ) : (
-            "Call-level priority (1-5 stars). Higher priority calls are routed first. Works with all routing types including skills-based routing."
+            tUi("Call-level priority (1-5 stars). Higher priority calls are routed first. Works with all routing types including skills-based routing.")
           )}
         </p>
       </div>
@@ -543,9 +538,7 @@ export default function SetQueueOptionsNodeEditor({
       {queueRoutingStrategy === "Skill-based" && (
       <div>
         <div className="flex items-center justify-between mb-2">
-          <Label className="text-sm font-semibold">
-            Required Skills
-          </Label>
+          <Label className="text-sm font-semibold">{tUi("Required Skills")}</Label>
         </div>
         <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
           {/* First row: Add Skill button and Use Variable toggle */}
@@ -563,20 +556,16 @@ export default function SetQueueOptionsNodeEditor({
                 }
                 title={
                   skills.length >= availableSkills.length
-                    ? "All available skills have been added"
-                    : "Add a skill"
+                    ? tUi("All available skills have been added")
+                    : tUi("Add a skill")
                 }
               >
-                <IconPlus className="w-4 h-4 mr-1" />
-                Add Skill
-              </Button>
+                <IconPlus className="w-4 h-4 mr-1" />{tUi("Add Skill")}</Button>
             ) : (
               <div></div>
             )}
             <div className="flex items-center gap-2">
-              <Label htmlFor="skills_use_variable" className="text-xs">
-                Use Variable
-              </Label>
+              <Label htmlFor="skills_use_variable" className="text-xs">{tUi("Use Variable")}</Label>
               <Switch
                 id="skills_use_variable"
                 checked={skillsUseVariable}
@@ -587,8 +576,8 @@ export default function SetQueueOptionsNodeEditor({
           
           <p className="text-xs text-muted-foreground">
             {skillsUseVariable
-              ? "Enter a variable name containing skills object (e.g., {{skills}})"
-              : "Define skills required for this call with minimum proficiency levels"}
+              ? tUi("Enter a variable name containing skills object (e.g., {{skills}})")
+              : tUi("Define skills required for this call with minimum proficiency levels")}
           </p>
 
         {skillsUseVariable ? (
@@ -596,13 +585,11 @@ export default function SetQueueOptionsNodeEditor({
             value={skillsVariable}
             onChange={setSkillsVariable}
             availableVariables={availableVariables}
-            placeholder="{{skills}}"
+            placeholder={tUi("{{skills}}")}
             className="mt-1 w-full"
           />
         ) : skills.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">
-            No skills defined. Add skills to enable skills-based routing.
-          </p>
+          <p className="text-sm text-muted-foreground italic">{tUi("No skills defined. Add skills to enable skills-based routing.")}</p>
         ) : (
           <div className="space-y-3">
             {skills.map((skill, index) => (
@@ -614,13 +601,11 @@ export default function SetQueueOptionsNodeEditor({
                   }
                 >
                   <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Select a skill" />
+                    <SelectValue placeholder={tUi("Select a skill")} />
                   </SelectTrigger>
                   <SelectContent>
                     {loadingSkills ? (
-                      <SelectItem value="__loading__" disabled>
-                        Loading skills...
-                      </SelectItem>
+                      <SelectItem value="__loading__" disabled>{tUi("Loading skills...")}</SelectItem>
                     ) : availableSkills.length > 0 ? (
                       availableSkills
                         .filter((s) => {
@@ -642,9 +627,7 @@ export default function SetQueueOptionsNodeEditor({
                           </SelectItem>
                         ))
                     ) : (
-                      <SelectItem value="__no_skills__" disabled>
-                        No skills available
-                      </SelectItem>
+                      <SelectItem value="__no_skills__" disabled>{tUi("No skills available")}</SelectItem>
                     )}
                   </SelectContent>
                 </Select>
@@ -673,9 +656,7 @@ export default function SetQueueOptionsNodeEditor({
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
         <div className="p-3 border border-destructive rounded-lg bg-destructive/10">
-          <p className="text-sm font-semibold text-destructive mb-2">
-            Validation Errors:
-          </p>
+          <p className="text-sm font-semibold text-destructive mb-2">{tUi("Validation Errors:")}</p>
           <ul className="text-xs text-destructive space-y-1 list-disc list-inside">
             {validationErrors.map((error, idx) => (
               <li key={idx}>{error}</li>

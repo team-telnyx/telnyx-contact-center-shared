@@ -164,19 +164,21 @@ async function PUT_handler(request, { params }) {
       values.push(JSON.stringify(normalizeWorkflowDataActionButtons(data_action_buttons)));
     }
     if (llm_model !== undefined) {
+      // Empty = no workflow override: the Admin → AI Copilot default applies.
       updates.push(`llm_model = $${paramIndex++}`);
-      values.push(llm_model);
+      values.push(typeof llm_model === "string" && llm_model.trim() ? llm_model.trim() : null);
     }
     if (llm_fallback_model !== undefined) {
+      // Optional: empty = no fallback model.
       const fallbackModel = typeof llm_fallback_model === "string" ? llm_fallback_model.trim() : "";
-      if (!fallbackModel || fallbackModel.length > 100) {
+      if (fallbackModel.length > 100) {
         return NextResponse.json(
-          { error: "Invalid llm_fallback_model. Select a fallback model." },
+          { error: "Invalid llm_fallback_model. Choose a model from the list or leave it empty." },
           { status: 400 }
         );
       }
       updates.push(`llm_fallback_model = $${paramIndex++}`);
-      values.push(fallbackModel);
+      values.push(fallbackModel || null);
     }
     if (llm_reasoning_enabled !== undefined) {
       if (typeof llm_reasoning_enabled !== "boolean") {

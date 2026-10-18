@@ -1,196 +1,45 @@
 "use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { useUiText } from "@/components/i18n/use-ui-text";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import Combobox from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
-
+import { Skeleton } from "@/components/ui/skeleton";
+import { IconX } from "@tabler/icons-react";
 export default function RetrievalToolEditor({ value, onChange }) {
-  const rt = value?.retrieval || {};
-  const selectedIds = useMemo(
-    () => (Array.isArray(rt.bucket_ids) ? rt.bucket_ids : []),
-    [rt]
-  );
-  const [buckets, setBuckets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [maxResults, setMaxResults] = useState(Number(rt.max_num_results || 3));
-
+  const t = useUiText();
+  const config = value?.retrieval || {};
+  const selected = config.bucket_ids || [];
+  const [catalog, setCatalog] = useState({ loading: true, buckets: [], error: "" });
+  const [reload, setReload] = useState(0);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    const controller = new AbortController();
+    async function load() {
+      setCatalog(current => ({ ...current, loading: true, error: "" }));
       try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch("/api/storage/embeddings/buckets", {
-          cache: "no-store",
-        });
-        const data = await res.json();
-
-        if (cancelled) return;
-
-        if (!res.ok) {
-          const errorMsg = data?.error || data?.detail || `Failed to load buckets (${res.status})`;
-          console.error("[RetrievalToolEditor] API error:", errorMsg, data);
-          setError(errorMsg);
-          setBuckets([]);
-          setLoading(false);
-          return;
-        }
-
-        if (data?.ok) {
-          // Handle various response structures (prioritize normalized structure):
-          // 1. { ok: true, data: { buckets: [...] } } - Normalized (preferred)
-          // 2. { ok: true, data: { data: { buckets: [...] } } } - Telnyx wrapped response
-          // 3. { ok: true, data: [...] } - Direct array
-          let items = [];
-
-          if (Array.isArray(data?.data?.buckets)) {
-            // Case 1: Normalized structure (preferred)
-            items = data.data.buckets;
-          } else if (Array.isArray(data?.data?.data?.buckets)) {
-            // Case 2: Telnyx response wrapped: { ok: true, data: { data: { buckets: [...] } } }
-            items = data.data.data.buckets;
-          } else if (Array.isArray(data?.data)) {
-            // Case 3: Direct array: { ok: true, data: [...] }
-            items = data.data;
-          } else if (data?.data?.data && typeof data.data.data === 'object') {
-            // Try to extract buckets from nested structure
-            const nested = data.data.data;
-            if (Array.isArray(nested.buckets)) {
-              items = nested.buckets;
-            } else if (Array.isArray(nested)) {
-              items = nested;
-            }
-          }
-
-          const list = items
-            .map((b) => {
-              const name =
-                typeof b === "string"
-                  ? b
-                  : b?.name || b?.bucket_name || b?.id || "";
-              const id = String(name || "").trim();
-              return id ? { value: id, label: id } : null;
-            })
-            .filter(Boolean);
-
-          if (list.length === 0 && items.length === 0) {
-            console.warn("[RetrievalToolEditor] No buckets found in response:", data);
-          } else {
-            console.log(`[RetrievalToolEditor] Loaded ${list.length} buckets`);
-          }
-
-          setBuckets(list);
-        } else {
-          const errorMsg = data?.error || data?.detail || "Failed to load buckets";
-          console.error("[RetrievalToolEditor] Response not ok:", errorMsg, data);
-          setError(errorMsg);
-          setBuckets([]);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error("[RetrievalToolEditor] Fetch error:", err);
-          setError(err.message || "Failed to load buckets");
-          setBuckets([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        const response = await fetch("/api/storage/embeddings/buckets", { cache: "no-store", signal: controller.signal });
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body?.ok || !Array.isArray(body.data?.buckets)) throw new Error("catalog unavailable");
+        const buckets = body.data.buckets.map(item => typeof item === "string" ? item : item.name || item.bucket_name || item.id).filter(Boolean);
+        if (!controller.signal.aborted) setCatalog({ loading: false, buckets: [...new Set(buckets)], error: "" });
+      } catch {
+        if (!controller.signal.aborted) setCatalog({ loading: false, buckets: [], error: "Knowledge sources could not be loaded. Your selected sources are unchanged. Try again." });
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  function update(nextIds, nextMax) {
-    onChange?.({
-      ...(value || { type: "retrieval" }),
-      retrieval: { bucket_ids: nextIds, max_num_results: Number(nextMax || 0) },
-    });
-  }
-
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-
-  return (
-    <div className="space-y-3 mt-2">
-      <div>
-        <label className="text-xs">Selected Buckets</label>
-        <div className="space-y-2 p-2 ">
-          <div className="flex flex-wrap gap-2">
-            {Array.from(selectedSet).map((id) => (
-              <span
-                key={id}
-                className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs border-telnyx-green"
-              >
-                <span className="truncate max-w-[200px]">{id}</span>
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    const next = new Set(selectedSet);
-                    next.delete(id);
-                    update(Array.from(next), maxResults);
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="space-y-1">
-            {error && <div className="text-xs text-red-500 mb-2">{error}</div>}
-            {!loading && !error && buckets.length === 0 && (
-              <div className="text-xs text-muted-foreground mb-2">
-                No embedding buckets available. Create buckets in Telnyx Storage
-                to use with retrieval.
-              </div>
-            )}
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
-                <label className="text-xs mb-1.5 block">Buckets</label>
-                <Combobox
-                  value=""
-                  disabled={loading || buckets.length === 0}
-                  onChange={(val) => {
-                    const next = new Set(selectedSet);
-                    next.add(val);
-                    update(Array.from(next), maxResults);
-                  }}
-                  options={buckets}
-                  placeholder={
-                    loading
-                      ? "Loading buckets..."
-                      : buckets.length === 0
-                      ? "No buckets available"
-                      : "Search buckets…"
-                  }
-                  emptyLabel="No buckets found"
-                  triggerClassName="w-full"
-                  contentClassName="w-[400px]"
-                  searchable={true}
-                />
-              </div>
-              <div className="w-[220px]">
-                <label className="text-xs mb-1.5 block">Max Number of Results</label>
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-full"
-                  value={maxResults}
-                  onChange={(e) => {
-                    const v = Number(e.target.value || 0);
-                    setMaxResults(v);
-                    update(Array.from(selectedSet), v);
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    }
+    load();
+    return () => controller.abort();
+  }, [reload]);
+  const update = patch => onChange({ ...value, retrieval: { ...config, ...patch } });
+  return <div className="space-y-5">
+    <div className="space-y-2"><Label>{t("Knowledge sources")}</Label><p className="text-xs text-muted-foreground">{t("Choose embedded Telnyx Storage buckets for the assistant to search.")}</p>
+      <div className="flex flex-wrap gap-2">{selected.map(id => <span key={id} className="inline-flex max-w-full items-center gap-2 rounded-md border px-3 py-1.5 text-sm"><span className="truncate">{id}</span><button type="button" aria-label={t("Remove {value0}", { value0: id })} onClick={() => update({ bucket_ids: selected.filter(item => item !== id) })}><IconX className="size-4" /></button></span>)}</div>
     </div>
-  );
+    <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
+      <div className="space-y-2"><Label>{t("Add knowledge source")}</Label>
+        {catalog.loading ? <Skeleton className="h-10 w-full" /> : catalog.error ? <div className="space-y-2" role="alert"><p className="text-sm text-destructive">{t(catalog.error)}</p><Button type="button" size="sm" variant="outline" onClick={() => setReload(v => v + 1)}>{t("Try again")}</Button></div> : catalog.buckets.length ? <Combobox value="" options={catalog.buckets.filter(id => !selected.includes(id)).map(id => ({ value: id, label: id }))} onChange={id => { if (id && !selected.includes(id)) update({ bucket_ids: [...selected, id] }); }} placeholder={t("Choose a knowledge source")} emptyLabel={t("No more knowledge sources available")} triggerClassName="w-full" contentClassName="w-[min(400px,80vw)]" searchable /> : <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">{t("No embedded knowledge sources yet. Embed a bucket in Telnyx Storage, then refresh this list.")} <button type="button" className="underline" onClick={() => setReload(v => v + 1)}>{t("Refresh")}</button></p>}
+      </div>
+      <div className="space-y-2"><Label htmlFor="retrieval-results">{t("Maximum results")}</Label><Input id="retrieval-results" type="number" min={1} step={1} value={config.max_num_results ?? 3} onChange={e => update({ max_num_results: Number(e.target.value) })} /></div>
+    </div>
+  </div>;
 }

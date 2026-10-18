@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
@@ -7,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { WIDGET_ICON_CATALOG } from "@/lib/widgets/icon-catalog";
 
 export default function IconPicker({ label = "Icon", hint, value, onChange }) {
+  const tUi = useUiText();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const filtered = useMemo(() => {
@@ -22,22 +25,22 @@ export default function IconPicker({ label = "Icon", hint, value, onChange }) {
       {hint && <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>}
       <button type="button" className="flex h-10 items-center gap-3 rounded-md border bg-background px-3 text-left text-sm" onClick={() => setOpen((current) => !current)}>
         <WidgetIcon name={value} size={18} />
-        <span className="min-w-0 flex-1 truncate">{WIDGET_ICON_CATALOG.find(([id]) => id === value)?.[1] || value}</span>
-        <span className="text-xs text-muted-foreground">{open ? "Close" : "Choose"}</span>
+        <span className="min-w-0 flex-1 truncate">{(WIDGET_ICON_CATALOG.find(([id]) => id === value)?.[1] ? tUi(WIDGET_ICON_CATALOG.find(([id]) => id === value)[1]) : value)}</span>
+        <span className="text-xs text-muted-foreground">{open ? tUi("Close") : tUi("Choose")}</span>
       </button>
       {open && (
         <div className="rounded-lg border bg-background p-2 shadow-sm">
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-8" placeholder="Search 50+ icons…" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-8" placeholder={tUi("Search 50+ icons…")} />
           </div>
           <div className="grid max-h-64 grid-cols-6 gap-1 overflow-y-auto pr-1">
             {filtered.map(([id, name]) => (
               <button
                 key={id}
                 type="button"
-                title={name}
-                aria-label={name}
+                title={tUi(name)}
+                aria-label={tUi(name)}
                 className={`grid aspect-square place-items-center rounded-md border transition-colors hover:bg-muted ${id === value ? "border-primary bg-primary/10 text-primary" : "border-transparent"}`}
                 onClick={() => { onChange(id); setOpen(false); }}
               >

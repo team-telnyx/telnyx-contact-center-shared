@@ -13,10 +13,10 @@ window.EventSource = class extends EventTarget {
   close() {}
 };
 const snapshot = { endpointId: null, generation: '0', endpoints: [
-  {id:'old-web',label:'Computer',kind:'web',reachable:false},
-  {id:'old-phone',label:'iPhone',kind:'ios',reachable:false},
-  {id:'web',label:'Computer',kind:'web',reachable:true},
-  {id:'phone',label:'Phone',kind:'ios',reachable:false},
+  {id:'old-web',deviceId:'desk',label:'Computer',kind:'web',reachable:false},
+  {id:'old-phone',deviceId:'iphone',label:'iPhone',kind:'ios',formFactor:'phone',reachable:false},
+  {id:'web',deviceId:'desk',label:'Computer',kind:'web',reachable:true},
+  {id:'phone',deviceId:'iphone',label:'Phone',kind:'ios',formFactor:'phone',reachable:false},
 ] };
 fixture.enablePhone = async () => { snapshot.endpoints.find(device => device.id === 'phone').reachable = true; await refreshVoiceEndpoints(); };
 fixture.remoteSelection = (id) => {
@@ -52,7 +52,7 @@ window.fetch = async (url, options = {}) => {
   throw new Error(`Unexpected fixture request: ${url}`);
 };
 createRoot(document.getElementById('root')).render(<TelephonyProvider><ContactCenterStreamProvider>
-  <div className="flex justify-end border-b bg-muted p-4" data-testid="mini-phone"><VoiceRecoveryBadge/></div>
+  <div className="flex justify-end border-b bg-muted p-4" data-testid="mini-phone"><VoiceRecoveryBadge promptForDevice/></div>
   <div className="fixed bottom-5 right-5 z-[1000] flex w-80 items-center gap-3 rounded-xl border bg-muted p-4" data-testid="floating-phone">
     <VoiceRecoveryBadge/><span>Floating phone</span>
   </div>

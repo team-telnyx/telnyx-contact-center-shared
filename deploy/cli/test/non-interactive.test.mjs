@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nonInteractiveIo, runWizard } from '../lib/wizard.mjs';
@@ -78,6 +79,22 @@ describe('nonInteractiveIo', () => {
     );
   });
 });
+
+// The preflight port probe binds each port for real. Fixed numbers inside the
+// Linux ephemeral range (32768-60999) collide with whatever outgoing connection
+// the runner happens to hold at that moment, and the wizard then enters the
+// port-conflict step that an unattended run cannot answer. Let the OS hand out
+// ports that are free right now, on the same wildcard host the probe binds.
+async function freePorts(count) {
+  const servers = await Promise.all(Array.from({ length: count }, () => new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', reject);
+    server.listen(0, '0.0.0.0', () => resolve(server));
+  })));
+  const ports = servers.map((server) => server.address().port);
+  await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
+  return ports;
+}
 
 describe('runWizard with --non-interactive answers (Task 1.4)', () => {
   let repoRoot;
@@ -171,7 +188,7 @@ describe('runWizard with --non-interactive answers (Task 1.4)', () => {
       io,
       execImpl,
       fetchImpl,
-      ports: [59911, 59912],
+      ports: await freePorts(2),
       buyNumber: false,
       // No domain in the answers, so the Local flow takes the auto-tunnel
       // branch. Without a fake this spawned a real, detached cloudflared on

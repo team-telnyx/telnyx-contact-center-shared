@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { useSyncExternalStore } from "react";
 import { interactionClock } from "@/lib/contact-center/interaction-clock.mjs";
 import { Badge } from "@/components/ui/badge";
@@ -6,12 +8,13 @@ import { Badge } from "@/components/ui/badge";
 const noSubscribe = () => () => {};
 const noSnapshot = () => null;
 export default function InteractionSla({ sla, now: suppliedNow }) {
+  const tUi = useUiText();
   const ticking = suppliedNow === undefined && Boolean(sla?.deadline_at) && !sla?.served_at && ["pending", "breached"].includes(sla?.state);
   const clockNow = useSyncExternalStore(ticking ? interactionClock.subscribe : noSubscribe, ticking ? interactionClock.getSnapshot : noSnapshot, noSnapshot);
   const now = suppliedNow === undefined ? clockNow : suppliedNow;
   if (!sla)
     return (
-      <span className="text-[10px] text-muted-foreground">SLA unavailable</span>
+      <span className="text-[10px] text-muted-foreground">{tUi("SLA unavailable")}</span>
     );
   const measuredState =
     sla.state === "pending" &&
@@ -51,19 +54,19 @@ export default function InteractionSla({ sla, now: suppliedNow }) {
     !["pending", "breached"].includes(measuredState)
       ? ""
       : seconds > 0
-        ? ` · ${seconds >= 60 ? Math.ceil(seconds / 60) + "m" : seconds + "s"} left`
-        : " · overdue";
+        ? tUi(" · {value0} left", { value0: seconds >= 60 ? Math.ceil(seconds / 60) + "m" : seconds + "s" })
+        : tUi(" · overdue");
   return (
     <Badge
       variant="outline"
       className={`whitespace-nowrap text-[10px] ${measuredState === "breached" || measuredState === "unserved" ? "border-rose-500/30 text-rose-600 dark:text-rose-400" : atRisk ? "border-amber-500/30 text-amber-600 dark:text-amber-400" : measuredState === "met" ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
       title={
         sla.excluded_reason || (sla.policy
-          ? `${sla.policy.source || "Policy"} · revision ${sla.policy.revision || 0} · ${sla.policy?.thresholdSeconds ?? "—"}s · target ${sla.policy.targetPercentage ?? "—"}%`
+          ? tUi("{value0} · revision {value1} · {value2}s · target {value3}%", { value0: sla.policy.source || tUi("Policy"), value1: sla.policy.revision || 0, value2: sla.policy?.thresholdSeconds ?? "—", value3: sla.policy.targetPercentage ?? "—" })
           : undefined)
       }
     >
-      {state}
+      {tUi(state)}
       {elapsed}
     </Badge>
   );

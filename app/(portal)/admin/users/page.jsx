@@ -1,4 +1,7 @@
 "use client";
+import { roleDisplayText } from "@/lib/i18n/role-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -52,6 +55,7 @@ import { roleBadgeClass } from "@/components/permissions/role-badges";
 import { Can } from "@/components/auth-provider";
 
 function SkillsInfoCell({ user }) {
+  const tUi = useUiText();
   const skills = user.skills || {};
   let skillsObj = {};
   try {
@@ -102,23 +106,22 @@ function SkillsInfoCell({ user }) {
             <button
               type="button"
               className="inline-flex items-center text-muted-foreground hover:text-foreground"
-              title="View skills"
+              title={tUi("View skills")}
             >
               <IconInfoCircle className="size-3" />
             </button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>User Skills</DialogTitle>
-              <DialogDescription>
-                Skills assigned to {user.first_name} {user.last_name || user.username}
+              <DialogTitle>{tUi("User Skills")}</DialogTitle>
+              <DialogDescription>{tUi("Skills assigned to ")}{user.first_name} {user.last_name || user.username}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 mt-4">
               {loading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
+                <p className="text-sm text-muted-foreground">{tUi("Loading...")}</p>
               ) : skillEntries.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No skills assigned</p>
+                <p className="text-sm text-muted-foreground">{tUi("No skills assigned")}</p>
               ) : (
                 skillEntries.map(({ skill, proficiency }) => (
                   <div
@@ -161,6 +164,7 @@ function SkillsInfoCell({ user }) {
 
 
 export default function AdminUsersPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -266,7 +270,8 @@ export default function AdminUsersPage() {
 
   function roleLabel(role) {
     const key = String(role || "user").toLowerCase();
-    return roleCatalog[key]?.name || key.toUpperCase();
+    const definition = roleCatalog[key];
+    return definition ? roleDisplayText(tUi, {...definition, key}) : ({agent: tUi("Agent"), supervisor: tUi("Supervisor"), admin: tUi("Admin"), owner: tUi("Owner")}[key] || key.toUpperCase());
   }
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -286,41 +291,37 @@ export default function AdminUsersPage() {
 
   const headerActions = <>
     <Can permission="users:create"><Button size="sm" className="gap-2" onClick={() => setAddUserOpen(true)}>
-      <IconUserPlus className="size-4" />
-      Add User
-    </Button></Can>
+      <IconUserPlus className="size-4" />{tUi("Add User")}</Button></Can>
     <Button
       variant="secondary"
       onClick={() => setFilters({ role: "all", q: "" })}
-    >
-      Clear
-    </Button>
+    >{tUi("Clear")}</Button>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Users" badges={<Badge variant="secondary">{total} users</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Users")} badges={<Badge variant="secondary">{total}{tUi(" users")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="users">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="flex gap-2 items-end">
             <div style={{ width: "20%", minWidth: 0 }}>
-              <label className="text-xs">Name</label>
+              <label className="text-xs">{tUi("Name")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="name, username, mobile…"
+                placeholder={tUi("name, username, mobile…")}
                 className="w-full"
               />
             </div>
             <div style={{ width: "30%", minWidth: 0 }}>
-              <label className="text-xs">Role</label>
+              <label className="text-xs">{tUi("Role")}</label>
               <Select
                 value={filters.role || "all"}
                 onValueChange={(value) =>
@@ -328,10 +329,10 @@ export default function AdminUsersPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
                   {availableRoles.map((role) => (
                     <SelectItem key={role} value={role}>
                       {roleLabel(role)}
@@ -366,14 +367,12 @@ export default function AdminUsersPage() {
                 </colgroup>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">Username</TableHead>
-                    <TableHead className="px-[10px]">Roles</TableHead>
-                    <TableHead className="px-[10px]">Skills</TableHead>
-                    <TableHead className="px-[10px]">Verified</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Username")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Roles")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Skills")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Verified")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -426,7 +425,7 @@ export default function AdminUsersPage() {
                                   : "border-red-500 text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 min-w-[56px] justify-center"
                               }
                             >
-                              {u.verified ? "YES" : "NO"}
+                              {u.verified ? tUi("YES") : tUi("NO")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap text-right">
@@ -438,7 +437,7 @@ export default function AdminUsersPage() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit user"
+                                title={tUi("Edit user")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -455,25 +454,20 @@ export default function AdminUsersPage() {
                                     <Can permission="users:delete"><button
                                       type="button"
                                       className="inline-flex items-center text-red-500"
-                                      title="Delete user"
+                                      title={tUi("Delete user")}
                                     >
                                       <IconTrash className="size-4" />
                                     </button></Can>
                                   </DialogTrigger>
                                   <DialogContent>
                                     <DialogHeader>
-                                      <DialogTitle>Delete user?</DialogTitle>
-                                      <DialogDescription>
-                                        This action cannot be undone. This will
-                                        permanently delete the user "
-                                        {u.username}".
+                                      <DialogTitle>{tUi("Delete user?")}</DialogTitle>
+                                      <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the user \"")}{u.username}&quot;.
                                       </DialogDescription>
                                     </DialogHeader>
                                     <div className="flex justify-end gap-2 pt-2">
                                       <DialogClose asChild>
-                                        <Button variant="outline">
-                                          Cancel
-                                        </Button>
+                                        <Button variant="outline">{tUi("Cancel")}</Button>
                                       </DialogClose>
                                       <DialogClose asChild>
                                         <Button
@@ -481,9 +475,7 @@ export default function AdminUsersPage() {
                                           onClick={() =>
                                             onDelete(u.id, u.roles || u.role)
                                           }
-                                        >
-                                          Delete
-                                        </Button>
+                                        >{tUi("Delete")}</Button>
                                       </DialogClose>
                                     </div>
                                   </DialogContent>
@@ -493,7 +485,7 @@ export default function AdminUsersPage() {
                                   type="button"
                                   disabled
                                   className="inline-flex items-center text-gray-400 opacity-50 cursor-not-allowed"
-                                  title="Owner cannot be deleted"
+                                  title={tUi("Owner cannot be deleted")}
                                 >
                                   <IconTrash className="size-4" />
                                 </button>
@@ -509,9 +501,7 @@ export default function AdminUsersPage() {
                       <TableCell
                         colSpan={6}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No users
-                      </TableCell>
+                      >{tUi("No users")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -521,12 +511,10 @@ export default function AdminUsersPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -546,8 +534,7 @@ export default function AdminUsersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium">
-                Page {page} of {pageCount}
+              <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
               </div>
               <div className="ml-auto flex items-center gap-2 lg:ml-0">
                 <Button
@@ -556,7 +543,7 @@ export default function AdminUsersPage() {
                   onClick={() => setPage(1)}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to first page</span>
+                  <span className="sr-only">{tUi("Go to first page")}</span>
                   <IconChevronsLeft />
                 </Button>
                 <Button
@@ -566,7 +553,7 @@ export default function AdminUsersPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to previous page</span>
+                  <span className="sr-only">{tUi("Go to previous page")}</span>
                   <IconChevronLeft />
                 </Button>
                 <Button
@@ -576,7 +563,7 @@ export default function AdminUsersPage() {
                   onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to next page</span>
+                  <span className="sr-only">{tUi("Go to next page")}</span>
                   <IconChevronRight />
                 </Button>
                 <Button
@@ -586,7 +573,7 @@ export default function AdminUsersPage() {
                   onClick={() => setPage(pageCount)}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to last page</span>
+                  <span className="sr-only">{tUi("Go to last page")}</span>
                   <IconChevronsRight />
                 </Button>
               </div>

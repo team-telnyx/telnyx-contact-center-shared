@@ -75,12 +75,13 @@ export async function prepareAcdTestPool(testDbName) {
       DROP TABLE IF EXISTS cc_mobile_alerts, cc_mobile_devices, cc_agent_voice_preferences, cc_voice_endpoints, acd_cobrowse_tickets, acd_cobrowse_sessions, acd_cobrowse_pairings, acd_cobrowse_claim_attempts,
         acd_sla_measurements, cc_sla_policy_audit, form_submissions, aa_ai_handoff_events,
         quality_ai_jobs, quality_evaluations, aa_workflow_sessions CASCADE;
-      DROP TABLE IF EXISTS acd_work_item_annotations, acd_transcripts, acd_recordings,
+      DROP TABLE IF EXISTS cc_video_ai_commands, cc_video_ai_events, cc_video_members, cc_video_ai_sessions, cc_video_ai_profiles, cc_video_ai_workers,
+        acd_work_item_annotations, acd_transcripts, acd_recordings,
         acd_action_requests, acd_outbound_lines, acd_direct_intents, acd_test_provider_calls, acd_stream_events, acd_retention_watermarks, acd_operator_actions, acd_outbox, acd_webhook_events, acd_events, acd_commands,
         acd_sagas, acd_agent_sessions, acd_agent_state, acd_reservations, acd_offers,
         acd_leg_intents, acd_legs, acd_segments, acd_work_items CASCADE;
       DROP TABLE IF EXISTS cc_agent_status_intervals,
-        acd_text_attachments, cc_widget_handoffs, cc_widget_handoff_integration, cc_widget_ai_commands, cc_widget_sessions, cc_widget_preview_assets, cc_widget_audit, cc_widget_revisions, cc_widgets,
+        cc_widget_ai_images, acd_text_attachments, cc_widget_handoffs, cc_widget_handoff_integration, cc_widget_ai_commands, cc_widget_sessions, cc_widget_preview_assets, cc_widget_audit, cc_widget_revisions, cc_widgets,
         cc_email_compose_requests, cc_email_audit, cc_email_drafts, cc_email_deliveries, cc_email_messages, cc_email_threads, cc_email_received, cc_email_mailboxes,
         cc_sms_audit, cc_sms_templates, cc_sms_messages, cc_sms_threads, cc_sms_received, cc_sms_numbers, cc_sms_profiles,
         cc_whatsapp_audit, cc_whatsapp_messages, cc_whatsapp_threads, cc_whatsapp_media, cc_whatsapp_received, cc_whatsapp_numbers, cc_whatsapp_profiles, cc_whatsapp_accounts,

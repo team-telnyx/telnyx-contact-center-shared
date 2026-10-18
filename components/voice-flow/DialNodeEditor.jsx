@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Label } from "@/components/ui/label";
@@ -61,6 +63,7 @@ export default function DialNodeEditor({
   availableVariables = [],
   onOutputsChange,
 }) {
+  const tUi = useUiText();
   // Basic fields
   const [to, setTo] = useState(config.to || "");
   const [from, setFrom] = useState(config.from || "");
@@ -626,8 +629,7 @@ export default function DialNodeEditor({
       {/* Basic Call Settings */}
       <div className="space-y-3">
         <div>
-          <Label>
-            To Number <span className="text-red-500">*</span>
+          <Label>{tUi("To Number ")}<span className="text-red-500">*</span>
           </Label>
           <VariableInput
             value={to}
@@ -635,18 +637,16 @@ export default function DialNodeEditor({
               setTo(value);
             }}
             availableVariables={availableVariables}
-            placeholder="+15551234567 or {{phone_number}}"
+            placeholder={tUi("+15551234567 or {{phone_number}}")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            The DID or SIP URI to dial (supports variables like{" "}
+          <p className="text-xs text-muted-foreground mt-1">{tUi("The DID or SIP URI to dial (supports variables like")}{" "}
             {`{{phone_number}}`})
           </p>
         </div>
 
         <div>
-          <Label>
-            From Number <span className="text-red-500">*</span>
+          <Label>{tUi("From Number ")}<span className="text-red-500">*</span>
           </Label>
           <VariableInput
             value={from}
@@ -654,56 +654,49 @@ export default function DialNodeEditor({
               setFrom(value);
             }}
             availableVariables={availableVariables}
-            placeholder="+15559876543 or {{from_number}}"
+            placeholder={tUi("+15559876543 or {{from_number}}")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            The `from` number to be used as the caller id (supports variables
-            like {`{{from_number}}`})
+          <p className="text-xs text-muted-foreground mt-1">{tUi("The `from` number to be used as the caller id (supports variables like ")}{`{{from_number}}`})
           </p>
         </div>
 
         <div>
-          <Label>From Display Name</Label>
+          <Label>{tUi("From Display Name")}</Label>
           <VariableInput
             value={fromDisplayName}
             onChange={(value) => {
               setFromDisplayName(value);
             }}
             availableVariables={availableVariables}
-            placeholder="John Doe or {{display_name}}"
+            placeholder={tUi("John Doe or {{display_name}}")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            The caller ID name to be used for the call (supports variables like{" "}
+          <p className="text-xs text-muted-foreground mt-1">{tUi("The caller ID name to be used for the call (supports variables like")}{" "}
             {`{{display_name}}`})
           </p>
         </div>
 
         <div>
-          <Label>Connection ID</Label>
+          <Label>{tUi("Connection ID")}</Label>
           <Input
             type="text"
             value={connectionId}
             onChange={(e) => {
               setConnectionId(e.target.value);
             }}
-            placeholder="Connection ID"
+            placeholder={tUi("Connection ID")}
             readOnly
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            The ID of the Call Control App
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("The ID of the Call Control App")}</p>
         </div>
 
         {webhookUrl && (
           <div>
-            <Label>Webhook URL</Label>
+            <Label>{tUi("Webhook URL")}</Label>
             <Input type="text" value={webhookUrl} readOnly className="mt-1" />
-            <p className="text-xs text-muted-foreground mt-1">
-              URL for webhooks related to this call (auto-generated)
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("URL for webhooks related to this call (auto-generated)")}</p>
           </div>
         )}
       </div>
@@ -721,14 +714,12 @@ export default function DialNodeEditor({
                 audioExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Audio & Media
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Audio & Media")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>Audio URL</Label>
+            <Label>{tUi("Audio URL")}</Label>
             <Input
               type="text"
               value={audioUrl}
@@ -738,25 +729,21 @@ export default function DialNodeEditor({
               placeholder="https://example.com/audio.mp3"
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The URL of the audio file to play when the call is answered
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The URL of the audio file to play when the call is answered")}</p>
           </div>
 
           <div>
-            <Label>Media Name</Label>
+            <Label>{tUi("Media Name")}</Label>
             <Input
               type="text"
               value={mediaName}
               onChange={(e) => {
                 setMediaName(e.target.value);
               }}
-              placeholder="Media file name"
+              placeholder={tUi("Media file name")}
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The name of the media file to play
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The name of the media file to play")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -774,14 +761,12 @@ export default function DialNodeEditor({
                 timingExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Timing
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Timing")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>Timeout (seconds)</Label>
+            <Label>{tUi("Timeout (seconds)")}</Label>
             <Input
               type="number"
               value={timeoutSecs}
@@ -791,13 +776,11 @@ export default function DialNodeEditor({
               placeholder="60"
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The number of seconds to wait for the call to be answered
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The number of seconds to wait for the call to be answered")}</p>
           </div>
 
           <div>
-            <Label>Time Limit (seconds)</Label>
+            <Label>{tUi("Time Limit (seconds)")}</Label>
             <Input
               type="number"
               value={timeLimitSecs}
@@ -807,9 +790,7 @@ export default function DialNodeEditor({
               placeholder="3600"
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The maximum duration of the call in seconds
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The maximum duration of the call in seconds")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -827,42 +808,36 @@ export default function DialNodeEditor({
                 bridgingExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Bridging
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Bridging")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>Link To</Label>
+            <Label>{tUi("Link To")}</Label>
             <Input
               type="text"
               value={linkTo}
               onChange={(e) => {
                 setLinkTo(e.target.value);
               }}
-              placeholder="Call Control ID"
+              placeholder={tUi("Call Control ID")}
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The call control ID to link this call to
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The call control ID to link this call to")}</p>
           </div>
 
           <div>
-            <Label>Bridge Intent</Label>
+            <Label>{tUi("Bridge Intent")}</Label>
             <Input
               type="text"
               value={bridgeIntent}
               onChange={(e) => {
                 setBridgeIntent(e.target.value);
               }}
-              placeholder="Bridge intent"
+              placeholder={tUi("Bridge intent")}
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The intent for bridging the call
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The intent for bridging the call")}</p>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -876,13 +851,9 @@ export default function DialNodeEditor({
             <Label
               htmlFor="bridge_on_answer"
               className="text-sm font-normal cursor-pointer"
-            >
-              Bridge On Answer
-            </Label>
+            >{tUi("Bridge On Answer")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            Whether to bridge the call when it is answered
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2">{tUi("Whether to bridge the call when it is answered")}</p>
 
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -895,13 +866,9 @@ export default function DialNodeEditor({
             <Label
               htmlFor="park_after_unbridge"
               className="text-sm font-normal cursor-pointer"
-            >
-              Park After Unbridge
-            </Label>
+            >{tUi("Park After Unbridge")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            Whether to park the call after unbridging
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2">{tUi("Whether to park the call after unbridging")}</p>
         </CollapsibleContent>
       </Collapsible>
 
@@ -918,9 +885,7 @@ export default function DialNodeEditor({
                 recordingExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Recording
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Recording")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
@@ -935,18 +900,14 @@ export default function DialNodeEditor({
             <Label
               htmlFor="record"
               className="text-sm font-normal cursor-pointer"
-            >
-              Record Call
-            </Label>
+            >{tUi("Record Call")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            Whether to record the call
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2">{tUi("Whether to record the call")}</p>
 
           {record && (
             <>
               <div>
-                <Label>Record Channels</Label>
+                <Label>{tUi("Record Channels")}</Label>
                 <Select
                   value={recordChannels}
                   onValueChange={(value) => {
@@ -954,20 +915,18 @@ export default function DialNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select channels" />
+                    <SelectValue placeholder={tUi("Select channels")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single">Single</SelectItem>
-                    <SelectItem value="dual">Dual</SelectItem>
+                    <SelectItem value="single">{tUi("Single")}</SelectItem>
+                    <SelectItem value="dual">{tUi("Dual")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  The recording channels
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The recording channels")}</p>
               </div>
 
               <div>
-                <Label>Record Format</Label>
+                <Label>{tUi("Record Format")}</Label>
                 <Select
                   value={recordFormat}
                   onValueChange={(value) => {
@@ -975,20 +934,18 @@ export default function DialNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select format" />
+                    <SelectValue placeholder={tUi("Select format")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mp3">MP3</SelectItem>
-                    <SelectItem value="wav">WAV</SelectItem>
+                    <SelectItem value="mp3">{tUi("MP3")}</SelectItem>
+                    <SelectItem value="wav">{tUi("WAV")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  The recording format
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The recording format")}</p>
               </div>
 
               <div>
-                <Label>Record Max Length (seconds)</Label>
+                <Label>{tUi("Record Max Length (seconds)")}</Label>
                 <Input
                   type="number"
                   value={recordMaxLength}
@@ -998,13 +955,11 @@ export default function DialNodeEditor({
                   placeholder="3600"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The maximum length of the recording in seconds
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The maximum length of the recording in seconds")}</p>
               </div>
 
               <div>
-                <Label>Record Timeout (seconds)</Label>
+                <Label>{tUi("Record Timeout (seconds)")}</Label>
                 <Input
                   type="number"
                   value={recordTimeoutSecs}
@@ -1014,13 +969,11 @@ export default function DialNodeEditor({
                   placeholder="30"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The timeout for recording in seconds
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The timeout for recording in seconds")}</p>
               </div>
 
               <div>
-                <Label>Record Track</Label>
+                <Label>{tUi("Record Track")}</Label>
                 <Select
                   value={recordTrack}
                   onValueChange={(value) => {
@@ -1028,17 +981,15 @@ export default function DialNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select track" />
+                    <SelectValue placeholder={tUi("Select track")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="inbound">Inbound</SelectItem>
-                    <SelectItem value="outbound">Outbound</SelectItem>
-                    <SelectItem value="both">Both</SelectItem>
+                    <SelectItem value="inbound">{tUi("Inbound")}</SelectItem>
+                    <SelectItem value="outbound">{tUi("Outbound")}</SelectItem>
+                    <SelectItem value="both">{tUi("Both")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Which track(s) to record
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Which track(s) to record")}</p>
               </div>
             </>
           )}
@@ -1058,30 +1009,26 @@ export default function DialNodeEditor({
                 supervisionExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Supervision
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Supervision")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>Supervise Call Control ID</Label>
+            <Label>{tUi("Supervise Call Control ID")}</Label>
             <Input
               type="text"
               value={superviseCallControlId}
               onChange={(e) => {
                 setSuperviseCallControlId(e.target.value);
               }}
-              placeholder="Call Control ID"
+              placeholder={tUi("Call Control ID")}
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The call control ID to supervise
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The call control ID to supervise")}</p>
           </div>
 
           <div>
-            <Label>Supervisor Role</Label>
+            <Label>{tUi("Supervisor Role")}</Label>
             <Select
               value={supervisorRole}
               onValueChange={(value) => {
@@ -1089,17 +1036,15 @@ export default function DialNodeEditor({
               }}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select role" />
+                <SelectValue placeholder={tUi("Select role")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="barge">Barge</SelectItem>
-                <SelectItem value="whisper">Whisper</SelectItem>
-                <SelectItem value="monitor">Monitor</SelectItem>
+                <SelectItem value="barge">{tUi("Barge")}</SelectItem>
+                <SelectItem value="whisper">{tUi("Whisper")}</SelectItem>
+                <SelectItem value="monitor">{tUi("Monitor")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              The supervisor role for the call
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The supervisor role for the call")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -1117,14 +1062,12 @@ export default function DialNodeEditor({
                 amdExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Answering Machine Detection (AMD)
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Answering Machine Detection (AMD)")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>AMD Mode</Label>
+            <Label>{tUi("AMD Mode")}</Label>
             <Select
               value={answeringMachineDetection}
               onValueChange={(value) => {
@@ -1132,28 +1075,24 @@ export default function DialNodeEditor({
               }}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select AMD mode" />
+                <SelectValue placeholder={tUi("Select AMD mode")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="disabled">Disabled</SelectItem>
-                <SelectItem value="premium">Premium</SelectItem>
-                <SelectItem value="detect">Detect</SelectItem>
-                <SelectItem value="detect_beep">Detect Beep</SelectItem>
-                <SelectItem value="detect_words">Detect Words</SelectItem>
-                <SelectItem value="greeting_end">Greeting End</SelectItem>
+                <SelectItem value="disabled">{tUi("Disabled")}</SelectItem>
+                <SelectItem value="premium">{tUi("Premium")}</SelectItem>
+                <SelectItem value="detect">{tUi("Detect")}</SelectItem>
+                <SelectItem value="detect_beep">{tUi("Detect Beep")}</SelectItem>
+                <SelectItem value="detect_words">{tUi("Detect Words")}</SelectItem>
+                <SelectItem value="greeting_end">{tUi("Greeting End")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Premium detection provides detailed results (human_residence,
-              human_business, machine, silence, fax_detected). Standard
-              detection determines if answered by human or machine.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Premium detection provides detailed results (human_residence, human_business, machine, silence, fax_detected). Standard detection determines if answered by human or machine.")}</p>
           </div>
 
           {answeringMachineDetection !== "disabled" && (
             <>
               <div>
-                <Label>Total Analysis Time (milliseconds)</Label>
+                <Label>{tUi("Total Analysis Time (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.total_analysis_time_millis || ""}
@@ -1168,14 +1107,11 @@ export default function DialNodeEditor({
                   placeholder="3500"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Maximum timeout threshold for overall detection (default:
-                  3500)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Maximum timeout threshold for overall detection (default: 3500)")}</p>
               </div>
 
               <div>
-                <Label>After Greeting Silence (milliseconds)</Label>
+                <Label>{tUi("After Greeting Silence (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.after_greeting_silence_millis || ""}
@@ -1190,14 +1126,11 @@ export default function DialNodeEditor({
                   placeholder="800"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Silence duration threshold after a greeting message or voice
-                  for it be considered human (default: 800)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Silence duration threshold after a greeting message or voice for it be considered human (default: 800)")}</p>
               </div>
 
               <div>
-                <Label>Between Words Silence (milliseconds)</Label>
+                <Label>{tUi("Between Words Silence (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.between_words_silence_millis || ""}
@@ -1212,13 +1145,11 @@ export default function DialNodeEditor({
                   placeholder="50"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Maximum threshold for silence between words (default: 50)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Maximum threshold for silence between words (default: 50)")}</p>
               </div>
 
               <div>
-                <Label>Greeting Duration (milliseconds)</Label>
+                <Label>{tUi("Greeting Duration (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.greeting_duration_millis || ""}
@@ -1233,14 +1164,11 @@ export default function DialNodeEditor({
                   placeholder="3500"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Maximum threshold of a human greeting. If greeting longer than
-                  this value, considered machine (default: 3500)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Maximum threshold of a human greeting. If greeting longer than this value, considered machine (default: 3500)")}</p>
               </div>
 
               <div>
-                <Label>Initial Silence (milliseconds)</Label>
+                <Label>{tUi("Initial Silence (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.initial_silence_millis || ""}
@@ -1255,14 +1183,11 @@ export default function DialNodeEditor({
                   placeholder="3500"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  If initial silence duration is greater than this value,
-                  consider it a machine (default: 3500)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("If initial silence duration is greater than this value, consider it a machine (default: 3500)")}</p>
               </div>
 
               <div>
-                <Label>Maximum Number of Words</Label>
+                <Label>{tUi("Maximum Number of Words")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.maximum_number_of_words || ""}
@@ -1277,14 +1202,11 @@ export default function DialNodeEditor({
                   placeholder="5"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  If number of detected words is greater than this value,
-                  consider it a machine (default: 5)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("If number of detected words is greater than this value, consider it a machine (default: 5)")}</p>
               </div>
 
               <div>
-                <Label>Maximum Word Length (milliseconds)</Label>
+                <Label>{tUi("Maximum Word Length (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.maximum_word_length_millis || ""}
@@ -1299,14 +1221,11 @@ export default function DialNodeEditor({
                   placeholder="3500"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  If a single word lasts longer than this threshold, consider it
-                  a machine (default: 3500)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("If a single word lasts longer than this threshold, consider it a machine (default: 3500)")}</p>
               </div>
 
               <div>
-                <Label>Silence Threshold</Label>
+                <Label>{tUi("Silence Threshold")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.silence_threshold || ""}
@@ -1321,13 +1240,11 @@ export default function DialNodeEditor({
                   placeholder="256"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Minimum noise threshold for any analysis (default: 256)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Minimum noise threshold for any analysis (default: 256)")}</p>
               </div>
 
               <div>
-                <Label>Greeting Total Analysis Time (milliseconds)</Label>
+                <Label>{tUi("Greeting Total Analysis Time (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.greeting_total_analysis_time_millis || ""}
@@ -1342,14 +1259,11 @@ export default function DialNodeEditor({
                   placeholder="5000"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  If machine already detected, maximum timeout threshold to
-                  determine the end of the machine greeting (default: 5000)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("If machine already detected, maximum timeout threshold to determine the end of the machine greeting (default: 5000)")}</p>
               </div>
 
               <div>
-                <Label>Greeting Silence Duration (milliseconds)</Label>
+                <Label>{tUi("Greeting Silence Duration (milliseconds)")}</Label>
                 <Input
                   type="number"
                   value={amdConfig.greeting_silence_duration_millis || ""}
@@ -1364,11 +1278,7 @@ export default function DialNodeEditor({
                   placeholder="1500"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  If machine already detected, maximum threshold for silence
-                  between words. If exceeded, the greeting is considered ended
-                  (default: 1500)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("If machine already detected, maximum threshold for silence between words. If exceeded, the greeting is considered ended (default: 1500)")}</p>
               </div>
             </>
           )}
@@ -1388,16 +1298,12 @@ export default function DialNodeEditor({
                 streamingExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Streaming
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Streaming")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label className="flex items-center gap-2">
-              Stream URL
-              {streamUrlError && (
+            <Label className="flex items-center gap-2">{tUi("Stream URL")}{streamUrlError && (
                 <IconAlertTriangle className="h-4 w-4 text-destructive" />
               )}
             </Label>
@@ -1409,19 +1315,16 @@ export default function DialNodeEditor({
                 setStreamUrlError(validation.valid ? null : validation.error);
               }}
               availableVariables={availableVariables}
-              placeholder="wss://www.example.com/websocket"
+              placeholder={tUi("wss://www.example.com/websocket")}
               className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              The destination WebSocket address where the stream is going to be
-              delivered
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The destination WebSocket address where the stream is going to be delivered")}</p>
           </div>
 
           {streamUrl && (
             <>
               <div>
-                <Label>Stream Track</Label>
+                <Label>{tUi("Stream Track")}</Label>
                 <Select
                   value={streamTrack}
                   onValueChange={(value) => {
@@ -1429,23 +1332,19 @@ export default function DialNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select track" />
+                    <SelectValue placeholder={tUi("Select track")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="inbound_track">Inbound Track</SelectItem>
-                    <SelectItem value="outbound_track">
-                      Outbound Track
-                    </SelectItem>
-                    <SelectItem value="both_tracks">Both Tracks</SelectItem>
+                    <SelectItem value="inbound_track">{tUi("Inbound Track")}</SelectItem>
+                    <SelectItem value="outbound_track">{tUi("Outbound Track")}</SelectItem>
+                    <SelectItem value="both_tracks">{tUi("Both Tracks")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Specifies which track should be streamed
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Specifies which track should be streamed")}</p>
               </div>
 
               <div>
-                <Label>Stream Codec</Label>
+                <Label>{tUi("Stream Codec")}</Label>
                 <Select
                   value={streamCodec || "default"}
                   onValueChange={(value) => {
@@ -1453,27 +1352,23 @@ export default function DialNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select codec (optional)" />
+                    <SelectValue placeholder={tUi("Select codec (optional)")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">Default (from call)</SelectItem>
-                    <SelectItem value="PCMU">PCMU</SelectItem>
-                    <SelectItem value="PCMA">PCMA</SelectItem>
-                    <SelectItem value="G722">G722</SelectItem>
-                    <SelectItem value="OPUS">OPUS</SelectItem>
-                    <SelectItem value="AMR-WB">AMR-WB</SelectItem>
-                    <SelectItem value="L16">L16</SelectItem>
+                    <SelectItem value="default">{tUi("Default (from call)")}</SelectItem>
+                    <SelectItem value="PCMU">{tUi("PCMU")}</SelectItem>
+                    <SelectItem value="PCMA">{tUi("PCMA")}</SelectItem>
+                    <SelectItem value="G722">{tUi("G722")}</SelectItem>
+                    <SelectItem value="OPUS">{tUi("OPUS")}</SelectItem>
+                    <SelectItem value="AMR-WB">{tUi("AMR-WB")}</SelectItem>
+                    <SelectItem value="L16">{tUi("L16")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Specifies the codec to be used for the streamed audio. When
-                  set to default or when transcoding is not possible, the codec
-                  from the call will be used.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Specifies the codec to be used for the streamed audio. When set to default or when transcoding is not possible, the codec from the call will be used.")}</p>
               </div>
 
               <div>
-                <Label>Bidirectional Stream Mode</Label>
+                <Label>{tUi("Bidirectional Stream Mode")}</Label>
                 <Select
                   value={streamBidirectionalMode}
                   onValueChange={(value) => {
@@ -1481,22 +1376,20 @@ export default function DialNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select mode" />
+                    <SelectValue placeholder={tUi("Select mode")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mp3">MP3</SelectItem>
-                    <SelectItem value="rtp">RTP</SelectItem>
+                    <SelectItem value="mp3">{tUi("MP3")}</SelectItem>
+                    <SelectItem value="rtp">{tUi("RTP")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Configures method of bidirectional streaming (mp3, rtp)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Configures method of bidirectional streaming (mp3, rtp)")}</p>
               </div>
 
               {streamBidirectionalMode === "rtp" && (
                 <>
                   <div>
-                    <Label>Bidirectional Stream Codec</Label>
+                    <Label>{tUi("Bidirectional Stream Codec")}</Label>
                     <Select
                       value={streamBidirectionalCodec}
                       onValueChange={(value) => {
@@ -1504,25 +1397,22 @@ export default function DialNodeEditor({
                       }}
                     >
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select codec" />
+                        <SelectValue placeholder={tUi("Select codec")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="PCMU">PCMU</SelectItem>
-                        <SelectItem value="PCMA">PCMA</SelectItem>
-                        <SelectItem value="G722">G722</SelectItem>
-                        <SelectItem value="OPUS">OPUS</SelectItem>
-                        <SelectItem value="AMR-WB">AMR-WB</SelectItem>
-                        <SelectItem value="L16">L16</SelectItem>
+                        <SelectItem value="PCMU">{tUi("PCMU")}</SelectItem>
+                        <SelectItem value="PCMA">{tUi("PCMA")}</SelectItem>
+                        <SelectItem value="G722">{tUi("G722")}</SelectItem>
+                        <SelectItem value="OPUS">{tUi("OPUS")}</SelectItem>
+                        <SelectItem value="AMR-WB">{tUi("AMR-WB")}</SelectItem>
+                        <SelectItem value="L16">{tUi("L16")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Indicates codec for bidirectional streaming RTP payloads.
-                      Used only with stream_bidirectional_mode=rtp.
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Indicates codec for bidirectional streaming RTP payloads. Used only with stream_bidirectional_mode=rtp.")}</p>
                   </div>
 
                   <div>
-                    <Label>Bidirectional Stream Sampling Rate</Label>
+                    <Label>{tUi("Bidirectional Stream Sampling Rate")}</Label>
                     <Select
                       value={String(streamBidirectionalSamplingRate)}
                       onValueChange={(value) => {
@@ -1530,25 +1420,23 @@ export default function DialNodeEditor({
                       }}
                     >
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select sampling rate" />
+                        <SelectValue placeholder={tUi("Select sampling rate")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="8000">8000 Hz</SelectItem>
-                        <SelectItem value="16000">16000 Hz</SelectItem>
-                        <SelectItem value="22050">22050 Hz</SelectItem>
-                        <SelectItem value="24000">24000 Hz</SelectItem>
-                        <SelectItem value="48000">48000 Hz</SelectItem>
+                        <SelectItem value="8000">{tUi("8000 Hz")}</SelectItem>
+                        <SelectItem value="16000">{tUi("16000 Hz")}</SelectItem>
+                        <SelectItem value="22050">{tUi("22050 Hz")}</SelectItem>
+                        <SelectItem value="24000">{tUi("24000 Hz")}</SelectItem>
+                        <SelectItem value="48000">{tUi("48000 Hz")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Audio sampling rate for bidirectional RTP streaming
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Audio sampling rate for bidirectional RTP streaming")}</p>
                   </div>
                 </>
               )}
 
               <div>
-                <Label>Bidirectional Stream Target Legs</Label>
+                <Label>{tUi("Bidirectional Stream Target Legs")}</Label>
                 <Select
                   value={streamBidirectionalTargetLegs}
                   onValueChange={(value) => {
@@ -1556,18 +1444,15 @@ export default function DialNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select target legs" />
+                    <SelectValue placeholder={tUi("Select target legs")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="both">Both</SelectItem>
-                    <SelectItem value="self">Self</SelectItem>
-                    <SelectItem value="opposite">Opposite</SelectItem>
+                    <SelectItem value="both">{tUi("Both")}</SelectItem>
+                    <SelectItem value="self">{tUi("Self")}</SelectItem>
+                    <SelectItem value="opposite">{tUi("Opposite")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Specifies which call legs should receive the bidirectional
-                  stream audio
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Specifies which call legs should receive the bidirectional stream audio")}</p>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -1581,15 +1466,9 @@ export default function DialNodeEditor({
                 <Label
                   htmlFor="stream_establish_before_call_originate"
                   className="text-sm font-normal cursor-pointer"
-                >
-                  Establish WebSocket Before Call Originate
-                </Label>
+                >{tUi("Establish WebSocket Before Call Originate")}</Label>
               </div>
-              <p className="text-xs text-muted-foreground -mt-2">
-                Establish websocket connection before dialing the destination.
-                Useful for cases where the websocket connection takes a long
-                time to establish.
-              </p>
+              <p className="text-xs text-muted-foreground -mt-2">{tUi("Establish websocket connection before dialing the destination. Useful for cases where the websocket connection takes a long time to establish.")}</p>
 
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -1602,13 +1481,9 @@ export default function DialNodeEditor({
                 <Label
                   htmlFor="send_silence_when_idle"
                   className="text-sm font-normal cursor-pointer"
-                >
-                  Send Silence When Idle
-                </Label>
+                >{tUi("Send Silence When Idle")}</Label>
               </div>
-              <p className="text-xs text-muted-foreground -mt-2">
-                Generate silence RTP packets when no transmission available
-              </p>
+              <p className="text-xs text-muted-foreground -mt-2">{tUi("Generate silence RTP packets when no transmission available")}</p>
             </>
           )}
         </CollapsibleContent>
@@ -1627,9 +1502,7 @@ export default function DialNodeEditor({
                 sipExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              SIP Settings
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("SIP Settings")}</Label>
             {(sipHeaders.length > 0 || customHeaders.length > 0) && (
               <span className="text-xs text-muted-foreground">
                 ({sipHeaders.length + customHeaders.length})
@@ -1639,7 +1512,7 @@ export default function DialNodeEditor({
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>SIP Region</Label>
+            <Label>{tUi("SIP Region")}</Label>
             <Select
               value={sipRegion}
               onValueChange={(value) => {
@@ -1647,23 +1520,21 @@ export default function DialNodeEditor({
               }}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select SIP region" />
+                <SelectValue placeholder={tUi("Select SIP region")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="US">US</SelectItem>
-                <SelectItem value="Europe">Europe</SelectItem>
-                <SelectItem value="Canada">Canada</SelectItem>
-                <SelectItem value="Australia">Australia</SelectItem>
-                <SelectItem value="Middle East">Middle East</SelectItem>
+                <SelectItem value="US">{tUi("US")}</SelectItem>
+                <SelectItem value="Europe">{tUi("Europe")}</SelectItem>
+                <SelectItem value="Canada">{tUi("Canada")}</SelectItem>
+                <SelectItem value="Australia">{tUi("Australia")}</SelectItem>
+                <SelectItem value="Middle East">{tUi("Middle East")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Defines the SIP region to be used for the call
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Defines the SIP region to be used for the call")}</p>
           </div>
 
           <div>
-            <Label>SIP Headers</Label>
+            <Label>{tUi("SIP Headers")}</Label>
             <div className="space-y-2 mt-1">
               {sipHeaders.map((header, index) => (
                 <div
@@ -1678,7 +1549,7 @@ export default function DialNodeEditor({
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select header name" />
+                        <SelectValue placeholder={tUi("Select header name")} />
                       </SelectTrigger>
                       <SelectContent>
                         {SIP_HEADER_NAMES.map((name) => {
@@ -1699,7 +1570,7 @@ export default function DialNodeEditor({
                   </div>
                   <Input
                     className="flex-1 min-w-0 max-w-[calc(100%-12rem)]"
-                    placeholder="Header value"
+                    placeholder={tUi("Header value")}
                     value={header?.value || ""}
                     onChange={(e) =>
                       handleSipHeaderChange(index, "value", e.target.value)
@@ -1711,7 +1582,7 @@ export default function DialNodeEditor({
                       variant="outline"
                       size="icon"
                       onClick={() => removeSipHeader(index)}
-                      aria-label="Remove header"
+                      aria-label={tUi("Remove header")}
                     >
                       <IconTrash className="w-4 h-4" />
                     </Button>
@@ -1730,18 +1601,13 @@ export default function DialNodeEditor({
                 }
                 className="w-full"
               >
-                <IconPlus className="w-4 h-4 mr-2" />
-                Add SIP Header
-              </Button>
+                <IconPlus className="w-4 h-4 mr-2" />{tUi("Add SIP Header")}</Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              SIP headers to be added to the request. Currently only
-              User-to-User and Diversion headers are supported.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("SIP headers to be added to the request. Currently only User-to-User and Diversion headers are supported.")}</p>
           </div>
 
           <div>
-            <Label>Custom Headers</Label>
+            <Label>{tUi("Custom Headers")}</Label>
             <div className="space-y-2 mt-1">
               {customHeaders.map((header, index) => (
                 <div
@@ -1750,7 +1616,7 @@ export default function DialNodeEditor({
                 >
                   <Input
                     className="flex-shrink-0 w-32"
-                    placeholder="Header name"
+                    placeholder={tUi("Header name")}
                     value={header?.name || ""}
                     onChange={(e) =>
                       handleCustomHeaderChange(index, "name", e.target.value)
@@ -1758,7 +1624,7 @@ export default function DialNodeEditor({
                   />
                   <Input
                     className="flex-1 min-w-0 max-w-[calc(100%-12rem)]"
-                    placeholder="Header value"
+                    placeholder={tUi("Header value")}
                     value={header?.value || ""}
                     onChange={(e) =>
                       handleCustomHeaderChange(index, "value", e.target.value)
@@ -1770,7 +1636,7 @@ export default function DialNodeEditor({
                       variant="outline"
                       size="icon"
                       onClick={() => removeCustomHeader(index)}
-                      aria-label="Remove header"
+                      aria-label={tUi("Remove header")}
                     >
                       <IconTrash className="w-4 h-4" />
                     </Button>
@@ -1784,13 +1650,9 @@ export default function DialNodeEditor({
                 onClick={addCustomHeader}
                 className="w-full"
               >
-                <IconPlus className="w-4 h-4 mr-2" />
-                Add Custom Header
-              </Button>
+                <IconPlus className="w-4 h-4 mr-2" />{tUi("Add Custom Header")}</Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Custom headers to be added to the SIP INVITE
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Custom headers to be added to the SIP INVITE")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -1808,9 +1670,7 @@ export default function DialNodeEditor({
                 transcriptionExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Transcription
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Transcription")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0">
@@ -1839,13 +1699,9 @@ export default function DialNodeEditor({
             <Label
               htmlFor="transcription_enabled"
               className="text-sm font-normal cursor-pointer"
-            >
-              Enable Transcription
-            </Label>
+            >{tUi("Enable Transcription")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2 mb-4">
-            Start real-time transcription when the call is answered
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2 mb-4">{tUi("Start real-time transcription when the call is answered")}</p>
 
           {transcriptionEnabled && (
             <TranscriptionNodeEditor

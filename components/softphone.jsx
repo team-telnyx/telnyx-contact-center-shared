@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { voiceFetch } from "@/lib/telephony/endpoint-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
+import { HandoffEntryBar } from "@/components/contact-center/handoff/HandoffEntry";
 import { notify } from "@/components/ToastNotify";
 import { submitCoreHoldIntent } from "@/lib/acd/client-hold-intent";
 import {
@@ -94,6 +96,7 @@ function isValidDialTo(value) {
 }
 
 export function Softphone() {
+  const tUi = useUiText();
   const { client, region, regions, setRegion } = useTelnyx();
 
   // Zustand stores - call state (shared with mini phone)
@@ -258,9 +261,11 @@ export function Softphone() {
     });
   };
 
-  const hydrateRemoteAudio = useCallback(() => {
+  // Pass the call explicitly when it may be newer than this render's activeCall
+  // (e.g. a consult leg created by TransferModal).
+  const hydrateRemoteAudio = useCallback((targetCall) => {
     try {
-      const call = activeCall;
+      const call = targetCall || activeCall;
       const audioEl = remoteAudioRef.current;
       if (!call || !audioEl) return;
       if (useActiveCallStore.getState().call !== call) return;
@@ -1272,18 +1277,16 @@ export function Softphone() {
               disabled={hasActiveCall}
               title={
                 hasActiveCall
-                  ? "Cannot change WebRTC region during an active call"
-                  : "Select WebRTC region"
+                  ? tUi("Cannot change WebRTC region during an active call")
+                  : tUi("Select WebRTC region")
               }
             >
-              <span>{regions.find((r) => r.value === region)?.label || "AUTO"}</span>
+              <span>{regions.find((r) => r.value === region)?.label || tUi("AUTO")}</span>
               <IconChevronDown className="h-3 w-3" />
             </button>
             {showRegionList && !hasActiveCall && (
               <div className="absolute left-0 z-10 mt-2 w-36 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
-                <div className="px-2 py-1 text-[11px] text-zinc-400">
-                  WebRTC Region
-                </div>
+                <div className="px-2 py-1 text-[11px] text-zinc-400">{tUi("WebRTC Region")}</div>
                 <div className="max-h-64 overflow-auto">
                   {regions.map((option) => (
                     <button
@@ -1317,16 +1320,14 @@ export function Softphone() {
                 setShowSpkList(false);
                 setShowRegionList(false);
               }}
-              title="Select microphone"
+              title={tUi("Select microphone")}
             >
               <IconMic className="h-4 w-4" />
               <IconChevronDown className="h-3 w-3" />
             </button>
             {showMicList && (
               <div className="absolute right-0 z-10 mt-2 w-50 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
-                <div className="px-2 py-1 text-[11px] text-zinc-400">
-                  Microphones
-                </div>
+                <div className="px-2 py-1 text-[11px] text-zinc-400">{tUi("Microphones")}</div>
                 <div className="max-h-64 overflow-auto">
                   {audioInputs.map((d) => (
                     <button
@@ -1341,7 +1342,7 @@ export function Softphone() {
                       )}
                     >
                       <span className="truncate">
-                        {d.label || "Default microphone"}
+                        {d.label || tUi("Default microphone")}
                       </span>
                     </button>
                   ))}
@@ -1357,14 +1358,14 @@ export function Softphone() {
                 setShowMicList(false);
                 setShowRegionList(false);
               }}
-              title="Select speaker"
+              title={tUi("Select speaker")}
             >
               <IconSpeaker className="h-4 w-4" />
               <IconChevronDown className="h-3 w-3" />
             </button>
             {showSpkList && (
               <div className="absolute right-0 z-10 mt-2 w-50 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
-                <div className="px-2 py-1 text-zinc-400">Speakers</div>
+                <div className="px-2 py-1 text-zinc-400">{tUi("Speakers")}</div>
                 <div className="max-h-64 overflow-auto text-[6px]">
                   {audioOutputs.map((d) => (
                     <button
@@ -1379,7 +1380,7 @@ export function Softphone() {
                       )}
                     >
                       <span className="truncate">
-                        {d.label || "Default speakers"}
+                        {d.label || tUi("Default speakers")}
                       </span>
                     </button>
                   ))}
@@ -1390,30 +1391,30 @@ export function Softphone() {
         </div>
 
         <div className="w-full mt-8">
-          <label className="mb-1 block text-[11px] text-zinc-300">To</label>
+          <label className="mb-1 block text-[11px] text-zinc-300">{tUi("To")}</label>
           <div className="flex items-center gap-2">
             <button
               type="button"
               className="h-8 w-8 rounded-lg border border-zinc-700 bg-zinc-900/60 text-white hover:bg-zinc-800 flex items-center justify-center"
-              title="Select number from contacts"
+              title={tUi("Select number from contacts")}
               onClick={() => setShowNumberModal(true)}
             >
               <IconContact className="h-4 w-4" />
             </button>
             <input
               className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900/60 px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-zinc-500 cursor-pointer"
-              placeholder="Phone number or SIP URI"
+              placeholder={tUi("Phone number or SIP URI")}
               value={toNumber}
               readOnly
               onClick={() => setShowNumberModal(true)}
-              title="Click to select number"
+              title={tUi("Click to select number")}
               inputMode="text"
             />
           </div>
         </div>
 
         <div className="w-full">
-          <label className="mb-1 block text-[11px] text-zinc-300">From</label>
+          <label className="mb-1 block text-[11px] text-zinc-300">{tUi("From")}</label>
           <input
             className={clsx(
               "w-full rounded-lg border bg-zinc-900/60 px-2.5 py-1.5 text-[10px] outline-none cursor-not-allowed",
@@ -1423,10 +1424,10 @@ export function Softphone() {
                 ? "border-emerald-500/50 text-white focus:border-emerald-500"
                 : "border-zinc-700 text-white focus:border-zinc-500"
             )}
-            placeholder="Phone number or SIP URI"
+            placeholder={tUi("Phone number or SIP URI")}
             value={displayedFromNumber || ""}
             readOnly
-            title={isIncomingCall ? `Incoming caller: ${displayedFromNumber || ""}` : "Voice number from your profile"}
+            title={isIncomingCall ? tUi("Incoming caller: {value0}", { value0: displayedFromNumber || "" }) : tUi("Voice number from your profile")}
             inputMode="text"
           />
         </div>
@@ -1436,23 +1437,23 @@ export function Softphone() {
           <div className="mt-1 grid w-full grid-cols-2 place-items-center gap-4">
             <div className="flex flex-col items-center gap-2">
               <CircleButton
-                title="Reject"
+                title={tUi("Reject")}
                 className="bg-red-600"
                 onClick={() => handleRejectCall()}
               >
                 <IconPhoneOff className="h-5 w-5" />
               </CircleButton>
-              <div className="text-[11px] text-zinc-300">Reject</div>
+              <div className="text-[11px] text-zinc-300">{tUi("Reject")}</div>
             </div>
             <div className="flex flex-col items-center gap-2">
               <CircleButton
-                title="Answer"
+                title={tUi("Answer")}
                 className="bg-emerald-600"
                 onClick={() => handleAnswerCall()}
               >
                 <IconPhone className="h-5 w-5" />
               </CircleButton>
-              <div className="text-[11px] text-zinc-300">Answer</div>
+              <div className="text-[11px] text-zinc-300">{tUi("Answer")}</div>
             </div>
           </div>
         ) : activeCall && !isCallConnected ? (
@@ -1460,13 +1461,13 @@ export function Softphone() {
           <div className="mt-1 flex w-full justify-center">
             <div className="flex flex-col items-center gap-2">
               <CircleButton
-                title="Disconnect"
+                title={tUi("Disconnect")}
                 className="bg-red-600"
                 onClick={hangup}
               >
                 <IconPhoneOff className="h-5 w-5" />
               </CircleButton>
-              <div className="text-[11px] text-zinc-300">Disconnect</div>
+              <div className="text-[11px] text-zinc-300">{tUi("Disconnect")}</div>
             </div>
           </div>
         ) : isCallConnected ? (
@@ -1474,7 +1475,7 @@ export function Softphone() {
           <div className="mt-1 grid w-full grid-cols-4 place-items-center gap-2">
             <div className="flex flex-col items-center gap-2">
               <CircleButton
-                title={callUI.isMuted ? "Unmute" : "Mute"}
+                title={callUI.isMuted ? tUi("Unmute") : tUi("Mute")}
                 className="bg-zinc-700/70"
                 onClick={toggleMute}
               >
@@ -1485,20 +1486,20 @@ export function Softphone() {
                 )}
               </CircleButton>
               <div className="text-[11px] text-zinc-300">
-                {callUI.isMuted ? "Unmute" : "Mute"}
+                {callUI.isMuted ? tUi("Unmute") : tUi("Mute")}
               </div>
             </div>
 
             <div className="flex flex-col items-center gap-2">
-              <CircleButton title="End" className="bg-red-600" onClick={hangup}>
+              <CircleButton title={tUi("End")} className="bg-red-600" onClick={hangup}>
                 <IconPhoneOff className="h-5 w-5" />
               </CircleButton>
-              <div className="text-[11px] text-zinc-300">End</div>
+              <div className="text-[11px] text-zinc-300">{tUi("End")}</div>
             </div>
 
             <div className="flex flex-col items-center gap-2">
               <CircleButton
-                title={callUI.isHeld ? "Unhold" : "Hold"}
+                title={callUI.isHeld ? tUi("Unhold") : tUi("Hold", undefined, "phone action")}
                 className="bg-zinc-700/70"
                 onClick={toggleHold}
               >
@@ -1509,19 +1510,19 @@ export function Softphone() {
                 )}
               </CircleButton>
               <div className="text-[11px] text-zinc-300">
-                {callUI.isHeld ? "Unhold" : "Hold"}
+                {callUI.isHeld ? tUi("Unhold") : tUi("Hold", undefined, "phone action")}
               </div>
             </div>
 
             <div className="flex flex-col items-center gap-2">
               <CircleButton
-                title="Transfer"
+                title={tUi("Transfer")}
                 className="bg-zinc-700/70"
                 onClick={() => setShowTransfer(true)}
               >
                 <IconPhoneForwarded className="h-5 w-5" />
               </CircleButton>
-              <div className="text-[11px] text-zinc-300">Transfer</div>
+              <div className="text-[11px] text-zinc-300">{tUi("Transfer")}</div>
             </div>
           </div>
         ) : (
@@ -1529,14 +1530,14 @@ export function Softphone() {
           <div className="mt-1 flex w-full justify-center">
             <div className="flex flex-col items-center gap-2">
               <CircleButton
-                title="Call"
+                title={tUi("Call", undefined, "phone action")}
                 className={clsx("bg-emerald-600", !canCall && "opacity-50")}
                 onClick={startCall}
                 disabled={!canCall}
               >
                 <IconPhone className="h-5 w-5" />
               </CircleButton>
-              <div className="text-[11px] text-zinc-300">Call</div>
+              <div className="text-[11px] text-zinc-300">{tUi("Call", undefined, "phone action")}</div>
             </div>
           </div>
         )}
@@ -1546,11 +1547,11 @@ export function Softphone() {
           type="button"
           className="w-full flex items-center justify-between px-1 py-1 text-[11px] text-zinc-300 hover:text-white"
           onClick={() => setShowDtmf((v) => !v)}
-          data-testid="voice-dtmf-open" title="DTMF"
+          data-testid="voice-dtmf-open" title={tUi("DTMF")}
         >
           <span className="flex items-center gap-1">
             <IconHash className="h-3 w-3" />
-            <span>DTMF</span>
+            <span>{tUi("DTMF")}</span>
           </span>
           <IconChevronDown
             className={clsx(
@@ -1586,6 +1587,7 @@ export function Softphone() {
             </div>
           </div>
         )}
+        <HandoffEntryBar callInteractionId={interaction?.id ?? null} />
       </div>
 
       {/* Number Selection Modal */}
@@ -1607,9 +1609,9 @@ export function Softphone() {
         interaction={interaction}
         onConsultCallCreated={(call) => {
           wireCall(call);
-          attachAudio(call);
+          hydrateRemoteAudio(call);
           for (const delay of [100, 300, 700, 1500]) {
-            setTimeout(() => attachAudio(call), delay);
+            setTimeout(() => hydrateRemoteAudio(call), delay);
           }
         }}
         onTransfer={() => {

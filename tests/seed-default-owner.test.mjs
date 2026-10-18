@@ -1,29 +1,6 @@
-// Regression tests for lib/seed-default-owner.mjs's Telnyx voice_number wiring
-// (bug #3 from the 2026-07-05 wizard log: the owner account was created in
-// Telnyx by the deploy wizard's bootstrap step, but the `users` row never
-// learned the assigned voice number), plus the owner's full-role-set and
-// "Sales" queue assignment (added 2026-07-09 after a GCP wizard E2E test
-// showed a freshly seeded owner had no access to the Contact Center agent
-// desktop — only the `owner` role was ever seeded, not agent/supervisor/
-// admin, and the owner was never assigned into the seeded queue).
-//
-// NOTE: telephony_credentials_id/telephony_user_name are deliberately NOT
-// seeded here (and never read from env) — NextAuth's own
-// auto-create-credentials-on-first-login path (see
-// app/api/auth/[...nextauth]/route.js) creates the owner's telephony
-// credential lazily on first login, exactly like it does for every other
-// user. Pre-seeding it here was pure duplication of that idempotent
-// app-side mechanism (confirmed via real E2E testing) and left an extra,
-// unused Telnyx credential behind on every wizard re-run. These tests
-// assert those columns stay untouched (null on create, unchanged on
-// backfill) and that only voice_number gets synced from
-// TELNYX_MAIN_FROM_NUMBER.
-//
-// These tests use a mock `pg`-shaped Pool (no real Postgres needed) injected
-// via lib/postgres.mjs's own `global.__pg_pool` cache slot (getPostgresPool()
-// returns `cached.pool` immediately if already set — see lib/postgres.mjs),
-// which avoids needing ESM module-mocking flags/APIs not used elsewhere in
-// this test suite.
+// Owner seeding grants roles and queue membership, while credentials are
+// provisioned at login and personal direct-call numbers remain explicit.
+// The main service DID must never be copied into a user's voice_number.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -146,7 +123,7 @@ async function withMockPool(pool, fn) {
   }
 }
 
-test("seedDefaultOwner: creates a new owner row with voice_number populated, telephony credential fields left null for NextAuth to fill lazily", async () => {
+test("seedDefaultOwner: creates a new owner row with no personal voice_number, telephony credential fields left null for NextAuth to fill lazily", async () => {
   const { pool, state } = makeMockPool([]);
   await withMockPool(pool, () =>
     withEnv(
@@ -163,13 +140,13 @@ test("seedDefaultOwner: creates a new owner row with voice_number populated, tel
         const owner = state.users[0];
         assert.equal(owner.telephony_credentials_id, null);
         assert.equal(owner.telephony_user_name, null);
-        assert.equal(owner.voice_number, "+141****0100");
+        assert.equal(owner.voice_number, null);
       }
     )
   );
 });
 
-test("seedDefaultOwner: backfills voice_number onto an existing owner row missing it, without touching telephony credential fields", async () => {
+test("seedDefaultOwner: leaves an existing owner without a personal voice_number, without touching telephony credential fields", async () => {
   const { pool, state } = makeMockPool([
     {
       id: "u1",
@@ -195,7 +172,7 @@ test("seedDefaultOwner: backfills voice_number onto an existing owner row missin
         const owner = state.users.find((u) => u.id === "u1");
         assert.equal(owner.telephony_credentials_id, null);
         assert.equal(owner.telephony_user_name, null);
-        assert.equal(owner.voice_number, "+141****0199");
+        assert.equal(owner.voice_number, null);
       }
     )
   );
@@ -233,7 +210,7 @@ test("seedDefaultOwner: does NOT overwrite voice_number already set on an existi
   );
 });
 
-test("seedDefaultOwner: promotes an existing non-owner user to owner (and every other role) and still backfills voice_number", async () => {
+test("seedDefaultOwner: promotes an existing non-owner user to owner (and every other role) without assigning the service DID", async () => {
   const { pool, state } = makeMockPool([
     {
       id: "u1",
@@ -267,7 +244,7 @@ test("seedDefaultOwner: promotes an existing non-owner user to owner (and every 
         assert.equal(owner.verified, true);
         assert.equal(owner.telephony_credentials_id, null);
         assert.equal(owner.telephony_user_name, null);
-        assert.equal(owner.voice_number, "+141****0188");
+        assert.equal(owner.voice_number, null);
       }
     )
   );

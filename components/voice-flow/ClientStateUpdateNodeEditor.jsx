@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo } from "react";
 import { Label } from "@/components/ui/label";
@@ -76,6 +78,7 @@ function encodePreview(value) {
 }
 
 export default function ClientStateUpdateNodeEditor({ config = {}, onChange, availableVariables = [] }) {
+  const tUi = useUiText();
   const update = (key, value) => onChange({ ...config, [key]: value });
   const mode = config.update_mode || "predefined";
   const valueSource = config.value_source || "static";
@@ -85,15 +88,15 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
   return (
     <div className="space-y-4">
       <div className="grid gap-2">
-        <Label>Update mode</Label>
+        <Label>{tUi("Update mode")}</Label>
         <Select value={mode} onValueChange={(value) => update("update_mode", value)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="predefined">Predefined parameter</SelectItem>
-            <SelectItem value="custom">Custom parameter</SelectItem>
-            <SelectItem value="raw_json">Raw JSON</SelectItem>
+            <SelectItem value="predefined">{tUi("Predefined parameter")}</SelectItem>
+            <SelectItem value="custom">{tUi("Custom parameter")}</SelectItem>
+            <SelectItem value="raw_json">{tUi("Raw JSON")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -101,7 +104,7 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
       {mode === "predefined" && (
         <div className="space-y-4">
           <div className="grid gap-2">
-            <Label>Parameter</Label>
+            <Label>{tUi("Parameter")}</Label>
             <Select
               value={config.predefined_key || "caller_language"}
               onValueChange={(value) => update("predefined_key", value)}
@@ -112,47 +115,46 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
               <SelectContent>
                 {PREDEFINED_PARAMETERS.map((parameter) => (
                   <SelectItem key={parameter.value} value={parameter.value}>
-                    {parameter.label}
+                    {tUi(parameter.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {PREDEFINED_PARAMETERS.find((item) => item.value === (config.predefined_key || "caller_language"))?.description}
+              {tUi(PREDEFINED_PARAMETERS.find((item) => item.value === (config.predefined_key || "caller_language"))?.description)}
             </p>
           </div>
 
           <div className="grid gap-2">
-            <Label>Value source</Label>
+            <Label>{tUi("Value source")}</Label>
             <Select value={valueSource} onValueChange={(value) => update("value_source", value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="static">Static language</SelectItem>
-                <SelectItem value="variable">Variable / expression</SelectItem>
+                <SelectItem value="static">{tUi("Static language")}</SelectItem>
+                <SelectItem value="variable">{tUi("Variable / expression")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {valueSource === "variable" ? (
             <div className="grid gap-2">
-              <Label>Variable value</Label>
+              <Label>{tUi("Variable value")}</Label>
               <VariableInput
                 value={config.variable_value || ""}
                 onChange={(value) => update("variable_value", value)}
                 availableVariables={availableVariables}
-                placeholder="{{customer_language}}"
+                placeholder={tUi("{{customer_language}}")}
               />
               {availableVariables.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Available examples: {availableVariables.slice(0, 6).join(", ")}
+                <p className="text-xs text-muted-foreground">{tUi("Available examples: ")}{availableVariables.slice(0, 6).join(", ")}
                 </p>
               )}
             </div>
           ) : (
             <div className="grid gap-2">
-              <Label>Caller language</Label>
+              <Label>{tUi("Caller language")}</Label>
               <Select
                 value={config.caller_language || "en-US"}
                 onValueChange={(value) => update("caller_language", value)}
@@ -163,7 +165,7 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
                 <SelectContent>
                   {LANGUAGE_OPTIONS.map((language) => (
                     <SelectItem key={language.code} value={language.code}>
-                      {language.flag} {language.name}
+                      {language.flag} {tUi(language.name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -176,15 +178,15 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
       {mode === "custom" && (
         <div className="space-y-4">
           <div className="grid gap-2">
-            <Label>Custom parameter</Label>
+            <Label>{tUi("Custom parameter")}</Label>
             <Input
               value={config.custom_key || ""}
               onChange={(event) => update("custom_key", event.target.value)}
-              placeholder="customer_tier"
+              placeholder={tUi("customer_tier")}
             />
           </div>
           <div className="grid gap-2">
-            <Label>Value type</Label>
+            <Label>{tUi("Value type")}</Label>
             <Select
               value={config.custom_value_type || "text"}
               onValueChange={(value) => update("custom_value_type", value)}
@@ -193,19 +195,19 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="text">Text</SelectItem>
-                <SelectItem value="number">Number</SelectItem>
-                <SelectItem value="boolean">Boolean</SelectItem>
-                <SelectItem value="json">JSON value</SelectItem>
+                <SelectItem value="text">{tUi("Text")}</SelectItem>
+                <SelectItem value="number">{tUi("Number")}</SelectItem>
+                <SelectItem value="boolean">{tUi("Boolean")}</SelectItem>
+                <SelectItem value="json">{tUi("JSON value")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label>Value</Label>
+            <Label>{tUi("Value")}</Label>
             <Input
               value={config.custom_value || ""}
               onChange={(event) => update("custom_value", event.target.value)}
-              placeholder="gold or {{customer_tier}}"
+              placeholder={tUi("gold or {{customer_tier}}")}
             />
           </div>
         </div>
@@ -213,27 +215,25 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
 
       {mode === "raw_json" && (
         <div className="grid gap-2">
-          <Label>Raw JSON</Label>
+          <Label>{tUi("Raw JSON")}</Label>
           <Textarea
             value={config.raw_json || "{}"}
             onChange={(event) => update("raw_json", event.target.value)}
             rows={6}
             className="font-mono text-xs"
-            placeholder={'{"caller_language":"{{customer_language}}"}'}
+            placeholder={tUi("{\"caller_language\":\"{{customer_language}}\"}")}
           />
-          <p className="text-xs text-muted-foreground">
-            This object is merged into the current client_state. Existing keys are preserved unless this JSON sets the same key.
-          </p>
+          <p className="text-xs text-muted-foreground">{tUi("This object is merged into the current client_state. Existing keys are preserved unless this JSON sets the same key.")}</p>
         </div>
       )}
 
       <div className="space-y-2 rounded-lg border p-3">
-        <Label>Will merge into client_state</Label>
+        <Label>{tUi("Will merge into client_state")}</Label>
         <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
           {JSON.stringify(previewPatch, null, 2)}
         </pre>
         <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer">Base64 preview</summary>
+          <summary className="cursor-pointer">{tUi("Base64 preview")}</summary>
           <pre className="mt-2 overflow-auto rounded bg-muted p-2 font-mono text-[11px] text-foreground">
             {base64Preview}
           </pre>

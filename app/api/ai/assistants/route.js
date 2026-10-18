@@ -1,8 +1,12 @@
+import { validateAssistantVisionTools } from "@/lib/ai/vision-validation.mjs";
+import { validateConversationFlow } from "@/lib/ai/assistant-conversation-workflow.mjs";
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
-import { normalizeAssistantPayload } from "@/lib/ai/assistant-payload.mjs";
+import { planAssistantToolSave } from "@/lib/ai/shared-tool-sync.mjs";
+import { verifyAssistantWrite } from "@/lib/ai/assistant-verification.mjs";
+import { normalizeAssistantPayload, assistantCreateWirePayload } from "@/lib/ai/assistant-payload.mjs";
 import { telnyxErrorDetail } from "@/lib/telnyx-error.mjs";
 
 import { withPermission } from "@/lib/authz/guard";
@@ -42,7 +46,7 @@ async function GET_handler(request) {
       const text = await res.text();
       return NextResponse.json(
         { ok: false, error: telnyxErrorDetail(text, `Telnyx API error: ${res.status}`) },
-        { status: 502, headers: { "Cache-Control": "no-store" } }
+        { status: [400, 422].includes(res.status) ? res.status : 502, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -93,7 +97,7 @@ async function GET_handler(request) {
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err?.message || String(err) },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
+      { status: err.status || 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
@@ -109,7 +113,15 @@ async function POST_handler(request) {
     }
 
     const payloadRaw = await request.json().catch(() => ({}));
-    const payload = normalizeAssistantPayload(payloadRaw);
+    if (payloadRaw.conversation_flow) {
+      const errors = validateConversationFlow(payloadRaw.conversation_flow, {allowInheritedInstructions: true});
+      if (errors.length) return NextResponse.json({ok: false, error: errors.join(" "), code: "invalid_workflow"}, {status: 400, headers: {"Cache-Control": "no-store"}});
+    }
+
+    const plan = planAssistantToolSave(normalizeAssistantPayload(payloadRaw));
+    if (plan.duplicateNames.length) return NextResponse.json({ok:false,error:"Tool names must be unique."},{status:400});
+    const payload = assistantCreateWirePayload(plan.updatePayload);
+    await validateAssistantVisionTools(payload);
 
     const res = await fetch(buildTelnyxV2Url("/ai/assistants"), {
       method: "POST",
@@ -125,7 +137,7 @@ async function POST_handler(request) {
     if (!res.ok) {
       return NextResponse.json(
         { ok: false, error: telnyxErrorDetail(text, `Telnyx API error: ${res.status}`) },
-        { status: 502, headers: { "Cache-Control": "no-store" } }
+        { status: [400, 422].includes(res.status) ? res.status : 502, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -136,14 +148,16 @@ async function POST_handler(request) {
       data = { data: null, raw: text };
     }
 
+    const created = data?.data || data;
+    const checked = created?.id ? await verifyAssistantWrite(apiKey, created.id, payload) : { verification: { status: "unavailable" } };
     return NextResponse.json(
-      { ok: true, assistant: data?.data || data },
+      { ok: true, assistant: checked.assistant || created, verification: checked.verification },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err?.message || String(err) },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
+      { status: err.status || 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

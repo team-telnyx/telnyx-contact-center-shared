@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -48,6 +50,7 @@ function parseVoiceString(value) {
 }
 
 export default function WorkflowVoicePicker({ value, onChange }) {
+  const tUi = useUiText();
   const voice = value?.voice || "";
   const voice_speed = value?.voice_speed ?? 1;
   const { provider: pInit, model: mInit, voiceName: vInit } = useMemo(
@@ -187,10 +190,10 @@ export default function WorkflowVoicePicker({ value, onChange }) {
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-xs">Provider</label>
+        <label className="text-xs">{tUi("Provider")}</label>
         <Select value={provider || undefined} onValueChange={handleProvider}>
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select provider" />
+            <SelectValue placeholder={tUi("Select provider")} />
           </SelectTrigger>
           <SelectContent>
             {providers.map((p) => (
@@ -204,10 +207,10 @@ export default function WorkflowVoicePicker({ value, onChange }) {
 
       {hasRealModels && (
         <div>
-          <label className="text-xs">Model</label>
+          <label className="text-xs">{tUi("Model")}</label>
           <Select value={model || undefined} onValueChange={handleModel} disabled={!provider}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder={provider ? "Select model" : "Select a provider first"} />
+              <SelectValue placeholder={provider ? tUi("Select model") : tUi("Select a provider first")} />
             </SelectTrigger>
             <SelectContent>
               {models
@@ -223,7 +226,7 @@ export default function WorkflowVoicePicker({ value, onChange }) {
       )}
 
       <div>
-        <label className="text-xs">Voice</label>
+        <label className="text-xs">{tUi("Voice")}</label>
         <Select
           value={voiceName || undefined}
           onValueChange={handleVoice}
@@ -233,10 +236,10 @@ export default function WorkflowVoicePicker({ value, onChange }) {
             <SelectValue
               placeholder={
                 !provider
-                  ? "Select a provider first"
+                  ? tUi("Select a provider first")
                   : hasRealModels && !model
-                    ? "Select a model first"
-                    : "Select voice"
+                    ? tUi("Select a model first")
+                    : tUi("Select voice")
               }
             />
           </SelectTrigger>
@@ -260,10 +263,9 @@ export default function WorkflowVoicePicker({ value, onChange }) {
       {supportsSpeed && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs">Voice Speed</label>
+            <label className="text-xs">{tUi("Voice Speed")}</label>
             <Badge variant="secondary" className="text-xs">
-              {voice_speed.toFixed(2)}x
-            </Badge>
+              {voice_speed.toFixed(2)}{tUi("x")}</Badge>
           </div>
           <div className="relative pt-2">
             <Slider
@@ -289,19 +291,13 @@ export default function WorkflowVoicePicker({ value, onChange }) {
             onCheckedChange={(checked) => emit({ expressive_mode: checked })}
           />
           <div className="flex items-center gap-1.5">
-            <label htmlFor="workflow-expressive-mode" className="cursor-pointer text-sm font-medium">
-              Expressive Mode
-            </label>
+            <label htmlFor="workflow-expressive-mode" className="cursor-pointer text-sm font-medium">{tUi("Expressive Mode")}</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <IconInfoCircle className="size-4 cursor-help text-muted-foreground" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                  Enables emotionally expressive speech using SSML emotion tags.
-                  <br />
-                  Only supported for Telnyx Ultra voices.
-                </p>
+                <p>{tUi("Enables emotionally expressive speech using SSML emotion tags.")}<br />{tUi("Only supported for Telnyx Ultra voices.")}</p>
               </TooltipContent>
             </Tooltip>
           </div>

@@ -1,3 +1,5 @@
+"use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 import { Badge } from '@/components/ui/badge';
 import { emailMessageStatus } from '@/lib/email/message-status.mjs';
 
@@ -9,6 +11,7 @@ const tones = {
   danger: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
 };
 export default function EmailMessageStatus({ message }) {
+  const tUi = useUiText();
   const { status, label, tone, title } = emailMessageStatus(message);
-  return <Badge variant="outline" data-email-status={status} title={title} className={`shrink-0 capitalize ${tones[tone]}`}>{label}</Badge>;
+  return <Badge variant="outline" data-email-status={status} title={tUi(title)} className={`shrink-0 capitalize ${tones[tone]}`}>{tUi(label)}</Badge>;
 }

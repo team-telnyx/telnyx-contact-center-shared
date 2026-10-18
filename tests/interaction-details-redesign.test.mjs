@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { readFileSync } from "./helpers/ui-source.mjs";
 import { test } from "node:test";
 
 const detailPage = readFileSync("app/(portal)/supervisor/call-history/[id]/page.jsx", "utf8");

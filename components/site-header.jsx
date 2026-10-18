@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
@@ -19,6 +21,7 @@ import {
 import { IconBook2 } from "@tabler/icons-react";
 
 export function SiteHeader() {
+  const tUi = useUiText();
   const [status, setStatus] = useState(DEFAULT_USER_STATUS);
   // Manual status chosen while busy; applies once the current interactions end.
   const statusVersion = useRef(null);
@@ -172,9 +175,7 @@ export function SiteHeader() {
           if (data?.type === "queue_created") {
             notify({
               title: "New queue available",
-              description: `${
-                data.queue?.displayName || data.queue?.name
-              } has been added and is now available for activation.`,
+              description: tUi("{value0} has been added and is now available for activation.", {value0: data.queue?.displayName || data.queue?.name}),
               variant: "info",
             });
             loadQueuesRef.current?.();
@@ -235,7 +236,7 @@ export function SiteHeader() {
         if (data.pendingStatus) {
           notify({
             title: "Status change pending",
-            description: `${data.pendingStatus} applies after your current interactions end. No new interactions will be offered meanwhile.`,
+            description: tUi("{value0} applies after your current interactions end. No new interactions will be offered meanwhile.", {value0: data.pendingStatus}),
             variant: "info",
           });
         }
@@ -252,10 +253,10 @@ export function SiteHeader() {
     <header className="cc-app-header flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />
-        <Button asChild variant="ghost" size="sm" title="Open documentation">
+        <Button asChild variant="ghost" size="sm" title={tUi("Open documentation")}>
           <Link href="/help">
             <IconBook2 aria-hidden="true" className="text-sky-500" />
-            <span>Docs</span>
+            <span>{tUi("Docs")}</span>
           </Link>
         </Button>
         <Separator

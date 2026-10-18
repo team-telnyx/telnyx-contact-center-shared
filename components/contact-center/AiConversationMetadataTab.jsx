@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { IconCopy, IconCheck } from "@tabler/icons-react";
 
 function CopyInline({ value }) {
+  const tUi = useUiText();
   const [copied, setCopied] = useState(false);
   async function doCopy() {
     try {
@@ -21,7 +24,7 @@ function CopyInline({ value }) {
       variant="ghost"
       className={copied ? "h-7 w-7 text-telnyx-green" : "h-7 w-7"}
       onClick={doCopy}
-      title={copied ? "Copied" : "Copy"}
+      title={copied ? tUi("Copied") : tUi("Copy")}
     >
       {copied ? (
         <IconCheck className="size-4 text-telnyx-green" />
@@ -33,6 +36,7 @@ function CopyInline({ value }) {
 }
 
 export default function AiConversationMetadataTab({ conversation, loading }) {
+  const tUi = useUiText();
   if (loading) {
     return (
       <div className="space-y-2">
@@ -49,7 +53,7 @@ export default function AiConversationMetadataTab({ conversation, loading }) {
   const md = conversation?.metadata || {};
   const entries = Object.entries(md);
   if (!entries.length) {
-    return <div className="text-sm text-muted-foreground">No metadata</div>;
+    return <div className="text-sm text-muted-foreground">{tUi("No metadata")}</div>;
   }
   function humanizeKey(k) {
     try {

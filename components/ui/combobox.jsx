@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ import {
 import { IconCheck, IconSelector } from "@tabler/icons-react";
 
 export function Combobox({
+  id,
   value,
   onChange,
   options = [],
@@ -23,6 +26,7 @@ export function Combobox({
   searchable = true,
   disabled = false,
 }) {
+  const tUi = useUiText();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const inputRef = React.useRef(null);
@@ -57,6 +61,7 @@ export function Combobox({
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild disabled={disabled}>
         <Button
+          id={id}
           variant="outline"
           className={`h-9 justify-between px-3 overflow-hidden ${triggerClassName}`}
           disabled={disabled}
@@ -73,7 +78,7 @@ export function Combobox({
               </>
             )}
           </span>
-          <IconSelector className="size-4 opacity-60 shrink-0 ml-2" />
+          <IconSelector className="size-4 opacity-60 shrink-0 ms-2" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent 
@@ -85,7 +90,7 @@ export function Combobox({
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type to filter…"
+              placeholder={tUi("Type to filter…")}
               autoFocus
             />
           </div>
@@ -97,6 +102,7 @@ export function Combobox({
             filtered.map((opt) => (
               <DropdownMenuItem
                 key={opt.value}
+                disabled={opt.disabled}
                 onClick={() => {
                   try {
                     onChange?.(opt.value);
@@ -113,7 +119,7 @@ export function Combobox({
                   <span className="break-words">{opt.label || opt.value}</span>
                 </span>
                 {value === opt.value ? (
-                  <IconCheck className="ml-2 shrink-0 text-telnyx-green" />
+                  <IconCheck className="ms-2 shrink-0 text-telnyx-green" />
                 ) : null}
               </DropdownMenuItem>
             ))

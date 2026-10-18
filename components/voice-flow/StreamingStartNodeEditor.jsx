@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
@@ -196,6 +198,7 @@ export default function StreamingStartNodeEditor({
   availableVariables = [],
   hasCallerLanguageParameterBefore = false,
 }) {
+  const tUi = useUiText();
   const initialProvider =
     config.ai_streaming_provider === "telnyx-stt" ||
     AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
@@ -400,7 +403,7 @@ export default function StreamingStartNodeEditor({
         disabled={opts.disabled}
       >
         <SelectTrigger className="w-full mt-1">
-          <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
+          <SelectValue placeholder={tUi("Select {value0}", { value0: label.toLowerCase() })} />
         </SelectTrigger>
         <SelectContent>
           {options.map((opt) => (
@@ -420,12 +423,11 @@ export default function StreamingStartNodeEditor({
     <div className="space-y-4">
       {/* Provider Selection */}
       <div>
-        <Label>
-          Provider <span className="text-red-500">*</span>
+        <Label>{tUi("Provider ")}<span className="text-red-500">*</span>
         </Label>
         <Select value={provider} onValueChange={handleProviderChange}>
           <SelectTrigger className="w-full mt-1">
-            <SelectValue placeholder="Select provider" />
+            <SelectValue placeholder={tUi("Select provider")} />
           </SelectTrigger>
           <SelectContent>
             {PROVIDER_OPTIONS.filter(
@@ -433,14 +435,12 @@ export default function StreamingStartNodeEditor({
                 !EXPERIMENTAL_PROVIDERS.includes(opt.value) || experimentalFeaturesEnabled
             ).map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
+                {tUi(opt.label)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          Select a provider or choose Custom for manual configuration
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Select a provider or choose Custom for manual configuration")}</p>
       </div>
 
       {/* Auto-configuration notice for AI providers */}
@@ -448,14 +448,10 @@ export default function StreamingStartNodeEditor({
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
           <IconInfoCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-blue-700 dark:text-blue-300">
-            <strong>
-              Auto-configured for{" "}
-              {PROVIDER_OPTIONS.find((p) => p.value === provider)?.label}
+            <strong>{tUi("Auto-configured for")}{" "}
+              {tUi(PROVIDER_OPTIONS.find((p) => p.value === provider)?.label)}
             </strong>
-            <p className="mt-1">
-              Stream settings are automatically configured. AI session parameters
-              can be customized below.
-            </p>
+            <p className="mt-1">{tUi("Stream settings are automatically configured. AI session parameters can be customized below.")}</p>
           </div>
         </div>
       )}
@@ -465,42 +461,38 @@ export default function StreamingStartNodeEditor({
         <div className="space-y-4">
           <div className="flex items-center gap-2 pt-2 border-t">
             <IconBrain className="w-4 h-4 text-purple-500" />
-            <span className="text-sm font-medium">AI Session Configuration</span>
+            <span className="text-sm font-medium">{tUi("AI Session Configuration")}</span>
           </div>
 
           {/* Common: Instructions */}
           <div>
-            <Label>AI Instructions</Label>
+            <Label>{tUi("AI Instructions")}</Label>
             <Textarea
               value={config.ai_instructions || ""}
               onChange={(e) => handleFieldChange("ai_instructions", e.target.value)}
-              placeholder="System instructions for the AI assistant..."
+              placeholder={tUi("System instructions for the AI assistant...")}
               rows={4}
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              System instructions for the AI assistant. Leave empty for default.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("System instructions for the AI assistant. Leave empty for default.")}</p>
           </div>
 
           {/* Common: Greeting Prompt */}
           <div>
-            <Label>Greeting Prompt</Label>
+            <Label>{tUi("Greeting Prompt")}</Label>
             <Textarea
               value={config.ai_greeting_prompt || ""}
               onChange={(e) => handleFieldChange("ai_greeting_prompt", e.target.value)}
-              placeholder="Please greet the caller and ask how you can help..."
+              placeholder={tUi("Please greet the caller and ask how you can help...")}
               rows={2}
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              What the AI should say when greeting the caller
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("What the AI should say when greeting the caller")}</p>
           </div>
 
           {/* Common: Temperature */}
           <div>
-            <Label>Temperature</Label>
+            <Label>{tUi("Temperature")}</Label>
             <Input
               type="number"
               value={config.ai_temperature ?? 0.8}
@@ -512,9 +504,7 @@ export default function StreamingStartNodeEditor({
               step={0.1}
               className="mt-1"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Controls randomness (0.0–2.0)
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Controls randomness (0.0–2.0)")}</p>
           </div>
 
           {/* === OpenAI-specific === */}
@@ -541,17 +531,15 @@ export default function StreamingStartNodeEditor({
               )}
 
               <div>
-                <Label>Language Code</Label>
+                <Label>{tUi("Language Code")}</Label>
                 <Input
                   type="text"
                   value={config.ai_language_code || ""}
                   onChange={(e) => handleFieldChange("ai_language_code", e.target.value)}
-                  placeholder="e.g. en-US, pl-PL"
+                  placeholder={tUi("e.g. en-US, pl-PL")}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  BCP-47 language code — forces response language and transcription (leave empty for auto-detect)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("BCP-47 language code — forces response language and transcription (leave empty for auto-detect)")}</p>
               </div>
 
               {/* Advanced OpenAI Settings */}
@@ -562,12 +550,10 @@ export default function StreamingStartNodeEditor({
                   ) : (
                     <IconChevronRight className="w-4 h-4" />
                   )}
-                  <IconSettings className="w-4 h-4" />
-                  Advanced Settings
-                </CollapsibleTrigger>
+                  <IconSettings className="w-4 h-4" />{tUi("Advanced Settings")}</CollapsibleTrigger>
                 <CollapsibleContent className="space-y-4 mt-3">
                   <div>
-                    <Label>VAD Threshold</Label>
+                    <Label>{tUi("VAD Threshold")}</Label>
                     <Input
                       type="number"
                       value={config.ai_vad_threshold ?? 0.5}
@@ -579,13 +565,11 @@ export default function StreamingStartNodeEditor({
                       step={0.05}
                       className="mt-1"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Voice activity detection threshold (0.0–1.0)
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Voice activity detection threshold (0.0–1.0)")}</p>
                   </div>
 
                   <div>
-                    <Label>Silence Duration (ms)</Label>
+                    <Label>{tUi("Silence Duration (ms)")}</Label>
                     <Input
                       type="number"
                       value={config.ai_vad_silence_ms ?? 500}
@@ -596,13 +580,11 @@ export default function StreamingStartNodeEditor({
                       step={50}
                       className="mt-1"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Silence duration before end of speech
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Silence duration before end of speech")}</p>
                   </div>
 
                   <div>
-                    <Label>Prefix Padding (ms)</Label>
+                    <Label>{tUi("Prefix Padding (ms)")}</Label>
                     <Input
                       type="number"
                       value={config.ai_vad_prefix_padding_ms ?? 300}
@@ -616,25 +598,21 @@ export default function StreamingStartNodeEditor({
                       step={50}
                       className="mt-1"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Audio padding before speech start
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Audio padding before speech start")}</p>
                   </div>
 
                   <div>
-                    <Label>Max Output Tokens</Label>
+                    <Label>{tUi("Max Output Tokens")}</Label>
                     <Input
                       type="text"
                       value={config.ai_max_output_tokens ?? "inf"}
                       onChange={(e) =>
                         handleFieldChange("ai_max_output_tokens", e.target.value)
                       }
-                      placeholder="inf"
+                      placeholder={tUi("inf")}
                       className="mt-1"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Maximum output tokens (or &quot;inf&quot; for unlimited)
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Maximum output tokens (or \"inf\" for unlimited)")}</p>
                   </div>
                 </CollapsibleContent>
               </Collapsible>
@@ -657,17 +635,15 @@ export default function StreamingStartNodeEditor({
               })}
 
               <div>
-                <Label>Language Code</Label>
+                <Label>{tUi("Language Code")}</Label>
                 <Input
                   type="text"
                   value={config.ai_language_code || ""}
                   onChange={(e) => handleFieldChange("ai_language_code", e.target.value)}
-                  placeholder="e.g. en-US, pl-PL"
+                  placeholder={tUi("e.g. en-US, pl-PL")}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  BCP-47 language code (leave empty for auto-detect)
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("BCP-47 language code (leave empty for auto-detect)")}</p>
               </div>
             </div>
           )}
@@ -679,16 +655,16 @@ export default function StreamingStartNodeEditor({
         <div className="space-y-4 pt-2 border-t">
           <div className="flex items-center gap-2">
             <IconMicrophone className="w-4 h-4 text-teal-500" />
-            <span className="text-sm font-medium">Telnyx STT Configuration</span>
+            <span className="text-sm font-medium">{tUi("Telnyx STT Configuration")}</span>
           </div>
           <div>
-            <Label>Model</Label>
+            <Label>{tUi("Model")}</Label>
             <Select
               value={telnyxSttModel}
               onValueChange={handleTelnyxSttModelChange}
             >
               <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select STT model" />
+                <SelectValue placeholder={tUi("Select STT model")} />
               </SelectTrigger>
               <SelectContent>
                 {TELNYX_STT_MODEL_OPTIONS.map((opt) => (
@@ -703,10 +679,8 @@ export default function StreamingStartNodeEditor({
           {hasCallerLanguageParameterBefore && (
             <div className="flex items-center justify-between rounded-md border p-3">
               <div className="space-y-0.5">
-                <Label>Use Caller Language</Label>
-                <p className="text-xs text-muted-foreground">
-                  Use client_state.caller_language set by an upstream Update Client State node.
-                </p>
+                <Label>{tUi("Use Caller Language")}</Label>
+                <p className="text-xs text-muted-foreground">{tUi("Use client_state.caller_language set by an upstream Update Client State node.")}</p>
               </div>
               <Switch
                 checked={useCallerLanguage}
@@ -719,10 +693,8 @@ export default function StreamingStartNodeEditor({
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <Label>Language</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Choose a supported language for the selected STT model or provide it dynamically.
-                  </p>
+                  <Label>{tUi("Language")}</Label>
+                  <p className="text-xs text-muted-foreground">{tUi("Choose a supported language for the selected STT model or provide it dynamically.")}</p>
                 </div>
                 <Select
                   value={config.telnyx_stt_language_source || "static"}
@@ -732,8 +704,8 @@ export default function StreamingStartNodeEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="static">Static</SelectItem>
-                    <SelectItem value="variable">Variable</SelectItem>
+                    <SelectItem value="static">{tUi("Static")}</SelectItem>
+                    <SelectItem value="variable">{tUi("Variable")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -742,7 +714,7 @@ export default function StreamingStartNodeEditor({
                   value={config.telnyx_stt_language || ""}
                   onChange={(value) => handleFieldChange("telnyx_stt_language", value)}
                   availableVariables={availableVariables}
-                  placeholder="{{caller_language}}"
+                  placeholder={tUi("{{caller_language}}")}
                 />
               ) : (
                 <Select
@@ -750,7 +722,7 @@ export default function StreamingStartNodeEditor({
                   onValueChange={(value) => handleFieldChange("telnyx_stt_language", value)}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select language" />
+                    <SelectValue placeholder={tUi("Select language")} />
                   </SelectTrigger>
                   <SelectContent>
                     {telnyxSttLanguageOptions.map((opt) => (
@@ -766,10 +738,8 @@ export default function StreamingStartNodeEditor({
 
           <div className="flex items-center justify-between rounded-md border p-3">
             <div className="space-y-0.5">
-              <Label>Interim Results</Label>
-              <p className="text-xs text-muted-foreground">
-                Emit partial transcripts while speech is still in progress.
-              </p>
+              <Label>{tUi("Interim Results")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Emit partial transcripts while speech is still in progress.")}</p>
             </div>
             <Switch
               checked={config.telnyx_stt_interim_results !== false}
@@ -784,12 +754,11 @@ export default function StreamingStartNodeEditor({
         <div className="space-y-4 pt-2 border-t">
           <div className="flex items-center gap-2">
             <IconSettings className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Telnyx Streaming Parameters</span>
+            <span className="text-sm font-medium">{tUi("Telnyx Streaming Parameters")}</span>
           </div>
 
           <div>
-            <Label className="flex items-center gap-2">
-              Stream URL <span className="text-red-500">*</span>
+            <Label className="flex items-center gap-2">{tUi("Stream URL ")}<span className="text-red-500">*</span>
               {streamUrlError && (
                 <IconAlertTriangle className="h-4 w-4 text-destructive" />
               )}
@@ -798,15 +767,13 @@ export default function StreamingStartNodeEditor({
               type="text"
               value={config.stream_url || ""}
               onChange={(e) => handleFieldChange("stream_url", e.target.value)}
-              placeholder="wss://www.example.com/websocket"
+              placeholder={tUi("wss://www.example.com/websocket")}
               className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
             />
             {streamUrlError && (
               <p className="text-xs text-destructive mt-1">{streamUrlError}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
-              The destination WebSocket address.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("The destination WebSocket address.")}</p>
           </div>
 
           {renderSelect("stream_track", "Stream Track", STREAM_TRACK_OPTIONS, "inbound_track", {
@@ -855,9 +822,7 @@ export default function StreamingStartNodeEditor({
       {(isAI || isTelnyxStt) && (
         <div className="space-y-4 pt-2 border-t">
           <div>
-            <Label className="flex items-center gap-2">
-              Stream URL
-              <IconLock className="w-3 h-3 text-muted-foreground" />
+            <Label className="flex items-center gap-2">{tUi("Stream URL")}<IconLock className="w-3 h-3 text-muted-foreground" />
             </Label>
             <Input
               type="text"
@@ -865,10 +830,8 @@ export default function StreamingStartNodeEditor({
               className="mt-1"
               readOnly
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Auto-configured WebSocket URL for{" "}
-              {isOpenAI ? "OpenAI" : isGemini ? "Gemini" : "Telnyx STT"} streaming
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Auto-configured WebSocket URL for")}{" "}
+              {isOpenAI ? tUi("OpenAI") : isGemini ? tUi("Gemini") : tUi("Telnyx STT")}{tUi(" streaming")}</p>
           </div>
         </div>
       )}

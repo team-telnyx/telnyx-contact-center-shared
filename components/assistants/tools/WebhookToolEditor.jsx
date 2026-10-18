@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -25,6 +27,7 @@ export default function WebhookToolEditor({
   toolId,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const wh = value?.webhook || {};
   const headers = Array.isArray(wh.headers) ? wh.headers : [];
   const body = wh.body_parameters || {};
@@ -35,10 +38,10 @@ export default function WebhookToolEditor({
   )
     ? wh.store_fields_as_variables
     : [];
-  const fillerMessages = Array.isArray(wh.filler_messages)
-    ? wh.filler_messages
+  const fillerMessages = Array.isArray(wh.messages)
+    ? wh.messages
     : [];
-  const isAsync = value?.async === true || wh.async === true;
+  const isAsync = (value?.async ?? wh.async) === true;
   const [testSheetOpen, setTestSheetOpen] = useState(false);
 
   // Check if testing is enabled (both assistantId and toolId must be present)
@@ -114,28 +117,24 @@ export default function WebhookToolEditor({
           id="webhook-async"
           checked={isAsync}
           onCheckedChange={(checked) =>
-            onChange?.({ ...(value || { type: "webhook" }), async: checked })
+            onChange?.({ ...value, async: undefined, webhook: { ...wh, async: checked } })
           }
         />
-        <label htmlFor="webhook-async" className="text-sm font-medium cursor-pointer">
-          Async (Fire &amp; Forget)
-        </label>
+        <label htmlFor="webhook-async" className="text-sm font-medium cursor-pointer">{tUi("Async (Fire & Forget)")}</label>
       </div>
-      <p className="text-xs text-muted-foreground -mt-2">
-        Call this webhook asynchronously — the assistant won&apos;t wait for the response.
-      </p>
+      <p className="text-xs text-muted-foreground -mt-2">{tUi("Call this webhook asynchronously — the assistant won't wait for the response.")}</p>
 
       {/* Static top section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs">Name</label>
+          <label className="text-xs">{tUi("Name")}</label>
           <Input
             value={wh.name || ""}
             onChange={(e) => update({ name: e.target.value })}
           />
         </div>
         <div className="md:col-span-2">
-          <label className="text-xs">Description</label>
+          <label className="text-xs">{tUi("Description")}</label>
           <VariableInput
             value={wh.description || ""}
             availableVariables={availableVariables}
@@ -144,7 +143,7 @@ export default function WebhookToolEditor({
           />
         </div>
         <div className="md:col-span-2">
-          <label className="text-xs">URL</label>
+          <label className="text-xs">{tUi("URL")}</label>
           <VariableInput
             value={wh.url || ""}
             availableVariables={availableVariables}
@@ -154,7 +153,7 @@ export default function WebhookToolEditor({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-2">
           <div>
-            <label className="text-xs">Method</label>
+            <label className="text-xs">{tUi("Method")}</label>
             <Select
               value={wh.method || "POST"}
               onValueChange={(val) => update({ method: val })}
@@ -173,13 +172,15 @@ export default function WebhookToolEditor({
           </div>
           {!isAsync && (
             <div>
-              <label className="text-xs">Timeout (seconds)</label>
+              <label className="text-xs">{tUi("Timeout (seconds)")}</label>
               <Input
                 type="number"
-                min={0}
-                value={wh.timeout_secs ?? ""}
+                min={0.001}
+                max={60}
+                step={0.001}
+                value={(value?.timeout_ms ?? wh.timeout_ms ?? (wh.timeout_secs * 1000 || 5000)) / 1000}
                 onChange={(e) =>
-                  update({ timeout_secs: Number(e.target.value || 0) })
+                  onChange?.({ ...value, timeout_ms: Math.round(Number(e.target.value) * 1000), webhook: { ...wh, timeout_secs: undefined, timeout_ms: undefined } })
                 }
               />
             </div>
@@ -190,16 +191,14 @@ export default function WebhookToolEditor({
 
       {/* Tabs with scrollable content */}
       <Tabs defaultValue="headers" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="w-full">
-          <TabsTrigger value="headers">Headers</TabsTrigger>
-          <TabsTrigger value="path">Path</TabsTrigger>
-          <TabsTrigger value="query">Query</TabsTrigger>
-          <TabsTrigger value="body">Body</TabsTrigger>
-          <TabsTrigger value="dynamic_variables">Dynamic Variables</TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="headers">{tUi("Headers")}</TabsTrigger>
+          <TabsTrigger value="path">{tUi("Path")}</TabsTrigger>
+          <TabsTrigger value="query">{tUi("Query")}</TabsTrigger>
+          <TabsTrigger value="body">{tUi("Body")}</TabsTrigger>
+          <TabsTrigger value="dynamic_variables">{tUi("Dynamic Variables")}</TabsTrigger>
           {!isAsync && (
-            <TabsTrigger value="filler_messages" className="relative">
-              Filler Messages
-              {fillerMessages.length > 0 && (
+            <TabsTrigger value="filler_messages" className="relative">{tUi("Filler Messages")}{fillerMessages.length > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center min-w-4 h-4 px-1 text-[10px] font-medium rounded-full bg-destructive text-destructive-foreground">
                   {fillerMessages.length}
                 </span>
@@ -209,7 +208,7 @@ export default function WebhookToolEditor({
         </TabsList>
         <TabsContent value="headers" className="flex-1 min-h-0">
           <ScrollArea className="h-full pr-2">
-            <SectionLabel>Headers</SectionLabel>
+            <SectionLabel>{tUi("Headers")}</SectionLabel>
             <div className="space-y-2">
               {headers.map((h, i) => (
                 <div
@@ -218,7 +217,7 @@ export default function WebhookToolEditor({
                 >
                   <Input
                     className="md:col-span-4"
-                    placeholder="Header name"
+                    placeholder={tUi("Header name")}
                     value={h?.name || ""}
                     onChange={(e) => {
                       const next = headers.map((x, idx) =>
@@ -229,7 +228,7 @@ export default function WebhookToolEditor({
                   />
                   <div className="md:col-span-6">
                     <VariableInput
-                      placeholder="Header value"
+                      placeholder={tUi("Header value")}
                       value={h?.value || ""}
                       availableVariables={availableVariables}
                       secrets={[]}
@@ -261,7 +260,7 @@ export default function WebhookToolEditor({
                           headers: headers.filter((_, idx) => idx !== i),
                         })
                       }
-                      aria-label="Remove"
+                      aria-label={tUi("Remove")}
                     >
                       <IconTrash />
                     </Button>
@@ -275,9 +274,7 @@ export default function WebhookToolEditor({
                 onClick={() =>
                   update({ headers: [...headers, { name: "", value: "" }] })
                 }
-              >
-                Add
-              </Button>
+              >{tUi("Add")}</Button>
             </div>
           </ScrollArea>
         </TabsContent>
@@ -286,15 +283,12 @@ export default function WebhookToolEditor({
             <div className="space-y-2">
               {pathParams.length === 0 ? (
                 <div className="text-xs text-muted-foreground p-4 border rounded bg-muted/50">
-                  <p className="mb-2">
-                    No parameters have been added yet, path parameters are
-                    inferred from the URL path, use this syntax:{" "}
+                  <p className="mb-2">{tUi("No parameters have been added yet, path parameters are inferred from the URL path, use this syntax:")}{" "}
                     <code className="bg-background px-1 py-0.5 rounded">
                       /path/&#123;path_param1&#125;/&#123;path_param2&#125;
                     </code>
                   </p>
-                  <p>
-                    You can also use dynamic variables in paths:{" "}
+                  <p>{tUi("You can also use dynamic variables in paths:")}{" "}
                     <code className="bg-background px-1 py-0.5 rounded">
                       /path/&#123;&#123;dynamic_variable&#125;&#125;/&#123;path_param&#125;
                     </code>
@@ -302,7 +296,7 @@ export default function WebhookToolEditor({
                 </div>
               ) : (
                 <SchemaEditor
-                  title="Path Parameters"
+                  title={tUi("Path Parameters")}
                   value={path}
                   onChange={(val) => update({ path_parameters: val })}
                   readOnly={true}
@@ -323,7 +317,7 @@ export default function WebhookToolEditor({
           <ScrollArea className="h-full pr-2">
             <div className="space-y-2">
               <SchemaEditor
-                title="Query Parameters"
+                title={tUi("Query Parameters")}
                 value={query}
                 onChange={(val) => update({ query_parameters: val })}
                 availableTypes={[
@@ -345,9 +339,7 @@ export default function WebhookToolEditor({
                   onClick={() =>
                     update({ query_parameters: addEmptyField(query) })
                   }
-                >
-                  Add
-                </Button>
+                >{tUi("Add")}</Button>
               </div>
             </div>
           </ScrollArea>
@@ -356,7 +348,7 @@ export default function WebhookToolEditor({
           <ScrollArea className="h-full pr-2">
             <div className="space-y-2">
               <SchemaEditor
-                title="Body Parameters"
+                title={tUi("Body Parameters")}
                 value={body}
                 onChange={(val) => update({ body_parameters: val })}
                 availableTypes={[
@@ -378,9 +370,7 @@ export default function WebhookToolEditor({
                   onClick={() =>
                     update({ body_parameters: addEmptyField(body) })
                   }
-                >
-                  Add
-                </Button>
+                >{tUi("Add")}</Button>
               </div>
             </div>
           </ScrollArea>
@@ -388,20 +378,18 @@ export default function WebhookToolEditor({
         <TabsContent value="dynamic_variables" className="flex-1 min-h-0">
           <ScrollArea className="h-full pr-2">
             <div className="space-y-3">
-              <SectionLabel>Dynamic Variables</SectionLabel>
-              <p className="text-xs text-muted-foreground">
-                Configure which dynamic variables should be updated from this webhook response.
-              </p>
+              <SectionLabel>{tUi("Dynamic Variables")}</SectionLabel>
+              <p className="text-xs text-muted-foreground">{tUi("Configure which dynamic variables should be updated from this webhook response.")}</p>
               {dynamicVariableAssignments.map((assignment, i) => (
                 <div
                   key={i}
                   className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end border-b pb-3"
                 >
                   <div className="md:col-span-4">
-                    <label className="text-xs">Dynamic Variable</label>
+                    <label className="text-xs">{tUi("Dynamic Variable")}</label>
                     <Input
                       value={assignment?.name || ""}
-                      placeholder="customer_name"
+                      placeholder={tUi("customer_name")}
                       onChange={(e) => {
                         const next = dynamicVariableAssignments.map((x, idx) =>
                           idx === i ? { ...x, name: e.target.value } : x
@@ -411,10 +399,10 @@ export default function WebhookToolEditor({
                     />
                   </div>
                   <div className="md:col-span-7">
-                    <label className="text-xs">Response Path</label>
+                    <label className="text-xs">{tUi("Response Path")}</label>
                     <Input
                       value={assignment?.value_path || ""}
-                      placeholder="data.customer.name"
+                      placeholder={tUi("data.customer.name")}
                       onChange={(e) => {
                         const next = dynamicVariableAssignments.map((x, idx) =>
                           idx === i ? { ...x, value_path: e.target.value } : x
@@ -436,7 +424,7 @@ export default function WebhookToolEditor({
                             ),
                         })
                       }
-                      aria-label="Remove dynamic variable assignment"
+                      aria-label={tUi("Remove dynamic variable assignment")}
                     >
                       <IconTrash />
                     </Button>
@@ -444,9 +432,7 @@ export default function WebhookToolEditor({
                 </div>
               ))}
               {dynamicVariableAssignments.length === 0 && (
-                <div className="text-xs text-muted-foreground p-4 border rounded bg-muted/50">
-                  No dynamic variable assignments configured.
-                </div>
+                <div className="text-xs text-muted-foreground p-4 border rounded bg-muted/50">{tUi("No dynamic variable assignments configured.")}</div>
               )}
               <div className="flex justify-end">
                 <Button
@@ -459,9 +445,7 @@ export default function WebhookToolEditor({
                       ],
                     })
                   }
-                >
-                  Add dynamic variable assignment
-                </Button>
+                >{tUi("Add dynamic variable assignment")}</Button>
               </div>
             </div>
           </ScrollArea>
@@ -470,78 +454,65 @@ export default function WebhookToolEditor({
           <TabsContent value="filler_messages" className="flex-1 min-h-0">
             <ScrollArea className="h-full pr-2">
               <div className="space-y-3">
-                <SectionLabel>Filler Messages</SectionLabel>
-                <p className="text-xs text-muted-foreground">
-                  Sentences the assistant speaks while a synchronous webhook is
-                  running, so the caller isn&apos;t left in silence.
-                </p>
+                <SectionLabel>{tUi("Filler Messages")}</SectionLabel>
+                <p className="text-xs text-muted-foreground">{tUi("Sentences the assistant speaks while a synchronous webhook is running, so the caller isn't left in silence.")}</p>
                 {fillerMessages.map((fm, i) => (
                   <div
                     key={i}
                     className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end border-b pb-3"
                   >
                     <div className="md:col-span-4">
-                      <label className="text-xs">When</label>
+                      <label className="text-xs">{tUi("When")}</label>
                       <Select
-                        value={fm?.type || "on_start"}
+                        value={fm?.type || "request_start"}
                         onValueChange={(val) => {
                           const next = fillerMessages.map((x, idx) =>
-                            idx === i ? { ...x, type: val } : x
+                            idx === i ? { ...x, type: val, ...(val === "request_response_delayed" ? { timing_ms: x.timing_ms ?? 3000 } : {}) } : x
                           );
-                          update({ filler_messages: next });
+                          update({ messages: next });
                         }}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="on_start">
-                            When the request starts
-                          </SelectItem>
-                          <SelectItem value="on_delay">
-                            If the response is delayed
-                          </SelectItem>
+                          <SelectItem value="request_start">{tUi("When the request starts")}</SelectItem>
+                          <SelectItem value="request_response_delayed">{tUi("If the response is delayed")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="md:col-span-5">
-                      <label className="text-xs">Message</label>
+                      <label className="text-xs">{tUi("Message")}</label>
                       <Input
-                        value={fm?.message || ""}
-                        placeholder="e.g. Let me check that for you..."
+                        value={fm?.content || ""}
+                        placeholder={tUi("e.g. Let me check that for you...")}
                         onChange={(e) => {
                           const next = fillerMessages.map((x, idx) =>
-                            idx === i ? { ...x, message: e.target.value } : x
+                            idx === i ? { ...x, content: e.target.value } : x
                           );
-                          update({ filler_messages: next });
+                          update({ messages: next });
                         }}
                       />
                     </div>
-                    {fm?.type === "on_delay" ? (
+                    {fm?.type === "request_response_delayed" ? (
                       <div className="md:col-span-2">
-                        <label className="text-xs flex items-center gap-1">
-                          Delay (ms)
-                          <span className="relative group cursor-help">
+                        <label className="text-xs flex items-center gap-1">{tUi("Delay (ms)")}<span className="relative group cursor-help">
                             <IconInfoCircle size={12} className="text-muted-foreground" />
-                            <span className="absolute bottom-full right-0 mb-2 w-48 p-2 rounded bg-popover text-popover-foreground text-xs shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                              How long to wait (in milliseconds, 100–120000)
-                              before speaking this message. Only used for delayed
-                              messages.
-                            </span>
+                            <span className="absolute bottom-full right-0 mb-2 w-48 p-2 rounded bg-popover text-popover-foreground text-xs shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">{tUi("How long to wait (in milliseconds, 100–120000) before speaking this message. Only used for delayed messages.")}</span>
                           </span>
                         </label>
                         <Input
                           type="number"
                           min={100}
                           max={120000}
-                          value={fm?.delay_ms ?? 3000}
+                          value={fm?.timing_ms ?? 3000}
                           onChange={(e) => {
                             const next = fillerMessages.map((x, idx) =>
                               idx === i
-                                ? { ...x, delay_ms: Number(e.target.value) }
+                                ? { ...x, timing_ms: Number(e.target.value) }
                                 : x
                             );
-                            update({ filler_messages: next });
+                            update({ messages: next });
                           }}
                         />
                       </div>
@@ -553,12 +524,12 @@ export default function WebhookToolEditor({
                         size="icon"
                         onClick={() =>
                           update({
-                            filler_messages: fillerMessages.filter(
+                            messages: fillerMessages.filter(
                               (_, idx) => idx !== i
                             ),
                           })
                         }
-                        aria-label="Remove filler message"
+                        aria-label={tUi("Remove filler message")}
                       >
                         <IconTrash />
                       </Button>
@@ -566,25 +537,20 @@ export default function WebhookToolEditor({
                   </div>
                 ))}
                 {fillerMessages.length === 0 && (
-                  <div className="text-xs text-muted-foreground p-4 border rounded bg-muted/50">
-                    No filler messages configured. The caller will be in silence
-                    while the webhook runs.
-                  </div>
+                  <div className="text-xs text-muted-foreground p-4 border rounded bg-muted/50">{tUi("No filler messages configured. The caller will be in silence while the webhook runs.")}</div>
                 )}
                 <div className="flex justify-end">
                   <Button
                     type="button"
                     onClick={() =>
                       update({
-                        filler_messages: [
+                        messages: [
                           ...fillerMessages,
-                          { type: "on_start", message: "" },
+                          { type: "request_start", content: "" },
                         ],
                       })
                     }
-                  >
-                    + Add filler message
-                  </Button>
+                  >{tUi("+ Add filler message")}</Button>
                 </div>
               </div>
             </ScrollArea>
@@ -622,6 +588,7 @@ function PropertyField({
   onRequiredChange,
   onRemove,
 }) {
+  const tUi = useUiText();
   const [localName, setLocalName] = useState(propKey);
 
   // Update local name when prop key changes externally
@@ -648,7 +615,7 @@ function PropertyField({
     <div className="border rounded p-2 grid grid-cols-1 md:grid-cols-12 gap-2">
       <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
         <div className="md:col-span-2">
-          <label className="text-xs">Name</label>
+          <label className="text-xs">{tUi("Name")}</label>
           <Input
             value={localName}
             onChange={(e) => setLocalName(e.target.value)}
@@ -658,7 +625,7 @@ function PropertyField({
           />
         </div>
         <div className="md:col-span-2">
-          <label className="text-xs">Type</label>
+          <label className="text-xs">{tUi("Type")}</label>
           <Select
             value={definition.type || "string"}
             onValueChange={(val) => onTypeChange(propKey, val)}
@@ -677,7 +644,7 @@ function PropertyField({
         </div>
         <div className="md:col-span-1 flex items-end">
           <div>
-            <label className="text-xs">Required</label>
+            <label className="text-xs">{tUi("Required")}</label>
             <div className="h-[38px] flex items-center">
               <Switch
                 checked={required}
@@ -689,9 +656,9 @@ function PropertyField({
         </div>
       </div>
       <div className={readOnly ? "md:col-span-12" : "md:col-span-11"}>
-        <label className="text-xs">Description</label>
+        <label className="text-xs">{tUi("Description")}</label>
         <VariableInput
-          placeholder="Description"
+          placeholder={tUi("Description")}
           value={definition.description || ""}
           availableVariables={availableVariables}
           secrets={[]}
@@ -705,7 +672,7 @@ function PropertyField({
             variant="outline"
             size="icon"
             onClick={() => onRemove(propKey)}
-            aria-label="Remove"
+            aria-label={tUi("Remove")}
           >
             <IconTrash />
           </Button>
@@ -713,9 +680,9 @@ function PropertyField({
       )}
       {definition.type === "enum" && (
         <div className="md:col-span-12">
-          <label className="text-xs">Enum Values (comma separated)</label>
+          <label className="text-xs">{tUi("Enum Values (comma separated)")}</label>
           <VariableInput
-            placeholder="e.g., value1, value2, value3"
+            placeholder={tUi("e.g., value1, value2, value3")}
             value={
               Array.isArray(definition.enum) ? definition.enum.join(", ") : ""
             }
@@ -744,6 +711,7 @@ function SchemaEditor({
   ],
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const schema = value || {};
   const properties = schema?.properties || {};
   const required = Array.isArray(schema?.required) ? schema.required : [];
@@ -830,7 +798,7 @@ function SchemaEditor({
     <div className="space-y-2">
       <SectionLabel>{title}</SectionLabel>
       {keys.length === 0 ? (
-        <div className="text-xs text-muted-foreground">No fields defined.</div>
+        <div className="text-xs text-muted-foreground">{tUi("No fields defined.")}</div>
       ) : null}
       {keys.map((key, index) => (
         <PropertyField

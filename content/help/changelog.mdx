@@ -4,13 +4,75 @@ description: Release notes for Telnyx Contact Center.
 audiences: [agent, supervisor, admin, owner]
 keywords: [changelog, release notes, changes, version]
 owner: contact-center
-lastReviewed: 2026-09-24
+lastReviewed: 2026-09-27
 ---
 
 {/* Generated from CHANGELOG.md by yarn release:sync. */}
 
 Official versions follow [Semantic Versioning](https://semver.org/). These notes
 are also available inside the application through **About Contact Center → Release notes**.
+
+## [Unreleased]
+
+### Fixed
+
+- Hold and unhold include the selected voice device's authorization headers.
+- Direct calls remain connected when answer/bridge webhooks omit routing headers
+  or arrive more than once; the connect saga retains lifecycle ownership.
+- Owner seeding no longer assigns the main service DID as a personal direct-call
+  number. Existing main-number assignments cannot bypass inbound application routing.
+- First-login voice status prompts for a device instead of reporting ready without
+  a selection. WebRTC connection setup repairs call parking on existing connections.
+
+### Changed
+
+- Added name filtering and a five-row scroll area for additional video assistants.
+- Updated rrweb recorder/replay, React Table, Pino, Pino Pretty, Inquirer and pg
+  to compatible versions reviewed from the open dependency-update proposals.
+
+## [1.9.0] - 2026-09-27
+
+### Added
+
+- Central Admin → Settings → AI Copilot workspace for fifteen AI operations,
+  with default models, editable business guidance, protected technical rules,
+  affected-screen descriptions and consolidated chat suggestion settings.
+- On-demand AI instruction tester with synthetic editable examples, complete
+  effective prompts, model selection, response validation, token usage and
+  latency. Draft tests do not save settings or create real evaluations.
+- Native iPhone AI Assistant session lifecycle with authenticated device ownership,
+  shared voice capacity, idempotent completion and bounded recovery deadlines.
+- Live browser WebRTC diagnostics with estimated MOS, jitter, round-trip time,
+  packet loss and audio bitrate charts; region selection and quality indicators.
+- Mobile supervisor reporting projections for historical interactions, recordings,
+  transcriptions, quality evaluation and detailed analytics.
+
+- Authenticated Watch audio sessions on the existing public streaming service,
+  including AI conversations and outgoing PSTN/SIP calls from saved contacts and
+  colleagues, bounded audio transport and shared voice/video occupancy protection.
+- Mobile transfer directory queue statistics and supervisor queue-management data.
+
+
+### Fixed
+
+- Quality AI evaluation uses compatible model output handling and the existing
+  text conversation for messaging interactions, with clearer provider failures.
+- Synchronize open supervisor campaign assignments after remote mobile changes.
+- Close the Calls On popover before diagnostics and keep region choices above
+  the phone panel; exclude local build artifacts from Tailwind source scanning.
+- Sanitize and bound Watch caller display names before sending outbound calls
+  to Telnyx, including punctuation, non-ASCII input and empty-name fallbacks.
+
+- Synchronize open supervisor queue assignments with activation changes from mobile.
+- Resolve mobile voice caller names from contacts and preserve handoff schema roles
+  during startup upgrades; handle empty voice endpoint responses safely.
+
+- Keep the selected iPhone routable through an authenticated VoIP push
+  registration when iOS suspends the app or its signaling socket disconnects.
+  Separate socket, push and video deadlines; invalidate stale push eligibility
+  on token/login revocation and show push standby in Calls On.
+- Preserve push standby after missed or declined calls while retaining queue
+  no-answer policy and invalid-destination recovery.
 
 ## [1.8.0] - 2026-09-24
 

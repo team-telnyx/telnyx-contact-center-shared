@@ -1,3 +1,5 @@
+import { previewTranslationSystem } from '../../../lib/ai-operations/prompts/core.mjs';
+import { prepareAiOperation } from '@/lib/ai-operations/runtime.mjs';
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
@@ -11,15 +13,14 @@ async function POST_handler(request) {
     const response = await fetch(buildTelnyxV2Url("/ai/chat/completions"), {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: process.env.TELNYX_TRANSLATION_MODEL || "meta-llama/Llama-3.3-70B-Instruct",
+      body: JSON.stringify(await prepareAiOperation('preview-translation', {
         temperature: 0,
         max_tokens: 500,
         messages: [
-          { role: "system", content: "Translate the supplied text faithfully. Return only the translated text with no explanation or quotation marks." },
+          { role: "system", content: previewTranslationSystem() },
           { role: "user", content: `Source language: ${sourceLanguage}\nTarget language: ${targetLanguage}\nText:\n${text}` },
         ],
-      }),
+      })),
       cache: "no-store",
     });
     const data = await response.json().catch(() => ({}));

@@ -1,4 +1,8 @@
 "use client";
+import { sourceText } from "@/lib/i18n/source-text.mjs";
+
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +38,10 @@ function formatConfidence(confidence) {
   return `${Math.round(Number(confidence) * 100)}%`;
 }
 
-function formatSpeakerLabel(speaker) {
+function formatSpeakerLabel(speaker, tUi = sourceText) {
   const speakerNumber = Number(speaker);
-  if (Number.isFinite(speakerNumber)) return `Speaker ${speakerNumber + 1}`;
-  return speaker || "Speaker";
+  if (Number.isFinite(speakerNumber)) return tUi("Speaker {value0}", { value0: speakerNumber + 1 });
+  return speaker || tUi("Speaker");
 }
 
 // Synced diarized transcript rendered as chat bubbles. When wired to a player
@@ -54,6 +58,7 @@ export default function DiarizedTranscript({
   onSeek = null,
   className,
 }) {
+  const tUi = useUiText();
   const turnRefs = useRef({});
 
   const synced = onSeek != null;
@@ -104,11 +109,11 @@ export default function DiarizedTranscript({
             </div>
             <div className={`flex min-w-0 max-w-[85%] flex-col ${isRight ? "items-end" : "items-start"}`}>
               <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                <span className="font-medium">{formatSpeakerLabel(turn.speaker)}</span>
+                <span className="font-medium">{formatSpeakerLabel(turn.speaker, tUi)}</span>
                 {hasStart && (
                   <span className="font-mono tabular-nums">
                     {formatClock(turn.start)}
-                    {Number.isFinite(Number(turn.end)) ? `–${formatClock(turn.end)}` : ""}
+                    {Number.isFinite(Number(turn.end)) ? tUi("–{value0}", { value0: formatClock(turn.end) }) : ""}
                   </span>
                 )}
                 {confidenceLabel && (
@@ -127,7 +132,7 @@ export default function DiarizedTranscript({
                 onClick={() => {
                   if (clickable) onSeek(Math.max(0, Number(turn.start) - 0.3));
                 }}
-                title={clickable ? "Click to play from here" : undefined}
+                title={clickable ? tUi("Click to play from here") : undefined}
               >
                 <p className="whitespace-pre-wrap leading-relaxed">{turn.text}</p>
               </div>

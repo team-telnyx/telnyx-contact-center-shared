@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { voiceFetch } from "@/lib/telephony/endpoint-client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -66,6 +68,7 @@ export default function WrapupCodesSheet({
   segmentId = null,
   transcriptions,
 }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   // Set when a save attempt fails, so the agent is never trapped in an
@@ -472,7 +475,7 @@ export default function WrapupCodesSheet({
       modal={true}
     >
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
         showCloseButton={false}
         onInteractOutside={(e) => {
@@ -486,18 +489,15 @@ export default function WrapupCodesSheet({
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconChecklist className="size-5" />
-            Wrapup Codes
-          </SheetTitle>
+            <IconChecklist className="size-5" />{tUi("Wrapup Codes")}</SheetTitle>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="outline" className="text-base font-semibold">
               <span data-testid="wrapup-countdown" data-deadline={Number.isFinite(clock?.deadline) ? new Date(clock.deadline).toISOString() : ""}>
-                {clock?.core ? "Wrap-up ends in" : "Auto-save in"} {timerLabel}
+                {clock?.core ? tUi("Wrap-up ends in") : tUi("Auto-save in")} {timerLabel}
               </span>
             </Badge>
             {queueName ? (
-              <span className="text-xs text-muted-foreground">
-                Queue: {queueName}
+              <span className="text-xs text-muted-foreground">{tUi("Queue: ")}{queueName}
               </span>
             ) : null}
           </div>
@@ -513,9 +513,7 @@ export default function WrapupCodesSheet({
                   <Skeleton className="h-9 w-full" />
                 </div>
               ) : codes.length === 0 ? (
-                <div className="text-sm text-muted-foreground text-center py-6">
-                  No wrapup codes assigned to this queue.
-                </div>
+                <div className="text-sm text-muted-foreground text-center py-6">{tUi("No wrapup codes assigned to this queue.")}</div>
               ) : (
                 <ScrollArea className="flex-1">
                   <div className="space-y-2 pr-4">
@@ -552,9 +550,7 @@ export default function WrapupCodesSheet({
                                   <Badge
                                     variant="outline"
                                     className="ml-2 text-xs"
-                                  >
-                                    Default
-                                  </Badge>
+                                  >{tUi("Default")}</Badge>
                                 ) : null}
                               </span>
                               {code.description ? (
@@ -580,9 +576,7 @@ export default function WrapupCodesSheet({
               variant="outline"
               onClick={() => onOpenChange?.(false)}
               disabled={saving}
-            >
-              Close without saving
-            </Button>
+            >{tUi("Close without saving")}</Button>
           ) : null}
           <Button
             data-testid="wrapup-submit-break"
@@ -590,10 +584,10 @@ export default function WrapupCodesSheet({
             onClick={() => handleManualSubmit({ nextStatus: "Break" })}
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save & Go on Break"}
+            {saving ? tUi("Saving...") : tUi("Save & Go on Break")}
           </Button>
           <Button data-testid="wrapup-submit" onClick={() => handleManualSubmit()} disabled={saving}>
-            {saving ? "Saving..." : saveFailed ? "Retry save" : "Save & Close"}
+            {saving ? tUi("Saving...") : saveFailed ? tUi("Retry save") : tUi("Save & Close")}
           </Button>
         </SheetFooter>
       </SheetContent>

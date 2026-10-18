@@ -15,6 +15,17 @@ import { readFile } from "node:fs/promises";
 // test, and only showed up as "Your session has expired" on a phone.
 
 const MOBILE_ROUTES = [
+  "app/api/admin/utilization/[scope]/[id]/route.js",
+  "app/api/video/recordings/[id]/stream/route.js",
+  "app/api/voice/recordings/[id]/stream/route.js",
+  "app/api/voice/recordings/[id]/transcribe/route.js",
+  "app/api/voice/recordings/route.js",
+  "app/api/voice/recordings/proxy/route.js",
+  "app/api/voice/assistant-session/route.js",
+  "app/api/contact-center/quality/forms/route.js",
+  "app/api/contact-center/quality/evaluations/route.js",
+  "app/api/contact-center/quality/evaluations/[id]/route.js",
+  "app/api/contact-center/quality/evaluations/[id]/ai/route.js",
   "app/api/contact-center/interactions/[id]/device-handoff/route.js",
   "app/api/contact-center/video/[id]/route.js",
   "app/api/contact-center/video/[id]/token/route.js",
@@ -176,6 +187,13 @@ describe("routes the mobile client reads", () => {
       declared = new Set(
         bodies
           .join("\n")
+          // Endpoint appends encoded path components after the base path.
+          .replace(/path:\s*"(api\/[^"]*)",\s*pathComponents:\s*\[([^\]]*)\]/g,
+            (_match, base, components) => {
+              const suffix = components.split(",").filter(part => part.trim()).map(part =>
+                /^"[^"\\]*"$/.test(part.trim()) ? JSON.parse(part.trim()) : "*");
+              return `path: "${[base, ...suffix].join("/")}"`;
+            })
           .match(/path:\s*"api\/[^"]*/g)
           ?.map((match) =>
             match

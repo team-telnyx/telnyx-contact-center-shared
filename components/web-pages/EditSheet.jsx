@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React from "react";
 import {
@@ -28,6 +30,7 @@ export default function WebPageEditSheet({
   pageId,
   onSaveComplete,
 }) {
+  const tUi = useUiText();
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [url, setUrl] = React.useState("");
@@ -290,21 +293,17 @@ export default function WebPageEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             {pageId ? (
               <>
-                <IconEdit className="size-5" />
-                Edit Web Page
-              </>
+                <IconEdit className="size-5" />{tUi("Edit Web Page")}</>
             ) : (
               <>
-                <IconWorld className="size-5" />
-                New Web Page
-              </>
+                <IconWorld className="size-5" />{tUi("New Web Page")}</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -327,32 +326,28 @@ export default function WebPageEditSheet({
                 <>
                   {/* Page Information Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Page Information
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Page Information")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">
-                          Name <span className="text-red-500">*</span>
+                        <Label className="text-sm">{tUi("Name ")}<span className="text-red-500">*</span>
                         </Label>
                         <Input
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          placeholder="Enter page name"
+                          placeholder={tUi("Enter page name")}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Description</Label>
+                        <Label className="text-sm">{tUi("Description")}</Label>
                         <Textarea
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
-                          placeholder="Enter page description"
+                          placeholder={tUi("Enter page description")}
                           rows={3}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">
-                          URL <span className="text-red-500">*</span>
+                        <Label className="text-sm">{tUi("URL ")}<span className="text-red-500">*</span>
                         </Label>
                         <div className="relative">
                           <Input
@@ -365,7 +360,7 @@ export default function WebPageEditSheet({
                                 setShowSecretSuggestions(false);
                               }
                             }}
-                            placeholder="https://example.com or https://maps.google.com/maps/embed/v1/place?key={{google_maps_api_key}}&q=..."
+                            placeholder={tUi("https://example.com or https://maps.google.com/maps/embed/v1/place?key={{google_maps_api_key}}&q=...")}
                             className="pr-8"
                           />
                           {showSecretSuggestions && filteredSecrets.length > 0 && (
@@ -389,20 +384,18 @@ export default function WebPageEditSheet({
                             </div>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Full URL including protocol. Use <code className="bg-muted px-1 rounded">{"{{secret_name}}"}</code> to reference secrets (e.g., API keys).
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Full URL including protocol. Use ")}<code className="bg-muted px-1 rounded">{"{{secret_name}}"}</code>{tUi(" to reference secrets (e.g., API keys).")}</p>
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Icon</Label>
+                        <Label className="text-sm">{tUi("Icon")}</Label>
                         <Input
                           value={icon}
                           onChange={(e) => setIcon(e.target.value)}
-                          placeholder="Icon identifier (optional)"
+                          placeholder={tUi("Icon identifier (optional)")}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Order Index</Label>
+                        <Label className="text-sm">{tUi("Order Index")}</Label>
                         <Input
                           type="number"
                           value={orderIndex}
@@ -411,16 +404,12 @@ export default function WebPageEditSheet({
                           }
                           placeholder="0"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Lower numbers appear first
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Lower numbers appear first")}</p>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <Label className="text-sm">Active</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Show this page in the agent desktop
-                          </p>
+                          <Label className="text-sm">{tUi("Active")}</Label>
+                          <p className="text-xs text-muted-foreground">{tUi("Show this page in the agent desktop")}</p>
                         </div>
                         <Switch
                           checked={isActive}
@@ -442,31 +431,25 @@ export default function WebPageEditSheet({
                     }
                   })() && (
                     <div className="pt-4 border-t">
-                      <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                        Preview
-                      </h3>
+                      <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Preview")}</h3>
                       {resolvingUrl ? (
                         <div className="flex items-center justify-center h-64 rounded-lg border bg-muted/30">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Resolving secrets...
-                          </div>
+                            </svg>{tUi("Resolving secrets...")}</div>
                         </div>
                       ) : url.includes("{{") && !resolvedUrl ? (
                         <div className="flex items-center justify-center h-32 rounded-lg border border-dashed bg-muted/20">
-                          <p className="text-sm text-muted-foreground">
-                            Could not resolve secret placeholders. Check that secrets exist.
-                          </p>
+                          <p className="text-sm text-muted-foreground">{tUi("Could not resolve secret placeholders. Check that secrets exist.")}</p>
                         </div>
                       ) : (
                         <>
                           <div className="relative w-full rounded-lg overflow-hidden border bg-muted/30">
                             <iframe
                               src={safeHttpUrl(resolvedUrl || url) || "about:blank"}
-                              title="Page Preview"
+                              title={tUi("Page Preview")}
                               className="w-full h-64 border-0"
                               sandbox="allow-scripts allow-same-origin allow-forms"
                               loading="lazy"
@@ -474,8 +457,8 @@ export default function WebPageEditSheet({
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">
                             {url.includes("{{") 
-                              ? "Preview with resolved secrets. Some pages may not display due to security restrictions."
-                              : "Some pages may not display due to security restrictions (X-Frame-Options)"}
+                              ? tUi("Preview with resolved secrets. Some pages may not display due to security restrictions.")
+                              : tUi("Some pages may not display due to security restrictions (X-Frame-Options)")}
                           </p>
                         </>
                       )}
@@ -492,11 +475,9 @@ export default function WebPageEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={onSave} disabled={saving || loading}>
-            {saving ? "Saving..." : pageId ? "Update" : "Create"}
+            {saving ? tUi("Saving...") : pageId ? tUi("Update") : tUi("Create")}
           </Button>
         </SheetFooter>
       </SheetContent>

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { emailTemplateModels, generateEmailTemplate, parseEmailTemplateResult } from '../lib/email/template-ai.mjs';
+import { emailTemplateModels as loadModels, generateEmailTemplate as generateTemplate, parseEmailTemplateResult } from '../lib/email/template-ai.mjs';
+
+const pool = { query: async () => ({ rows: [{ cc_settings: {} }] }) };
+const emailTemplateModels = request => loadModels(request, { pool });
+const generateEmailTemplate = (input, options) => generateTemplate(input, { pool, ...options });
 
 const template = {
   name: 'welcome', subject: 'Welcome, {{ first_name }}',
@@ -92,4 +96,18 @@ test('provider failure is propagated without a duplicate request', async () => {
   const error = Object.assign(new Error('Rate limited'), { status: 429 });
   await assert.rejects(generateEmailTemplate(input, { request: async () => { calls++; throw error; } }), e => e === error);
   assert.equal(calls, 1);
+});
+
+test('catalog and generation read operation settings from the supplied database', async () => {
+  const configuredPool = { query: async () => ({ rows: [{ cc_settings: { ai_operations: {
+    'email-template': { model: 'configured/model', instructions: 'Use concise customer-friendly language.' },
+  } } }] }) };
+  const catalog = await loadModels(async () => ({ data: [] }), { pool: configuredPool });
+  assert.equal(catalog.defaultModel, 'configured/model');
+  await generateTemplate(input, { pool: configuredPool, request: async (_, { body }) => {
+    assert.equal(body.model, input.model);
+    assert.match(body.messages[0].content, /Use concise customer-friendly language/);
+    assert.match(body.messages[0].content, /Protected technical contract/);
+    return completion();
+  } });
 });

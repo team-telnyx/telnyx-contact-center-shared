@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import test from "node:test";
 
 async function source(path) {
@@ -55,7 +55,7 @@ test("an earlier fix frontend: each alternative chip displays its value and roun
   // value. LLM alternatives carry no label so they render exactly as before;
   // MCP lookup candidates carry a human-readable label because the raw value is
   // an opaque facility id.
-  assert.match(workflowSource, /\{alt\.label \?\? formatSlotDisplay\(alt\.value, item\.slot_type\)\}/);
+  assert.match(workflowSource, /\{alt\.label \?\? formatSlotDisplay\(alt\.value, item\.slot_type, tUi\)\}/);
 
   // The percentage still comes from alt.confidence, now only when one was
   // supplied - an MCP lookup match is not a probability.

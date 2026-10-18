@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
@@ -69,6 +71,7 @@ const TEST_SCENARIOS = {
 };
 
 export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
+  const tUi = useUiText();
   const client = useClient();
   const transcript = useTranscript();
   const conversation = useConversation();
@@ -90,11 +93,11 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
   const startTimeRef = useRef(null);
 
   const log = useCallback((message, type = "info") => {
-    const timestamp = new Date().toLocaleTimeString();
+    const timestamp = new Date().toLocaleTimeString(tUi.locale);
     const entry = { timestamp, message, type };
     setLogs(prev => [...prev, entry]);
     console.log(`[${timestamp}] [${type.toUpperCase()}] ${message}`);
-  }, []);
+  }, [tUi]);
 
   // Setup audio playback
   useEffect(() => {
@@ -293,8 +296,7 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
           }`} />
           <div>
             <div className="font-semibold">{testScenario.name}</div>
-            <div className="text-sm text-zinc-400">
-              Status: {status} | Step: {currentStep}/{testScenario.responses.length} | Agent: {agentState || "N/A"}
+            <div className="text-sm text-zinc-400">{tUi("Status: ")}{status}{tUi(" | Step: ")}{currentStep}/{testScenario.responses.length}{tUi(" | Agent: ")}{agentState || tUi("N/A")}
             </div>
           </div>
         </div>
@@ -305,20 +307,16 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
               autoMode ? "bg-green-600" : "bg-zinc-600"
             }`}
           >
-            {autoMode ? "Auto" : "Manual"}
+            {autoMode ? tUi("Auto") : tUi("Manual")}
           </button>
           <button
             onClick={handleEndCall}
             className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded"
-          >
-            End Call
-          </button>
+          >{tUi("End Call")}</button>
           <button
             onClick={onStop}
             className="bg-zinc-600 hover:bg-zinc-700 px-4 py-2 rounded"
-          >
-            Stop Test
-          </button>
+          >{tUi("Stop Test")}</button>
         </div>
       </div>
 
@@ -334,27 +332,23 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
               value={manualInput}
               onChange={(e) => setManualInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleManualSend()}
-              placeholder="Type message to send..."
+              placeholder={tUi("Type message to send...")}
               className="flex-1 bg-zinc-700 border border-zinc-600 rounded px-3 py-2"
             />
             <button
               onClick={handleManualSend}
               className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
-            >
-              Send
-            </button>
+            >{tUi("Send")}</button>
           </div>
         </div>
       )}
 
       {/* Live Transcript */}
       <div className="bg-zinc-800 rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-4">📝 Live Transcript</h3>
+        <h3 className="text-lg font-semibold mb-4">{tUi("📝 Live Transcript")}</h3>
         <div className="space-y-2 max-h-64 overflow-y-auto">
           {transcript.length === 0 ? (
-            <div className="text-zinc-500 text-center py-4">
-              Waiting for conversation...
-            </div>
+            <div className="text-zinc-500 text-center py-4">{tUi("Waiting for conversation...")}</div>
           ) : (
             transcript.map((item, index) => (
               <div
@@ -366,8 +360,8 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
                 } ${!item.isFinal ? "opacity-50" : ""}`}
               >
                 <div className="text-xs text-zinc-400 mb-1">
-                  {item.role === "assistant" ? "🤖 AI" : "👤 User"}
-                  {!item.isFinal && " (typing...)"}
+                  {item.role === "assistant" ? tUi("🤖 AI") : tUi("👤 User")}
+                  {!item.isFinal && tUi(" (typing...)")}
                 </div>
                 <div>{item.content}</div>
               </div>
@@ -378,7 +372,7 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
 
       {/* Test Log */}
       <div className="bg-zinc-800 rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-4">📋 Test Log</h3>
+        <h3 className="text-lg font-semibold mb-4">{tUi("📋 Test Log")}</h3>
         <div className="space-y-1 max-h-48 overflow-y-auto font-mono text-sm">
           {logs.map((entry, index) => (
             <div
@@ -405,19 +399,19 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
           testResult.passed ? "bg-green-900/50 border border-green-500" : "bg-red-900/50 border border-red-500"
         }`}>
           <h3 className="text-xl font-bold mb-2">
-            {testResult.passed ? "✅ Test Passed!" : "❌ Test Failed"}
+            {testResult.passed ? tUi("✅ Test Passed!") : tUi("❌ Test Failed")}
           </h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <div className="text-zinc-400">Steps Completed</div>
+              <div className="text-zinc-400">{tUi("Steps Completed")}</div>
               <div className="text-2xl font-bold">{testResult.steps}</div>
             </div>
             <div>
-              <div className="text-zinc-400">Duration</div>
-              <div className="text-2xl font-bold">{testResult.duration.toFixed(1)}s</div>
+              <div className="text-zinc-400">{tUi("Duration")}</div>
+              <div className="text-2xl font-bold">{testResult.duration.toFixed(1)}{tUi("s")}</div>
             </div>
             <div>
-              <div className="text-zinc-400">Messages</div>
+              <div className="text-zinc-400">{tUi("Messages")}</div>
               <div className="text-2xl font-bold">{testResult.transcript.length}</div>
             </div>
           </div>
@@ -426,7 +420,7 @@ export default function VoiceTestHarness({ assistantId, scenario, onStop }) {
 
       {/* Expected Steps Reference */}
       <div className="bg-zinc-800 rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-4">📋 Expected Steps</h3>
+        <h3 className="text-lg font-semibold mb-4">{tUi("📋 Expected Steps")}</h3>
         <div className="space-y-1 text-sm">
           {testScenario.responses.map((step, index) => (
             <div

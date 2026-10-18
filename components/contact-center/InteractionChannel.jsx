@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import {
   Layers,
   Mail,
@@ -31,12 +33,13 @@ const tones = {
   slate: "bg-muted text-muted-foreground",
 };
 export function InteractionChannel({ channel, label = false }) {
+  const tUi = useUiText();
   const definition = channelDefinition(channel),
     Icon = icons[definition.icon] || Layers;
   return (
     <span
       className="inline-flex items-center gap-2 whitespace-nowrap"
-      title={definition.label}
+      title={tUi(definition.label)}
     >
       <span
         className={`inline-grid size-8 shrink-0 place-items-center rounded-xl ${tones[definition.tone] || tones.slate}`}
@@ -44,7 +47,7 @@ export function InteractionChannel({ channel, label = false }) {
         <Icon className="size-4" aria-hidden="true" />
       </span>
       <span className={label ? "text-sm font-medium" : "sr-only"}>
-        {definition.label}
+        {tUi(definition.label)}
       </span>
     </span>
   );
@@ -54,10 +57,11 @@ export function ChannelFilter({
   onChange,
   channels = RELEASED_CHANNELS,
 }) {
+  const tUi = useUiText();
   return (
     <div
       className="flex flex-wrap items-center gap-1 rounded-xl border bg-muted/30 p-1"
-      aria-label="Communication channel"
+      aria-label={tUi("Communication channel")}
     >
       {["all", ...channels].map((channel) => (
         <button
@@ -68,8 +72,8 @@ export function ChannelFilter({
           className={`rounded-lg px-3 py-2 text-xs font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${value === channel ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-background/70 hover:text-foreground"}`}
         >
           {channel === "all"
-            ? "All channels"
-            : channelDefinition(channel).label}
+            ? tUi("All channels")
+            : tUi(channelDefinition(channel).label)}
         </button>
       ))}
     </div>

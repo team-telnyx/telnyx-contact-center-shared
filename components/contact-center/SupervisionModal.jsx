@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { supervisionCustomerIdentity } from "@/lib/contact-center/customer-identity";
 
@@ -116,6 +119,7 @@ function SupervisionParticipantCard({
   dashed = false,
   className,
 }) {
+  const tUi = useUiText();
   const colors = PARTICIPANT_TONES[tone];
   return (
     <div
@@ -142,7 +146,7 @@ function SupervisionParticipantCard({
             colors.eyebrow,
           )}
         >
-          {role}
+          {tUi(role)}
         </div>
         <div className="truncate text-sm font-semibold" title={label}>
           {label}
@@ -156,7 +160,7 @@ function SupervisionParticipantCard({
         variant="outline"
         className={cn("shrink-0 text-[10px] uppercase", colors.badge)}
       >
-        {status}
+        {operationalStatusLabel(tUi, status)}
       </Badge>
     </div>
   );
@@ -166,6 +170,7 @@ function SupervisionParticipantCard({
 const SUPERVISION_PERMISSION = { monitor: "calls:supervise.listen", whisper: "calls:supervise.whisper", barge: "calls:supervise.barge" };
 
 export function SupervisionModal({ open, onOpenChange, call }) {
+  const tUi = useUiText();
   const { can } = useAuth();
   const { client } = useTelnyx();
   const [loading, setLoading] = useState(false);
@@ -786,7 +791,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
 
         notify({
           title: "Supervision Started",
-          description: `Supervising call in ${role} mode`,
+          description: tUi("Supervising call in {value0} mode", {value0: role}),
           variant: "success",
         });
       } else {
@@ -892,7 +897,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         });
         notify({
           title: "Role Switched",
-          description: `Switched to ${newRole} mode`,
+          description: tUi("Switched to {value0} mode", {value0: newRole}),
           variant: "success",
         });
       } else {
@@ -1172,23 +1177,23 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         .join(" ") ||
       user?.name ||
       user?.username ||
-      "You";
+      tUi("You");
     const supervisorDetail =
-      supervisorNumber || user?.username || "Supervisor WebRTC";
-    const {label: callerLabel, detail: callerDetail} = supervisionCustomerIdentity(call);
+      supervisorNumber || user?.username || tUi("Supervisor WebRTC");
+    const {label: callerLabel, detail: callerDetail} = supervisionCustomerIdentity(call, tUi);
     const agentIdentity =
       call?.agentUsername ||
       call?.metadata?.agent_username ||
       call?.metadata?.assigned_agent ||
       null;
     const agentLabel =
-      call?.agentName || call?.metadata?.agent_name || agentIdentity || "Agent";
+      call?.agentName || call?.metadata?.agent_name || agentIdentity || tUi("Agent");
     const agentDetail =
       call?.agentNumber ||
       call?.agentPhone ||
       call?.agentAddress ||
       (agentIdentity && agentIdentity !== agentLabel ? agentIdentity : null) ||
-      (isCallInQueue ? "Waiting for assignment" : "Connected via WebRTC");
+      (isCallInQueue ? tUi("Waiting for assignment") : tUi("Connected via WebRTC"));
     const SupervisorIcon = role ? SUPERVISOR_ROLES[role].icon : IconEye;
 
     const getLineStyle = (fromParty, toParty) => {
@@ -1337,11 +1342,11 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         }}
       >
         <DialogHeader>
-          <DialogTitle>Supervise Call</DialogTitle>
+          <DialogTitle>{tUi("Supervise Call")}</DialogTitle>
           <DialogDescription>
             {isCallInQueue
-              ? "Monitor this call while it's waiting in the queue."
-              : "Monitor, whisper, or barge into this call. Select a mode to start supervision."}
+              ? tUi("Monitor this call while it's waiting in the queue.")
+              : tUi("Monitor, whisper, or barge into this call. Select a mode to start supervision.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1453,9 +1458,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                       </div>
                     </div>
                     {isActive && (
-                      <Badge variant="outline" className="text-xs">
-                        Active
-                      </Badge>
+                      <Badge variant="outline" className="text-xs">{tUi("Active")}</Badge>
                     )}
                     {loading && !showAsActive && (
                       <IconLoader className="h-4 w-4 animate-spin" />
@@ -1469,7 +1472,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
           {/* Audio Flow Visualization - Always visible, never dimmed */}
           <div className="space-y-3 pt-4 border-t">
             <div className="font-semibold text-sm">
-              {activeRole ? `Current Audio Flow (${activeRole})` : "Audio Flow"}
+              {activeRole ? tUi("Current Audio Flow ({value0})", { value0: activeRole }) : tUi("Audio Flow")}
             </div>
             {renderAudioFlow(activeRole)}
           </div>
@@ -1490,7 +1493,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     onClick={handleRejectCall}
                     disabled={loading}
                     className="h-12 w-12 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Reject"
+                    title={tUi("Reject")}
                   >
                     <IconPhoneOff className="h-5 w-5" />
                   </button>
@@ -1498,7 +1501,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     onClick={handleAnswerCall}
                     disabled={loading}
                     className="h-12 w-12 rounded-full grid place-items-center bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Answer"
+                    title={tUi("Answer")}
                   >
                     <IconPhone className="h-5 w-5" />
                   </button>
@@ -1510,7 +1513,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     onClick={handleDisconnectCall}
                     disabled={loading}
                     className="h-12 w-12 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Disconnect"
+                    title={tUi("Disconnect")}
                   >
                     <IconPhoneOff className="h-5 w-5" />
                   </button>
@@ -1527,7 +1530,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                         ? "bg-zinc-700 hover:bg-zinc-800 text-white"
                         : "bg-zinc-600 hover:bg-zinc-700 text-white",
                     )}
-                    title={callUI.isMuted ? "Unmute" : "Mute"}
+                    title={callUI.isMuted ? tUi("Unmute") : tUi("Mute")}
                   >
                     {callUI.isMuted ? (
                       <IconMicrophoneOff className="h-5 w-5" />
@@ -1539,7 +1542,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     onClick={handleDisconnectCall}
                     disabled={loading}
                     className="h-12 w-12 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Disconnect"
+                    title={tUi("Disconnect")}
                   >
                     <IconPhoneOff className="h-5 w-5" />
                   </button>
@@ -1547,7 +1550,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     onClick={handleToggleHold}
                     disabled={loading}
                     className="h-12 w-12 rounded-full grid place-items-center bg-zinc-600 hover:bg-zinc-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={callUI.isHeld ? "Unhold" : "Hold"}
+                    title={callUI.isHeld ? tUi("Unhold") : tUi("Hold", undefined, "phone action")}
                   >
                     {callUI.isHeld ? (
                       <IconPlay className="h-5 w-5" />
@@ -1562,14 +1565,14 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                   <button
                     disabled
                     className="h-12 w-12 rounded-full grid place-items-center bg-red-600/50 text-white opacity-50 cursor-not-allowed"
-                    title="Reject (disabled - no call)"
+                    title={tUi("Reject (disabled - no call)")}
                   >
                     <IconPhoneOff className="h-5 w-5" />
                   </button>
                   <button
                     disabled
                     className="h-12 w-12 rounded-full grid place-items-center bg-green-600/50 text-white opacity-50 cursor-not-allowed"
-                    title="Answer (disabled - no call)"
+                    title={tUi("Answer (disabled - no call)")}
                   >
                     <IconPhone className="h-5 w-5" />
                   </button>

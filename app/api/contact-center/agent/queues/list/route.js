@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { withPermission } from "@/lib/authz/guard";
-import { agentInScope } from "@/lib/authz/scope.mjs";
+import { mobilePaging, pageRows } from "@/lib/acd/mobile-monitor-pages.mjs";
+import { agentInScope, queueInScope } from "@/lib/authz/scope.mjs";
 
 /**
  * GET /api/contact-center/agent/queues/list?userId=xxx
@@ -10,8 +11,6 @@ import { agentInScope } from "@/lib/authz/scope.mjs";
  */
 async function GET_handler(request, _context, authz) {
   try {
-    const user = authz.user;
-
     // Only supervisors and admins can view other users' queue assignments
 
     const { searchParams } = new URL(request.url);
@@ -62,17 +61,21 @@ async function GET_handler(request, _context, authz) {
       [userId]
     );
 
-    const assignedQueues = result.rows;
+    // Every stored membership remains selectable when participation is off.
+    // Preserve the legacy isAssigned flag for existing browser consumers.
+    const assignedQueues = result.rows.filter(q => queueInScope(authz.scope, q.id));
+    const paged = mobilePaging(searchParams) ? pageRows(assignedQueues, searchParams) : null;
 
     return NextResponse.json({
       ok: true,
-      queues: assignedQueues.map((q) => ({
+      ...(paged ? { pagination: paged.pagination } : {}),
+      queues: (paged?.rows ?? assignedQueues).map((q) => ({
         id: q.id,
         name: q.name,
         displayName: q.display_name || q.name,
         description: q.description,
         routingType: q.routing_strategy,
-        isAssigned: q.is_assigned === true,
+        isAssigned: mobilePaging(searchParams) || q.is_assigned === true,
         isActivated: q.is_activated === true,
         activatedAt: q.activated_at,
         deactivatedAt: q.deactivated_at,

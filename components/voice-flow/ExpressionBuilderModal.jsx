@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import {
@@ -67,6 +69,7 @@ export function ExpressionBuilderModal({
   testPayloadOptions = [],
   onApply,
 }) {
+  const tUi = useUiText();
   const [expression, setExpression] = useState(initialExpression);
   const [testData, setTestData] = useState("");
   const [isEditingTestData, setIsEditingTestData] = useState(true);
@@ -289,21 +292,15 @@ export function ExpressionBuilderModal({
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <IconCode className="h-5 w-5 text-telnyx-green" />
-            Expression Builder
-          </DialogTitle>
-          <DialogDescription>
-            Build and test your expression with functions and variables
-          </DialogDescription>
+            <IconCode className="h-5 w-5 text-telnyx-green" />{tUi("Expression Builder")}</DialogTitle>
+          <DialogDescription>{tUi("Build and test your expression with functions and variables")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden">
           <div className="grid grid-cols-[280px_1fr] gap-6 h-full">
             {/* Left Column - Function Library */}
             <div className="flex flex-col min-h-0">
-              <Label className="text-sm font-semibold mb-2">
-                Function Library
-              </Label>
+              <Label className="text-sm font-semibold mb-2">{tUi("Function Library")}</Label>
               <Card className="flex flex-col flex-1 min-h-0 p-4">
                 <ScrollArea className="flex-1 pr-3">
                   <Accordion
@@ -316,7 +313,7 @@ export function ExpressionBuilderModal({
                     {categories.map((cat) => (
                       <AccordionItem key={cat.value} value={cat.value}>
                         <AccordionTrigger className="text-sm py-2">
-                          {cat.label}
+                          {tUi(cat.label)}
                         </AccordionTrigger>
                         <AccordionContent>
                           <div className="space-y-2 py-2 max-h-[400px] overflow-y-auto">
@@ -356,17 +353,13 @@ export function ExpressionBuilderModal({
                                         >
                                           <div className="space-y-2">
                                             <div>
-                                              <p className="font-semibold text-xs">
-                                                Example:
-                                              </p>
+                                              <p className="font-semibold text-xs">{tUi("Example:")}</p>
                                               <p className="font-mono text-xs">
                                                 {func.example}
                                               </p>
                                             </div>
                                             <div>
-                                              <p className="font-semibold text-xs">
-                                                Result:
-                                              </p>
+                                              <p className="font-semibold text-xs">{tUi("Result:")}</p>
                                               <p className="font-mono text-xs">
                                                 {func.result}
                                               </p>
@@ -397,13 +390,11 @@ export function ExpressionBuilderModal({
             <div className="space-y-4 flex flex-col min-h-0 overflow-y-auto pr-2">
               {/* Expression Textarea */}
               <div className="min-w-0">
-                <Label className="text-sm font-semibold mb-2 block">
-                  Expression
-                </Label>
+                <Label className="text-sm font-semibold mb-2 block">{tUi("Expression")}</Label>
                 <Textarea
                   value={expression}
                   onChange={(e) => setExpression(e.target.value)}
-                  placeholder="{{first_name}} + ' ' + {{last_name}}"
+                  placeholder={tUi("{{first_name}} + ' ' + {{last_name}}")}
                   className={`font-mono text-sm w-full ${
                     !validation.valid && expression ? "border-red-500" : ""
                   }`}
@@ -430,9 +421,7 @@ export function ExpressionBuilderModal({
                   ) : (
                     <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
                       <IconCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      <AlertDescription className="text-xs text-green-600 dark:text-green-400">
-                        Expression is valid
-                      </AlertDescription>
+                      <AlertDescription className="text-xs text-green-600 dark:text-green-400">{tUi("Expression is valid")}</AlertDescription>
                     </Alert>
                   )}
                 </div>
@@ -441,9 +430,7 @@ export function ExpressionBuilderModal({
               {/* Available Variables */}
               {availableVariables.length > 0 && (
                 <div className="min-w-0">
-                  <Label className="text-sm font-semibold mb-2 block">
-                    Available Variables
-                  </Label>
+                  <Label className="text-sm font-semibold mb-2 block">{tUi("Available Variables")}</Label>
                   <div className="overflow-x-auto w-full border rounded-md p-2 bg-muted/30">
                     <div className="flex gap-2">
                       {availableVariables.map((varName) => (
@@ -459,18 +446,14 @@ export function ExpressionBuilderModal({
                       ))}
                     </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1.5">
-                    Click to insert variable
-                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">{tUi("Click to insert variable")}</p>
                 </div>
               )}
 
               {/* Test Expression */}
               <div className="border rounded-md p-4 bg-muted/30 flex flex-col">
                 <div className="mb-3 space-y-2">
-                  <Label className="text-sm font-semibold block">
-                    Test Data (provide a JSON object)
-                  </Label>
+                  <Label className="text-sm font-semibold block">{tUi("Test Data (provide a JSON object)")}</Label>
                   {testPayloadOptions.length > 0 && (
                     <div className="space-y-1.5">
                       <Select
@@ -478,10 +461,10 @@ export function ExpressionBuilderModal({
                         onValueChange={handleSelectTestPayload}
                       >
                         <SelectTrigger className="w-full bg-background">
-                          <SelectValue placeholder="Choose a saved payload" />
+                          <SelectValue placeholder={tUi("Choose a saved payload")} />
                         </SelectTrigger>
                         <SelectContent className="max-h-80">
-                          <SelectItem value="manual-json">Manual JSON / custom test data</SelectItem>
+                          <SelectItem value="manual-json">{tUi("Manual JSON / custom test data")}</SelectItem>
                           {Object.entries(groupedTestPayloadOptions).map(
                             ([group, options]) => (
                               <SelectGroup key={group}>
@@ -503,9 +486,7 @@ export function ExpressionBuilderModal({
                           )}
                         </SelectContent>
                       </Select>
-                      <p className="text-[10px] text-muted-foreground">
-                        Choose a saved webhook/request/response payload from this call flow, or edit the JSON below.
-                      </p>
+                      <p className="text-[10px] text-muted-foreground">{tUi("Choose a saved webhook/request/response payload from this call flow, or edit the JSON below.")}</p>
                     </div>
                   )}
                 </div>
@@ -528,9 +509,7 @@ export function ExpressionBuilderModal({
                           setSelectedPayloadId("manual-json");
                           setIsEditingTestData(true);
                         }}
-                      >
-                        Edit JSON
-                      </Button>
+                      >{tUi("Edit JSON")}</Button>
                     </CodeBlock>
                   ) : (
                     <div className="rounded-md border border-zinc-800 bg-black overflow-hidden">
@@ -541,12 +520,10 @@ export function ExpressionBuilderModal({
                           setIsEditingTestData(true);
                           setTestData(e.target.value);
                         }}
-                        placeholder={
-                          '{\n  "customer_data_rows": [\n    {"first_name": "John", "last_name": "Doe"}\n  ]\n}'
-                        }
+                        placeholder={tUi("{\n  \"customer_data_rows\": [\n    {\"first_name\": \"John\", \"last_name\": \"Doe\"}\n  ]\n}")}
                         rows={8}
                         spellCheck={false}
-                        aria-label="Test Data JSON code editor"
+                        aria-label={tUi("Test Data JSON code editor")}
                         className="font-mono text-xs w-full min-h-48 resize-y border-0 bg-black text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-zinc-500"
                       />
                     </div>
@@ -558,9 +535,7 @@ export function ExpressionBuilderModal({
                     size="sm"
                     className="w-full"
                   >
-                    <IconPlayerPlay className="h-3 w-3 mr-1" />
-                    Test Expression
-                  </Button>
+                    <IconPlayerPlay className="h-3 w-3 mr-1" />{tUi("Test Expression")}</Button>
 
                   {testResult && (
                     <div className="flex items-center gap-2 mb-2">
@@ -570,7 +545,7 @@ export function ExpressionBuilderModal({
                         <IconAlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" />
                       )}
                       <Label className="text-sm font-semibold">
-                        {testResult.success ? "Result:" : "Error:"}
+                        {testResult.success ? tUi("Result:") : tUi("Error:")}
                       </Label>
                     </div>
                   )}
@@ -606,17 +581,13 @@ export function ExpressionBuilderModal({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               type="button"
               onClick={handleApply}
               disabled={!validation.valid || !expression}
             >
-              <IconCheck className="h-4 w-4 mr-2" />
-              Apply Expression
-            </Button>
+              <IconCheck className="h-4 w-4 mr-2" />{tUi("Apply Expression")}</Button>
           </div>
         </DialogFooter>
       </DialogContent>

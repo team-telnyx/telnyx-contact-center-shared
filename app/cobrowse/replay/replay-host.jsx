@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef } from "react";
 import { Replayer } from "@rrweb/replay";
@@ -26,6 +28,7 @@ function safeEvent(event) {
 }
 
 export default function ReplayHost() {
+  const tUi = useUiText();
   const root = useRef(null);
   const player = useRef(null);
   const meta = useRef(null);
@@ -73,5 +76,5 @@ export default function ReplayHost() {
     parent.postMessage({ type: "cobrowse-replay-ready" }, location.origin);
     return () => { window.removeEventListener("message", onMessage); player.current?.destroy(); };
   }, []);
-  return <div ref={root} className="h-screen w-screen overflow-hidden bg-white" aria-label="Shared page replay" />;
+  return <div ref={root} className="h-screen w-screen overflow-hidden bg-white" aria-label={tUi("Shared page replay")} />;
 }

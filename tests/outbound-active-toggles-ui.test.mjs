@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import test from "node:test";
 
 const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
@@ -48,8 +48,8 @@ test("contact list inventory gives the Name column most of the available width",
 
 test("inventory activation badges are green or red and campaign state stays separate from visibility", () => {
   assert.match(source, /const activationBadgeClass = \(active\) => active \? "border-emerald-500\/35 bg-emerald-500\/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500\/35 bg-rose-500\/10 text-rose-700 dark:text-rose-300";/);
-  assert.match(source, /<Badge key="state" variant="outline" className=\{statusClass\(displayState\)\}>\{title\(displayState\)\}<\/Badge>/);
-  assert.match(source, /<Badge key="mode" variant="outline" className=\{campaignModeClass\(c\.mode\)\}>\{title\(c\.mode\)\}<\/Badge>/);
+  assert.match(source, /<Badge key="state" variant="outline" className=\{statusClass\(displayState\)\}>\{operationalStatusLabel\(tUi, displayState\)\}<\/Badge>/);
+  assert.match(source, /<Badge key="mode" variant="outline" className=\{campaignModeClass\(c\.mode\)\}>\{operationalStatusLabel\(tUi, c\.mode\)\}<\/Badge>/);
   assert.match(source, /<Badge key="active" variant="outline" className=\{activationBadgeClass\(isActiveCampaignConfig\(c\)\)\}>\{isActiveCampaignConfig\(c\) \? "Active" : "Not active"\}<\/Badge>/);
   assert.doesNotMatch(source, /className=\{statusClass\(isActiveConfigItem\([^)]*\) \? "active" : "draft"\)\}>\{isActiveConfigItem\([^)]*\) \? "Active" : "Not active"\}/);
 });

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import {
   forwardRef,
@@ -72,6 +74,7 @@ const ProfileImageEditor = forwardRef(function ProfileImageEditor(
   { initialSrc, onPreviewChange },
   ref
 ) {
+  const tUi = useUiText();
   const [imageSrc, setImageSrc] = useState(initialSrc || "");
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -140,13 +143,11 @@ const ProfileImageEditor = forwardRef(function ProfileImageEditor(
           {imageSrc ? (
             <img
               src={imageSrc}
-              alt="Avatar"
+              alt={tUi("Avatar")}
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
-              No image
-            </div>
+            <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">{tUi("No image")}</div>
           )}
         </div>
         {/* Upload control moved to modal */}
@@ -164,7 +165,7 @@ const ProfileImageEditor = forwardRef(function ProfileImageEditor(
           className="h-auto max-h-[53vh] w-[90vw] sm:w-1/2 mx-auto inset-0 rounded-xl bg-accent dark:bg-neutral-900"
         >
           <SheetHeader>
-            <SheetTitle>Edit profile picture</SheetTitle>
+            <SheetTitle>{tUi("Edit profile picture")}</SheetTitle>
           </SheetHeader>
           {isEditing && imageSrc && (
             <div className="mt-2 flex flex-col gap-3">
@@ -193,11 +194,9 @@ const ProfileImageEditor = forwardRef(function ProfileImageEditor(
                   <Button
                     type="button"
                     onClick={() => inputRef.current?.click()}
-                  >
-                    Upload
-                  </Button>
+                  >{tUi("Upload")}</Button>
                 </div>
-                <label className="text-sm w-10 ml-[20px]">Zoom</label>
+                <label className="text-sm w-10 ml-[20px]">{tUi("Zoom")}</label>
                 <input
                   type="range"
                   min={1}
@@ -217,9 +216,7 @@ const ProfileImageEditor = forwardRef(function ProfileImageEditor(
                       pendingBlobRef.current = null;
                       inputRef.current && (inputRef.current.value = "");
                     }}
-                  >
-                    Cancel
-                  </Button>
+                  >{tUi("Cancel")}</Button>
                   <Button
                     type="button"
                     onClick={async () => {
@@ -241,9 +238,7 @@ const ProfileImageEditor = forwardRef(function ProfileImageEditor(
                       setIsEditing(false);
                       inputRef.current && (inputRef.current.value = "");
                     }}
-                  >
-                    Update
-                  </Button>
+                  >{tUi("Update")}</Button>
                 </div>
               </div>
             </div>

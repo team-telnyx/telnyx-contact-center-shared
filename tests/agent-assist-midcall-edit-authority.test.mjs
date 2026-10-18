@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import { mentionsCorrectionTrigger } from "../lib/agent-assist/readback.mjs";
 
 // an earlier fix follow-up ("not fixed well enough", the reference workflow retest Aug 11): the agent's
@@ -163,6 +163,54 @@ test("modifier words, a genuine 'scheduled' value, and multi-utterance blobs are
     "The patient is stable.",
   ].join(" \n");
   assert.equal(mentionsCorrectionTrigger(blobWithoutCorrection), false);
+});
+
+// Found while bringing the Test AI Agent analyze-test route to an earlier fix
+// parity: the leading-"no" pattern (`^no\b.*\bis\s+`) matched ordinary agent
+// lines that START with "no" — "No problem. What is your first name?". Mid-call
+// that filler opened the correction window for the customer's next answer.
+test("agent filler and questions that start with 'no' do NOT open the window (regression)", () => {
+  const noMatch = [
+    // Idioms: "no" as a determiner, not a standalone answer.
+    "No problem. What is your first name?",
+    "No worries, what is the date of birth?",
+    "No rush, the pickup time is flexible.",
+    "No need to repeat it, the room number is 302.",
+    "No changes, everything is correct.",
+    "No one is available at the front desk.",
+    // A standalone "No" followed by the agent's next question.
+    "No. What is your date of birth?",
+    "No, what is the patient's first name?",
+    "No. Is the patient on oxygen?",
+    // A standalone "No" answering "anything to change?" with a confirmation.
+    "No, everything is correct.",
+    "No, it is all good.",
+    "No, everything is all right.",
+  ];
+  for (const phrase of noMatch) {
+    assert.equal(mentionsCorrectionTrigger(phrase), false, `false positive: "${phrase}"`);
+  }
+
+  // The same filler inside suggestion-target-resolver.mjs's joined blob.
+  const blobWithFiller = ["No problem. What is your first name?", "Michael."].join(" \n");
+  assert.equal(mentionsCorrectionTrigger(blobWithFiller), false);
+});
+
+test("a standalone 'no' starting a restatement still opens the window", () => {
+  const nowMatch = [
+    "No no, pickup facility is Delta.",
+    "No, no, the room is 302.",
+    "No. Sorry. Pickup facility is Delta.",
+    // Unpunctuated STT: "no" before a word the determiner never takes.
+    "No the pickup facility is Delta",
+    "no it is delta",
+    // Only a confirmation word that ENDS the clause is excluded.
+    "No, the pickup is Good Samaritan Hospital.",
+    "No, the date of birth is correct but the room is 302.",
+  ];
+  for (const phrase of nowMatch) {
+    assert.equal(mentionsCorrectionTrigger(phrase), true, `expected trigger: "${phrase}"`);
+  }
 });
 
 test("UI: review state comes from the analyzer's flags, not only a local confidence comparison", async () => {
@@ -347,4 +395,14 @@ test("server: the slot route persists an edit to an already-completed item (Code
   // a stale whole-object snapshot.
   assert.match(route, /SET slots_filled = COALESCE\(slots_filled, '\{\}'::jsonb\) \|\| \$1::jsonb/);
   assert.doesNotMatch(route, /SET slots_filled = \$1, updated_at/);
+});
+
+test("a comma STT puts inside a name does not end the confirmation (Codex review on #1638)", () => {
+  assert.equal(mentionsCorrectionTrigger("No, the pickup is Good, Samaritan Hospital."), true);
+  assert.equal(mentionsCorrectionTrigger("No, the pickup is Right, Choice Clinic."), true);
+  assert.equal(mentionsCorrectionTrigger("No, the pickup is Good Samaritan Hospital."), true);
+  // A comma that really closes the confirmation still confirms.
+  assert.equal(mentionsCorrectionTrigger("No, it is all good, thanks."), false);
+  assert.equal(mentionsCorrectionTrigger("No, everything is correct, I just wanted to check."), false);
+  assert.equal(mentionsCorrectionTrigger("No, everything is correct."), false);
 });

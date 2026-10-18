@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { ConversationReader } from "@/components/contact-center/ConversationPreview";
 import { channelDefinition } from "@/lib/acd/channel-registry.mjs";
@@ -95,6 +97,7 @@ function computeLocalScore(schema, answers, scoringConfig = {}) {
 }
 
 function ScoreButtons({ criterion, answer, disabled, onScore }) {
+  const tUi = useUiText();
   if (criterion.type === "boolean") {
     return (
       <div className="flex gap-2">
@@ -105,9 +108,7 @@ function ScoreButtons({ criterion, answer, disabled, onScore }) {
           className={answer?.score === 1 ? "bg-emerald-600 text-white hover:bg-emerald-700" : ""}
           disabled={disabled}
           onClick={() => onScore(1)}
-        >
-          Pass
-        </Button>
+        >{tUi("Pass")}</Button>
         <Button
           type="button"
           size="sm"
@@ -115,9 +116,7 @@ function ScoreButtons({ criterion, answer, disabled, onScore }) {
           className={answer?.score === 0 ? "bg-red-600 text-white hover:bg-red-700" : ""}
           disabled={disabled}
           onClick={() => onScore(0)}
-        >
-          Fail
-        </Button>
+        >{tUi("Fail")}</Button>
       </div>
     );
   }
@@ -142,6 +141,7 @@ function ScoreButtons({ criterion, answer, disabled, onScore }) {
 }
 
 export default function QualityEvaluationDetailPage() {
+  const tUi = useUiText();
   const params = useParams();
   const router = useRouter();
   const evaluationId = params?.id;
@@ -291,13 +291,13 @@ export default function QualityEvaluationDetailPage() {
   return (
     <SupervisorPageShell>
       <SupervisorPageHeader
-        title="Quality Evaluation"
+        title={tUi("Quality Evaluation")}
         badges={(
           <>
-            <Badge variant="outline" className={statusConfig.className}>{statusConfig.label}</Badge>
+            <Badge variant="outline" className={statusConfig.className}>{tUi(statusConfig.label)}</Badge>
             {evaluation?.form_name ? (
               <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-                {evaluation.form_name} · v{evaluation.form_version}
+                {evaluation.form_name}{tUi(" · v")}{evaluation.form_version}
               </Badge>
             ) : null}
           </>
@@ -305,9 +305,7 @@ export default function QualityEvaluationDetailPage() {
         actions={(
           <Button variant="outline" size="sm" asChild>
             <Link href="/supervisor/quality?section=evaluations">
-              <IconArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Link>
+              <IconArrowLeft className="mr-2 h-4 w-4" />{tUi("Back")}</Link>
           </Button>
         )}
       />
@@ -327,9 +325,7 @@ export default function QualityEvaluationDetailPage() {
             </Card>
           ) : !evaluation ? (
             <Card className="shadow-sm">
-              <CardContent className="py-6 text-sm text-muted-foreground">
-                Evaluation not found.
-              </CardContent>
+              <CardContent className="py-6 text-sm text-muted-foreground">{tUi("Evaluation not found.")}</CardContent>
             </Card>
           ) : (
             <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -340,13 +336,11 @@ export default function QualityEvaluationDetailPage() {
                     <CardTitle className="flex items-center gap-2.5 text-base">
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
                         <IconUsers className="h-5 w-5" />
-                      </span>
-                      Interaction
-                    </CardTitle>
+                      </span>{tUi("Interaction")}</CardTitle>
                   </CardHeader>
                   <CardContent className="grid gap-3 text-sm md:grid-cols-2">
                     <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Agent</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{tUi("Agent")}</div>
                       <div className="mt-1 font-medium">
                         {interaction?.first_name || interaction?.last_name
                           ? `${interaction.first_name || ""} ${interaction.last_name || ""}`.trim()
@@ -354,22 +348,21 @@ export default function QualityEvaluationDetailPage() {
                       </div>
                     </div>
                     <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Queue</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{tUi("Queue")}</div>
                       <div className="mt-1 font-medium">{interaction?.queue_name || "-"}</div>
                     </div>
                     <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Customer</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{tUi("Customer")}</div>
                       <div className="mt-1 font-medium">
                         {interaction?.from_name || interaction?.from_number || "-"}
                       </div>
                     </div>
                     <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Completed</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{tUi("Completed")}</div>
                       <div className="mt-1 font-medium">
                         {formatDateTime(interaction?.completed_at || interaction?.abandoned_at)}
                         <span className="ml-2 text-muted-foreground">
-                          · {formatDuration(interaction?.handle_time_seconds)} handling elapsed
-                        </span>
+                          · {formatDuration(interaction?.handle_time_seconds)}{tUi(" handling elapsed")}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -387,9 +380,7 @@ export default function QualityEvaluationDetailPage() {
                         onPlayingChange={setPlaybackPlaying}
                       />
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No recording available for this interaction.
-                      </p>
+                      <p className="text-sm text-muted-foreground">{tUi("No recording available for this interaction.")}</p>
                     )}
                   </CardContent>
                 </Card>
@@ -399,9 +390,7 @@ export default function QualityEvaluationDetailPage() {
                     <CardTitle className="flex items-center gap-2.5 text-base">
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300">
                         <IconQuote className="h-5 w-5" />
-                      </span>
-                      Transcript
-                    </CardTitle>
+                      </span>{tUi("Transcript")}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {speakerTurns && speakerTurns.length > 0 ? (
@@ -418,10 +407,7 @@ export default function QualityEvaluationDetailPage() {
                         {transcriptionText}
                       </p>
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No transcript yet. Run the AI evaluation and the assistant will transcribe the
-                        recording automatically.
-                      </p>
+                      <p className="text-sm text-muted-foreground">{tUi("No transcript yet. Run the AI evaluation and the assistant will transcribe the recording automatically.")}</p>
                     )}
                   </CardContent>
                 </Card>
@@ -434,9 +420,7 @@ export default function QualityEvaluationDetailPage() {
                   <CardContent className="space-y-4 p-5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-semibold">
-                        <IconGauge className="h-4 w-4 text-emerald-500" />
-                        Score
-                      </div>
+                        <IconGauge className="h-4 w-4 text-emerald-500" />{tUi("Score")}</div>
                       <span className="text-2xl font-semibold tracking-tight">
                         {localScore.percent}%
                       </span>
@@ -444,13 +428,10 @@ export default function QualityEvaluationDetailPage() {
                     <Progress value={localScore.percent} className="h-2" />
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>
-                        {localScore.total} / {localScore.max} pts
-                      </span>
+                        {localScore.total} / {localScore.max}{tUi(" pts")}</span>
                       {localScore.criticalFailed ? (
                         <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                          <IconAlertTriangle className="h-3.5 w-3.5" />
-                          Critical fail
-                        </span>
+                          <IconAlertTriangle className="h-3.5 w-3.5" />{tUi("Critical fail")}</span>
                       ) : null}
                     </div>
 
@@ -469,12 +450,10 @@ export default function QualityEvaluationDetailPage() {
                         ) : (
                           <IconRobot className="mr-2 h-4 w-4" />
                         )}
-                        {aiRunning ? AI_PHASE_LABELS[aiPhase] || "Working…" : "Evaluate with AI"}
+                        {tUi(aiRunning ? AI_PHASE_LABELS[aiPhase] || tUi("Working…") : tUi("Evaluate with AI"))}
                       </Button>
                       <Button type="button" size="sm" variant="outline" disabled={isFinal || saving} onClick={() => save("save")}>
-                        <IconDeviceFloppy className="mr-2 h-4 w-4" />
-                        Save
-                      </Button>
+                        <IconDeviceFloppy className="mr-2 h-4 w-4" />{tUi("Save")}</Button>
                       <Button
                         type="button"
                         size="sm"
@@ -482,9 +461,7 @@ export default function QualityEvaluationDetailPage() {
                         disabled={isFinal || saving}
                         onClick={() => save("finalize")}
                       >
-                        <IconRosetteDiscountCheck className="mr-2 h-4 w-4" />
-                        Finalize
-                      </Button>
+                        <IconRosetteDiscountCheck className="mr-2 h-4 w-4" />{tUi("Finalize")}</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -493,9 +470,7 @@ export default function QualityEvaluationDetailPage() {
                   <Card className="border-violet-500/30 bg-card/95 shadow-sm">
                     <CardHeader className="pb-3">
                       <CardTitle className="flex items-center gap-2 text-sm">
-                        <IconRobot className="h-4 w-4 text-violet-500" />
-                        AI assessment
-                        <Badge variant="outline" className="ml-auto text-[11px] text-muted-foreground">
+                        <IconRobot className="h-4 w-4 text-violet-500" />{tUi("AI assessment")}<Badge variant="outline" className="ml-auto text-[11px] text-muted-foreground">
                           {aiResult.model}
                         </Badge>
                       </CardTitle>
@@ -505,9 +480,7 @@ export default function QualityEvaluationDetailPage() {
                       {(aiResult.coachingTips || []).length > 0 ? (
                         <div>
                           <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            <IconBolt className="h-3.5 w-3.5" />
-                            Coaching tips
-                          </div>
+                            <IconBolt className="h-3.5 w-3.5" />{tUi("Coaching tips")}</div>
                           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
                             {aiResult.coachingTips.map((tip, index) => (
                               <li key={index}>{tip}</li>
@@ -518,9 +491,7 @@ export default function QualityEvaluationDetailPage() {
                       {(aiResult.risks || []).length > 0 ? (
                         <div>
                           <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                            <IconAlertTriangle className="h-3.5 w-3.5" />
-                            Risks
-                          </div>
+                            <IconAlertTriangle className="h-3.5 w-3.5" />{tUi("Risks")}</div>
                           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
                             {aiResult.risks.map((risk, index) => (
                               <li key={index}>{risk}</li>
@@ -550,9 +521,7 @@ export default function QualityEvaluationDetailPage() {
                                 <div className="text-sm font-medium">
                                   {criterion.label}
                                   {criterion.criticalFail ? (
-                                    <Badge variant="outline" className="ml-2 border-red-500/40 text-[10px] text-red-600 dark:text-red-400">
-                                      Critical
-                                    </Badge>
+                                    <Badge variant="outline" className="ml-2 border-red-500/40 text-[10px] text-red-600 dark:text-red-400">{tUi("Critical")}</Badge>
                                   ) : null}
                                 </div>
                                 {criterion.description ? (
@@ -560,8 +529,7 @@ export default function QualityEvaluationDetailPage() {
                                 ) : null}
                               </div>
                               {answer?.source === "ai" && answer?.confidence != null ? (
-                                <Badge variant="outline" className="shrink-0 border-violet-500/40 text-[10px] text-violet-700 dark:text-violet-300">
-                                  AI {Math.round(answer.confidence * 100)}%
+                                <Badge variant="outline" className="shrink-0 border-violet-500/40 text-[10px] text-violet-700 dark:text-violet-300">{tUi("AI ")}{Math.round(answer.confidence * 100)}%
                                 </Badge>
                               ) : null}
                             </div>
@@ -573,7 +541,7 @@ export default function QualityEvaluationDetailPage() {
                             />
                             {answer?.reasoning ? (
                               <p className="text-xs text-muted-foreground">
-                                <span className="font-medium text-foreground/70">Reasoning: </span>
+                                <span className="font-medium text-foreground/70">{tUi("Reasoning: ")}</span>
                                 {answer.reasoning}
                               </p>
                             ) : null}
@@ -592,15 +560,13 @@ export default function QualityEvaluationDetailPage() {
                 <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-sm">
-                      <IconCircleCheck className="h-4 w-4 text-muted-foreground" />
-                      Review notes
-                    </CardTitle>
+                      <IconCircleCheck className="h-4 w-4 text-muted-foreground" />{tUi("Review notes")}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Textarea
                       value={reviewNotes}
                       onChange={(event) => setReviewNotes(event.target.value)}
-                      placeholder="Supervisor notes, coaching follow-ups, calibration remarks…"
+                      placeholder={tUi("Supervisor notes, coaching follow-ups, calibration remarks…")}
                       rows={4}
                       disabled={isFinal}
                     />

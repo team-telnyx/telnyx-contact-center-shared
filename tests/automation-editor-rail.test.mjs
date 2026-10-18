@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync } from "./helpers/ui-source.mjs";
 
 const callFlowEditor = readFileSync(
   new URL("../app/(portal)/admin/call-flows/[id]/page.jsx", import.meta.url),

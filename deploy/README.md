@@ -630,6 +630,19 @@ deploy/
 
 ## Troubleshooting
 
+### Agent WebRTC connection: parking and webhooks
+
+For a connection created by hand, enable `outbound.call_parking_enabled` and
+set its `webhook_event_url` to `https://YOUR-CC-HOST/api/voice/webhook` with
+`webhook_api_version: "2"`. The Call Control application's webhook alone is not
+sufficient: agent-leg events arrive through the credential connection. Without
+parking, the connection and Contact Center can both dial the PSTN destination.
+The Telnyx bootstrap step now repairs parking and the configured webhook when
+reusing a connection, as well as setting them on creation. Inspect these fields
+with `GET /v2/credential_connections/{id}` after configuring the connection.
+See [voice connection requirements](../README.md#voice-connection-requirements)
+for service-number routing and the first-login device choice.
+
 - **`./deploy/cc doctor` first.** It's read-only and reports exactly which
   check is failing, with a hint for how to fix it.
 - **AWS `terraform apply` failed partway through (e.g. EIP quota

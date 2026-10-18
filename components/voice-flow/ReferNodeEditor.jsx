@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useRef } from "react";
 import { Label } from "@/components/ui/label";
@@ -14,6 +16,7 @@ import {
 import { IconTrash, IconPlus } from "@tabler/icons-react";
 
 export default function ReferNodeEditor({ config = {}, onChange }) {
+  const tUi = useUiText();
   const [sipAddress, setSipAddress] = useState(config.sip_address || "");
   const [clientState, setClientState] = useState(config.client_state || "");
   const [commandId, setCommandId] = useState(config.command_id || "");
@@ -304,84 +307,73 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
     <div className="space-y-4">
       {/* SIP Address */}
       <div>
-        <Label>
-          SIP Address <span className="text-red-500">*</span>
+        <Label>{tUi("SIP Address ")}<span className="text-red-500">*</span>
         </Label>
         <Input
           type="text"
           value={sipAddress}
           onChange={(e) => handleSipAddressChange(e.target.value)}
-          placeholder="sip:username@sip.non-telnyx-address.com"
+          placeholder={tUi("sip:username@sip.non-telnyx-address.com")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          The SIP URI to which the call will be referred to
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("The SIP URI to which the call will be referred to")}</p>
       </div>
 
       {/* Client State */}
       <div>
-        <Label>Client State</Label>
+        <Label>{tUi("Client State")}</Label>
         <Input
           type="text"
           value={clientState}
           onChange={(e) => handleClientStateChange(e.target.value)}
-          placeholder="aGF2ZSBhIG5pY2UgZGF5ID1d"
+          placeholder={tUi("aGF2ZSBhIG5pY2UgZGF5ID1d")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Base-64 encoded string to add state to every subsequent webhook
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Base-64 encoded string to add state to every subsequent webhook")}</p>
       </div>
 
       {/* Command ID */}
       <div>
-        <Label>Command ID</Label>
+        <Label>{tUi("Command ID")}</Label>
         <Input
           type="text"
           value={commandId}
           onChange={(e) => handleCommandIdChange(e.target.value)}
-          placeholder="891510ac-f3e4-11e8-af5b-de00688a4901"
+          placeholder={tUi("891510ac-f3e4-11e8-af5b-de00688a4901")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Use this field to avoid execution of duplicate commands
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Use this field to avoid execution of duplicate commands")}</p>
       </div>
 
       {/* SIP Auth Username */}
       <div>
-        <Label>SIP Auth Username</Label>
+        <Label>{tUi("SIP Auth Username")}</Label>
         <Input
           type="text"
           value={sipAuthUsername}
           onChange={(e) => handleSipAuthUsernameChange(e.target.value)}
-          placeholder="username"
+          placeholder={tUi("username")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          SIP Authentication username used for SIP challenges
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("SIP Authentication username used for SIP challenges")}</p>
       </div>
 
       {/* SIP Auth Password */}
       <div>
-        <Label>SIP Auth Password</Label>
+        <Label>{tUi("SIP Auth Password")}</Label>
         <Input
           type="password"
           value={sipAuthPassword}
           onChange={(e) => handleSipAuthPasswordChange(e.target.value)}
-          placeholder="password"
+          placeholder={tUi("password")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          SIP Authentication password used for SIP challenges
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("SIP Authentication password used for SIP challenges")}</p>
       </div>
 
       {/* SIP Headers */}
       <div>
-        <Label>SIP Headers</Label>
+        <Label>{tUi("SIP Headers")}</Label>
         <div className="space-y-2 mt-1">
           {sipHeaders.map((header, index) => (
             <div
@@ -396,7 +388,7 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select header name" />
+                    <SelectValue placeholder={tUi("Select header name")} />
                   </SelectTrigger>
                   <SelectContent>
                     {SIP_HEADER_NAMES.map((name) => {
@@ -417,7 +409,7 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
               </div>
               <Input
                 className="flex-1 min-w-0 max-w-[calc(100%-12rem)]"
-                placeholder="Header value"
+                placeholder={tUi("Header value")}
                 value={header?.value || ""}
                 onChange={(e) =>
                   handleSipHeaderChange(index, "value", e.target.value)
@@ -429,7 +421,7 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
                   variant="outline"
                   size="icon"
                   onClick={() => removeSipHeader(index)}
-                  aria-label="Remove header"
+                  aria-label={tUi("Remove header")}
                 >
                   <IconTrash className="w-4 h-4" />
                 </Button>
@@ -448,19 +440,14 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
             }
             className="w-full"
           >
-            <IconPlus className="w-4 h-4 mr-2" />
-            Add SIP Header
-          </Button>
+            <IconPlus className="w-4 h-4 mr-2" />{tUi("Add SIP Header")}</Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          SIP headers to be added to the request. Currently only User-to-User
-          and Diversion headers are supported.
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("SIP headers to be added to the request. Currently only User-to-User and Diversion headers are supported.")}</p>
       </div>
 
       {/* Custom Headers */}
       <div>
-        <Label>Custom Headers</Label>
+        <Label>{tUi("Custom Headers")}</Label>
         <div className="space-y-2 mt-1">
           {customHeaders.map((header, index) => (
             <div
@@ -469,7 +456,7 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
             >
               <Input
                 className="flex-shrink-0 w-32"
-                placeholder="Header name"
+                placeholder={tUi("Header name")}
                 value={header?.name || ""}
                 onChange={(e) =>
                   handleCustomHeaderChange(index, "name", e.target.value)
@@ -477,7 +464,7 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
               />
               <Input
                 className="flex-1 min-w-0 max-w-[calc(100%-12rem)]"
-                placeholder="Header value"
+                placeholder={tUi("Header value")}
                 value={header?.value || ""}
                 onChange={(e) =>
                   handleCustomHeaderChange(index, "value", e.target.value)
@@ -489,7 +476,7 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
                   variant="outline"
                   size="icon"
                   onClick={() => removeCustomHeader(index)}
-                  aria-label="Remove header"
+                  aria-label={tUi("Remove header")}
                 >
                   <IconTrash className="w-4 h-4" />
                 </Button>
@@ -503,13 +490,9 @@ export default function ReferNodeEditor({ config = {}, onChange }) {
             onClick={addCustomHeader}
             className="w-full"
           >
-            <IconPlus className="w-4 h-4 mr-2" />
-            Add Custom Header
-          </Button>
+            <IconPlus className="w-4 h-4 mr-2" />{tUi("Add Custom Header")}</Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Custom headers to be added to the SIP INVITE
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Custom headers to be added to the SIP INVITE")}</p>
       </div>
     </div>
   );

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -121,6 +123,7 @@ function setAtPath(source, path, value) {
 }
 
 function EmbedPanel({ snippet }) {
+  const tUi = useUiText();
   const contextSnippet = `<script>
   window.TelnyxWidgetContext = {
     "customer.name": "Anna Kowalska",
@@ -139,67 +142,67 @@ ${snippet}`;
   return (
     <aside className="flex h-full min-h-0 w-full flex-col bg-background">
       <div className="border-b px-4 py-4">
-        <h2 className="font-semibold">Embed & integration</h2>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Install the published widget, pass page context and inspect its server-managed endpoints.</p>
+        <h2 className="font-semibold">{tUi("Embed & integration")}</h2>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tUi("Install the published widget, pass page context and inspect its server-managed endpoints.")}</p>
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
         <section className="space-y-3">
           <div>
-            <h3 className="text-sm font-semibold">Embed snippet</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Add this once to the global layout of your website, immediately before the closing <code className="rounded bg-muted px-1 py-0.5">&lt;/body&gt;</code> tag.</p>
+            <h3 className="text-sm font-semibold">{tUi("Embed snippet")}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tUi("Add this once to the global layout of your website, immediately before the closing ")}<code className="rounded bg-muted px-1 py-0.5">&lt;/body&gt;</code>{tUi(" tag.")}</p>
           </div>
           <CodeBlock code={snippet} language="html">
-            <CodeBlockCopyButton aria-label="Copy embed snippet" title="Copy embed snippet" />
+            <CodeBlockCopyButton aria-label={tUi("Copy embed snippet")} title={tUi("Copy embed snippet")} />
           </CodeBlock>
-          <p className="text-xs leading-relaxed text-muted-foreground">The page origin must also be listed under <span className="font-medium text-foreground">Targeting → Allowed embedding origins</span>. Enter an exact origin such as <code className="rounded bg-muted px-1 py-0.5">https://portal.example.com</code>, without a path.</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{tUi("The page origin must also be listed under ")}<span className="font-medium text-foreground">{tUi("Targeting → Allowed embedding origins")}</span>{tUi(". Enter an exact origin such as ")}<code className="rounded bg-muted px-1 py-0.5">https://portal.example.com</code>{tUi(", without a path.")}</p>
         </section>
 
         <section className="space-y-3 border-t pt-5">
           <div>
-            <h3 className="text-sm font-semibold">Where to install it</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Use the location that loads once on every page where the widget should be available.</p>
+            <h3 className="text-sm font-semibold">{tUi("Where to install it")}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tUi("Use the location that loads once on every page where the widget should be available.")}</p>
           </div>
           <div className="grid gap-2 text-xs">
-            <div className="rounded-lg border p-3"><p className="font-medium">HTML or CMS</p><p className="mt-1 leading-relaxed text-muted-foreground">Paste it into the global footer, body-end or custom code section before <code>&lt;/body&gt;</code>.</p></div>
-            <div className="rounded-lg border p-3"><p className="font-medium">Google Tag Manager</p><p className="mt-1 leading-relaxed text-muted-foreground">Use a Custom HTML tag and an All Pages trigger, or a narrower trigger matching the configured origins and paths.</p></div>
-            <div className="rounded-lg border p-3"><p className="font-medium">React or Next.js</p><p className="mt-1 leading-relaxed text-muted-foreground">Load it once from the root layout after the page can access <code>window</code>. Do not add it inside a component rendered repeatedly.</p></div>
+            <div className="rounded-lg border p-3"><p className="font-medium">{tUi("HTML or CMS")}</p><p className="mt-1 leading-relaxed text-muted-foreground">{tUi("Paste it into the global footer, body-end or custom code section before ")}<code>&lt;/body&gt;</code>.</p></div>
+            <div className="rounded-lg border p-3"><p className="font-medium">{tUi("Google Tag Manager")}</p><p className="mt-1 leading-relaxed text-muted-foreground">{tUi("Use a Custom HTML tag and an All Pages trigger, or a narrower trigger matching the configured origins and paths.")}</p></div>
+            <div className="rounded-lg border p-3"><p className="font-medium">{tUi("React or Next.js")}</p><p className="mt-1 leading-relaxed text-muted-foreground">{tUi("Load it once from the root layout after the page can access ")}<code>{tUi("window")}</code>{tUi(". Do not add it inside a component rendered repeatedly.")}</p></div>
           </div>
-          <p className="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">Do not embed the loader more than once and do not place it inside an iframe.</p>
+          <p className="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">{tUi("Do not embed the loader more than once and do not place it inside an iframe.")}</p>
         </section>
 
         <section className="space-y-3 border-t pt-5">
           <div>
-            <h3 className="text-sm font-semibold">Pass page context</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Set context before the loader to personalize widget copy, visibility, language, opening view and Contact Center handoff routing through Rules & decisions.</p>
+            <h3 className="text-sm font-semibold">{tUi("Pass page context")}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tUi("Set context before the loader to personalize widget copy, visibility, language, opening view and Contact Center handoff routing through Rules & decisions.")}</p>
           </div>
           <CodeBlock code={contextSnippet} language="html">
-            <CodeBlockCopyButton aria-label="Copy page context example" title="Copy page context example" />
+            <CodeBlockCopyButton aria-label={tUi("Copy page context example")} title={tUi("Copy page context example")} />
           </CodeBlock>
-          <p className="text-xs leading-relaxed text-muted-foreground">Register every custom key under <span className="font-medium text-foreground">Rules & decisions → Context catalog</span> and select <span className="font-medium text-foreground">Host context</span>. Values are evaluated when the widget starts.</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{tUi("Register every custom key under ")}<span className="font-medium text-foreground">{tUi("Rules & decisions → Context catalog")}</span>{tUi(" and select ")}<span className="font-medium text-foreground">{tUi("Host context")}</span>{tUi(". Values are evaluated when the widget starts.")}</p>
         </section>
 
         <section className="space-y-3 border-t pt-5">
           <div>
-            <h3 className="text-sm font-semibold">Update stored context in an SPA</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">The API merges new values into the existing host context. Call it before initializing the widget for a new view.</p>
+            <h3 className="text-sm font-semibold">{tUi("Update stored context in an SPA")}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tUi("The API merges new values into the existing host context. Call it before initializing the widget for a new view.")}</p>
           </div>
           <CodeBlock code={spaContextExample} language="javascript">
-            <CodeBlockCopyButton aria-label="Copy SPA context example" title="Copy SPA context example" />
+            <CodeBlockCopyButton aria-label={tUi("Copy SPA context example")} title={tUi("Copy SPA context example")} />
           </CodeBlock>
-          <p className="text-xs leading-relaxed text-muted-foreground">Changing stored context does not reconfigure an already mounted widget or alter an active conversation.</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{tUi("Changing stored context does not reconfigure an already mounted widget or alter an active conversation.")}</p>
         </section>
 
         <section className="space-y-3 border-t pt-5">
           <div>
-            <h3 className="text-sm font-semibold">Available context sources</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">The widget always provides browser context and can read custom values from the configured source.</p>
+            <h3 className="text-sm font-semibold">{tUi("Available context sources")}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tUi("The widget always provides browser context and can read custom values from the configured source.")}</p>
           </div>
           <dl className="grid gap-2 text-xs">
-            <div className="rounded-lg border p-3"><dt className="font-medium">Built in</dt><dd className="mt-1 break-words leading-relaxed text-muted-foreground"><code>page.path</code>, <code>page.host</code>, <code>page.url</code>, <code>device.type</code> and <code>visitor.locale</code>.</dd></div>
-            <div className="rounded-lg border p-3"><dt className="font-medium">Custom sources</dt><dd className="mt-1 leading-relaxed text-muted-foreground">Host context, URL query parameters, cookies or the latest matching value in <code>window.dataLayer</code>.</dd></div>
+            <div className="rounded-lg border p-3"><dt className="font-medium">{tUi("Built in")}</dt><dd className="mt-1 break-words leading-relaxed text-muted-foreground"><code>page.path</code>, <code>page.host</code>, <code>page.url</code>, <code>device.type</code>{tUi(" and ")}<code>visitor.locale</code>.</dd></div>
+            <div className="rounded-lg border p-3"><dt className="font-medium">{tUi("Custom sources")}</dt><dd className="mt-1 leading-relaxed text-muted-foreground">{tUi("Host context, URL query parameters, cookies or the latest matching value in ")}<code>window.dataLayer</code>.</dd></div>
           </dl>
-          <p className="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">Browser context can be modified by the visitor. Never include secrets or use it as proof of identity or authorization.</p>
-          <p className="rounded-lg bg-muted p-3 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Current behavior:</span> context drives widget decisions and routing. AI messaging receives conversation metadata; voice receives the configured dynamic variables as call headers.</p>
+          <p className="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">{tUi("Browser context can be modified by the visitor. Never include secrets or use it as proof of identity or authorization.")}</p>
+          <p className="rounded-lg bg-muted p-3 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">{tUi("Current behavior:")}</span>{tUi(" context drives widget decisions and routing. AI messaging receives conversation metadata; voice receives the configured dynamic variables as call headers.")}</p>
         </section>
 
 
@@ -209,6 +212,7 @@ ${snippet}`;
 }
 
 function WidgetChannelBadges({ widget }) {
+  const tUi = useUiText();
   const channels = widget?.draft?.config?.channels;
   const badges = [
     channels?.messaging?.enabled && "Chat",
@@ -217,22 +221,23 @@ function WidgetChannelBadges({ widget }) {
 
   return (
     <span className="flex min-w-0 flex-wrap gap-1">
-      {badges.length ? badges.map((label) => <Badge key={label} variant="secondary" className="px-1.5 py-0 text-[10px] leading-4">{label}</Badge>) : <Badge variant="outline" className="px-1.5 py-0 text-[10px] leading-4">No channels</Badge>}
-      {!widget?.enabled && <Badge variant="outline" className="px-1.5 py-0 text-[10px] leading-4 text-muted-foreground">Disabled</Badge>}
+      {badges.length ? badges.map((label) => <Badge key={label} variant="secondary" className="px-1.5 py-0 text-[10px] leading-4">{tUi(label)}</Badge>) : <Badge variant="outline" className="px-1.5 py-0 text-[10px] leading-4">{tUi("No channels")}</Badge>}
+      {!widget?.enabled && <Badge variant="outline" className="px-1.5 py-0 text-[10px] leading-4 text-muted-foreground">{tUi("Disabled")}</Badge>}
     </span>
   );
 }
 
 function WidgetPicker({ widgets, selectedId, onSelect }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const selected = widgets.find((widget) => widget.id === selectedId) || null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label="Select widget configuration" className="h-auto min-h-16 w-full justify-between gap-2 px-3 py-2 text-left font-normal">
+        <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={tUi("Select widget configuration")} className="h-auto min-h-16 w-full justify-between gap-2 px-3 py-2 text-left font-normal">
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{selected?.name || "Select widget"}</span>
+            <span className="block truncate text-sm font-medium">{selected?.name || tUi("Select widget")}</span>
             {selected && <span className="mt-1 block"><WidgetChannelBadges widget={selected} /></span>}
           </span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
@@ -240,9 +245,9 @@ function WidgetPicker({ widgets, selectedId, onSelect }) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
-          <CommandInput placeholder="Filter widgets…" />
+          <CommandInput placeholder={tUi("Filter widgets…")} />
           <CommandList>
-            <CommandEmpty>No widgets found.</CommandEmpty>
+            <CommandEmpty>{tUi("No widgets found.")}</CommandEmpty>
             {widgets.map((widget) => (
               <CommandItem key={widget.id} value={widget.id} keywords={[widget.name, widget.id]} onSelect={() => { onSelect(widget); setOpen(false); }} className="items-start py-2.5">
                 <span className="min-w-0 flex-1">
@@ -260,6 +265,7 @@ function WidgetPicker({ widgets, selectedId, onSelect }) {
 }
 
 export default function WidgetAdmin({ embedded = false, inventory = null, onPublished = null }) {
+  const tUi = useUiText();
   const draftRevisionRef = useRef(null);
   const latestEditRef = useRef("");
   const failedSaveRef = useRef(null);
@@ -644,8 +650,8 @@ export default function WidgetAdmin({ embedded = false, inventory = null, onPubl
   const handoffSetup = null;
 
   if (auth.loading) return <div className={`grid place-items-center ${embedded ? "h-full min-h-80" : "min-h-screen"}`}><Loader2 className="animate-spin" /></div>;
-  if (!auth.authenticated) return <div className={`grid place-items-center p-6 ${embedded ? "min-h-80" : "min-h-screen"}`}><div className="max-w-md rounded-xl border bg-card p-8 text-center shadow-sm"><h1 className="text-xl font-semibold">Telnyx Widget Administration</h1><p className="mt-2 text-sm text-muted-foreground">Sign in with an administrator account to manage widgets.</p>{auth.error && <p className="mt-3 rounded bg-destructive/10 p-2 text-sm text-destructive">{auth.error}</p>}<Button className="mt-5" onClick={() => { window.location.href = "/signin"; }}><LogIn /> Sign in</Button></div></div>;
-  if (loadError) return <div className={`grid place-items-center p-6 ${embedded ? "min-h-80" : "min-h-screen"}`}><div className="max-w-md rounded-xl border bg-card p-8 text-center shadow-sm"><h1 className="text-xl font-semibold">Widget configurations could not be loaded</h1><p className="mt-2 text-sm text-muted-foreground">The widget configuration service returned an error.</p><p className="mt-3 rounded bg-destructive/10 p-2 text-sm text-destructive">{loadError}</p><Button className="mt-5" onClick={() => void load()}>Try again</Button></div></div>;
+  if (!auth.authenticated) return <div className={`grid place-items-center p-6 ${embedded ? "min-h-80" : "min-h-screen"}`}><div className="max-w-md rounded-xl border bg-card p-8 text-center shadow-sm"><h1 className="text-xl font-semibold">{tUi("Telnyx Widget Administration")}</h1><p className="mt-2 text-sm text-muted-foreground">{tUi("Sign in with an administrator account to manage widgets.")}</p>{auth.error && <p className="mt-3 rounded bg-destructive/10 p-2 text-sm text-destructive">{auth.error}</p>}<Button className="mt-5" onClick={() => { window.location.href = "/signin"; }}><LogIn />{tUi(" Sign in")}</Button></div></div>;
+  if (loadError) return <div className={`grid place-items-center p-6 ${embedded ? "min-h-80" : "min-h-screen"}`}><div className="max-w-md rounded-xl border bg-card p-8 text-center shadow-sm"><h1 className="text-xl font-semibold">{tUi("Widget configurations could not be loaded")}</h1><p className="mt-2 text-sm text-muted-foreground">{tUi("The widget configuration service returned an error.")}</p><p className="mt-3 rounded bg-destructive/10 p-2 text-sm text-destructive">{loadError}</p><Button className="mt-5" onClick={() => void load()}>{tUi("Try again")}</Button></div></div>;
 
   return <>
     <main className={`flex min-h-0 w-full flex-col overflow-hidden bg-background ${embedded ? "h-full" : "h-screen"}`}>
@@ -660,13 +666,13 @@ export default function WidgetAdmin({ embedded = false, inventory = null, onPubl
                 applyWidget(widget);
               }} />
               <div className="grid grid-cols-3 gap-1.5">
-                <Button className="min-w-0 px-2" size="sm" variant="outline" onClick={openCreateDialog}><Plus size={14} /> New</Button>
-                <Button className="min-w-0 px-2" size="sm" variant="outline" onClick={openCloneDialog}><Copy size={14} /> Clone</Button>
-                <Button className="min-w-0 px-2" size="sm" variant="outline" onClick={openEditDialog}><Pencil size={14} /> Edit</Button>
+                <Button className="min-w-0 px-2" size="sm" variant="outline" onClick={openCreateDialog}><Plus size={14} />{tUi(" New")}</Button>
+                <Button className="min-w-0 px-2" size="sm" variant="outline" onClick={openCloneDialog}><Copy size={14} />{tUi(" Clone")}</Button>
+                <Button className="min-w-0 px-2" size="sm" variant="outline" onClick={openEditDialog}><Pencil size={14} />{tUi(" Edit")}</Button>
               </div>
             </div>
-            <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Widget configuration sections">
-              {NAV_GROUPS.map((group) => <div key={group.label} className="mb-5"><p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</p><div className="grid gap-1">{group.items.map((item) => { const Icon = item.icon; return <button key={item.id} type="button" onClick={() => { setSection(item.id); if (["chat", "handoff"].includes(item.id) && config.channels.messaging.enabled) setSurface("chat"); if (item.id === "callbacks" && config.callbacks.enabled) setSurface("callbacks"); if (item.id === "video" && config.channels.video?.enabled) setSurface("video"); if (item.id === "voice" && config.channels.voice.enabled) setSurface("voice"); }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${section === item.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><Icon size={17} /> {item.label}</button>; })}</div></div>)}
+            <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label={tUi("Widget configuration sections")}>
+              {NAV_GROUPS.map((group) => <div key={group.label} className="mb-5"><p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{tUi(group.label)}</p><div className="grid gap-1">{group.items.map((item) => { const Icon = item.icon; return <button key={item.id} type="button" onClick={() => { setSection(item.id); if (["chat", "handoff"].includes(item.id) && config.channels.messaging.enabled) setSurface("chat"); if (item.id === "callbacks" && config.callbacks.enabled) setSurface("callbacks"); if (item.id === "video" && config.channels.video?.enabled) setSurface("video"); if (item.id === "voice" && config.channels.voice.enabled) setSurface("voice"); }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${section === item.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><Icon size={17} /> {tUi(item.label)}</button>; })}</div></div>)}
             </nav>
           </div>
           {section === "test" ? <WidgetTestStage widget={selected} test={widgetTest} /> : <WidgetStudioPreview widget={{ ...selected, name }} config={previewConfig} surface={surface} onSurfaceChange={setSurface} previewScenario={section === "chat" ? "typing" : section === "handoff" ? "handoff" : section === "callbacks" ? "callbacks" : section === "video" ? `video:${videoScenario}` : null} previewUser={auth.user} decisionResult={decisionResult} showDecisionOverlay={section === "rules"} simulationRun={decisionSimulationRun} />}
@@ -684,48 +690,48 @@ export default function WidgetAdmin({ embedded = false, inventory = null, onPubl
           </div>
         </div>
         <footer className="flex min-h-16 shrink-0 items-center gap-3 border-t bg-background px-4 py-2">
-          <div className="min-w-0 flex-1" aria-live="polite" aria-label="Widget publication progress">
+          <div className="min-w-0 flex-1" aria-live="polite" aria-label={tUi("Widget publication progress")}>
             {publishProgress.length ? <div className="grid max-h-16 gap-0.5 overflow-y-auto pr-2">
               {publishProgress.slice(-3).map((entry, index) => <div key={`${entry.label}-${entry.status}-${index}`} className="flex min-w-0 items-center gap-2 text-xs">
                 {entry.status === "running" ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" /> : entry.status === "success" ? <Check className="size-3.5 shrink-0 text-emerald-500" /> : <span className="size-2.5 shrink-0 rounded-full bg-destructive" />}
                 <span className="truncate font-medium">{entry.label}</span>
                 {entry.detail && <span className="truncate text-muted-foreground">— {entry.detail}</span>}
               </div>)}
-            </div> : <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">{saving ? <><Loader2 className="size-3.5 animate-spin" /> Saving…</> : dirty ? <>Unsaved changes</> : <><Check className="size-3.5 text-emerald-500" /> {lastSavedAt ? "Draft saved" : "Saved"}</>}</span>}
+            </div> : <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">{saving ? <><Loader2 className="size-3.5 animate-spin" />{tUi(" Saving…")}</> : dirty ? <>{tUi("Unsaved changes")}</> : <><Check className="size-3.5 text-emerald-500" /> {lastSavedAt ? tUi("Draft saved") : tUi("Saved")}</>}</span>}
           </div>
-          <Button size="sm" variant="outline" disabled={saving || publishing || dirty} onClick={()=>void openHistory()}>History</Button>
-          <Button size="sm" variant="outline" disabled={saving || publishing || !dirty} onClick={()=>void save()}>Save draft</Button>
-          <Button size="sm" disabled={saving || publishing || !selected} onClick={() => void publish()} title="Publish this widget revision">{publishing ? <Loader2 className="animate-spin" /> : <Send size={16} />} {publishing ? "Publishing…" : "Publish"}</Button>
+          <Button size="sm" variant="outline" disabled={saving || publishing || dirty} onClick={()=>void openHistory()}>{tUi("History")}</Button>
+          <Button size="sm" variant="outline" disabled={saving || publishing || !dirty} onClick={()=>void save()}>{tUi("Save draft")}</Button>
+          <Button size="sm" disabled={saving || publishing || !selected} onClick={() => void publish()} title={tUi("Publish this widget revision")}>{publishing ? <Loader2 className="animate-spin" /> : <Send size={16} />} {publishing ? tUi("Publishing…") : tUi("Publish")}</Button>
         </footer>
         </>
-      ) : <div className="grid flex-1 place-items-center text-sm text-muted-foreground"><div className="text-center"><Bot className="mx-auto mb-3 size-8" /><p>Create a widget to begin.</p><Button className="mt-4" onClick={openCreateDialog}><Plus /> New widget</Button></div></div>}
+      ) : <div className="grid flex-1 place-items-center text-sm text-muted-foreground"><div className="text-center"><Bot className="mx-auto mb-3 size-8" /><p>{tUi("Create a widget to begin.")}</p><Button className="mt-4" onClick={openCreateDialog}><Plus />{tUi(" New widget")}</Button></div></div>}
     </main>
     <Dialog open={Boolean(history)} onOpenChange={open=>{if(!open&&!restoring)setHistory(null);}}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Widget revision history</DialogTitle>
-        <DialogDescription>Restore a published version into the draft, then review and publish it.</DialogDescription></DialogHeader>
-        <div className="space-y-2">{history?.revisions.length===0&&<p className="text-sm text-muted-foreground">No published revisions yet.</p>}
+      <DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{tUi("Widget revision history")}</DialogTitle>
+        <DialogDescription>{tUi("Restore a published version into the draft, then review and publish it.")}</DialogDescription></DialogHeader>
+        <div className="space-y-2">{history?.revisions.length===0&&<p className="text-sm text-muted-foreground">{tUi("No published revisions yet.")}</p>}
           {history?.revisions.map(revision=><div key={revision.id} className="flex items-center justify-between rounded border p-3 text-sm">
-            <div>Revision {revision.version} · {revision.state}<p className="text-xs text-muted-foreground">{new Date(revision.published_at).toLocaleString()}</p></div>
-            <Button variant="outline" size="sm" disabled={restoring} onClick={()=>void restoreRevision(revision.id)}>Restore to draft</Button>
+            <div>{tUi("Revision ")}{revision.version} · {revision.state}<p className="text-xs text-muted-foreground">{new Date(revision.published_at).toLocaleString(tUi.locale)}</p></div>
+            <Button variant="outline" size="sm" disabled={restoring} onClick={()=>void restoreRevision(revision.id)}>{tUi("Restore to draft")}</Button>
           </div>)}</div>
-        <p className="text-sm font-medium">Audit trail</p><div className="max-h-56 overflow-y-auto text-xs">{history?.audit.map((event,index)=><p key={index} className="border-b py-2">
-          {new Date(event.created_at).toLocaleString()} · {event.action}<span className="block text-muted-foreground">{event.actor_id}</span></p>)}</div>
+        <p className="text-sm font-medium">{tUi("Audit trail")}</p><div className="max-h-56 overflow-y-auto text-xs">{history?.audit.map((event,index)=><p key={index} className="border-b py-2">
+          {new Date(event.created_at).toLocaleString(tUi.locale)} · {event.action}<span className="block text-muted-foreground">{event.actor_id}</span></p>)}</div>
       </DialogContent>
     </Dialog>
     <Dialog open={newWidgetOpen} onOpenChange={(open) => { if (!creating) setNewWidgetOpen(open); }}>
       <DialogContent>
         <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void create(); }}>
           <DialogHeader>
-            <DialogTitle>Create new widget</DialogTitle>
-            <DialogDescription>Create an independent visual configuration. Channels, appearance and behavior can be customized after creation.</DialogDescription>
+            <DialogTitle>{tUi("Create new widget")}</DialogTitle>
+            <DialogDescription>{tUi("Create an independent visual configuration. Channels, appearance and behavior can be customized after creation.")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-2">
-            <label className="text-sm font-medium" htmlFor="new-widget-name">Widget name</label>
-            <Input id="new-widget-name" autoFocus maxLength={120} value={newWidgetName} onChange={(event) => setNewWidgetName(event.target.value)} placeholder="Customer service widget" />
+            <label className="text-sm font-medium" htmlFor="new-widget-name">{tUi("Widget name")}</label>
+            <Input id="new-widget-name" autoFocus maxLength={120} value={newWidgetName} onChange={(event) => setNewWidgetName(event.target.value)} placeholder={tUi("Customer service widget")} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={creating} onClick={() => setNewWidgetOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={creating || !newWidgetName.trim()}>{creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Create widget</Button>
+            <Button type="button" variant="outline" disabled={creating} onClick={() => setNewWidgetOpen(false)}>{tUi("Cancel")}</Button>
+            <Button type="submit" disabled={creating || !newWidgetName.trim()}>{creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{tUi(" Create widget")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -734,16 +740,16 @@ export default function WidgetAdmin({ embedded = false, inventory = null, onPubl
       <DialogContent>
         <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void clone(); }}>
           <DialogHeader>
-            <DialogTitle>Clone widget</DialogTitle>
-            <DialogDescription>Copy the complete draft design, behavior, channels and device-specific preview screenshots into an independent widget.</DialogDescription>
+            <DialogTitle>{tUi("Clone widget")}</DialogTitle>
+            <DialogDescription>{tUi("Copy the complete draft design, behavior, channels and device-specific preview screenshots into an independent widget.")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-2">
-            <label className="text-sm font-medium" htmlFor="clone-widget-name">New widget name</label>
+            <label className="text-sm font-medium" htmlFor="clone-widget-name">{tUi("New widget name")}</label>
             <Input id="clone-widget-name" autoFocus maxLength={120} value={cloneWidgetName} onChange={(event) => setCloneWidgetName(event.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={cloning} onClick={() => setCloneWidgetOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={cloning || !cloneWidgetName.trim()}>{cloning ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />} Clone widget</Button>
+            <Button type="button" variant="outline" disabled={cloning} onClick={() => setCloneWidgetOpen(false)}>{tUi("Cancel")}</Button>
+            <Button type="submit" disabled={cloning || !cloneWidgetName.trim()}>{cloning ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}{tUi(" Clone widget")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -752,16 +758,16 @@ export default function WidgetAdmin({ embedded = false, inventory = null, onPubl
       <DialogContent>
         <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void renameWidget(); }}>
           <DialogHeader>
-            <DialogTitle>Rename widget</DialogTitle>
-            <DialogDescription>Change the administrative name shown in the widget list. The public widget ID stays unchanged.</DialogDescription>
+            <DialogTitle>{tUi("Rename widget")}</DialogTitle>
+            <DialogDescription>{tUi("Change the administrative name shown in the widget list. The public widget ID stays unchanged.")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-2">
-            <label className="text-sm font-medium" htmlFor="edit-widget-name">Widget name</label>
+            <label className="text-sm font-medium" htmlFor="edit-widget-name">{tUi("Widget name")}</label>
             <Input id="edit-widget-name" autoFocus maxLength={120} value={editWidgetName} onChange={(event) => setEditWidgetName(event.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={renaming} onClick={() => setEditWidgetOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={renaming || !editWidgetName.trim()}>{renaming ? <Loader2 className="size-4 animate-spin" /> : <Pencil className="size-4" />} Save name</Button>
+            <Button type="button" variant="outline" disabled={renaming} onClick={() => setEditWidgetOpen(false)}>{tUi("Cancel")}</Button>
+            <Button type="submit" disabled={renaming || !editWidgetName.trim()}>{renaming ? <Loader2 className="size-4 animate-spin" /> : <Pencil className="size-4" />}{tUi(" Save name")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

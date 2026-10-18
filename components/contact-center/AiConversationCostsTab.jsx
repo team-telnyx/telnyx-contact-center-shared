@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
@@ -178,11 +180,10 @@ function extractRecordDetails(event) {
 
 /** Custom donut chart center label */
 function DonutLabel({ cx, cy, total }) {
+  const tUi = useUiText();
   return (
     <g>
-      <text x={cx} y={cy - 8} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11 }}>
-        Total
-      </text>
+      <text x={cx} y={cy - 8} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11 }}>{tUi("Total")}</text>
       <text x={cx} y={cy + 12} textAnchor="middle" className="fill-foreground font-bold" style={{ fontSize: 15, fontWeight: 700 }}>
         {formatUsd(total)}
       </text>
@@ -203,6 +204,7 @@ function CustomTooltip({ active, payload }) {
 }
 
 export default function AiConversationCostsTab({ conversation, useDemoApiKey = false }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sessionData, setSessionData] = useState(null);
@@ -281,7 +283,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
         <IconCurrencyDollar className="size-10 opacity-40" />
-        <p className="text-sm">No cost data available for this conversation</p>
+        <p className="text-sm">{tUi("No cost data available for this conversation")}</p>
       </div>
     );
   }
@@ -290,7 +292,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
     <div className="space-y-6 py-2">
       {/* ── Total Cost Banner ────────────────────────────────────────────── */}
       <div className="rounded-xl bg-card border border-border px-6 py-4 text-center shadow-sm">
-        <p className="text-xs text-muted-foreground mb-1">Total Call Cost</p>
+        <p className="text-xs text-muted-foreground mb-1">{tUi("Total Call Cost")}</p>
         <p className="text-2xl font-bold font-mono tracking-tight">
           {formatUsd(totalCost)}
         </p>
@@ -332,7 +334,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
 
         {/* Legend + Breakdown */}
         <div className="flex-1 space-y-2 min-w-0">
-          <p className="text-sm font-semibold mb-3">Cost Breakdown</p>
+          <p className="text-sm font-semibold mb-3">{tUi("Cost Breakdown")}</p>
           {chartGroups.map((group, index) => {
             const pct = totalCost > 0 ? (group.value / totalCost) * 100 : 0;
             const color = PRODUCT_COLORS[index % PRODUCT_COLORS.length];
@@ -357,7 +359,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
 
       {/* ── Component Details Cards ───────────────────────────────────────── */}
       <div>
-        <p className="text-sm font-semibold mb-3">Component Details</p>
+        <p className="text-sm font-semibold mb-3">{tUi("Component Details")}</p>
         <div className="grid grid-cols-2 gap-3">
           {productGroups.map((group, index) => {
             const color = PRODUCT_COLORS[index % PRODUCT_COLORS.length];
@@ -402,7 +404,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
                   </div>
                 ) : (
                   <div className="text-xs text-muted-foreground pl-1">
-                    {group.events.length} event{group.events.length !== 1 ? "s" : ""}
+                    {tUi("Events: {value0}", {value0: group.events.length})}
                   </div>
                 )}
               </div>
@@ -416,6 +418,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
 
 // ── Fallback: legacy cost view (for conversations without session analysis) ──
 function LegacyCostsView({ conversation, apiError }) {
+  const tUi = useUiText();
   const cost =
     conversation?.cost ||
     conversation?.data?.cost ||
@@ -430,10 +433,10 @@ function LegacyCostsView({ conversation, apiError }) {
         {apiError && (
           <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 max-w-xs text-center">
             <IconAlertCircle className="size-3.5 shrink-0" />
-            <span>{apiError}</span>
+            <span>{tUi("Detailed cost analysis is currently unavailable.")}</span>
           </div>
         )}
-        <p className="text-sm">Cost data not available for this conversation</p>
+        <p className="text-sm">{tUi("Cost data not available for this conversation")}</p>
       </div>
     );
   }
@@ -453,7 +456,7 @@ function LegacyCostsView({ conversation, apiError }) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
         <IconCurrencyDollar className="size-10 opacity-40" />
-        <p className="text-sm">Cost data not available for this conversation</p>
+        <p className="text-sm">{tUi("Cost data not available for this conversation")}</p>
       </div>
     );
   }
@@ -464,14 +467,14 @@ function LegacyCostsView({ conversation, apiError }) {
   return (
     <div className="space-y-6 py-2">
       <div className="rounded-xl bg-muted/50 border border-border px-6 py-4 text-center">
-        <p className="text-xs text-muted-foreground mb-1">Total Cost</p>
+        <p className="text-xs text-muted-foreground mb-1">{tUi("Total Cost")}</p>
         <p className="text-2xl font-bold font-mono">{formatUsd(grandTotal)}</p>
       </div>
 
       {apiError && (
         <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
           <IconAlertCircle className="size-3.5 shrink-0" />
-          <span>Detailed analysis unavailable: {apiError}</span>
+          <span>{tUi("Detailed cost analysis is currently unavailable. The available cost summary is shown below.")}</span>
         </div>
       )}
 
@@ -490,7 +493,7 @@ function LegacyCostsView({ conversation, apiError }) {
             </ResponsiveContainer>
           </div>
           <div className="flex-1 space-y-2">
-            <p className="text-sm font-semibold mb-3">Cost Breakdown</p>
+            <p className="text-sm font-semibold mb-3">{tUi("Cost Breakdown")}</p>
             {rows.map((r) => {
               const pct = grandTotal > 0 ? (r.total / grandTotal) * 100 : 0;
               return (

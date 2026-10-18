@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -32,6 +34,7 @@ function getSafeAttachmentUrl(value) {
 }
 
 export function AIWidgetMessages({ compact = false }) {
+  const tUi = useUiText();
   const client = useClient();
   const transcript = useTranscript();
   const { hasActiveConversation, reportError, status } = useAIWidgetUI();
@@ -137,11 +140,9 @@ export function AIWidgetMessages({ compact = false }) {
                 <Bot className="size-6 text-emerald-500" />
               </div>
               <p className="text-sm font-medium">
-                {hasActiveConversation ? status.description : "Start a call to talk with the assistant"}
+                {hasActiveConversation ? status.description : tUi("Start a call to talk with the assistant")}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Voice and typed messages will appear here in real time.
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{tUi("Voice and typed messages will appear here in real time.")}</p>
             </div>
           </div>
         ) : (
@@ -179,9 +180,9 @@ export function AIWidgetMessages({ compact = false }) {
                           <a key={url} href={url} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-lg border">
                             {attachment.type === "image" ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={url} alt="Message attachment" className="max-h-40 w-full object-cover" />
+                              <img src={url} alt={tUi("Message attachment")} className="max-h-40 w-full object-cover" />
                             ) : (
-                              <span className="flex items-center gap-1 p-2 text-xs"><ImageIcon className="size-3" /> Attachment</span>
+                              <span className="flex items-center gap-1 p-2 text-xs"><ImageIcon className="size-3" />{tUi(" Attachment")}</span>
                             )}
                           </a>
                         );
@@ -189,15 +190,14 @@ export function AIWidgetMessages({ compact = false }) {
                     </div>
                     <div className={`mt-1 flex items-center gap-1 text-[10px] text-muted-foreground ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                       <span>{formatTime(message.timestamp)}</span>
-                      {message.pending && <span>Sending…</span>}
+                      {message.pending && <span>{tUi("Sending…")}</span>}
                       {!message.pending && !message.failed && message.role === "user" && <Check className="size-3" />}
                       {message.failed && (
                         <button type="button" className="inline-flex items-center gap-1 text-red-500" onClick={() => retryMessage(message)}>
-                          <RotateCcw className="size-3" /> Retry
-                        </button>
+                          <RotateCcw className="size-3" />{tUi(" Retry")}</button>
                       )}
                       {message.role === "assistant" && (
-                        <button type="button" className="ml-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={() => copyMessage(content)} aria-label="Copy message">
+                        <button type="button" className="ml-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={() => copyMessage(content)} aria-label={tUi("Copy message")}>
                           <Copy className="size-3" />
                         </button>
                       )}
@@ -214,7 +214,7 @@ export function AIWidgetMessages({ compact = false }) {
             {status.key === "thinking" && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="flex size-7 items-center justify-center rounded-full bg-emerald-500/10"><Bot className="size-3.5 text-emerald-500" /></span>
-                <span className="rounded-2xl border bg-background px-3 py-2">Thinking<span className="animate-pulse">…</span></span>
+                <span className="rounded-2xl border bg-background px-3 py-2">{tUi("Thinking")}<span className="animate-pulse">…</span></span>
               </div>
             )}
             <div ref={endRef} />
@@ -223,8 +223,7 @@ export function AIWidgetMessages({ compact = false }) {
 
         {showNewMessages && (
           <Button type="button" size="sm" className="sticky bottom-2 left-1/2 h-7 -translate-x-1/2 rounded-full text-xs" onClick={() => endRef.current?.scrollIntoView({ behavior: "smooth" })}>
-            <ChevronDown className="mr-1 size-3" /> New messages
-          </Button>
+            <ChevronDown className="mr-1 size-3" />{tUi(" New messages")}</Button>
         )}
       </div>
 
@@ -233,7 +232,7 @@ export function AIWidgetMessages({ compact = false }) {
           <Input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder={hasActiveConversation ? "Type a message…" : "Start a call to send a message"}
+            placeholder={hasActiveConversation ? tUi("Type a message…") : tUi("Start a call to send a message")}
             disabled={!hasActiveConversation}
             className="h-9 min-w-0 flex-1 border-0 bg-transparent px-2 text-sm shadow-none focus-visible:ring-0"
             onKeyDown={(event) => {
@@ -243,7 +242,7 @@ export function AIWidgetMessages({ compact = false }) {
               }
             }}
           />
-          <Button type="button" size="icon" className="size-9 shrink-0 rounded-xl bg-emerald-500 text-zinc-950 hover:bg-emerald-400" disabled={!hasActiveConversation || !input.trim()} onClick={sendMessage} aria-label="Send message">
+          <Button type="button" size="icon" className="size-9 shrink-0 rounded-xl bg-emerald-500 text-zinc-950 hover:bg-emerald-400" disabled={!hasActiveConversation || !input.trim()} onClick={sendMessage} aria-label={tUi("Send message")}>
             <SendHorizontal className="size-4" />
           </Button>
         </div>

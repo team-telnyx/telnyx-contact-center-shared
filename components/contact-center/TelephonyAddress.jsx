@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
@@ -16,6 +18,7 @@ export function TelephonyAddress({
   fallback = "-",
   className,
 }) {
+  const tUi = useUiText();
   const [copied, setCopied] = useState(false);
   const address = String(value || "").trim();
   const label = String(displayName || "").trim();
@@ -56,7 +59,7 @@ export function TelephonyAddress({
             className,
           )}
         >
-          {label || "WebRTC"}
+          {label || tUi("WebRTC")}
         </span>
       </HoverCardTrigger>
       <HoverCardContent
@@ -64,17 +67,15 @@ export function TelephonyAddress({
         className="w-80 space-y-2 p-3"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          SIP URI
-        </div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{tUi("SIP URI")}</div>
         <div className="flex items-start gap-2">
           <code className="min-w-0 flex-1 break-all text-xs leading-relaxed">
             {address}
           </code>
           <button
             type="button"
-            aria-label="Copy SIP URI"
-            title={copied ? "Copied" : "Copy SIP URI"}
+            aria-label={tUi("Copy SIP URI")}
+            title={copied ? tUi("Copied") : tUi("Copy SIP URI")}
             onClick={copyAddress}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-md border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >

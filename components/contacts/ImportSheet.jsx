@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React from "react";
 import {
@@ -26,6 +28,7 @@ export default function ContactImportSheet({
   onOpenChange,
   onImportComplete,
 }) {
+  const tUi = useUiText();
   const [file, setFile] = React.useState(null);
   const [dragActive, setDragActive] = React.useState(false);
   const [validating, setValidating] = React.useState(false);
@@ -219,9 +222,7 @@ export default function ContactImportSheet({
 
       notify({
         title: "Import completed",
-        description: `Successfully imported ${data.imported || 0} contact${
-          data.imported !== 1 ? "s" : ""
-        }${data.skipped > 0 ? ` (${data.skipped} skipped)` : ""}`,
+        description: tUi("Imported contacts: {value0}. Skipped: {value1}.", {value0: data.imported || 0, value1: data.skipped || 0}),
         variant: "success",
       });
 
@@ -253,14 +254,12 @@ export default function ContactImportSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-            <IconUpload className="size-5" />
-            Import Contacts
-          </SheetTitle>
+            <IconUpload className="size-5" />{tUi("Import Contacts")}</SheetTitle>
         </SheetHeader>
 
         {/* Scrollable Content Section */}
@@ -269,30 +268,21 @@ export default function ContactImportSheet({
             <CardContent className="p-6 space-y-6">
               {/* Template Download Section */}
               <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                  Step 1: Download Template
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Download the CSV template with sample data. Fill in your
-                  contacts and upload the file.
-                </p>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Step 1: Download Template")}</h3>
+                <p className="text-sm text-muted-foreground mb-4">{tUi("Download the CSV template with sample data. Fill in your contacts and upload the file.")}</p>
                 <Button
                   variant="outline"
                   onClick={downloadTemplate}
                   className="w-full"
                 >
-                  <IconFileDownload className="size-4 mr-2" />
-                  Download CSV Template
-                </Button>
+                  <IconFileDownload className="size-4 mr-2" />{tUi("Download CSV Template")}</Button>
               </div>
 
               <div className="border-t" />
 
               {/* File Upload Section */}
               <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                  Step 2: Upload CSV File
-                </h3>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Step 2: Upload CSV File")}</h3>
                 {!file ? (
                   <div
                     className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
@@ -306,16 +296,12 @@ export default function ContactImportSheet({
                     onDrop={handleDrop}
                   >
                     <IconUpload className="size-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-sm font-medium mb-2">
-                      Drag & drop your CSV file here
-                    </p>
-                    <p className="text-xs text-muted-foreground mb-4">or</p>
+                    <p className="text-sm font-medium mb-2">{tUi("Drag & drop your CSV file here")}</p>
+                    <p className="text-xs text-muted-foreground mb-4">{tUi("or")}</p>
                     <Button
                       variant="outline"
                       onClick={() => fileInputRef.current?.click()}
-                    >
-                      Select File
-                    </Button>
+                    >{tUi("Select File")}</Button>
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -334,8 +320,7 @@ export default function ContactImportSheet({
                         <div>
                           <p className="text-sm font-medium">{file.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {(file.size / 1024).toFixed(2)} KB
-                          </p>
+                            {(file.size / 1024).toFixed(2)}{tUi(" KB")}</p>
                         </div>
                       </div>
                       <Button
@@ -356,20 +341,14 @@ export default function ContactImportSheet({
                 <>
                   <div className="border-t" />
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Step 3: Validation
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Step 3: Validation")}</h3>
                     {validating ? (
                       <div className="text-center py-4">
-                        <p className="text-sm text-muted-foreground">
-                          Validating file...
-                        </p>
+                        <p className="text-sm text-muted-foreground">{tUi("Validating file...")}</p>
                       </div>
                     ) : validationErrors.length > 0 ? (
                       <div className="border rounded-lg p-4 bg-destructive/10 border-destructive/20">
-                        <p className="text-sm font-medium text-destructive mb-2">
-                          Validation Errors:
-                        </p>
+                        <p className="text-sm font-medium text-destructive mb-2">{tUi("Validation Errors:")}</p>
                         <ul className="text-xs text-destructive space-y-1 list-disc list-inside">
                           {validationErrors.map((error, idx) => (
                             <li key={idx}>{error}</li>
@@ -378,13 +357,9 @@ export default function ContactImportSheet({
                       </div>
                     ) : recordCount > 0 ? (
                       <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                        <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                          ✓ File validated successfully
-                        </p>
+                        <p className="text-sm font-medium text-green-700 dark:text-green-400">{tUi("✓ File validated successfully")}</p>
                         <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                          {recordCount} record{recordCount !== 1 ? "s" : ""}{" "}
-                          ready to import
-                        </p>
+                          {tUi("Records ready to import: {value0}", {value0: recordCount})}</p>
                       </div>
                     ) : null}
                   </div>
@@ -398,8 +373,8 @@ export default function ContactImportSheet({
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
                       {importComplete
-                        ? "Import Completed"
-                        : "Importing Contacts"}
+                        ? tUi("Import Completed")
+                        : tUi("Importing Contacts")}
                     </h3>
                     <div className="space-y-2">
                       <Progress
@@ -408,19 +383,15 @@ export default function ContactImportSheet({
                       />
                       <p className="text-xs text-muted-foreground text-center">
                         {importComplete
-                          ? "100% complete"
-                          : `${Math.round(importProgress)}% complete`}
+                          ? tUi("100% complete")
+                          : tUi("{value0}% complete", { value0: Math.round(importProgress) })}
                       </p>
                       {importComplete && importResult && (
                         <div className="mt-3 border rounded-lg p-3 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                          <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                            ✓ Import successful
-                          </p>
+                          <p className="text-sm font-medium text-green-700 dark:text-green-400">{tUi("✓ Import successful")}</p>
                           <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                            {importResult.imported || 0} contact
-                            {importResult.imported !== 1 ? "s" : ""} imported
-                            {importResult.skipped > 0
-                              ? `, ${importResult.skipped} skipped`
+                            {tUi("Imported contacts: {value0}", {value0: importResult.imported || 0})}{importResult.skipped > 0
+                              ? tUi(", {value0} skipped", { value0: importResult.skipped })
                               : ""}
                           </p>
                         </div>
@@ -439,9 +410,7 @@ export default function ContactImportSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={importing}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button
             onClick={importContacts}
             disabled={
@@ -453,10 +422,10 @@ export default function ContactImportSheet({
             }
           >
             {importing
-              ? "Importing..."
+              ? tUi("Importing...")
               : importComplete
-              ? "Import Complete"
-              : "Import Contacts"}
+              ? tUi("Import Complete")
+              : tUi("Import Contacts")}
           </Button>
         </SheetFooter>
       </SheetContent>

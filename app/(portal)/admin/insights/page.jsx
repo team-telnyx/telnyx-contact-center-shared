@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -99,6 +101,7 @@ function buildJsonSchema(parameters) {
 // ------------------ Page ------------------
 
 export default function AiInsightsManagerPage() {
+  const tUi = useUiText();
   const [tab, setTab] = useState("insights");
   const [insights, setInsights] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -152,13 +155,13 @@ export default function AiInsightsManagerPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Insights"
+        title={tUi("Insights")}
         icon={IconBrain}
-        badges={<Badge variant="secondary">{insights.length} insights</Badge>}
+        badges={<Badge variant="secondary">{insights.length}{tUi(" insights")}</Badge>}
         actions={tab === "insights" ? (
-          <Can permission="ai_insights:create"><Button size="sm" onClick={() => { setEditingInsight(null); setOpenInsightEditor(true); }}><IconPlus />Add Insight</Button></Can>
+          <Can permission="ai_insights:create"><Button size="sm" onClick={() => { setEditingInsight(null); setOpenInsightEditor(true); }}><IconPlus />{tUi("Add Insight")}</Button></Can>
         ) : (
-          <Can permission="ai_insights:create"><Button size="sm" onClick={() => { setEditingGroup(null); setOpenGroupEditor(true); }}><IconPlus />Add Group</Button></Can>
+          <Can permission="ai_insights:create"><Button size="sm" onClick={() => { setEditingGroup(null); setOpenGroupEditor(true); }}><IconPlus />{tUi("Add Group")}</Button></Can>
         )}
       />
       <AiAssistantsSectionPage activeId="insights">
@@ -174,9 +177,7 @@ export default function AiInsightsManagerPage() {
                     : "bg-background"
                 }`}
                 onClick={() => setTab("insights")}
-              >
-                Insights
-              </button>
+              >{tUi("Insights")}</button>
               <button
                 type="button"
                 className={`px-3 py-1 text-sm border-l ${
@@ -185,16 +186,14 @@ export default function AiInsightsManagerPage() {
                     : "bg-background"
                 }`}
                 onClick={() => setTab("groups")}
-              >
-                Groups
-              </button>
+              >{tUi("Groups")}</button>
             </div>
             <div className="ml-auto flex items-center gap-2">
               <Button
                 type="button"
                 variant={view === "list" ? "default" : "secondary"}
                 onClick={() => setView("list")}
-                title="List view"
+                title={tUi("List view")}
               >
                 <IconListDetails className="size-4" />
               </Button>
@@ -202,7 +201,7 @@ export default function AiInsightsManagerPage() {
                 type="button"
                 variant={view === "cards" ? "default" : "secondary"}
                 onClick={() => setView("cards")}
-                title="Cards view"
+                title={tUi("Cards view")}
               >
                 <IconLayoutGrid className="size-4" />
               </Button>
@@ -222,14 +221,10 @@ export default function AiInsightsManagerPage() {
                 <Table className="table-fixed min-w-[1000px]">
                   <TableHeader>
                     <TableRow className="bg-muted">
-                      <TableHead className="px-[10px] w-[25%]">Name</TableHead>
-                      <TableHead className="px-[10px] w-[45%]">
-                        Instructions / Schema
-                      </TableHead>
-                      <TableHead className="px-[10px] w-[15%]">Type</TableHead>
-                      <TableHead className="px-[10px] text-right">
-                        Actions
-                      </TableHead>
+                      <TableHead className="px-[10px] w-[25%]">{tUi("Name")}</TableHead>
+                      <TableHead className="px-[10px] w-[45%]">{tUi("Instructions / Schema")}</TableHead>
+                      <TableHead className="px-[10px] w-[15%]">{tUi("Type")}</TableHead>
+                      <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -242,18 +237,18 @@ export default function AiInsightsManagerPage() {
                           </TableCell>
                           <TableCell className="px-[10px] text-xs truncate max-w-[600px]">
                             {hasSchema
-                              ? "JSON Schema"
+                              ? tUi("JSON Schema")
                               : (ins.instructions || "").slice(0, 140)}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
-                            {hasSchema ? "Structured" : "Instructions"}
+                            {hasSchema ? tUi("Structured") : tUi("Instructions")}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap text-right">
                             <div className="inline-flex items-center gap-2">
                               <button
                                 type="button"
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit"
+                                title={tUi("Edit")}
                                 onClick={() => {
                                   setEditingInsight(ins);
                                   setOpenInsightEditor(true);
@@ -264,9 +259,9 @@ export default function AiInsightsManagerPage() {
                               <Can permission="ai_insights:delete"><button
                                 type="button"
                                 className="inline-flex items-center text-red-500 hover:text-red-700"
-                                title="Delete"
+                                title={tUi("Delete")}
                                 onClick={async () => {
-                                  if (!confirm("Delete this insight?")) return;
+                                  if (!confirm(tUi("Delete this insight?"))) return;
                                   try {
                                     const res = await fetch(
                                       `/api/ai/conversations/insights/${encodeURIComponent(
@@ -300,9 +295,7 @@ export default function AiInsightsManagerPage() {
                         <TableCell
                           colSpan={4}
                           className="text-center py-8 text-sm text-muted-foreground"
-                        >
-                          No insights
-                        </TableCell>
+                        >{tUi("No insights")}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -327,7 +320,7 @@ export default function AiInsightsManagerPage() {
                           <button
                             type="button"
                             className="inline-flex items-center text-telnyx-green"
-                            title="Edit"
+                            title={tUi("Edit")}
                             onClick={() => {
                               setEditingInsight(ins);
                               setOpenInsightEditor(true);
@@ -338,9 +331,9 @@ export default function AiInsightsManagerPage() {
                           <Can permission="ai_insights:delete"><button
                             type="button"
                             className="inline-flex items-center text-red-500 hover:text-red-700"
-                            title="Delete"
+                            title={tUi("Delete")}
                             onClick={async () => {
-                              if (!confirm("Delete this insight?")) return;
+                              if (!confirm(tUi("Delete this insight?"))) return;
                               try {
                                 const res = await fetch(
                                   `/api/ai/conversations/insights/${encodeURIComponent(
@@ -374,9 +367,7 @@ export default function AiInsightsManagerPage() {
                   </Card>
                 ))}
                 {insights.length === 0 && (
-                  <div className="text-center py-8 text-sm text-muted-foreground border rounded-md">
-                    No insights
-                  </div>
+                  <div className="text-center py-8 text-sm text-muted-foreground border rounded-md">{tUi("No insights")}</div>
                 )}
               </div>
             )
@@ -392,16 +383,10 @@ export default function AiInsightsManagerPage() {
               <Table className="table-fixed min-w-[1000px]">
                 <TableHeader>
                   <TableRow className="bg-muted">
-                    <TableHead className="px-[10px] w-[25%]">Name</TableHead>
-                    <TableHead className="px-[10px] w-[45%]">
-                      Webhook URL
-                    </TableHead>
-                    <TableHead className="px-[10px] w-[15%]">
-                      Insights
-                    </TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px] w-[25%]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px] w-[45%]">{tUi("Webhook URL")}</TableHead>
+                    <TableHead className="px-[10px] w-[15%]">{tUi("Insights")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -421,7 +406,7 @@ export default function AiInsightsManagerPage() {
                           <button
                             type="button"
                             className="inline-flex items-center text-telnyx-green"
-                            title="Edit"
+                            title={tUi("Edit")}
                             onClick={() => {
                               setEditingGroup(g);
                               setOpenGroupEditor(true);
@@ -432,9 +417,9 @@ export default function AiInsightsManagerPage() {
                           <Can permission="ai_insights:delete"><button
                             type="button"
                             className="inline-flex items-center text-red-500 hover:text-red-700"
-                            title="Delete"
+                            title={tUi("Delete")}
                             onClick={async () => {
-                              if (!confirm("Delete this group?")) return;
+                              if (!confirm(tUi("Delete this group?"))) return;
                               try {
                                 const res = await fetch(
                                   `/api/ai/conversations/insight-groups/${encodeURIComponent(
@@ -465,9 +450,7 @@ export default function AiInsightsManagerPage() {
                       <TableCell
                         colSpan={4}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No groups
-                      </TableCell>
+                      >{tUi("No groups")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -492,7 +475,7 @@ export default function AiInsightsManagerPage() {
                         <button
                           type="button"
                           className="inline-flex items-center text-telnyx-green"
-                          title="Edit"
+                          title={tUi("Edit")}
                           onClick={() => {
                             setEditingGroup(g);
                             setOpenGroupEditor(true);
@@ -503,9 +486,9 @@ export default function AiInsightsManagerPage() {
                         <Can permission="ai_insights:delete"><button
                           type="button"
                           className="inline-flex items-center text-red-500 hover:text-red-700"
-                          title="Delete"
+                          title={tUi("Delete")}
                           onClick={async () => {
-                            if (!confirm("Delete this group?")) return;
+                            if (!confirm(tUi("Delete this group?"))) return;
                             try {
                               const res = await fetch(
                                 `/api/ai/conversations/insight-groups/${encodeURIComponent(
@@ -531,16 +514,14 @@ export default function AiInsightsManagerPage() {
                       {g.webhook || ""}
                     </div>
                     <div className="mt-1 text-xs">
-                      <span className="text-muted-foreground">Insights:</span>{" "}
+                      <span className="text-muted-foreground">{tUi("Insights:")}</span>{" "}
                       {Array.isArray(g.insights) ? g.insights.length : 0}
                     </div>
                   </CardContent>
                 </Card>
               ))}
               {groups.length === 0 && (
-                <div className="text-center py-8 text-sm text-muted-foreground border rounded-md">
-                  No groups
-                </div>
+                <div className="text-center py-8 text-sm text-muted-foreground border rounded-md">{tUi("No groups")}</div>
               )}
             </div>
           )}
@@ -548,13 +529,13 @@ export default function AiInsightsManagerPage() {
       </Card>
 
       <Sheet open={openInsightEditor} onOpenChange={setOpenInsightEditor}>
-        <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
+        <SheetContent side="end" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
               <IconListCheck className="size-5" />
-              {editingInsight ? "Edit Insight" : "Create Insight"}
+              {editingInsight ? tUi("Edit Insight") : tUi("Create Insight")}
             </SheetTitle>
-            <SheetDescription>Configure conversational AI insight extraction.</SheetDescription>
+            <SheetDescription>{tUi("Configure conversational AI insight extraction.")}</SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto">
             <Card className="mx-5 my-4 border-muted-foreground/20 bg-card"><CardContent className="p-6">
@@ -570,20 +551,20 @@ export default function AiInsightsManagerPage() {
             </CardContent></Card>
           </div>
           <SheetFooter className="px-6 py-4 border-t border-border flex flex-row justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpenInsightEditor(false)}>Cancel</Button>
-            <Button type="submit" form="insight-editor-form">{editingInsight ? "Save" : "Create"}</Button>
+            <Button type="button" variant="outline" onClick={() => setOpenInsightEditor(false)}>{tUi("Cancel")}</Button>
+            <Button type="submit" form="insight-editor-form">{editingInsight ? tUi("Save") : tUi("Create")}</Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>
 
       <Sheet open={openGroupEditor} onOpenChange={setOpenGroupEditor}>
-        <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
+        <SheetContent side="end" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
           <SheetHeader className="px-6 py-4 border-b border-border">
             <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
               <IconListCheck className="size-5" />
-              {editingGroup ? "Edit Group" : "Create Group"}
+              {editingGroup ? tUi("Edit Group") : tUi("Create Group")}
             </SheetTitle>
-            <SheetDescription>Configure insight grouping and webhook settings.</SheetDescription>
+            <SheetDescription>{tUi("Configure insight grouping and webhook settings.")}</SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto">
             <Card className="mx-5 my-4 border-muted-foreground/20 bg-card"><CardContent className="p-6">
@@ -600,8 +581,8 @@ export default function AiInsightsManagerPage() {
             </CardContent></Card>
           </div>
           <SheetFooter className="px-6 py-4 border-t border-border flex flex-row justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpenGroupEditor(false)}>Cancel</Button>
-            <Button type="submit" form="group-editor-form">{editingGroup ? "Save" : "Create"}</Button>
+            <Button type="button" variant="outline" onClick={() => setOpenGroupEditor(false)}>{tUi("Cancel")}</Button>
+            <Button type="submit" form="group-editor-form">{editingGroup ? tUi("Save") : tUi("Create")}</Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>
@@ -613,6 +594,7 @@ export default function AiInsightsManagerPage() {
 // ------------------ Insight Editor ------------------
 
 function InsightEditor({ insight, onCancel, onSaved }) {
+  const tUi = useUiText();
   const isEdit = !!insight?.id;
   const [name, setName] = useState(insight?.name || "");
   const [mode, setMode] = useState(
@@ -718,15 +700,15 @@ function InsightEditor({ insight, onCancel, onSaved }) {
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs">Name</label>
+          <label className="text-xs">{tUi("Name")}</label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="save_data"
+            placeholder={tUi("save_data")}
           />
         </div>
         <div>
-          <label className="text-xs">Webhook URL (optional)</label>
+          <label className="text-xs">{tUi("Webhook URL (optional)")}</label>
           <Input
             value={webhook}
             onChange={(e) => setWebhook(e.target.value)}
@@ -744,9 +726,7 @@ function InsightEditor({ insight, onCancel, onSaved }) {
               : "bg-background"
           }`}
           onClick={() => setMode("instructions")}
-        >
-          Instructions
-        </button>
+        >{tUi("Instructions")}</button>
         <button
           type="button"
           className={`px-3 py-1 text-sm border-l ${
@@ -755,24 +735,22 @@ function InsightEditor({ insight, onCancel, onSaved }) {
               : "bg-background"
           }`}
           onClick={() => setMode("structured")}
-        >
-          Structured data
-        </button>
+        >{tUi("Structured data")}</button>
       </div>
 
       {mode === "instructions" ? (
         <div>
-          <label className="text-xs">Instructions</label>
+          <label className="text-xs">{tUi("Instructions")}</label>
           <Textarea
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
-            placeholder="What the assistant should extract or compute"
+            placeholder={tUi("What the assistant should extract or compute")}
             className="min-h-[120px]"
           />
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="text-sm font-medium">Parameters</div>
+          <div className="text-sm font-medium">{tUi("Parameters")}</div>
           <div className="rounded-md border">
             <ScrollArea className="h-[300px] w-full">
               <div className="divide-y">
@@ -782,17 +760,17 @@ function InsightEditor({ insight, onCancel, onSaved }) {
                     className="grid grid-cols-1 md:grid-cols-12 gap-2 p-2 items-start"
                   >
                     <div className="md:col-span-3">
-                      <Label className="text-xs">Name</Label>
+                      <Label className="text-xs">{tUi("Name")}</Label>
                       <Input
                         value={p.name}
                         onChange={(e) =>
                           updateParam(idx, { name: e.target.value })
                         }
-                        placeholder="name"
+                        placeholder={tUi("name")}
                       />
                     </div>
                     <div className="md:col-span-3">
-                      <Label className="text-xs">Type</Label>
+                      <Label className="text-xs">{tUi("Type")}</Label>
                       <Select
                         value={p.type || "string"}
                         onValueChange={(value) =>
@@ -805,16 +783,14 @@ function InsightEditor({ insight, onCancel, onSaved }) {
                         <SelectContent>
                           {PARAM_TYPES.map((t) => (
                             <SelectItem key={t.value} value={t.value}>
-                              {t.label}
+                              {tUi(t.label)}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-xs" htmlFor={`req-${idx}`}>
-                        Required
-                      </Label>
+                      <Label className="text-xs" htmlFor={`req-${idx}`}>{tUi("Required")}</Label>
                       <div className="pt-1">
                         <Switch
                           id={`req-${idx}`}
@@ -826,26 +802,24 @@ function InsightEditor({ insight, onCancel, onSaved }) {
                       </div>
                     </div>
                     <div className="md:col-span-12">
-                      <Label className="text-xs">Description</Label>
+                      <Label className="text-xs">{tUi("Description")}</Label>
                       <Input
                         value={p.description || ""}
                         onChange={(e) =>
                           updateParam(idx, { description: e.target.value })
                         }
-                        placeholder="What this parameter represents"
+                        placeholder={tUi("What this parameter represents")}
                       />
                     </div>
                     {p.type === "enum" && (
                       <div className="md:col-span-12">
-                        <Label className="text-xs">
-                          Allowed values (comma separated)
-                        </Label>
+                        <Label className="text-xs">{tUi("Allowed values (comma separated)")}</Label>
                         <Input
                           value={p.enumValues || ""}
                           onChange={(e) =>
                             updateParam(idx, { enumValues: e.target.value })
                           }
-                          placeholder="pending, accepted, rejected"
+                          placeholder={tUi("pending, accepted, rejected")}
                         />
                       </div>
                     )}
@@ -860,9 +834,7 @@ function InsightEditor({ insight, onCancel, onSaved }) {
                               list.filter((_, i) => i !== idx)
                             )
                           }
-                        >
-                          Remove
-                        </Button>
+                        >{tUi("Remove")}</Button>
                       </div>
                     </div>
                   </div>
@@ -884,8 +856,7 @@ function InsightEditor({ insight, onCancel, onSaved }) {
                       ])
                     }
                   >
-                    <IconPlus className="mr-1 size-4" /> Add parameter
-                  </Button>
+                    <IconPlus className="mr-1 size-4" />{tUi(" Add parameter")}</Button>
                 </div>
               </div>
             </ScrollArea>
@@ -901,6 +872,7 @@ function InsightEditor({ insight, onCancel, onSaved }) {
 // ------------------ Group Editor ------------------
 
 function GroupEditor({ group, insights, onCancel, onSaved }) {
+  const tUi = useUiText();
   const isEdit = !!group?.id;
   const [name, setName] = useState(group?.name || "");
   const [webhook, setWebhook] = useState(group?.webhook || "");
@@ -1002,15 +974,15 @@ function GroupEditor({ group, insights, onCancel, onSaved }) {
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs">Name</label>
+          <label className="text-xs">{tUi("Name")}</label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Default Group"
+            placeholder={tUi("Default Group")}
           />
         </div>
         <div>
-          <label className="text-xs">Webhook URL (optional)</label>
+          <label className="text-xs">{tUi("Webhook URL (optional)")}</label>
           <Input
             value={webhook}
             onChange={(e) => setWebhook(e.target.value)}
@@ -1020,8 +992,7 @@ function GroupEditor({ group, insights, onCancel, onSaved }) {
       </div>
 
       <div className="text-sm font-medium flex items-center gap-1">
-        <IconListCheck className="size-4 text-telnyx-green" /> Assign Insights
-      </div>
+        <IconListCheck className="size-4 text-telnyx-green" />{tUi(" Assign Insights")}</div>
       <div className="rounded-md border h-72">
         <ScrollArea className="h-72 w-full">
           <div className="p-2 space-y-1">
@@ -1043,17 +1014,13 @@ function GroupEditor({ group, insights, onCancel, onSaved }) {
               );
             })}
             {insights.length === 0 && (
-              <div className="text-xs text-muted-foreground px-2 py-1">
-                No insights available. Create an insight first.
-              </div>
+              <div className="text-xs text-muted-foreground px-2 py-1">{tUi("No insights available. Create an insight first.")}</div>
             )}
           </div>
         </ScrollArea>
       </div>
       {!atLeastOne && (
-        <div className="text-xs text-red-500">
-          At least one insight is required.
-        </div>
+        <div className="text-xs text-red-500">{tUi("At least one insight is required.")}</div>
       )}
 
       <input type="hidden" disabled={saving || !name.trim() || !atLeastOne} />

@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +65,7 @@ function formatDateTime(value) {
 // Per-run report body, rendered inside an accordion when the row is expanded.
 // Mirrors the stat tiles the Dashboard "Report" view used to show.
 function RunReportPanel({ runId }) {
+  const tUi = useUiText();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -108,12 +112,12 @@ function RunReportPanel({ runId }) {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <MetricCard icon={IconPhoneCall} label="Total" value={summary.total ?? 0} tone="sky" />
-        <MetricCard icon={IconActivity} label="Correlated" value={summary.correlated ?? 0} tone="violet" />
-        <MetricCard icon={IconHeadphones} label="Answered" value={summary.answered ?? 0} tone="emerald" />
-        <MetricCard icon={IconPhoneOff} label="Abandoned" value={summary.abandoned ?? 0} tone="amber" />
-        <MetricCard icon={IconAlertTriangle} label="Failed" value={summary.failed ?? 0} tone="rose" />
-        <MetricCard icon={IconActivity} label="Avg wait (s)" value={summary.avgWaitSecs ?? "—"} tone="sky" />
+        <MetricCard icon={IconPhoneCall} label={tUi("Total")} value={summary.total ?? 0} tone="sky" />
+        <MetricCard icon={IconActivity} label={tUi("Correlated")} value={summary.correlated ?? 0} tone="violet" />
+        <MetricCard icon={IconHeadphones} label={tUi("Answered")} value={summary.answered ?? 0} tone="emerald" />
+        <MetricCard icon={IconPhoneOff} label={tUi("Abandoned")} value={summary.abandoned ?? 0} tone="amber" />
+        <MetricCard icon={IconAlertTriangle} label={tUi("Failed")} value={summary.failed ?? 0} tone="rose" />
+        <MetricCard icon={IconActivity} label={tUi("Avg wait (s)")} value={summary.avgWaitSecs ?? "—"} tone="sky" />
       </div>
 
       {Object.keys(queues).length ? (
@@ -130,24 +134,25 @@ function RunReportPanel({ runId }) {
         <div className="space-y-2">
           {assertions.map((a, idx) => (
             <div key={idx} className="flex items-center justify-between rounded-lg border bg-background/70 px-3 py-2 text-sm">
-              <span className="font-mono text-xs">{a.type}{a.queue ? ` → ${a.queue}` : ""}{a.seconds ? ` ≤ ${a.seconds}s` : ""}{a.percent !== undefined ? ` ${a.percent}%` : ""}</span>
+              <span className="font-mono text-xs">{a.type}{a.queue ? tUi(" → {value0}", { value0: a.queue }) : ""}{a.seconds ? tUi(" ≤ {value0}s", { value0: a.seconds }) : ""}{a.percent !== undefined ? tUi(" {value0}%", { value0: a.percent }) : ""}</span>
               <span className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{a.detail}</span>
                 <Badge variant="outline" className={a.passed ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"}>
-                  {a.passed ? "PASS" : "FAIL"}
+                  {a.passed ? tUi("PASS") : tUi("FAIL")}
                 </Badge>
               </span>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No assertions configured on this scenario. Add them in the scenario config to get pass/fail evaluation.</p>
+        <p className="text-xs text-muted-foreground">{tUi("No assertions configured on this scenario. Add them in the scenario config to get pass/fail evaluation.")}</p>
       )}
     </div>
   );
 }
 
 export default function CallGeneratorLogsView({ refreshNonce = 0 }) {
+  const tUi = useUiText();
   const [runs, setRuns] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -193,10 +198,10 @@ export default function CallGeneratorLogsView({ refreshNonce = 0 }) {
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h4 className="text-sm font-semibold">Run logs</h4>
-            <p className="text-xs text-muted-foreground">Completed, stopped, failed and abandoned runs. Expand a run to see its report.</p>
+            <h4 className="text-sm font-semibold">{tUi("Run logs")}</h4>
+            <p className="text-xs text-muted-foreground">{tUi("Completed, stopped, failed and abandoned runs. Expand a run to see its report.")}</p>
           </div>
-          <Badge variant="outline" className="bg-card">{total} total</Badge>
+          <Badge variant="outline" className="bg-card">{total}{tUi(" total")}</Badge>
         </div>
 
         {loading ? (
@@ -206,7 +211,7 @@ export default function CallGeneratorLogsView({ refreshNonce = 0 }) {
         ) : error ? (
           <p className="mt-4 text-sm text-rose-600 dark:text-rose-300">{error}</p>
         ) : runs.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No historical runs yet. Completed runs from the Dashboard will appear here.</p>
+          <p className="mt-4 text-sm text-muted-foreground">{tUi("No historical runs yet. Completed runs from the Dashboard will appear here.")}</p>
         ) : (
           <Accordion type="multiple" className="mt-3 rounded-xl border">
             {runs.map((run) => {
@@ -224,9 +229,9 @@ export default function CallGeneratorLogsView({ refreshNonce = 0 }) {
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
-                          {completed ? `✓${completed} ` : ""}{failed ? `✗${failed} ` : ""}{abandoned ? `⊘${abandoned}` : ""}
+                          {completed ? tUi("✓{value0} ", { value0: completed }) : ""}{failed ? tUi("✗{value0} ", { value0: failed }) : ""}{abandoned ? tUi("⊘{value0}", { value0: abandoned }) : ""}
                         </span>
-                        <Badge variant="outline" className={statusBadgeClass(run.status)}>{run.status}</Badge>
+                        <Badge variant="outline" className={statusBadgeClass(run.status)}>{operationalStatusLabel(tUi, run.status)}</Badge>
                       </div>
                     </div>
                   </AccordionTrigger>
@@ -242,7 +247,7 @@ export default function CallGeneratorLogsView({ refreshNonce = 0 }) {
         {/* Pager */}
         <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Rows per page</span>
+            <span>{tUi("Rows per page")}</span>
             <div className="flex overflow-hidden rounded-lg border">
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <button
@@ -259,14 +264,14 @@ export default function CallGeneratorLogsView({ refreshNonce = 0 }) {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground tabular-nums">
-              {rangeStart}–{rangeEnd} of {total}
+              {rangeStart}–{rangeEnd}{tUi(" of ")}{total}
             </span>
             <div className="flex items-center gap-1">
-              <Button size="icon" variant="outline" className="h-8 w-8" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">
+              <Button size="icon" variant="outline" className="h-8 w-8" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label={tUi("Previous page")}>
                 {loading ? <IconLoader2 className="h-3.5 w-3.5 animate-spin" /> : <IconChevronLeft className="h-4 w-4" />}
               </Button>
               <span className="px-1 text-xs tabular-nums text-muted-foreground">{page} / {totalPages}</span>
-              <Button size="icon" variant="outline" className="h-8 w-8" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label="Next page">
+              <Button size="icon" variant="outline" className="h-8 w-8" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-label={tUi("Next page")}>
                 {loading ? <IconLoader2 className="h-3.5 w-3.5 animate-spin" /> : <IconChevronRight className="h-4 w-4" />}
               </Button>
             </div>

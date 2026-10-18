@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -7,6 +9,7 @@ import Combobox from "@/components/ui/combobox";
 import { IconRobot } from "@tabler/icons-react";
 
 export default function HandoffToolEditor({ value, onChange }) {
+  const tUi = useUiText();
   const ho = value?.handoff || {};
   const list = Array.isArray(ho.ai_assistants) ? ho.ai_assistants : [];
   const [assistantOptions, setAssistantOptions] = useState([]);
@@ -44,40 +47,36 @@ export default function HandoffToolEditor({ value, onChange }) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-xs">Voice Mode</label>
+        <label className="text-xs">{tUi("Voice Mode")}</label>
         <div className="mt-1">
           <Tabs
             defaultValue={ho.voice_mode || "unified"}
             onValueChange={(val) => update({ voice_mode: val })}
           >
-            <TabsList className="w-full">
-              <TabsTrigger value="unified" className="flex-1">
-                Unified
-              </TabsTrigger>
-              <TabsTrigger value="distinct" className="flex-1">
-                Distinct
-              </TabsTrigger>
+            <TabsList>
+              <TabsTrigger value="unified">{tUi("Unified")}</TabsTrigger>
+              <TabsTrigger value="distinct">{tUi("Distinct")}</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
       <div className="space-y-2">
-        <div className="text-xs">Name</div>
+        <div className="text-xs">{tUi("Name")}</div>
         <Input
-          placeholder="Name"
+          placeholder={tUi("Name")}
           value={selected?.name || ""}
           onChange={(e) =>
             update({ ai_assistants: [{ ...selected, name: e.target.value }] })
           }
         />
-        <div className="text-xs mt-3">Assistant</div>
+        <div className="text-xs mt-3">{tUi("Assistant")}</div>
         <Combobox
           value={selected?.id || ""}
           onChange={(val) =>
             update({ ai_assistants: [{ ...selected, id: val }] })
           }
           options={assistantOptions}
-          placeholder="Select assistant…"
+          placeholder={tUi("Select assistant…")}
           triggerClassName="w-full"
           searchable
         />

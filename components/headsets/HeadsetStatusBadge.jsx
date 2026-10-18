@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef } from "react";
 import {
@@ -53,14 +55,15 @@ function connectionCopy(status) {
   return "No headset connected";
 }
 
-function deviceLabel(device, status) {
+function deviceLabel(device, status, tUi) {
   if (device?.model) return device.model;
-  if (device?.vendorLabel && status === "service-connected") return `${device.vendorLabel} service ready`;
-  if (device?.vendorLabel) return `${device.vendorLabel} headset`;
-  return connectionCopy(status);
+  if (device?.vendorLabel && status === "service-connected") return tUi("{value0} service ready", { value0: device.vendorLabel });
+  if (device?.vendorLabel) return tUi("{value0} headset", { value0: device.vendorLabel });
+  return tUi(connectionCopy(status));
 }
 
 function DeviceArtworkCard({ entry, active }) {
+  const tUi = useUiText();
   return (
     <div
       className={`group relative overflow-hidden rounded-2xl border p-4 transition-all ${
@@ -73,15 +76,15 @@ function DeviceArtworkCard({ entry, active }) {
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-foreground">{entry.name}</div>
-          <div className="mt-1 text-xs text-muted-foreground">{entry.status}</div>
+          <div className="text-sm font-semibold text-foreground">{tUi(entry.name)}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{tUi(entry.status)}</div>
         </div>
         {active ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {entry.capabilities.map((capability) => (
           <span key={capability} className="rounded-full border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground">
-            {capability}
+            {tUi(capability)}
           </span>
         ))}
       </div>
@@ -90,6 +93,7 @@ function DeviceArtworkCard({ entry, active }) {
 }
 
 export function HeadsetStatusBadge() {
+  const tUi = useUiText();
   const serviceRef = useRef(null);
   const enabled = useMemo(() => isHeadsetIntegrationEnabled(), []);
   const { device, diagnostics, setEnabled, setStatus, setDevice, recordCommand, recordDiagnostic } = useHeadsetStore();
@@ -170,8 +174,8 @@ export function HeadsetStatusBadge() {
         <button
           type="button"
           className={`relative h-7 w-7 rounded-full border grid place-items-center transition-colors hover:bg-muted/70 ${statusClasses(status)}`}
-          title={deviceLabel(device, status)}
-          aria-label="Headset controls"
+          title={deviceLabel(device, status, tUi)}
+          aria-label={tUi("Headset controls")}
         >
           <Headphones className="h-4 w-4" />
           {status === "connected" ? (
@@ -183,7 +187,7 @@ export function HeadsetStatusBadge() {
           ) : null}
         </button>
       </SheetTrigger>
-      <SheetContent side="right" className="w-full overflow-hidden p-0 sm:max-w-3xl bg-background">
+      <SheetContent side="end" className="w-full overflow-hidden p-0 sm:max-w-3xl bg-background">
         <div className="flex h-full flex-col">
           <SheetHeader className="border-b bg-gradient-to-br from-zinc-950 via-zinc-900 to-emerald-950/50 p-6 text-white">
             <div className="flex items-center gap-3">
@@ -191,10 +195,8 @@ export function HeadsetStatusBadge() {
                 <Headphones className="h-5 w-5" />
               </div>
               <div>
-                <SheetTitle className="text-white">Headset control center</SheetTitle>
-                <SheetDescription className="text-zinc-300">
-                  EPOS/Sennheiser and Jabra call-control bridge for the WebRTC softphone.
-                </SheetDescription>
+                <SheetTitle className="text-white">{tUi("Headset control center")}</SheetTitle>
+                <SheetDescription className="text-zinc-300">{tUi("EPOS/Sennheiser and Jabra call-control bridge for the WebRTC softphone.")}</SheetDescription>
               </div>
             </div>
           </SheetHeader>
@@ -210,29 +212,24 @@ export function HeadsetStatusBadge() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-emerald-400">Current device</div>
-                  <div className="mt-1 text-2xl font-semibold text-foreground">{deviceLabel(device, status)}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-emerald-400">{tUi("Current device")}</div>
+                  <div className="mt-1 text-2xl font-semibold text-foreground">{deviceLabel(device, status, tUi)}</div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2.5 py-1">
-                      <RadioTower className="h-3.5 w-3.5" /> {connectionCopy(status)}
+                      <RadioTower className="h-3.5 w-3.5" /> {tUi(connectionCopy(status))}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2.5 py-1">
-                      <Bluetooth className="h-3.5 w-3.5" /> {device?.transport || "EPOS Connect / WebHID"}
+                      <Bluetooth className="h-3.5 w-3.5" /> {device?.transport || tUi("EPOS Connect / WebHID")}
                     </span>
                     {typeof batteryPercent === "number" && (
                       <span className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2.5 py-1">
-                        <Battery className="h-3.5 w-3.5" /> {Math.round(batteryPercent)}% battery
-                      </span>
+                        <Battery className="h-3.5 w-3.5" /> {Math.round(batteryPercent)}{tUi("% battery")}</span>
                     )}
                   </div>
                   {status === "disabled" ? (
-                    <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
-                      Integration is disabled by configuration. It should be enabled for headset testing unless NEXT_PUBLIC_HEADSET_INTEGRATION_ENABLED=false is set.
-                    </div>
+                    <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">{tUi("Integration is disabled by configuration. It should be enabled for headset testing unless NEXT_PUBLIC_HEADSET_INTEGRATION_ENABLED=false is set.")}</div>
                   ) : status === "disconnected" || status === "service-missing" ? (
-                    <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
-                      EPOS Connect should be running and the browser must be able to reach wss://127.0.0.1:41088. If the service is reachable, this panel changes to service-ready and then connected when EPOS sends HeadsetConnected / ActiveDeviceChanged.
-                    </div>
+                    <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">{tUi("EPOS Connect should be running and the browser must be able to reach wss://127.0.0.1:41088. If the service is reachable, this panel changes to service-ready and then connected when EPOS sends HeadsetConnected / ActiveDeviceChanged.")}</div>
                   ) : null}
                 </div>
               </div>
@@ -247,28 +244,24 @@ export function HeadsetStatusBadge() {
             <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_1.2fr]">
               <div className="rounded-2xl border bg-card p-4">
                 <div className="mb-3 flex items-center gap-2 font-semibold">
-                  <Settings2 className="h-4 w-4 text-emerald-400" /> Test controls
-                </div>
+                  <Settings2 className="h-4 w-4 text-emerald-400" />{tUi(" Test controls")}</div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={requestJabraPermission}>
-                    <PlugZap className="mr-1 inline h-3.5 w-3.5" /> Add Jabra
-                  </button>
-                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("ring")}>Test ring</button>
-                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("muteOn")}>Mute LED on</button>
-                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("muteOff")}>Mute LED off</button>
-                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("holdOn")}>Hold on</button>
-                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("reset")}>Reset</button>
+                    <PlugZap className="mr-1 inline h-3.5 w-3.5" />{tUi(" Add Jabra")}</button>
+                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("ring")}>{tUi("Test ring")}</button>
+                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("muteOn")}>{tUi("Mute LED on")}</button>
+                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("muteOff")}>{tUi("Mute LED off")}</button>
+                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("holdOn")}>{tUi("Hold on")}</button>
+                  <button className="rounded-md border px-3 py-2 hover:bg-muted" type="button" onClick={() => testCommand("reset")}>{tUi("Reset")}</button>
                 </div>
               </div>
 
               <div className="rounded-2xl border bg-card p-4">
                 <div className="mb-3 flex items-center gap-2 font-semibold">
-                  <Zap className="h-4 w-4 text-emerald-400" /> Diagnostics
-                </div>
+                  <Zap className="h-4 w-4 text-emerald-400" />{tUi(" Diagnostics")}</div>
                 {diagnostics.length === 0 ? (
                   <div className="flex items-center gap-2 rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-                    <Wifi className="h-4 w-4" /> Waiting for headset service events.
-                  </div>
+                    <Wifi className="h-4 w-4" />{tUi(" Waiting for headset service events.")}</div>
                 ) : (
                   <div className="max-h-56 space-y-1 overflow-auto text-xs">
                     {diagnostics.map((entry, index) => (
@@ -284,10 +277,7 @@ export function HeadsetStatusBadge() {
 
             <div className="mt-6 rounded-2xl border bg-card p-4 text-xs text-muted-foreground">
               <div className="mb-2 flex items-center gap-2 font-semibold text-foreground">
-                <CircleAlert className="h-4 w-4 text-amber-400" /> Expected EPOS behavior
-              </div>
-              After EPOS Connect is running, the app opens the local EPOS websocket, registers Telnyx Contact Center as a softphone, asks for the active device, and should show the BTD 800 / MB Pro 2 as connected. During calls it should sync ring, answer, hangup, mute and hold states both ways.
-            </div>
+                <CircleAlert className="h-4 w-4 text-amber-400" />{tUi(" Expected EPOS behavior")}</div>{tUi("After EPOS Connect is running, the app opens the local EPOS websocket, registers Telnyx Contact Center as a softphone, asks for the active device, and should show the BTD 800 / MB Pro 2 as connected. During calls it should sync ring, answer, hangup, mute and hold states both ways.")}</div>
           </div>
         </div>
       </SheetContent>

@@ -1,3 +1,5 @@
+import { assistantSummarySystem } from '../../../../../../lib/ai-operations/prompts/core.mjs';
+import { prepareAiOperation } from '@/lib/ai-operations/runtime.mjs';
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
@@ -49,13 +51,7 @@ async function POST_handler(request, context) {
       : 0;
     const dynamicVariableCount = Object.keys(assistant.dynamic_variables || {}).length;
 
-    const systemPrompt = `You are a Telnyx AI assistant solution architect. Generate a polished executive dashboard use-case summary for an AI assistant review screen.
-
-Rules:
-- Return one concise paragraph, 55-90 words.
-- Mention what the assistant is for, what channels/capabilities it appears configured for, and why the setup is valuable.
-- Use confident product language, but do not invent numbers or claims not present in the configuration.
-- Do not use markdown headings. Avoid bullet points.`;
+    const systemPrompt = assistantSummarySystem();
 
     const userPrompt = `Assistant ID: ${compact(id, "draft")}
 Name: ${compact(assistant.name, "Unnamed assistant")}
@@ -76,9 +72,6 @@ Instructions: ${truncate(assistant.instructions)}`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      model:
-        process.env.TELNYX_AI_DASHBOARD_SUMMARY_MODEL ||
-        "meta-llama/Llama-3.3-70B-Instruct",
       max_tokens: 180,
       temperature: 0.35,
       stream: false,
@@ -96,7 +89,7 @@ Instructions: ${truncate(assistant.instructions)}`;
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(chatPayload),
+      body: JSON.stringify(await prepareAiOperation("assistant-summary", chatPayload)),
       cache: "no-store",
     });
 

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +55,7 @@ export default function WebhookTestSheet({
   standaloneToolId,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [testError, setTestError] = useState(null);
@@ -269,8 +272,7 @@ export default function WebhookTestSheet({
           className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
         >
           <IconCheck className="h-3 w-3 mr-1" />
-          {statusCode} OK
-        </Badge>
+          {statusCode}{tUi(" OK")}</Badge>
       );
     } else {
       return (
@@ -279,8 +281,7 @@ export default function WebhookTestSheet({
           className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
         >
           <IconAlertCircle className="h-3 w-3 mr-1" />
-          {statusCode} Error
-        </Badge>
+          {statusCode}{tUi(" Error")}</Badge>
       );
     }
   };
@@ -294,12 +295,10 @@ export default function WebhookTestSheet({
       <SheetContent className="w-[600px] sm:w-[700px] overflow-y-auto mb-4">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <IconFlask className="h-5 w-5 text-blue-500" />
-            Test Webhook
-          </SheetTitle>
+            <IconFlask className="h-5 w-5 text-blue-500" />{tUi("Test Webhook")}</SheetTitle>
           <SheetDescription>
             {webhookConfig?.description ||
-              "Test your webhook configuration with sample data"}
+              tUi("Test your webhook configuration with sample data")}
           </SheetDescription>
         </SheetHeader>
 
@@ -309,9 +308,7 @@ export default function WebhookTestSheet({
             <CardHeader className="pb-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <IconSettings className="h-4 w-4" />
-                  Request Configuration
-                </CardTitle>
+                  <IconSettings className="h-4 w-4" />{tUi("Request Configuration")}</CardTitle>
                 <Button
                   onClick={handleTestRequest}
                   disabled={isTesting}
@@ -320,27 +317,23 @@ export default function WebhookTestSheet({
                 >
                   {isTesting ? (
                     <>
-                      <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Testing...
-                    </>
+                      <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />{tUi("Testing...")}</>
                   ) : (
                     <>
-                      <IconFlask className="h-4 w-4 mr-2" />
-                      Test
-                    </>
+                      <IconFlask className="h-4 w-4 mr-2" />{tUi("Test")}</>
                   )}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label className="text-xs">Tool Configuration</Label>
+                <Label className="text-xs">{tUi("Tool Configuration")}</Label>
                 <div className="mt-1 px-3 py-2 bg-muted rounded-md text-sm">
                   <div className="font-mono">
-                    {webhookConfig.name || "Unnamed Tool"}
+                    {webhookConfig.name || tUi("Unnamed Tool")}
                   </div>
                   <div className="text-muted-foreground">
-                    {webhookConfig.description || "No description"}
+                    {webhookConfig.description || tUi("No description")}
                   </div>
                 </div>
               </div>
@@ -348,7 +341,7 @@ export default function WebhookTestSheet({
               {/* Tool Parameters */}
               {Object.keys(testArguments).length > 0 && (
                 <div>
-                  <Label className="text-xs">Tool Parameters</Label>
+                  <Label className="text-xs">{tUi("Tool Parameters")}</Label>
                   <div className="space-y-2 mt-2">
                     {Object.keys(testArguments).map((key) => {
                       // Get parameter description and type from webhook config
@@ -380,7 +373,7 @@ export default function WebhookTestSheet({
                                   }
                                   className="w-4 h-4"
                                 />
-                                <span className="text-sm">True</span>
+                                <span className="text-sm">{tUi("True")}</span>
                               </label>
                               <label className="flex items-center gap-2 cursor-pointer">
                                 <input
@@ -392,7 +385,7 @@ export default function WebhookTestSheet({
                                   }
                                   className="w-4 h-4"
                                 />
-                                <span className="text-sm">False</span>
+                                <span className="text-sm">{tUi("False")}</span>
                               </label>
                             </div>
                           ) : (
@@ -411,7 +404,7 @@ export default function WebhookTestSheet({
                               onChange={(e) =>
                                 handleArgumentChange(key, e.target.value)
                               }
-                              placeholder={`Enter ${key}`}
+                              placeholder={tUi("Enter {value0}", { value0: key })}
                               className="mt-1"
                             />
                           )}
@@ -442,18 +435,14 @@ export default function WebhookTestSheet({
                 <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-3">
                   <div className="flex items-center gap-2">
                     <IconEye className="h-3 w-3 text-green-600" />
-                    <CardTitle className="text-sm font-semibold">
-                      Request Preview
-                    </CardTitle>
+                    <CardTitle className="text-sm font-semibold">{tUi("Request Preview")}</CardTitle>
                     <IconChevronRight
                       className={`h-3 w-3 transition-transform ${
                         expandedRequest ? "rotate-90" : ""
                       }`}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    How your request will be sent to the webhook
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{tUi("How your request will be sent to the webhook")}</p>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
@@ -462,7 +451,7 @@ export default function WebhookTestSheet({
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <IconWorld className="h-3 w-3 text-blue-600" />
-                      <Label className="text-xs font-medium">URL</Label>
+                      <Label className="text-xs font-medium">{tUi("URL")}</Label>
                     </div>
                     <div className="p-3 bg-muted/50 rounded border">
                       <code className="text-xs font-mono break-all text-foreground">
@@ -475,11 +464,11 @@ export default function WebhookTestSheet({
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <IconSettings className="h-3 w-3 text-purple-600" />
-                      <Label className="text-xs font-medium">Method</Label>
+                      <Label className="text-xs font-medium">{tUi("Method")}</Label>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="text-xs px-2 py-1">
-                        {webhookConfig.method || "POST"}
+                        {webhookConfig.method || tUi("POST")}
                       </Badge>
                     </div>
                   </div>
@@ -491,8 +480,8 @@ export default function WebhookTestSheet({
                         <IconVariable className="h-3 w-3 text-orange-600" />
                         <Label className="text-xs font-medium">
                           {webhookConfig.method === "GET"
-                            ? "Query Parameters"
-                            : "Parameters"}
+                            ? tUi("Query Parameters")
+                            : tUi("Parameters")}
                         </Label>
                         <Badge variant="secondary" className="text-xs">
                           {Object.keys(testArguments).length}
@@ -544,7 +533,7 @@ export default function WebhookTestSheet({
               <CardContent className="pt-4">
                 <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                   <IconAlertCircle className="h-4 w-4" />
-                  <span className="font-medium">Test Failed</span>
+                  <span className="font-medium">{tUi("Test Failed")}</span>
                 </div>
                 <p className="text-sm text-red-600 dark:text-red-400 mt-2">
                   {testError}
@@ -557,25 +546,19 @@ export default function WebhookTestSheet({
             <Card className="mb-4">
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <IconCheck className="h-4 w-4 text-green-500" />
-                  Response
-                  {getStatusBadge(testResult.success, testResult.status_code)}
+                  <IconCheck className="h-4 w-4 text-green-500" />{tUi("Response")}{getStatusBadge(testResult.success, testResult.status_code)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Content Type
-                    </Label>
+                    <Label className="text-xs text-muted-foreground">{tUi("Content Type")}</Label>
                     <div className="mt-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
-                      {testResult.content_type || "application/json"}
+                      {testResult.content_type || tUi("application/json")}
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">
-                      Response Body
-                    </Label>
+                    <Label className="text-xs text-muted-foreground">{tUi("Response Body")}</Label>
                     <div className="mt-2 border rounded-md h-[200px] overflow-auto">
                       <CodeBlock
                         language="json"

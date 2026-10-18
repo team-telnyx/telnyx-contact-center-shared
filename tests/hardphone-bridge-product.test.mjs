@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import { createPhoneSipConnection, phoneConnectionUserName } from "../lib/hardphones/credentials.mjs";
 
 async function file(path) {

@@ -3,6 +3,11 @@
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 
+/* Build caches contain binary fragments, not Tailwind class names.
+   Keep them excluded even when Git ignore rules are unavailable. */
+@source not "../tmp";
+@source not "../.next*";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -954,4 +959,23 @@
 @container (max-width: 1050px) {
   .cc-app-header:has(.cc-header-interaction) [data-testid="agent-status"] { width: 135px; }
   .cc-app-header:has(.cc-header-interaction) [data-testid="campaign-activation"] { width: 130px; }
+}
+
+/* Arabic/Hebrew text uses fonts with suitable shaping and generous line height. */
+html[dir="rtl"] body {
+  font-family: "Noto Sans Arabic", "Noto Sans Hebrew", Tahoma, Arial, sans-serif;
+}
+input[type="tel"], input[type="email"], input[type="url"], pre, code {
+  unicode-bidi: isolate;
+}
+
+/* Device handoff journey (components/contact-center/handoff): a ringing device's halo and wiggle */
+@keyframes handoff-halo {
+  from { transform: scale(1); opacity: 0.5; }
+  to { transform: scale(1.35); opacity: 0; }
+}
+@keyframes handoff-wiggle {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30%, 50% { transform: rotate(-9deg); }
+  20%, 40% { transform: rotate(9deg); }
 }

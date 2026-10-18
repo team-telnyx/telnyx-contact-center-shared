@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -44,6 +46,7 @@ import { Switch } from "@/components/ui/switch";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { notify } from "@/components/ToastNotify";
 import { canonicalTopicFor, LOGGING_TOPIC_GROUPS } from "@/lib/logger/topic-catalog.mjs";
+import { RAW_LOG_VIEWER_AVAILABLE } from "@/lib/deployment-capabilities.mjs";
 
 const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
 const LOG_FILTER_LEVELS = ["", ...LEVELS];
@@ -57,7 +60,7 @@ const NAV_ITEMS = [
   { id: "live", label: "Live", icon: IconActivity, description: "Log Viewer" },
   { id: "files", label: "Files", icon: IconFileText, description: "JSONL log files" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Runtime logging controls" },
-];
+].filter((item) => RAW_LOG_VIEWER_AVAILABLE || item.id === "settings");
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 const LOGGING_FILTER_STATE_STORAGE_KEY = "admin.logging.filters.v1";
 const DEFAULT_LOG_FILTERS = { file: "", level: "", topics: [], nodeName: "", runId: "", search: "", from: "", to: "", limit: "100" };
@@ -188,8 +191,9 @@ function mutableConfigPayload(config) {
 }
 
 export default function AdminLoggingPage() {
+  const tUi = useUiText();
   const router = useRouter();
-  const [active, setActive] = React.useState("live");
+  const [active, setActive] = React.useState(RAW_LOG_VIEWER_AVAILABLE ? "live" : "settings");
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [config, setConfig] = React.useState(null);
@@ -269,6 +273,7 @@ export default function AdminLoggingPage() {
   }, [persistTopicPreferencesRemote]);
 
   const loadLogs = React.useCallback(async (filterOverrides = {}) => {
+    if (!RAW_LOG_VIEWER_AVAILABLE) return;
     setLogsLoading(true);
     try {
       const fileParams = new URLSearchParams({ mode: "files", limit: "30" });
@@ -314,7 +319,7 @@ export default function AdminLoggingPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
-    if (active !== "live") return undefined;
+    if (!RAW_LOG_VIEWER_AVAILABLE || active !== "live") return undefined;
     const params = new URLSearchParams({ latest: "1", limit: logFilters.limit || "100" });
     appendLogFilterParams(params, {
       level: logFilters.level,
@@ -470,32 +475,29 @@ export default function AdminLoggingPage() {
   const headerActions = (
     <>
       <Button variant="outline" size="sm" onClick={() => { loadConfig(); loadLogs(); }} disabled={loading || saving || logsLoading}>
-        <IconRefresh className={`mr-2 h-4 w-4 ${loading || logsLoading ? "animate-spin" : ""}`} />Refresh
-      </Button>
+        <IconRefresh className={`mr-2 h-4 w-4 ${loading || logsLoading ? "animate-spin" : ""}`} />{tUi("Refresh")}</Button>
       <Button size="sm" className={neutralActionClass} onClick={save} disabled={loading || saving || !config}>
-        {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconCheck className="mr-2 h-4 w-4" />}
-        Save changes
-      </Button>
+        {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconCheck className="mr-2 h-4 w-4" />}{tUi("Save changes")}</Button>
     </>
   );
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Logging" actions={headerActions} />
+      <AdminPageHeader title={tUi("Logging")} actions={headerActions} />
       <LoggingConfirmationDialog confirmation={confirmation} onCancel={closeConfirmation} onConfirm={runConfirmedAction} saving={saving} />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
-        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel="Logging sections" />
+        <SectionRail fixedItems={[SYSTEM_EXIT_ITEM]} items={NAV_ITEMS} activeId={active} onSelect={(id) => id === "exit" ? router.push("/admin/system") : setActive(id)} ariaLabel={tUi("Logging sections")} />
         <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">
           <div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold">{activeMeta.label}</h2>
-              <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
+              <h2 className="text-sm font-semibold">{tUi(activeMeta.label)}</h2>
+              <p className="text-xs text-muted-foreground">{tUi(activeMeta.description)}</p>
             </div>
-            {active === "live" ? <Badge variant="outline" className="bg-background/80">{liveConnected ? "Live SSE" : "Connecting"}</Badge> : null}
-            {active === "files" ? <Badge variant="outline" className="bg-background/80">{logFilters.file || currentFile?.name || "Select file"}</Badge> : null}
+            {active === "live" ? <Badge variant="outline" className="bg-background/80">{liveConnected ? tUi("Live SSE") : tUi("Connecting")}</Badge> : null}
+            {active === "files" ? <Badge variant="outline" className="bg-background/80">{logFilters.file || currentFile?.name || tUi("Select file")}</Badge> : null}
           </div>
           <div className="flex-1 min-h-0 overflow-hidden p-5">
-            {loading && !config ? <LoadingState /> : !config ? <EmptyState title="Logging unavailable" description="Runtime logging configuration could not be loaded." /> : active === "settings" ? (
+            {loading && !config ? <LoadingState /> : !config ? <EmptyState title={tUi("Logging unavailable")} description={tUi("Runtime logging configuration could not be loaded.")} /> : active === "settings" ? (
               <SettingsView config={config} topicGroups={topicGroups} updateConfig={updateConfig} updateTopic={updateTopic} applyPreset={applyPreset} saving={saving} />
             ) : active === "files" ? (
               <FileLogView entries={logEntries} loading={logsLoading} meta={logMeta} fileSize={currentFile?.size} files={logFiles} />
@@ -506,10 +508,10 @@ export default function AdminLoggingPage() {
         </section>
         <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
           <PanelHeader
-            title={active === "settings" ? "Runtime controls" : active === "files" ? "File filters" : "Live filters"}
-            description={active === "settings" ? "Sinks, presets and topic policy" : active === "files" ? "Choose a JSONL source" : "Filter the active preview"}
+            title={active === "settings" ? tUi("Runtime controls") : active === "files" ? tUi("File filters") : tUi("Live filters")}
+            description={active === "settings" ? tUi("Sinks, presets and topic policy") : active === "files" ? tUi("Choose a JSONL source") : tUi("Filter the active preview")}
           />
-          {active === "settings" ? <SettingsContext config={config} updateConfig={updateConfig} applyPreset={applyPreset} saving={saving} /> : <LogFiltersPanel files={logFiles} filters={logFilters} currentFile={currentFile} topicGroups={topicGroups} update={updateLogFilter} onApply={loadLogs} loading={logsLoading} />}
+          {loading && !config ? <div className="p-4"><LoadingState /></div> : !config ? <EmptyState title={tUi("Logging unavailable")} description={tUi("Runtime logging configuration could not be loaded.")} /> : active === "settings" ? <SettingsContext config={config} updateConfig={updateConfig} applyPreset={applyPreset} saving={saving} /> : <LogFiltersPanel files={logFiles} filters={logFilters} currentFile={currentFile} topicGroups={topicGroups} update={updateLogFilter} onApply={loadLogs} loading={logsLoading} />}
         </aside>
       </main>
     </AdminPageShell>
@@ -517,6 +519,7 @@ export default function AdminLoggingPage() {
 }
 
 function LoggingConfirmationDialog({ confirmation, onCancel, onConfirm, saving }) {
+  const tUi = useUiText();
   return (
     <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) onCancel(); }}>
       <AlertDialogContent>
@@ -524,15 +527,15 @@ function LoggingConfirmationDialog({ confirmation, onCancel, onConfirm, saving }
           <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/12 text-amber-600 dark:text-amber-300">
             <IconAlertTriangle className="h-5 w-5" />
           </div>
-          <AlertDialogTitle>{confirmation?.title || "Confirm logging change"}</AlertDialogTitle>
+          <AlertDialogTitle>{confirmation?.title || tUi("Confirm logging change")}</AlertDialogTitle>
           <AlertDialogDescription>
-            {confirmation?.description || "This logging change may affect operational visibility or log volume."}
+            {confirmation?.description || tUi("This logging change may affect operational visibility or log volume.")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel} disabled={saving}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel} disabled={saving}>{tUi("Cancel")}</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} disabled={saving} className="bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200">
-            {confirmation?.confirmLabel || "Continue"}
+            {confirmation?.confirmLabel || tUi("Continue")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -545,7 +548,8 @@ function LoadingState() {
 }
 
 function EmptyState({ title: emptyTitle, description }) {
-  return <div className="rounded-2xl border border-dashed bg-background/70 p-8 text-center"><div className="font-semibold">{emptyTitle}</div><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>;
+  const tUi = useUiText();
+  return <div className="rounded-2xl border border-dashed bg-background/70 p-8 text-center"><div className="font-semibold">{tUi(emptyTitle)}</div><p className="mt-1 text-sm text-muted-foreground">{tUi(description)}</p></div>;
 }
 
 function PanelHeader({ title: panelTitle, description }) {
@@ -553,6 +557,7 @@ function PanelHeader({ title: panelTitle, description }) {
 }
 
 function MiniStat({ label, value, icon: Icon, tone = "sky" }) {
+  const tUi = useUiText();
   const tones = {
     sky: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300",
     emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300",
@@ -560,7 +565,7 @@ function MiniStat({ label, value, icon: Icon, tone = "sky" }) {
     rose: "from-rose-500/18 to-red-500/5 text-rose-600 dark:text-rose-300",
     violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300",
   };
-  return <div className="rounded-2xl border bg-background/80 p-4 shadow-sm"><div className="flex items-center justify-between"><span className={`rounded-xl bg-gradient-to-br p-2.5 ${tones[tone] || tones.sky}`}><Icon className="h-5 w-5" /></span></div><div className="mt-3 text-2xl font-semibold">{value}</div><div className="mt-1 text-xs text-muted-foreground">{label}</div></div>;
+  return <div className="rounded-2xl border bg-background/80 p-4 shadow-sm"><div className="flex items-center justify-between"><span className={`rounded-xl bg-gradient-to-br p-2.5 ${tones[tone] || tones.sky}`}><Icon className="h-5 w-5" /></span></div><div className="mt-3 text-2xl font-semibold">{value}</div><div className="mt-1 text-xs text-muted-foreground">{tUi(label)}</div></div>;
 }
 
 function SettingCard({ icon: Icon, title: cardTitle, subtitle, children }) {
@@ -591,6 +596,7 @@ function effectiveTopicEnabled(topicId, groupId, config) {
 }
 
 function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPreset, saving }) {
+  const tUi = useUiText();
   const topicLevels = config.topicLevels || {};
   const topicEnabled = config.topicEnabled || {};
   const [expandedGroups, setExpandedGroups] = React.useState(() => new Set(["platform", "security", "contact-center", "voice", "telnyx"]));
@@ -624,18 +630,18 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
   return (
     <div className="space-y-5">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MiniStat label="Global level" value={String(config.globalLevel || "info").toUpperCase()} icon={IconBug} tone="sky" />
-        <MiniStat label="File sink" value={config.fileEnabled ? "On" : "Off"} icon={IconFileText} tone={config.fileEnabled ? "emerald" : "amber"} />
-        <MiniStat label="Console" value={config.consoleEnabled !== false ? "On" : "Off"} icon={IconActivity} tone="violet" />
-        <MiniStat label="Topic groups" value={topicGroups.length} icon={IconAdjustmentsHorizontal} tone="amber" />
+        <MiniStat label={tUi("Global level")} value={String(config.globalLevel || "info").toUpperCase()} icon={IconBug} tone="sky" />
+        <MiniStat label={tUi("File sink")} value={config.fileEnabled ? tUi("On") : tUi("Off")} icon={IconFileText} tone={config.fileEnabled ? "emerald" : "amber"} />
+        <MiniStat label={tUi("Console")} value={config.consoleEnabled !== false ? tUi("On") : tUi("Off")} icon={IconActivity} tone="violet" />
+        <MiniStat label={tUi("Topic groups")} value={topicGroups.length} icon={IconAdjustmentsHorizontal} tone="amber" />
       </div>
-      <SettingCard icon={IconShieldCheck} title="Runtime safety" subtitle="Backend-owned guardrails remain enforced">
+      <SettingCard icon={IconShieldCheck} title={tUi("Runtime safety")} subtitle={tUi("Backend-owned guardrails remain enforced")}>
         <div className="grid gap-3 md:grid-cols-2">
-          <ToggleRow label="Logging enabled" checked={config.enabled === true} onCheckedChange={(checked) => updateConfig({ enabled: checked })} />
-          <ToggleRow label="Redaction enforced" description="Secrets are always masked. The UI cannot disable this." checked disabled />
+          <ToggleRow label={tUi("Logging enabled")} checked={config.enabled === true} onCheckedChange={(checked) => updateConfig({ enabled: checked })} />
+          <ToggleRow label={tUi("Redaction enforced")} description={tUi("Secrets are always masked. The UI cannot disable this.")} checked disabled />
         </div>
       </SettingCard>
-      <SettingCard icon={IconAdjustmentsHorizontal} title="Topic groups" subtitle="Group-level policy with child topic overrides">
+      <SettingCard icon={IconAdjustmentsHorizontal} title={tUi("Topic groups")} subtitle={tUi("Group-level policy with child topic overrides")}>
         <div data-testid="logging-topic-groups-list" data-legacy-testid="logging-topic-levels-list" className="max-h-[min(52vh,620px)] space-y-3 overflow-y-auto pr-1">
           {topicGroups.map((group) => {
             const expanded = expandedGroups.has(group.id);
@@ -650,23 +656,23 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-semibold">{group.label}</h4>
+                      <h4 className="font-semibold">{tUi(group.label)}</h4>
                       <Badge variant="outline" className="font-mono text-[11px]">{group.id}</Badge>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{tUi(group.description)}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="bg-background">{group.topics.length} topics</Badge>
-                      <Badge variant="outline" className="bg-background">{overrideCount} overrides</Badge>
-                      <Badge variant="outline" className="bg-background">{disabledCount} disabled</Badge>
+                      <Badge variant="outline" className="bg-background">{group.topics.length}{tUi(" topics")}</Badge>
+                      <Badge variant="outline" className="bg-background">{overrideCount}{tUi(" overrides")}</Badge>
+                      <Badge variant="outline" className="bg-background">{disabledCount}{tUi(" disabled")}</Badge>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Switch checked={groupEnabled} onCheckedChange={(checked) => updateTopicGroupEnabled(group, checked)} disabled={saving} />
-                    <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.id)}>{expanded ? "Collapse" : "Expand"}</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.id)}>{expanded ? tUi("Collapse") : tUi("Expand")}</Button>
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground">Group level</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">{tUi("Group level")}</Label>
                   <LevelTabs value={groupLevel} onChange={(level) => updateTopicGroupLevel(group, level)} />
                 </div>
                 {expanded ? (
@@ -681,17 +687,17 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
                           <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="font-mono text-sm font-semibold">{topic.id}</div>
-                              <div className="mt-0.5 text-xs text-muted-foreground">{topic.label} · {topic.description}</div>
+                              <div className="mt-0.5 text-xs text-muted-foreground">{tUi(topic.label)} · {tUi(topic.description)}</div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className={badgeTone[level] || badgeTone.info}>Effective {level}</Badge>
+                              <Badge variant="outline" className={badgeTone[level] || badgeTone.info}>{tUi("Effective ")}{level}</Badge>
                               <Switch checked={enabled} onCheckedChange={(checked) => updateTopic(topic.id, { enabled: checked })} disabled={saving} />
                             </div>
                           </div>
                           <LevelTabs value={level} onChange={(nextLevel) => updateTopic(topic.id, { level: nextLevel })} />
                           <div className="mt-2 flex flex-wrap gap-2">
-                            <Button type="button" variant="ghost" size="sm" disabled={!hasLevelOverride || saving} onClick={() => updateTopic(topic.id, { level: null })}>Inherit group</Button>
-                            <Button type="button" variant="ghost" size="sm" disabled={!hasEnabledOverride || saving} onClick={() => updateTopic(topic.id, { enabled: null })}>Inherit enabled</Button>
+                            <Button type="button" variant="ghost" size="sm" disabled={!hasLevelOverride || saving} onClick={() => updateTopic(topic.id, { level: null })}>{tUi("Inherit group")}</Button>
+                            <Button type="button" variant="ghost" size="sm" disabled={!hasEnabledOverride || saving} onClick={() => updateTopic(topic.id, { enabled: null })}>{tUi("Inherit enabled")}</Button>
                           </div>
                         </div>
                       );
@@ -708,16 +714,19 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
 }
 
 function SettingsContext({ config, updateConfig, applyPreset, saving }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconSettings} title="Global logging" subtitle="Runtime level and sinks"><div className="space-y-4"><div><Label className="mb-2 block text-sm font-medium">Global level</Label><LevelTabs value={config.globalLevel || "info"} onChange={(level) => updateConfig({ globalLevel: level })} compact /></div><ToggleRow label="Console logging" checked={config.consoleEnabled !== false} onCheckedChange={(checked) => updateConfig({ consoleEnabled: checked })} /><ToggleRow label="Pretty console" description="Keep pino-pretty for local operator readability." checked={config.consolePretty === true} onCheckedChange={(checked) => updateConfig({ consolePretty: checked })} /><ToggleRow label="Friendly console" description="Show one-line user-friendly console messages instead of expanded JSON object fields." checked={config.consoleFriendly === true} onCheckedChange={(checked) => updateConfig({ consoleFriendly: checked })} /><ToggleRow label="JSONL file logging" checked={config.fileEnabled === true} onCheckedChange={(checked) => updateConfig({ fileEnabled: checked })} /><ToggleRow label="Postgres live buffer" description="Store recent application log events for HA live viewing across nodes." checked={config.liveEnabled === true} onCheckedChange={(checked) => updateConfig({ liveEnabled: checked })} /><label className="space-y-2 text-sm"><span className="font-medium">Live buffer TTL</span><Input type="number" min="5" max="30" value={config.liveTtlMinutes || 15} onChange={(event) => updateConfig({ liveTtlMinutes: event.target.value })} /><span className="text-xs text-muted-foreground">Minutes to keep live application logs in Postgres (5–30).</span></label><ToggleRow label="Object archive" description="Archive JSONL chunks to provider-agnostic object storage." checked={config.archiveEnabled === true} onCheckedChange={(checked) => updateConfig({ archiveEnabled: checked })} /><ConfigSelect label="Archive provider" value={config.archiveProvider || "s3"} options={[{ value: "s3", label: "S3 compatible" }]} onChange={(archiveProvider) => updateConfig({ archiveProvider })} /><div className="space-y-2 text-sm"><span className="font-medium">Managed archive bucket</span><div className="rounded-md border bg-muted/40 px-3 py-2 font-mono text-sm">{config.managedArchiveBucket || config.archiveBucket || "Derived from APP_ENV + account ID"}</div><span className="text-xs text-muted-foreground">Managed by environment provisioning. Change APP_ENV/FDE infra, not this UI, if the bucket name must change.</span></div><label className="space-y-2 text-sm"><span className="font-medium">Archive prefix</span><Input value={config.archivePrefix || "logs"} onChange={(event) => updateConfig({ archivePrefix: event.target.value })} placeholder="logs/cc-prod" /></label><ToggleRow label="Local spool buffer" description="Keep a local emergency spool while archive uploads are unavailable. Directory is backend-owned via LOG_SPOOL_DIR." checked={config.spoolEnabled === true} onCheckedChange={(checked) => updateConfig({ spoolEnabled: checked })} /><ConfigSelect label="Rotation" value={config.rotationMode || "daily"} options={ROTATION_MODES.map((mode) => ({ value: mode, label: title(mode) }))} onChange={(rotationMode) => updateConfig({ rotationMode })} /><label className="space-y-2 text-sm"><span className="font-medium">Retention days</span><Input type="number" min="1" max="365" value={config.retentionDays || 14} onChange={(event) => updateConfig({ retentionDays: event.target.value })} /></label></div></SettingCard><SettingCard icon={IconAlertTriangle} title="Quick presets" subtitle="Debug presets ask for confirmation"><div className="space-y-2">{PRESETS.map((preset) => <Button key={preset.id} type="button" variant="outline" className="w-full justify-start" disabled={saving} onClick={() => applyPreset(preset.id, preset.ttl)}>{preset.label}{preset.ttl ? <span className="ml-auto text-xs text-muted-foreground">{preset.ttl}m</span> : null}</Button>)}</div></SettingCard><SettingCard icon={IconShieldCheck} title="Read-only policy" subtitle="Backend-controlled values"><div className="space-y-2 text-xs text-muted-foreground"><div className="rounded-lg border bg-muted/20 p-3">Log directory/path are intentionally not editable from the browser.</div><div className="rounded-lg border bg-muted/20 p-3">Redaction is fail-closed and re-applied when reading historical log files.</div></div></SettingCard></div>;
+  const tUi = useUiText();
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconSettings} title={tUi("Global logging")} subtitle={tUi("Runtime level and sinks")}><div className="space-y-4"><div><Label className="mb-2 block text-sm font-medium">{tUi("Global level")}</Label><LevelTabs value={config.globalLevel || "info"} onChange={(level) => updateConfig({ globalLevel: level })} compact /></div><ToggleRow label={tUi("Console logging")} checked={config.consoleEnabled !== false} onCheckedChange={(checked) => updateConfig({ consoleEnabled: checked })} /><ToggleRow label={tUi("Pretty console")} description={tUi("Keep pino-pretty for local operator readability.")} checked={config.consolePretty === true} onCheckedChange={(checked) => updateConfig({ consolePretty: checked })} /><ToggleRow label={tUi("Friendly console")} description={tUi("Show one-line user-friendly console messages instead of expanded JSON object fields.")} checked={config.consoleFriendly === true} onCheckedChange={(checked) => updateConfig({ consoleFriendly: checked })} /><ToggleRow label={tUi("JSONL file logging")} checked={config.fileEnabled === true} onCheckedChange={(checked) => updateConfig({ fileEnabled: checked })} /><ToggleRow label={tUi("Postgres live buffer")} description={tUi("Store recent application log events for HA live viewing across nodes.")} checked={config.liveEnabled === true} onCheckedChange={(checked) => updateConfig({ liveEnabled: checked })} /><label className="space-y-2 text-sm"><span className="font-medium">{tUi("Live buffer TTL")}</span><Input type="number" min="5" max="30" value={config.liveTtlMinutes || 15} onChange={(event) => updateConfig({ liveTtlMinutes: event.target.value })} /><span className="text-xs text-muted-foreground">{tUi("Minutes to keep live application logs in Postgres (5–30).")}</span></label><ToggleRow label={tUi("Object archive")} description={tUi("Archive JSONL chunks to provider-agnostic object storage.")} checked={config.archiveEnabled === true} onCheckedChange={(checked) => updateConfig({ archiveEnabled: checked })} /><ConfigSelect label={tUi("Archive provider")} value={config.archiveProvider || "s3"} options={[{ value: "s3", label: tUi("S3 compatible") }]} onChange={(archiveProvider) => updateConfig({ archiveProvider })} /><div className="space-y-2 text-sm"><span className="font-medium">{tUi("Managed archive bucket")}</span><div className="rounded-md border bg-muted/40 px-3 py-2 font-mono text-sm">{config.managedArchiveBucket || config.archiveBucket || tUi("Derived from APP_ENV + account ID")}</div><span className="text-xs text-muted-foreground">{tUi("Managed by environment provisioning. Change APP_ENV/FDE infra, not this UI, if the bucket name must change.")}</span></div><label className="space-y-2 text-sm"><span className="font-medium">{tUi("Archive prefix")}</span><Input value={config.archivePrefix || "logs"} onChange={(event) => updateConfig({ archivePrefix: event.target.value })} placeholder={tUi("logs/cc-prod")} /></label><ToggleRow label={tUi("Local spool buffer")} description={tUi("Keep a local emergency spool while archive uploads are unavailable. Directory is backend-owned via LOG_SPOOL_DIR.")} checked={config.spoolEnabled === true} onCheckedChange={(checked) => updateConfig({ spoolEnabled: checked })} /><ConfigSelect label={tUi("Rotation")} value={config.rotationMode || "daily"} options={ROTATION_MODES.map((mode) => ({ value: mode, label: tUi({ daily: "Daily", startup: "At startup" }[mode] || mode) }))} onChange={(rotationMode) => updateConfig({ rotationMode })} /><label className="space-y-2 text-sm"><span className="font-medium">{tUi("Retention days")}</span><Input type="number" min="1" max="365" value={config.retentionDays || 14} onChange={(event) => updateConfig({ retentionDays: event.target.value })} /></label></div></SettingCard><SettingCard icon={IconAlertTriangle} title={tUi("Quick presets")} subtitle={tUi("Debug presets ask for confirmation")}><div className="space-y-2">{PRESETS.map((preset) => <Button key={preset.id} type="button" variant="outline" className="w-full justify-start" disabled={saving} onClick={() => applyPreset(preset.id, preset.ttl)}>{tUi(preset.label)}{preset.ttl ? <span className="ml-auto text-xs text-muted-foreground">{preset.ttl}{tUi("m")}</span> : null}</Button>)}</div></SettingCard><SettingCard icon={IconShieldCheck} title={tUi("Read-only policy")} subtitle={tUi("Backend-controlled values")}><div className="space-y-2 text-xs text-muted-foreground"><div className="rounded-lg border bg-muted/20 p-3">{tUi("Log directory/path are intentionally not editable from the browser.")}</div><div className="rounded-lg border bg-muted/20 p-3">{tUi("Redaction is fail-closed and re-applied when reading historical log files.")}</div></div></SettingCard></div>;
 }
 
 function LogFiltersPanel({ files, filters, currentFile, topicGroups, update, onApply, loading }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><TopicMultiSelect label="Topic" topicGroups={topicGroups} selectedTopics={filters.topics || []} onChange={(selected) => update("topics", selected)} /><label className="space-y-2 text-sm"><span className="font-medium">Node</span><Input placeholder="All nodes / cc-ha-app-0" value={filters.nodeName || ""} onChange={(event) => update("nodeName", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button type="button" className="w-full" onClick={() => onApply()} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Apply filters</Button></div></SettingCard>{currentFile ? <SettingCard icon={IconFileText} title="Current source" subtitle={currentFile.name}><div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Size</span><span>{formatBytes(currentFile.size)}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Modified</span><span>{formatLogTime(currentFile.mtime || currentFile.modifiedAt)}</span></div></div></SettingCard> : null}</div>;
+  const tUi = useUiText();
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title={tUi("Filters")} subtitle={tUi("Applied to the active log preview")}><div className="space-y-3"><ConfigSelect label={tUi("File")} value={filters.file || "__latest__"} options={[{ value: "__latest__", label: tUi("Latest files") }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label={tUi("Level")} value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || tUi("All levels") }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><TopicMultiSelect label={tUi("Topic")} topicGroups={topicGroups} selectedTopics={filters.topics || []} onChange={(selected) => update("topics", selected)} /><label className="space-y-2 text-sm"><span className="font-medium">{tUi("Node")}</span><Input placeholder={tUi("All nodes / cc-ha-app-0")} value={filters.nodeName || ""} onChange={(event) => update("nodeName", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">{tUi("Run ID")}</span><Input placeholder={tUi("runId")} value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">{tUi("Search")}</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder={tUi("message, call ID, interaction ID…")} value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">{tUi("From")}</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">{tUi("To")}</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">{tUi("Limit")}</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button type="button" className="w-full" onClick={() => onApply()} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{tUi("Apply filters")}</Button></div></SettingCard>{currentFile ? <SettingCard icon={IconFileText} title={tUi("Current source")} subtitle={currentFile.name}><div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">{tUi("Size")}</span><span>{formatBytes(currentFile.size)}</span></div><div className="flex justify-between"><span className="text-muted-foreground">{tUi("Modified")}</span><span>{formatLogTime(currentFile.mtime || currentFile.modifiedAt)}</span></div></div></SettingCard> : null}</div>;
 }
 
 function TopicMultiSelect({ label, topicGroups, selectedTopics, onChange }) {
+  const tUi = useUiText();
   const selectedSet = React.useMemo(() => new Set(selectedTopics || []), [selectedTopics]);
-  const summary = selectedSet.size ? `${selectedSet.size} selected` : "All topics";
+  const summary = selectedSet.size ? tUi("{value0} selected", { value0: selectedSet.size }) : tUi("All topics");
   const toggleTopic = (topic) => {
     const next = new Set(selectedSet);
     if (next.has(topic)) next.delete(topic);
@@ -740,25 +749,23 @@ function TopicMultiSelect({ label, topicGroups, selectedTopics, onChange }) {
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" className="w-full justify-between font-normal">
             <span>{summary}</span>
-            <span className="text-xs text-muted-foreground">{selectedSet.size ? "Multi" : "Any"}</span>
+            <span className="text-xs text-muted-foreground">{selectedSet.size ? tUi("Multi") : tUi("Any")}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-2">
           <div className="space-y-2">
-            <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={() => onChange([])}>
-              All topics
-            </Button>
+            <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={() => onChange([])}>{tUi("All topics")}</Button>
             <div data-testid="logging-topic-filter-groups" className="max-h-80 space-y-3 overflow-y-auto pr-1">
               {topicGroups.map((group) => (
                 <div key={group.id} data-testid={`logging-topic-filter-group-${group.id}`} className="rounded-xl border bg-background/70 p-2">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="truncate text-xs font-semibold">{group.label}</div>
+                      <div className="truncate text-xs font-semibold">{tUi(group.label)}</div>
                       <div className="font-mono text-[10px] text-muted-foreground">{group.id}</div>
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={`Select ${group.label} topics`} title="Select group" onClick={() => setGroup(group, true)}><IconCheck className="h-3.5 w-3.5" /></Button>
-                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={`Clear ${group.label} topics`} title="Clear group" onClick={() => setGroup(group, false)}><IconX className="h-3.5 w-3.5" /></Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={tUi("Select {value0} topics", { value0: tUi(group.label) })} title={tUi("Select group")} onClick={() => setGroup(group, true)}><IconCheck className="h-3.5 w-3.5" /></Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={tUi("Clear {value0} topics", { value0: tUi(group.label) })} title={tUi("Clear group")} onClick={() => setGroup(group, false)}><IconX className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -780,18 +787,22 @@ function TopicMultiSelect({ label, topicGroups, selectedTopics, onChange }) {
 }
 
 function LiveLogView({ entries, loading, meta, connected = false, fileSize }) {
-  return <LogEntriesView entries={entries} loading={loading} meta={meta} fileSize={fileSize} emptyTitle="No matching live log entries" emptyDescription="Live reads the newest JSONL file and appends matching events over SSE." connectionLabel={connected ? "SSE connected" : "SSE connecting"} />;
+  const tUi = useUiText();
+  return <LogEntriesView entries={entries} loading={loading} meta={meta} fileSize={fileSize} emptyTitle={tUi("No matching live log entries")} emptyDescription={tUi("Live reads the newest JSONL file and appends matching events over SSE.")} connectionLabel={tUi(connected ? "SSE connected" : "SSE connecting")} />;
 }
 
 function FileLogView({ entries, loading, meta, fileSize, files }) {
-  return <LogEntriesView entries={entries} loading={loading} meta={meta} fileSize={fileSize} emptyTitle="No matching file log entries" emptyDescription={files.length ? "Choose a file from the filters or adjust filters to inspect historical events." : "Enable file logging or wait for JSONL files to appear."} connectionLabel="Static file snapshot" />;
+  const tUi = useUiText();
+  return <LogEntriesView entries={entries} loading={loading} meta={meta} fileSize={fileSize} emptyTitle={tUi("No matching file log entries")} emptyDescription={tUi(files.length ? "Choose a file from the filters or adjust filters to inspect historical events." : "Enable file logging or wait for JSONL files to appear.")} connectionLabel={tUi("Static file snapshot")} />;
 }
 
 function LogEntriesView({ entries, loading, meta, fileSize, emptyTitle, emptyDescription, connectionLabel }) {
-  return <div className="flex h-full min-h-0 flex-col gap-4"><div className="grid shrink-0 gap-3 md:grid-cols-4"><MiniStat label="Visible entries" value={entries.length} icon={IconActivity} tone="emerald" /><MiniStat label="File Size" value={formatBytes(fileSize)} icon={IconFileText} tone="violet" /><MiniStat label="Skipped invalid" value={meta.skippedInvalid || 0} icon={IconAlertTriangle} tone="amber" /><MiniStat label={connectionLabel || "Server cap"} value={meta.truncated ? "Truncated" : "OK"} icon={IconShieldCheck} tone={meta.truncated ? "rose" : "sky"} /></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{loading ? <div className="sticky top-0 z-10 rounded-xl border bg-card/95 px-4 py-3 text-sm text-muted-foreground shadow-sm backdrop-blur">Refreshing log list…</div> : null}{entries.length ? entries.map((entry, index) => <LogEntryCard key={`${entry.time || entry.ts || index}-${entry.runId || ""}-${index}`} entry={entry} />) : <EmptyState title={emptyTitle} description={emptyDescription} />}</div></div>;
+  const tUi = useUiText();
+  return <div className="flex h-full min-h-0 flex-col gap-4"><div className="grid shrink-0 gap-3 md:grid-cols-4"><MiniStat label={tUi("Visible entries")} value={entries.length} icon={IconActivity} tone="emerald" /><MiniStat label={tUi("File Size")} value={formatBytes(fileSize)} icon={IconFileText} tone="violet" /><MiniStat label={tUi("Skipped invalid")} value={meta.skippedInvalid || 0} icon={IconAlertTriangle} tone="amber" /><MiniStat label={connectionLabel ? tUi(connectionLabel) : tUi("Server cap")} value={meta.truncated ? tUi("Truncated") : tUi("OK")} icon={IconShieldCheck} tone={meta.truncated ? "rose" : "sky"} /></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{loading ? <div className="sticky top-0 z-10 rounded-xl border bg-card/95 px-4 py-3 text-sm text-muted-foreground shadow-sm backdrop-blur">{tUi("Refreshing log list…")}</div> : null}{entries.length ? entries.map((entry, index) => <LogEntryCard key={`${entry.time || entry.ts || index}-${entry.runId || ""}-${index}`} entry={entry} />) : <EmptyState title={tUi(emptyTitle)} description={tUi(emptyDescription)} />}</div></div>;
 }
 
 function LogEntryCard({ entry }) {
+  const tUi = useUiText();
   const [expanded, setExpanded] = React.useState(false);
   const level = String(entry.level || entry.severity || "info").toLowerCase();
   const topic = entry.topic || entry.scope || "app";
@@ -823,7 +834,7 @@ function LogEntryCard({ entry }) {
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge variant="outline" className={badgeTone[level] || badgeTone.info}>{level.toUpperCase()}</Badge>
-          {nodeName ? <Badge variant="outline" className="shrink-0 bg-card font-mono text-[11px]">Node {nodeName}</Badge> : null}
+          {nodeName ? <Badge variant="outline" className="shrink-0 bg-card font-mono text-[11px]">{tUi("Node ")}{nodeName}</Badge> : null}
           <span className="shrink-0 font-mono text-xs text-muted-foreground">{topic}</span>
           <span className="line-clamp-1 min-w-0 break-all text-sm font-medium">{String(message)}</span>
         </div>
@@ -835,15 +846,15 @@ function LogEntryCard({ entry }) {
             <span className="shrink-0 text-muted-foreground">{key}=</span>
             <span className="truncate">{formatMetaValue(value)}</span>
           </Badge>
-        )) : <span className="text-xs text-muted-foreground">Click to view full JSON entry</span>}
-        {hiddenMetaCount ? <Badge variant="outline" className="shrink-0 bg-card font-mono text-[11px]">+{hiddenMetaCount} more</Badge> : null}
-        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{expanded ? "Click to collapse" : "Click to expand"}</span>
+        )) : <span className="text-xs text-muted-foreground">{tUi("Click to view full JSON entry")}</span>}
+        {hiddenMetaCount ? <Badge variant="outline" className="shrink-0 bg-card font-mono text-[11px]">+{hiddenMetaCount}{tUi(" more")}</Badge> : null}
+        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{expanded ? tUi("Click to collapse") : tUi("Click to expand")}</span>
       </div>
       {expanded ? (
         <div className="mt-3 space-y-2 rounded-xl border bg-muted/15 p-3">
           <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
-            <span>Full JSON entry</span>
-            <span>JSON</span>
+            <span>{tUi("Full JSON entry")}</span>
+            <span>{tUi("JSON")}</span>
           </div>
           <CodeBlock code={safeJsonStringify(entry)} language="json" maxHeight={420}>
             <span onClick={(event) => event.stopPropagation()}>
@@ -857,5 +868,6 @@ function LogEntryCard({ entry }) {
 }
 
 function FilesView({ files, selectedFile, onSelect, loading }) {
-  return <div className="space-y-4">{loading ? <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Refreshing file list…</div> : null}<div className="grid gap-3 md:grid-cols-3"><MiniStat label="Files discovered" value={files.length} icon={IconFileText} tone="sky" /><MiniStat label="Total size" value={formatBytes(files.reduce((sum, file) => sum + Number(file.size || 0), 0))} icon={IconActivity} tone="violet" /><MiniStat label="Newest file" value={files[0]?.name ? "Ready" : "None"} icon={IconClockHour4} tone="emerald" /></div><div className="space-y-2">{files.length ? files.map((file) => <button key={file.name} type="button" onClick={() => onSelect(file.name)} className={`w-full rounded-2xl border bg-background/90 p-4 text-left shadow-sm transition hover:border-foreground/25 hover:bg-muted/40 ${selectedFile === file.name ? "border-foreground/40 bg-muted/55" : ""}`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="font-mono text-sm font-semibold">{file.name}</div><div className="mt-1 text-xs text-muted-foreground">Modified {formatLogTime(file.mtime || file.modifiedAt || file.updatedAt)}</div></div><Badge variant="outline" className="bg-card">{formatBytes(file.size)}</Badge></div></button>) : <EmptyState title="No JSONL files" description="Enable file logging or wait for the application to emit log entries." />}</div></div>;
+  const tUi = useUiText();
+  return <div className="space-y-4">{loading ? <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">{tUi("Refreshing file list…")}</div> : null}<div className="grid gap-3 md:grid-cols-3"><MiniStat label={tUi("Files discovered")} value={files.length} icon={IconFileText} tone="sky" /><MiniStat label={tUi("Total size")} value={formatBytes(files.reduce((sum, file) => sum + Number(file.size || 0), 0))} icon={IconActivity} tone="violet" /><MiniStat label={tUi("Newest file")} value={files[0]?.name ? tUi("Ready") : tUi("None")} icon={IconClockHour4} tone="emerald" /></div><div className="space-y-2">{files.length ? files.map((file) => <button key={file.name} type="button" onClick={() => onSelect(file.name)} className={`w-full rounded-2xl border bg-background/90 p-4 text-left shadow-sm transition hover:border-foreground/25 hover:bg-muted/40 ${selectedFile === file.name ? "border-foreground/40 bg-muted/55" : ""}`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="font-mono text-sm font-semibold">{file.name}</div><div className="mt-1 text-xs text-muted-foreground">{tUi("Modified ")}{formatLogTime(file.mtime || file.modifiedAt || file.updatedAt)}</div></div><Badge variant="outline" className="bg-card">{formatBytes(file.size)}</Badge></div></button>) : <EmptyState title={tUi("No JSONL files")} description={tUi("Enable file logging or wait for the application to emit log entries.")} />}</div></div>;
 }

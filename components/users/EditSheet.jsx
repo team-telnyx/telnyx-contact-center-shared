@@ -1,4 +1,7 @@
 "use client";
+import { roleDisplayText } from "@/lib/i18n/role-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import ChannelUtilization, { useChannelUtilization } from "@/components/admin/ChannelUtilization";
 
 import React from "react";
@@ -23,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger, tabsTriggerCompactClass } from "@/components/ui/tabs";
 import { IconEdit, IconCheck, IconLock, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone, IconSelector, IconHelpCircle } from "@tabler/icons-react";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -66,6 +69,7 @@ const ROLE_GROUPS = [
 ];
 
 function RolesMultiSelect({ value = [], onChange, options = [], lockedValues = [], lockedHint = "" }) {
+  const tUi = useUiText();
   const [open, setOpen] = React.useState(false);
 
   const toggleRole = (roleValue) => {
@@ -76,7 +80,8 @@ function RolesMultiSelect({ value = [], onChange, options = [], lockedValues = [
     onChange(newRoles);
   };
 
-  const byValue = new Map(options.map((option) => [option.value, option]));
+  const displayOptions = options.map(option => ({...option, label: roleDisplayText(tUi, {...option, key: option.value, name: option.label}), description: roleDisplayText(tUi, {...option, key: option.value}, "description")}));
+  const byValue = new Map(displayOptions.map((option) => [option.value, option]));
   const selectedLabels = value
     .map((v) => byValue.get(v)?.label || v)
     .filter(Boolean)
@@ -84,7 +89,7 @@ function RolesMultiSelect({ value = [], onChange, options = [], lockedValues = [
   const groups = ROLE_GROUPS.map(([origin, label]) => ({
     origin,
     label,
-    items: options.filter((option) => (option.origin || "system") === origin),
+    items: displayOptions.filter((option) => (option.origin || "system") === origin),
   })).filter((group) => group.items.length > 0);
 
   return (
@@ -95,7 +100,7 @@ function RolesMultiSelect({ value = [], onChange, options = [], lockedValues = [
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
           <span className="truncate">
-            {selectedLabels || "Select roles..."}
+            {selectedLabels || tUi("Select roles...")}
           </span>
         </Button>
       </PopoverTrigger>
@@ -115,7 +120,7 @@ function RolesMultiSelect({ value = [], onChange, options = [], lockedValues = [
                 return (
                   <div
                     key={option.value}
-                    title={locked ? lockedHint : option.description || undefined}
+                    title={locked ? tUi(lockedHint) : option.description || undefined}
                     className={`flex items-start gap-2 rounded p-2 ${locked ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-accent"}`}
                     onClick={() => toggleRole(option.value)}
                   >
@@ -132,7 +137,7 @@ function RolesMultiSelect({ value = [], onChange, options = [], lockedValues = [
             </div>
           ))}
         </div>
-        <p className="px-2 pb-1 pt-2 text-[11px] text-muted-foreground">Roles add up. Assign Agent when this person also handles interactions; position roles contain no agent desktop by themselves.</p>
+        <p className="px-2 pb-1 pt-2 text-[11px] text-muted-foreground">{tUi("Roles add up. Assign Agent when this person also handles interactions; position roles contain no agent desktop by themselves.")}</p>
       </PopoverContent>
     </Popover>
   );
@@ -159,6 +164,7 @@ export default function EditSheet({
   onSaved,
   createMode = false,
 }) {
+  const tUi = useUiText();
   const { openHelp, registerHelpPortalContainer } = useHelp();
   const { wildcard: actorIsOwner } = useAuth();
   const [roleOptions, setRoleOptions] = React.useState(fallbackRoleOptions);
@@ -628,7 +634,7 @@ export default function EditSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         ref={registerHelpPortalContainer}
-        side="right"
+        side="end"
         data-context-help-host="true"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
@@ -636,7 +642,7 @@ export default function EditSheet({
           <div className="flex items-center justify-between gap-3">
             <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
               <IconEdit className="size-5" />
-              {createMode ? "Add New User" : "Edit User"}
+              {createMode ? tUi("Add New User") : tUi("Edit User")}
             </SheetTitle>
             <Button
               type="button"
@@ -644,13 +650,11 @@ export default function EditSheet({
               size="sm"
               aria-controls="context-help-sheet"
               aria-keyshortcuts="F1"
-              title="Help for users (F1)"
+              title={tUi("Help for users (F1)")}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => openHelp()}
             >
-              <IconHelpCircle aria-hidden="true" />
-              Help
-            </Button>
+              <IconHelpCircle aria-hidden="true" />{tUi("Help")}</Button>
           </div>
         </SheetHeader>
 
@@ -751,12 +755,12 @@ export default function EditSheet({
               ) : (
                 <>
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
-                    <h3 className="text-sm font-semibold">Account Settings</h3>
+                    <h3 className="text-sm font-semibold">{tUi("Account Settings")}</h3>
                   {/* Invite Status Section */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1">
                       <IconMail className="size-3.5" />
-                      {createMode ? "Invite" : "Invite Status"}
+                      {createMode ? tUi("Invite") : tUi("Invite Status")}
                     </h3>
                     {createMode ? (
                       <div className="flex items-center gap-2">
@@ -765,52 +769,39 @@ export default function EditSheet({
                           checked={sendInvite}
                           onCheckedChange={(v) => setSendInvite(Boolean(v))}
                         />
-                        <Label htmlFor="edit-sheet-send-invite" className="cursor-pointer text-sm font-normal">
-                          Send invite email after creation
-                        </Label>
+                        <Label htmlFor="edit-sheet-send-invite" className="cursor-pointer text-sm font-normal">{tUi("Send invite email after creation")}</Label>
                       </div>
                     ) : (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="space-y-1">
                             {inviteStatus === "none" && (
-                              <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50 dark:bg-gray-800/40">
-                                Not invited
-                              </Badge>
+                              <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50 dark:bg-gray-800/40">{tUi("Not invited")}</Badge>
                             )}
                             {inviteStatus === "pending" && (
                               <div className="space-y-1">
-                                <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-900/20">
-                                  Pending
-                                </Badge>
+                                <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-900/20">{tUi("Pending")}</Badge>
                                 {inviteSentAt && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Sent: {new Date(inviteSentAt).toLocaleString()}
+                                  <p className="text-xs text-muted-foreground">{tUi("Sent: ")}{new Date(inviteSentAt).toLocaleString(tUi.locale)}
                                   </p>
                                 )}
                                 {inviteExpires && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Expires: {new Date(inviteExpires).toLocaleString()}
+                                  <p className="text-xs text-muted-foreground">{tUi("Expires: ")}{new Date(inviteExpires).toLocaleString(tUi.locale)}
                                   </p>
                                 )}
                               </div>
                             )}
                             {inviteStatus === "accepted" && (
                               <div className="space-y-1">
-                                <Badge variant="outline" className="text-green-600 border-green-400 bg-green-50 dark:bg-green-900/20">
-                                  Accepted
-                                </Badge>
+                                <Badge variant="outline" className="text-green-600 border-green-400 bg-green-50 dark:bg-green-900/20">{tUi("Accepted")}</Badge>
                                 {inviteAcceptedAt && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Accepted: {new Date(inviteAcceptedAt).toLocaleString()}
+                                  <p className="text-xs text-muted-foreground">{tUi("Accepted: ")}{new Date(inviteAcceptedAt).toLocaleString(tUi.locale)}
                                   </p>
                                 )}
                               </div>
                             )}
                             {inviteStatus === "expired" && (
-                              <Badge variant="outline" className="text-red-600 border-red-400 bg-red-50 dark:bg-red-900/20">
-                                Expired
-                              </Badge>
+                              <Badge variant="outline" className="text-red-600 border-red-400 bg-red-50 dark:bg-red-900/20">{tUi("Expired")}</Badge>
                             )}
                           </div>
                           <Button
@@ -823,12 +814,12 @@ export default function EditSheet({
                           >
                             <IconMail className="size-3.5" />
                             {sendingInvite
-                              ? "Sending..."
+                              ? tUi("Sending...")
                               : inviteStatus === "none" || inviteStatus === "expired"
-                              ? "Send Invite"
+                              ? tUi("Send Invite")
                               : inviteStatus === "pending"
-                              ? "Resend Invite"
-                              : "Invited"}
+                              ? tUi("Resend Invite")
+                              : tUi("Invited")}
                           </Button>
                         </div>
                       </div>
@@ -839,18 +830,14 @@ export default function EditSheet({
 
                   {/* Verified Switch at the top */}
                   <div className="flex items-center justify-between pb-4 border-b">
-                    <Label className="text-sm font-medium">
-                      Account Verified
-                    </Label>
+                    <Label className="text-sm font-medium">{tUi("Account Verified")}</Label>
                     <Switch
                       checked={verified}
                       onCheckedChange={(v) => setVerified(Boolean(v))}
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="active" className="text-sm font-medium">
-                      Active
-                    </Label>
+                    <Label htmlFor="active" className="text-sm font-medium">{tUi("Active")}</Label>
                     <Switch
                       checked={active}
                       onCheckedChange={(v) => setActive(Boolean(v))}
@@ -858,12 +845,8 @@ export default function EditSheet({
                   </div>
                   <div className="flex items-center justify-between gap-4 border-t pt-4">
                     <div className="space-y-1">
-                      <Label htmlFor="experimental-features" className="text-sm font-medium">
-                        Experimental features
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Translation/TTS, Phones Provisioning, and headset integrations
-                      </p>
+                      <Label htmlFor="experimental-features" className="text-sm font-medium">{tUi("Experimental features")}</Label>
+                      <p className="text-xs text-muted-foreground">{tUi("Translation/TTS, Phones Provisioning, and headset integrations")}</p>
                     </div>
                     <Switch
                       id="experimental-features"
@@ -874,30 +857,28 @@ export default function EditSheet({
 
                   {/* Name Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Personal Information
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Personal Information")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Username (email){createMode && " *"}</Label>
+                        <Label className="text-sm">{tUi("Username (email)")}{createMode && " *"}</Label>
                         <Input
                           value={username}
                           disabled={!createMode}
                           onChange={createMode ? (e) => setUsername(e.target.value) : undefined}
-                          placeholder={createMode ? "john.doe@company.com" : undefined}
+                          placeholder={createMode ? tUi("john.doe@company.com") : undefined}
                           type={createMode ? "email" : undefined}
                         />
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">First name</Label>
+                          <Label className="text-sm">{tUi("First name")}</Label>
                           <Input
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Last name</Label>
+                          <Label className="text-sm">{tUi("Last name")}</Label>
                           <Input
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
@@ -905,7 +886,7 @@ export default function EditSheet({
                         </div>
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Nickname</Label>
+                        <Label className="text-sm">{tUi("Nickname")}</Label>
                         <Input
                           value={nick}
                           onChange={(e) => setNick(e.target.value)}
@@ -918,20 +899,18 @@ export default function EditSheet({
 
                   {/* Phone Numbers Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Phone Numbers
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Phone Numbers")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Mobile</Label>
+                          <Label className="text-sm">{tUi("Mobile")}</Label>
                           <Input
                             value={mobile}
                             onChange={(e) => setMobile(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">SMS number</Label>
+                          <Label className="text-sm">{tUi("SMS number")}</Label>
                           <Input
                             value={smsNumber}
                             onChange={(e) => setSmsNumber(e.target.value)}
@@ -941,13 +920,11 @@ export default function EditSheet({
                       {/* Voice Number - enhanced picker */}
                       <div className="grid gap-2">
                         <Label className="text-sm flex items-center gap-1">
-                          <IconPhone className="size-3.5" />
-                          Voice Number
-                        </Label>
+                          <IconPhone className="size-3.5" />{tUi("Voice Number")}</Label>
                         <Tabs value={voiceNumberTab} onValueChange={setVoiceNumberTab}>
-                          <TabsList className="h-8 w-full grid grid-cols-2">
-                            <TabsTrigger value="telnyx" className="text-xs">From Telnyx</TabsTrigger>
-                            <TabsTrigger value="custom" className="text-xs">Custom</TabsTrigger>
+                          <TabsList>
+                            <TabsTrigger value="telnyx" className={tabsTriggerCompactClass}>{tUi("From Telnyx")}</TabsTrigger>
+                            <TabsTrigger value="custom" className={tabsTriggerCompactClass}>{tUi("Custom")}</TabsTrigger>
                           </TabsList>
                           <TabsContent value="telnyx" className="mt-2">
                             {numbersLoading ? (
@@ -966,7 +943,7 @@ export default function EditSheet({
                                       className="w-full justify-between font-normal"
                                     >
                                       <span className="truncate">
-                                        {voiceNumber || "Select a number..."}
+                                        {voiceNumber || tUi("Select a number...")}
                                       </span>
                                       <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -974,12 +951,12 @@ export default function EditSheet({
                                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                                     <Command>
                                       <CommandInput
-                                        placeholder="Search number..."
+                                        placeholder={tUi("Search number...")}
                                         value={numberSearch}
                                         onValueChange={setNumberSearch}
                                       />
                                       <CommandList>
-                                        <CommandEmpty>No numbers found.</CommandEmpty>
+                                        <CommandEmpty>{tUi("No numbers found.")}</CommandEmpty>
                                         <CommandItem
                                           value="__none__"
                                           onSelect={() => {
@@ -988,7 +965,7 @@ export default function EditSheet({
                                             setNumberSearch("");
                                           }}
                                         >
-                                          <span className="text-muted-foreground">— None —</span>
+                                          <span className="text-muted-foreground">{tUi("— None —")}</span>
                                         </CommandItem>
                                         {filteredNumbers.map((num) => {
                                           const isAssigned = allUserVoiceNumbers.includes(num.phone_number);
@@ -1010,9 +987,7 @@ export default function EditSheet({
                                                   </span>
                                                 )}
                                                 {isAssigned && (
-                                                  <span className="text-amber-500 text-xs ml-auto">
-                                                    (assigned)
-                                                  </span>
+                                                  <span className="text-amber-500 text-xs ml-auto">{tUi("(assigned)")}</span>
                                                 )}
                                               </span>
                                               {voiceNumber === num.phone_number && (
@@ -1022,9 +997,7 @@ export default function EditSheet({
                                           );
                                         })}
                                         {telnyxNumbers.length === 0 && (
-                                          <div className="py-6 text-center text-sm text-muted-foreground">
-                                            No numbers available
-                                          </div>
+                                          <div className="py-6 text-center text-sm text-muted-foreground">{tUi("No numbers available")}</div>
                                         )}
                                       </CommandList>
                                     </Command>
@@ -1047,19 +1020,14 @@ export default function EditSheet({
                                   variant="outline"
                                   size="sm"
                                   onClick={() => setVoiceNumber("")}
-                                >
-                                  Clear
-                                </Button>
+                                >{tUi("Clear")}</Button>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Enter any E.164 number (e.g. +12025551234)
-                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">{tUi("Enter any E.164 number (e.g. +12025551234)")}</p>
                           </TabsContent>
                         </Tabs>
                         {voiceNumber && (
-                          <p className="text-xs text-muted-foreground">
-                            Current: <span className="font-mono font-medium">{voiceNumber}</span>
+                          <p className="text-xs text-muted-foreground">{tUi("Current: ")}<span className="font-mono font-medium">{voiceNumber}</span>
                           </p>
                         )}
                       </div>
@@ -1070,12 +1038,10 @@ export default function EditSheet({
 
                   {/* Settings Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Settings
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Settings")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Roles</Label>
+                        <Label className="text-sm">{tUi("Roles")}</Label>
                         <RolesMultiSelect
                           value={roles}
                           onChange={setRoles}
@@ -1092,9 +1058,7 @@ export default function EditSheet({
                   <Card className="mx-5 my-4"><CardContent className="space-y-4 p-6">
                   {/* Queue Assignments Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Queue Assignments
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Queue Assignments")}</h3>
                     {queuesLoading ? (
                       <div className="space-y-2">
                         <Skeleton className="h-9 w-full" />
@@ -1103,9 +1067,7 @@ export default function EditSheet({
                     ) : (
                       <div className="space-y-2">
                         {availableQueues.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            No queues available. Create queues in the Queues management page.
-                          </p>
+                          <p className="text-sm text-muted-foreground">{tUi("No queues available. Create queues in the Queues management page.")}</p>
                         ) : (
                           <div className="rounded border overflow-hidden">
                             <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
@@ -1154,9 +1116,7 @@ export default function EditSheet({
                   {/* Skills Section */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground">
-                        Skills & Proficiency
-                      </h3>
+                      <h3 className="text-sm font-semibold text-muted-foreground">{tUi("Skills & Proficiency")}</h3>
                       <Button
                         type="button"
                         variant="outline"
@@ -1171,13 +1131,11 @@ export default function EditSheet({
                         }
                         title={
                           userSkillsArray.length >= availableSkills.length
-                            ? "All available skills have been assigned"
-                            : "Add a skill"
+                            ? tUi("All available skills have been assigned")
+                            : tUi("Add a skill")
                         }
                       >
-                        <IconPlus className="w-4 h-4 mr-1" />
-                        Add Skill
-                      </Button>
+                        <IconPlus className="w-4 h-4 mr-1" />{tUi("Add Skill")}</Button>
                     </div>
                     {skillsLoading ? (
                       <div className="space-y-2">
@@ -1187,13 +1145,9 @@ export default function EditSheet({
                     ) : (
                       <div className="space-y-3">
                         {availableSkills.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            No skills available. Create skills in the Skills management page.
-                          </p>
+                          <p className="text-sm text-muted-foreground">{tUi("No skills available. Create skills in the Skills management page.")}</p>
                         ) : userSkillsArray.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            No skills assigned. Click &quot;Add Skill&quot; to assign skills to this agent.
-                          </p>
+                          <p className="text-sm text-muted-foreground">{tUi("No skills assigned. Click \"Add Skill\" to assign skills to this agent.")}</p>
                         ) : (
                           userSkillsArray.map((skill, index) => {
                             return (
@@ -1222,7 +1176,7 @@ export default function EditSheet({
                                   }}
                                 >
                                   <SelectTrigger className="flex-1">
-                                    <SelectValue placeholder="Select a skill" />
+                                    <SelectValue placeholder={tUi("Select a skill")} />
                                   </SelectTrigger>
                                   <SelectContent>
                                     {availableSkills
@@ -1252,7 +1206,7 @@ export default function EditSheet({
                                         setUserSkillsArray(updated);
                                       }}
                                       className="focus:outline-none"
-                                      title={`Proficiency level ${level}`}
+                                      title={tUi("Proficiency level {value0}", { value0: level })}
                                     >
                                       {(skill.proficiency || 1) >= level ? (
                                         <IconStarFilled
@@ -1293,13 +1247,11 @@ export default function EditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={onSave} disabled={saving || (!createMode && loading) || !utilization.ready}>
             {saving
-              ? createMode ? "Creating..." : "Saving..."
-              : createMode ? "Create User" : "Save Changes"}
+              ? createMode ? tUi("Creating...") : tUi("Saving...")
+              : createMode ? tUi("Create User") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

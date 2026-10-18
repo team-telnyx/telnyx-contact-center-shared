@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +43,7 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 function MetricTile({ icon: Icon, label, value, detail, progress = 0, tone = "slate" }) {
+  const tUi = useUiText();
   const tones = {
     slate: "from-slate-500/15 to-zinc-500/5 text-slate-700 dark:text-slate-200",
     emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
@@ -54,9 +57,7 @@ function MetricTile({ icon: Icon, label, value, detail, progress = 0, tone = "sl
           <span className={`rounded-2xl bg-gradient-to-br p-3 ${tones[tone] || tones.slate}`}>
             <Icon className="h-5 w-5" />
           </span>
-          <Badge variant="outline" className="bg-background/70 text-[11px]">
-            Range
-          </Badge>
+          <Badge variant="outline" className="bg-background/70 text-[11px]">{tUi("Range")}</Badge>
         </div>
         <div className="mt-5 text-3xl font-semibold tracking-tight">{value}</div>
         <div className="text-sm font-medium text-muted-foreground">{label}</div>
@@ -73,6 +74,7 @@ function MetricTile({ icon: Icon, label, value, detail, progress = 0, tone = "sl
 }
 
 function RankedList({ title, rows, valueKey = "avgScorePercent", labelKey, countKey = "evaluations" }) {
+  const tUi = useUiText();
   const medalClasses = [
     "bg-amber-500/15 text-amber-600 dark:text-amber-300",
     "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
@@ -84,7 +86,7 @@ function RankedList({ title, rows, valueKey = "avgScorePercent", labelKey, count
         <h4 className="text-sm font-semibold">{title}</h4>
         <div className="mt-4 space-y-3">
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No evaluations in this range.</p>
+            <p className="text-sm text-muted-foreground">{tUi("No evaluations in this range.")}</p>
           ) : (
             rows.map((row, index) => (
               <div key={`${row[labelKey]}-${index}`} className="flex items-center gap-3">
@@ -99,7 +101,7 @@ function RankedList({ title, rows, valueKey = "avgScorePercent", labelKey, count
                   <div className="flex items-center justify-between gap-2 text-sm">
                     <span className="truncate font-medium">{row[labelKey]}</span>
                     <span className="shrink-0 text-muted-foreground">
-                      {row[valueKey] != null ? `${row[valueKey]}%` : "-"} · {row[countKey]}
+                      {row[valueKey] != null ? tUi("{value0}%", { value0: row[valueKey] }) : "-"} · {row[countKey]}
                     </span>
                   </div>
                   <Progress value={Number(row[valueKey] || 0)} className="mt-1.5 h-1.5" />
@@ -114,6 +116,7 @@ function RankedList({ title, rows, valueKey = "avgScorePercent", labelKey, count
 }
 
 export default function QualityDashboardView({ from, to, refreshNonce = 0,channel="all" }) {
+  const tUi = useUiText();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -160,7 +163,7 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0,channe
     );
   }
 
-  if (!data) return <div role="alert" className="rounded-xl border p-5 text-sm text-destructive">Quality report unavailable. Use Refresh to try again.</div>;
+  if (!data) return <div role="alert" className="rounded-xl border p-5 text-sm text-destructive">{tUi("Quality report unavailable. Use Refresh to try again.")}</div>;
   const totals = data.totals || {};
   const aiShare =
     totals.total > 0
@@ -172,33 +175,33 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0,channe
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricTile
           icon={IconGauge}
-          label="Average quality score"
+          label={tUi("Average quality score")}
           value={totals.avgScorePercent != null ? `${totals.avgScorePercent}%` : "-"}
-          detail="Reviewed and final evaluations"
+          detail={tUi("Reviewed and final evaluations")}
           progress={Math.round(Number(totals.avgScorePercent || 0))}
           tone="emerald"
         />
         <MetricTile
           icon={IconChecklist}
-          label="Evaluations"
+          label={tUi("Evaluations")}
           value={totals.total ?? 0}
-          detail={`${totals.inProgress ?? 0} in progress`}
+          detail={tUi("{value0} in progress", { value0: totals.inProgress ?? 0 })}
           progress={totals.total > 0 ? Math.round(((totals.finalized || 0) / totals.total) * 100) : 0}
           tone="sky"
         />
         <MetricTile
           icon={IconCircleCheck}
-          label="Finalized"
+          label={tUi("Finalized")}
           value={totals.finalized ?? 0}
-          detail={`${totals.disputed ?? 0} disputed`}
+          detail={tUi("{value0} disputed", { value0: totals.disputed ?? 0 })}
           progress={totals.total > 0 ? Math.round(((totals.finalized || 0) / totals.total) * 100) : 0}
           tone="slate"
         />
         <MetricTile
           icon={IconRobot}
-          label="AI-assisted"
+          label={tUi("AI-assisted")}
           value={`${aiShare}%`}
-          detail={`${totals.aiDrafts ?? 0} AI drafts awaiting review`}
+          detail={tUi("{value0} AI drafts awaiting review", { value0: totals.aiDrafts ?? 0 })}
           progress={aiShare}
           tone="violet"
         />
@@ -207,7 +210,7 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0,channe
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="border bg-background/85 shadow-sm">
           <CardContent className="p-5">
-            <h4 className="text-sm font-semibold">Quality trend</h4>
+            <h4 className="text-sm font-semibold">{tUi("Quality trend")}</h4>
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data?.daily || []}>
@@ -218,7 +221,7 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0,channe
                   <Line
                     type="monotone"
                     dataKey="avgScorePercent"
-                    name="Avg score %"
+                    name={tUi("Avg score %")}
                     stroke="#10b981"
                     strokeWidth={2}
                     dot={false}
@@ -230,7 +233,7 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0,channe
         </Card>
         <Card className="border bg-background/85 shadow-sm">
           <CardContent className="p-5">
-            <h4 className="text-sm font-semibold">Evaluations per day</h4>
+            <h4 className="text-sm font-semibold">{tUi("Evaluations per day")}</h4>
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data?.daily || []}>
@@ -238,7 +241,7 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0,channe
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="evaluations" name="Evaluations" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="evaluations" name={tUi("Evaluations")} fill="#0ea5e9" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -247,9 +250,9 @@ export default function QualityDashboardView({ from, to, refreshNonce = 0,channe
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <RankedList title="Top agents by quality" rows={data?.agents || []} labelKey="agentName" />
-        <RankedList title="Scores by form" rows={data?.forms || []} labelKey="formName" />
-        <RankedList title="Scores by queue" rows={data?.queues || []} labelKey="queueName" />
+        <RankedList title={tUi("Top agents by quality")} rows={data?.agents || []} labelKey="agentName" />
+        <RankedList title={tUi("Scores by form")} rows={data?.forms || []} labelKey="formName" />
+        <RankedList title={tUi("Scores by queue")} rows={data?.queues || []} labelKey="queueName" />
       </div>
     </div>
   );

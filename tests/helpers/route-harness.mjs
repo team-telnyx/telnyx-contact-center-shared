@@ -9,14 +9,23 @@ import * as publicUserModule from "../../lib/users/public-user.mjs";
 import * as mobilePagesModule from "../../lib/acd/mobile-monitor-pages.mjs";
 import * as providerStatusModule from "../../lib/provider-http-status.mjs";
 import * as scopeModule from "../../lib/authz/scope.mjs";
+import * as uiLocaleModule from "../../lib/i18n/locales.mjs";
+
+// Platform default model returned by the AI operation runtime stub.
+export const TEST_PLATFORM_MODEL = "test/platform-model";
 
 export async function loadRoute(path, dependencies) {
   const source = await readFile(new URL(`../../${path}`, import.meta.url), "utf8");
   const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const edits = [];
+  const sharedPrompts = {};
   for (const node of ast.statements) {
     if (!ts.isImportDeclaration(node)) continue;
     const specifier = node.moduleSpecifier.text;
+    if (specifier.includes('/ai-operations/prompts/') || specifier === '@/lib/ai-operations/usage.mjs') {
+      const url = specifier.startsWith('@/') ? new URL(`../../${specifier.slice(2)}`, import.meta.url) : new URL(specifier, new URL(`../../${path}`, import.meta.url));
+      sharedPrompts[specifier] = await import(url);
+    }
     const parts = [];
     if (node.importClause?.name) parts.push(`default: ${node.importClause.name.text}`);
     const bindings = node.importClause?.namedBindings;
@@ -32,9 +41,19 @@ export async function loadRoute(path, dependencies) {
   for (const edit of edits.reverse()) code = code.slice(0, edit.start) + edit.replacement + code.slice(edit.end);
   const key = `__route_test_${randomUUID()}`;
   const deps = {
+    ...sharedPrompts,
+    // AI configuration is a separate database boundary; operation tests inject real configuration.
+    // The stub follows the runtime contract: explicit model, else the platform default.
+    "@/lib/ai-operations/runtime.mjs": {
+      prepareAiOperation: async (_id, body, options = {}) => ({ ...body, model: options.preferredModel || TEST_PLATFORM_MODEL }),
+      operationModel: async (_id, preferred) => preferred || TEST_PLATFORM_MODEL,
+      resolveOperationModel: async (_id, options = {}) => options.preferredModel ? { model: options.preferredModel, source: options.preferredSource || "workflow" } : { model: TEST_PLATFORM_MODEL, source: "default" },
+      platformDefaultModel: async () => ({ model: TEST_PLATFORM_MODEL, source: "settings" }),
+    },
     "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) } },
     "@/lib/acd/mobile-monitor-pages.mjs": mobilePagesModule,
     "@/lib/provider-http-status.mjs": providerStatusModule,
+    "@/lib/i18n/locales.mjs": uiLocaleModule,
     "@/lib/users/public-user.mjs": publicUserModule,
     "@/lib/outbound-dialer/configuration-authorization.mjs": campaignConfigurationModule,
     ...dependencies,

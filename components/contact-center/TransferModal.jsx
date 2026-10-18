@@ -1,4 +1,7 @@
 "use client";
+import { statusLabel } from "@/lib/i18n/status-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { voiceFetch } from "@/lib/telephony/endpoint-client";
 import { useState, useEffect, useRef } from "react";
@@ -60,6 +63,7 @@ import { createLatestRequestScope } from "@/lib/contact-center/latest-request";
 
 // Prevent hydration mismatch by only rendering Select components after mount
 function ClientOnlySelect({ children, ...props }) {
+  const tUi = useUiText();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -71,7 +75,7 @@ function ClientOnlySelect({ children, ...props }) {
   if (!mounted) {
     return (
       <div className="border-input data-placeholder:text-muted-foreground flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs">
-        <span className="text-muted-foreground">Loading...</span>
+        <span className="text-muted-foreground">{tUi("Loading...")}</span>
       </div>
     );
   }
@@ -129,6 +133,7 @@ function ConsultTopology({
   disabled,
   connecting,
 }) {
+  const tUi = useUiText();
   const customerActive = activeLeg === "parked";
   const consultantActive = activeLeg === "consultant";
   const connectorClass = (active, side) =>
@@ -158,7 +163,7 @@ function ConsultTopology({
             : "border-green-500 bg-green-500/20 shadow-[0_0_18px_rgba(34,197,94,0.22)]"
           : "border-border bg-background/95 hover:bg-muted/70",
       )}
-      title={active ? "Active conversation" : `Switch to ${party.label}`}
+      title={active ? tUi("Active conversation") : tUi("Switch to {value0}", { value0: party.label })}
     >
       <div className="flex items-center gap-2">
         <div
@@ -184,7 +189,7 @@ function ConsultTopology({
               : "text-muted-foreground",
           )}
         >
-          {active ? "ACTIVE" : kind === "consultant" && connecting ? "RINGING" : "ON HOLD"}
+          {active ? tUi("ACTIVE") : kind === "consultant" && connecting ? tUi("RINGING") : tUi("ON HOLD")}
         </Badge>
       </div>
     </button>
@@ -207,7 +212,7 @@ function ConsultTopology({
           <UserCircle className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-500">Agent</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-500">{tUi("Agent")}</div>
           <div className="max-w-[240px] truncate text-sm font-semibold">{agentName}</div>
         </div>
       </div>
@@ -218,9 +223,7 @@ function ConsultTopology({
         {partyCard("parked", customer, customerActive, "blue")}
         {partyCard("consultant", consultant, consultantActive, "green")}
       </div>
-      <p className="mt-3 text-center text-xs text-muted-foreground">
-        The solid line shows which party is currently connected to the agent.
-      </p>
+      <p className="mt-3 text-center text-xs text-muted-foreground">{tUi("The solid line shows which party is currently connected to the agent.")}</p>
     </div>
   );
 }
@@ -232,6 +235,7 @@ export function TransferModal({
   onTransfer,
   onConsultCallCreated,
 }) {
+  const tUi = useUiText();
   // Other agents' live statistics need agents:read (RBAC Phase 5); one's own are always visible.
   const { can } = useAuth();
   const canReadAgents = can("agents:read");
@@ -792,9 +796,9 @@ export function TransferModal({
       case "FIFO":
         return "FIFO";
       case "Skill-based":
-        return "SKILLS";
+        return tUi("Skill-based");
       case "Priority-based":
-        return "PRIORITY";
+        return tUi("Priority-based");
       default:
         return routingStrategy || "FIFO";
     }
@@ -1516,7 +1520,7 @@ export function TransferModal({
     user?.username ||
     interaction?.agent_name ||
     interaction?.agent_username ||
-    "Agent";
+    tUi("Agent");
   const coreConsultTransitioning =
     hasCoreInteraction && coreIntent?.intent === "consult" && coreIntent?.step !== "in_consult";
   const coreConsultCanCancel =
@@ -1591,9 +1595,8 @@ export function TransferModal({
     <Dialog open={open} onOpenChange={handleModalOpenChange}>
       <DialogContent className="sm:max-w-[700px] dark:bg-zinc-900 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Transfer Call</DialogTitle>
-          <DialogDescription>
-            Choose where to transfer this call{interaction?.from_name||interaction?.from_number?` from ${interaction.from_name||interaction.from_number}`:""}.
+          <DialogTitle>{tUi("Transfer Call")}</DialogTitle>
+          <DialogDescription>{tUi("Choose where to transfer this call")}{interaction?.from_name||interaction?.from_number?tUi(" from {value0}", { value0: interaction.from_name||interaction.from_number }):""}.
           </DialogDescription>
         </DialogHeader>
 
@@ -1611,7 +1614,7 @@ export function TransferModal({
               )}
             >
               <UsersRound className="h-5 w-5 text-blue-500" />
-              <div className="font-semibold text-xs">Queues</div>
+              <div className="font-semibold text-xs">{tUi("Queues")}</div>
               {selectionType === "queues" && (
                 <CheckCircle2 className="h-3 w-3 text-blue-500" />
               )}
@@ -1628,7 +1631,7 @@ export function TransferModal({
               )}
             >
               <UserCheck className="h-5 w-5 text-purple-500" />
-              <div className="font-semibold text-xs">Users</div>
+              <div className="font-semibold text-xs">{tUi("Users")}</div>
               {selectionType === "agents" && (
                 <CheckCircle2 className="h-3 w-3 text-purple-500" />
               )}
@@ -1645,7 +1648,7 @@ export function TransferModal({
               )}
             >
               <Users className="h-5 w-5 text-green-500" />
-              <div className="font-semibold text-xs">Contacts</div>
+              <div className="font-semibold text-xs">{tUi("Contacts")}</div>
               {selectionType === "contacts" && (
                 <CheckCircle2 className="h-3 w-3 text-green-500" />
               )}
@@ -1662,7 +1665,7 @@ export function TransferModal({
               )}
             >
               <Bot className="h-5 w-5 text-indigo-500" />
-              <div className="font-semibold text-xs">AI Agents</div>
+              <div className="font-semibold text-xs">{tUi("AI Agents")}</div>
               {selectionType === "assistants" && (
                 <CheckCircle2 className="h-3 w-3 text-indigo-500" />
               )}
@@ -1679,7 +1682,7 @@ export function TransferModal({
               )}
             >
               <Phone className="h-5 w-5 text-orange-500" />
-              <div className="font-semibold text-xs">Manual</div>
+              <div className="font-semibold text-xs">{tUi("Manual")}</div>
               {selectionType === "manual" && (
                 <CheckCircle2 className="h-3 w-3 text-orange-500" />
               )}
@@ -1691,18 +1694,12 @@ export function TransferModal({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <UsersRound className="h-4 w-4 text-blue-600" />
-                  Select Queue
-                </Label>
+                  <UsersRound className="h-4 w-4 text-blue-600" />{tUi("Select Queue")}</Label>
                 {loadingData ? (
                   <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading queues...
-                  </div>
+                    <Loader2 className="h-4 w-4 animate-spin" />{tUi("Loading queues...")}</div>
                 ) : queues.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No queues available
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("No queues available")}</div>
                 ) : (
                   <ClientOnlySelect
                     value={selectedQueueId}
@@ -1712,7 +1709,7 @@ export function TransferModal({
                       className="w-full"
                       data-testid="transfer-assistant-select"
                     >
-                      <SelectValue data-testid="transfer-queue-select" placeholder="Choose a queue" />
+                      <SelectValue data-testid="transfer-queue-select" placeholder={tUi("Choose a queue")} />
                     </SelectTrigger>
                     <SelectContent>
                       {queues.map((queue) => (
@@ -1728,7 +1725,7 @@ export function TransferModal({
                                 getQueueTypeBadgeColor(queue.routing_strategy)
                               )}
                             >
-                              {getQueueTypeDisplayName(queue.routing_strategy)}
+                              {getQueueTypeDisplayName(queue.routing_strategy, tUi)}
                             </Badge>
                           </div>
                         </SelectItem>
@@ -1744,39 +1741,31 @@ export function TransferModal({
                     <>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Available Agents
-                          </Label>
+                          <Label className="text-xs text-muted-foreground">{tUi("Available Agents")}</Label>
                           <div className="text-sm font-medium text-green-600">
                             {queueStats.agents?.available || 0}
                           </div>
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Busy Agents
-                          </Label>
+                          <Label className="text-xs text-muted-foreground">{tUi("Busy Agents")}</Label>
                           <div className="text-sm font-medium text-orange-600">
                             {queueStats.agents?.busy || 0}
                           </div>
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Calls Awaiting
-                          </Label>
+                          <Label className="text-xs text-muted-foreground">{tUi("Calls Awaiting")}</Label>
                           <div className="text-sm font-medium text-yellow-600">
                             {queueStats.realtime?.waitingCalls || 0}
                           </div>
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            Expected Wait Time
-                          </Label>
+                            <Clock className="h-3 w-3" />{tUi("Expected Wait Time")}</Label>
                           <div className="text-sm font-medium">
                             {queueStats.realtime?.longestWaitSeconds
-                              ? `${Math.round(
+                              ? tUi("{value0}s", { value0: Math.round(
                                   queueStats.realtime.longestWaitSeconds
-                                )}s`
+                                ) })
                               : "—"}
                           </div>
                         </div>
@@ -1785,14 +1774,10 @@ export function TransferModal({
 
                     </>
                   ) : queueStatsUnavailable ? (
-                    <div className="text-sm text-muted-foreground">
-                      Queue statistics are unavailable.
-                    </div>
+                    <div className="text-sm text-muted-foreground">{tUi("Queue statistics are unavailable.")}</div>
                   ) : (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading queue statistics...
-                    </div>
+                      <Loader2 className="h-4 w-4 animate-spin" />{tUi("Loading queue statistics...")}</div>
                   )}
 
                   {/* Preserve Routing Options Toggle */}
@@ -1846,7 +1831,7 @@ export function TransferModal({
                             className="text-xs font-medium cursor-pointer"
                             htmlFor="preserve-routing"
                           >
-                            {toggleLabel}
+                            {tUi(toggleLabel)}
                           </Label>
                           {toggleDescription && (
                             <span className="text-xs text-muted-foreground">
@@ -1872,18 +1857,12 @@ export function TransferModal({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 text-purple-600" />
-                  Select User
-                </Label>
+                  <UserCheck className="h-4 w-4 text-purple-600" />{tUi("Select User")}</Label>
                 {loadingData ? (
                   <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading users...
-                  </div>
+                    <Loader2 className="h-4 w-4 animate-spin" />{tUi("Loading users...")}</div>
                 ) : agents.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No users found
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("No users found")}</div>
                 ) : (
                   <ClientOnlySelect
                     value={selectedAgentId}
@@ -1901,7 +1880,7 @@ export function TransferModal({
                     }}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue data-testid="transfer-agent-select" placeholder="Choose a user" />
+                      <SelectValue data-testid="transfer-agent-select" placeholder={tUi("Choose a user")} />
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map((agent) => {
@@ -1910,7 +1889,7 @@ export function TransferModal({
                             agent.lastName || ""
                           }`.trim() ||
                           agent.username ||
-                          "Unknown Agent";
+                          tUi("Unknown Agent");
                         // Get status icon
                         const StatusIcon =
                           STATUS_NAME_ICON_FALLBACK[agent.status] ||
@@ -1946,7 +1925,7 @@ export function TransferModal({
                                     : undefined
                                 }
                               >
-                                ({agent.status})
+                                ({statusLabel(tUi, agent.status)})
                               </span>
                             </div>
                           </SelectItem>
@@ -1961,15 +1940,13 @@ export function TransferModal({
               {selectedAgent && agentNumbers.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    Select Number
-                  </Label>
+                    <Phone className="h-4 w-4 text-green-600" />{tUi("Select Number")}</Label>
                   <ClientOnlySelect
                     value={selectedAgentNumber}
                     onValueChange={setSelectedAgentNumber}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a number" />
+                      <SelectValue placeholder={tUi("Choose a number")} />
                     </SelectTrigger>
                     <SelectContent>
                       {agentNumbers.map((num, idx) => {
@@ -2007,9 +1984,7 @@ export function TransferModal({
                     <div className="flex items-center justify-between gap-4">
                       {/* Status - label and value in one line */}
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          Status:
-                        </span>
+                        <span className="text-xs text-muted-foreground">{tUi("Status:")}</span>
                         {(() => {
                           const StatusIcon =
                             STATUS_NAME_ICON_FALLBACK[agentStats.status] ||
@@ -2047,7 +2022,7 @@ export function TransferModal({
                                     : undefined
                                 }
                               >
-                                {agentStats.status || "Unknown"}
+                                {agentStats.status || tUi("Unknown")}
                               </span>
                             </>
                           );
@@ -2055,9 +2030,7 @@ export function TransferModal({
                       </div>
                       {/* On Call - label and value in one line */}
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          On Call:
-                        </span>
+                        <span className="text-xs text-muted-foreground">{tUi("On Call:")}</span>
                         {(() => {
                           const currentCallsCount =
                             typeof agentStats.currentCalls === "number"
@@ -2073,7 +2046,7 @@ export function TransferModal({
                                   : "bg-gray-500 text-white"
                               )}
                             >
-                              {isOnCall ? "Yes" : "No"}
+                              {isOnCall ? tUi("Yes") : tUi("No")}
                             </Badge>
                           );
                         })()}
@@ -2081,9 +2054,7 @@ export function TransferModal({
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading...
-                    </div>
+                      <Loader2 className="h-4 w-4 animate-spin" />{tUi("Loading...")}</div>
                   )}
                 </div>
               )}
@@ -2095,24 +2066,18 @@ export function TransferModal({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <Users className="h-4 w-4 text-green-600" />
-                  Select Contact
-                </Label>
+                  <Users className="h-4 w-4 text-green-600" />{tUi("Select Contact")}</Label>
                 {loadingData ? (
-                  <div className="text-sm text-muted-foreground">
-                    Loading contacts...
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("Loading contacts...")}</div>
                 ) : recordsWithNumbers.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No contacts with phone numbers found
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("No contacts with phone numbers found")}</div>
                 ) : (
                   <ClientOnlySelect
                     value={selectedRecordId}
                     onValueChange={setSelectedRecordId}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a contact" />
+                      <SelectValue placeholder={tUi("Choose a contact")} />
                     </SelectTrigger>
                     <SelectContent>
                       {recordsWithNumbers.map((record) => (
@@ -2133,15 +2098,13 @@ export function TransferModal({
               {selectedRecord && availableNumbers.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    Select Number
-                  </Label>
+                    <Phone className="h-4 w-4 text-green-600" />{tUi("Select Number")}</Label>
                   <ClientOnlySelect
                     value={selectedNumber}
                     onValueChange={setSelectedNumber}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a number" />
+                      <SelectValue placeholder={tUi("Choose a number")} />
                     </SelectTrigger>
                     <SelectContent>
                       {availableNumbers.map((num, idx) => {
@@ -2175,24 +2138,18 @@ export function TransferModal({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <Bot className="h-4 w-4 text-indigo-600" />
-                  Select AI Agent
-                </Label>
+                  <Bot className="h-4 w-4 text-indigo-600" />{tUi("Select AI Agent")}</Label>
                 {loadingData ? (
-                  <div className="text-sm text-muted-foreground">
-                    Loading AI agents...
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("Loading AI agents...")}</div>
                 ) : assistants.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No AI agents found
-                  </div>
+                  <div className="text-sm text-muted-foreground">{tUi("No AI agents found")}</div>
                 ) : (
                   <ClientOnlySelect
                     value={selectedAssistantId}
                     onValueChange={setSelectedAssistantId}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose an AI agent" />
+                      <SelectValue placeholder={tUi("Choose an AI agent")} />
                     </SelectTrigger>
                     <SelectContent>
                       {assistants.map((assistant) => (
@@ -2214,10 +2171,7 @@ export function TransferModal({
                   </ClientOnlySelect>
                 )}
                 {selectedAssistantId && (
-                  <p className="text-xs text-muted-foreground">
-                    Will transfer to: sip:user@{selectedAssistantId}
-                    .sip.telnyx.com
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("Will transfer to: sip:user@")}{selectedAssistantId}{tUi(".sip.telnyx.com")}</p>
                 )}
               </div>
             </div>
@@ -2227,12 +2181,10 @@ export function TransferModal({
           {selectionType === "manual" && (
             <div className="space-y-2">
               <Label className="text-sm font-semibold flex items-center gap-2">
-                <Phone className="h-4 w-4 text-orange-600" />
-                Phone Number or SIP URI
-              </Label>
+                <Phone className="h-4 w-4 text-orange-600" />{tUi("Phone Number or SIP URI")}</Label>
               <input
                 type="tel"
-                data-testid="transfer-manual-number" placeholder="+1234567890 or sip:user@domain.com"
+                data-testid="transfer-manual-number" placeholder={tUi("+1234567890 or sip:user@domain.com")}
                 value={manualNumber}
                 onChange={(e) => setManualNumber(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -2246,9 +2198,7 @@ export function TransferModal({
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <PhoneCall className="h-4 w-4 text-blue-600" />
-                  Call Legs
-                </Label>
+                  <PhoneCall className="h-4 w-4 text-blue-600" />{tUi("Call Legs")}</Label>
                 {/* Call Status Badge - smaller, border/text only */}
                 <Badge
                   variant="outline"
@@ -2261,7 +2211,7 @@ export function TransferModal({
                       : "border-blue-500 text-blue-500"
                   )}
                 >
-                  {callStatus || activeCall?.state || "initiating"}
+                  {callStatus || activeCall?.state || tUi("initiating")}
                 </Badge>
               </div>
 
@@ -2302,7 +2252,7 @@ export function TransferModal({
                     onClick={handleDisconnectCall}
                     disabled={loading || completeRequested || !coreConsultCanCancel}
                     className="h-10 w-10 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Disconnect"
+                    title={tUi("Disconnect")}
                   >
                     <PhoneOff className="h-4 w-4" />
                   </button>
@@ -2319,7 +2269,7 @@ export function TransferModal({
                         ? "bg-zinc-700 hover:bg-zinc-800 text-white"
                         : "bg-zinc-600 hover:bg-zinc-700 text-white"
                     )}
-                    title={callUI.isMuted ? "Unmute" : "Mute"}
+                    title={callUI.isMuted ? tUi("Unmute") : tUi("Mute")}
                   >
                     {callUI.isMuted ? (
                       <MicOff className="h-4 w-4" />
@@ -2331,7 +2281,7 @@ export function TransferModal({
                     onClick={handleDisconnectCall}
                     disabled={loading || completeRequested || !coreConsultCanCancel}
                     className="h-10 w-10 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Disconnect"
+                    title={tUi("Disconnect")}
                   >
                     <PhoneOff className="h-4 w-4" />
                   </button>
@@ -2339,7 +2289,7 @@ export function TransferModal({
                     onClick={handleToggleHold}
                     disabled={loading || completeRequested}
                     className="h-10 w-10 rounded-full grid place-items-center bg-zinc-600 hover:bg-zinc-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={callUI.isHeld ? "Unhold" : "Hold"}
+                    title={callUI.isHeld ? tUi("Unhold") : tUi("Hold", undefined, "phone action")}
                   >
                     {callUI.isHeld ? (
                       <Play className="h-4 w-4" />
@@ -2360,12 +2310,12 @@ export function TransferModal({
               disabled={closeRequested || completeRequested}
               title={
                 consultState.isActive || consultState.initiating
-                  ? "Cancel consult and close"
-                  : "Cancel"
+                  ? tUi("Cancel consult and close")
+                  : tUi("Cancel")
               }
             >
               {closeRequested && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {closeRequested ? "Cancelling..." : "Cancel"}
+              {closeRequested ? tUi("Cancelling...") : tUi("Cancel")}
             </Button>
             {hasCoreInteraction && consultState.isActive && (
               <Button
@@ -2376,12 +2326,12 @@ export function TransferModal({
                   coreIntent?.step !== "in_consult"
                 }
                 className="min-w-[150px] bg-green-600 text-white hover:bg-green-700"
-                title="Connect the customer to the consultant and leave the call"
+                title={tUi("Connect the customer to the consultant and leave the call")}
               >
                 {(loading || completeRequested) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {completeRequested ? "Completing..." : "Complete transfer"}
+                {completeRequested ? tUi("Completing...") : tUi("Complete transfer")}
               </Button>
             )}
             {/* Show Consult/Transfer buttons when NOT in consult mode */}
@@ -2400,11 +2350,9 @@ export function TransferModal({
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Consulting...
-                    </>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />{tUi("Consulting...")}</>
                   ) : (
-                    "Consult"
+                    tUi("Consult")
                   )}
                 </Button>
                 <Button
@@ -2414,11 +2362,9 @@ export function TransferModal({
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Transferring...
-                    </>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />{tUi("Transferring...")}</>
                   ) : (
-                    "Transfer"
+                    tUi("Transfer")
                   )}
                 </Button>
               </>

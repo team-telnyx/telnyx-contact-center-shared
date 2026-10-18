@@ -5,6 +5,8 @@ import { ANAM_AVATAR_PROVIDER, AVATAR_PROVIDERS } from "@/lib/ai/avatar-config.m
 import { fetchPublicLiveAvatars } from "@/lib/ai/heygen-liveavatar.mjs";
 import { fetchAnamAvatars } from "@/lib/ai/anam-avatar.mjs";
 import { avatarErrorResponse, isAvatarProviderConfigured } from "@/lib/ai/avatar-extensions.mjs";
+import { TELNYX_AVATAR_PROVIDER } from "@/lib/ai/telnyx-avatar-catalog.mjs";
+import { listTelnyxAvatars } from "@/lib/ai/telnyx-avatars.mjs";
 
 // Avatar catalog for Widget Studio → Avatars. HeyGen exposes its public
 // avatars without a key; Anam needs the account key, so an unconfigured Anam
@@ -17,6 +19,10 @@ export const GET = (request, context) => withWidgetAdmin(request, async () => {
   const configured = isAvatarProviderConfigured(provider);
   const headers = { "Cache-Control": "no-store" };
   try {
+    if (provider === TELNYX_AVATAR_PROVIDER) {
+      const allAvatars = await listTelnyxAvatars();
+      return NextResponse.json({ configured, avatars: allAvatars.slice(0, 5), allAvatars }, { headers });
+    }
     if (provider === ANAM_AVATAR_PROVIDER && !configured) {
       return NextResponse.json({ configured: false, avatars: [], allAvatars: [] }, { headers });
     }

@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -71,6 +74,7 @@ function formPreviewStyle(form = {}) {
 }
 
 export default function AdminFormsPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -129,7 +133,7 @@ export default function AdminFormsPage() {
       const res = await fetch(`/api/admin/forms/${form.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Archive failed");
-      notify({ title: "Form archived", description: `“${form.name}” is now archived.`, variant: "success" });
+      notify({ title: "Form archived", description: tUi("“{value0}” is now archived.", {value0: form.name}), variant: "success" });
       setArchiveTarget(null);
       await load();
     } catch (err) {
@@ -145,7 +149,7 @@ export default function AdminFormsPage() {
       const res = await fetch(`/api/admin/forms/${form.id}/publish`, { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Publish failed");
-      notify({ title: "Form published", description: `“${form.name}” is now published.`, variant: "success" });
+      notify({ title: "Form published", description: tUi("“{value0}” is now published.", {value0: form.name}), variant: "success" });
       await load();
     } catch (err) {
       notify({ title: "Publish failed", description: err.message || "Please try again.", variant: "error" });
@@ -173,7 +177,7 @@ export default function AdminFormsPage() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      notify({ title: "Form exported", description: `Downloaded ${filename}.`, variant: "success" });
+      notify({ title: "Form exported", description: tUi("Downloaded {value0}.", {value0: filename}), variant: "success" });
     } catch (err) {
       notify({ title: "Export failed", description: err.message || "Please try again.", variant: "error" });
     } finally {
@@ -192,7 +196,7 @@ export default function AdminFormsPage() {
       const res = await fetch("/api/admin/forms/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bundle) });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.details?.[0]?.message || data.error || "Import failed");
-      notify({ title: "Form imported", description: `Created “${data.form?.name || "imported form"}” as a draft${data.importedMediaCount ? ` and registered ${data.importedMediaCount} media reference${data.importedMediaCount === 1 ? "" : "s"}` : ""}.`, variant: "success" });
+      notify({ title: "Form imported", description: tUi("Created draft “{value0}”. Registered media references: {value1}.", {value0: data.form?.name || tUi("Imported form"), value1: data.importedMediaCount || 0}), variant: "success" });
       await load();
     } catch (err) {
       notify({ title: "Import failed", description: err.message || "Please select a valid form JSON export.", variant: "error" });
@@ -204,29 +208,27 @@ export default function AdminFormsPage() {
   const headerActions = <>
     <div className="flex items-center gap-2 rounded-md border bg-background/70 px-3 py-2">
       <Switch id="show-archived-forms" checked={showArchived} onCheckedChange={setShowArchived} disabled={formsLoading || refreshing} />
-      <label htmlFor="show-archived-forms" className="text-sm font-medium leading-none">Show Archived</label>
+      <label htmlFor="show-archived-forms" className="text-sm font-medium leading-none">{tUi("Show Archived")}</label>
     </div>
     <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importFormFile} />
-    <Button size="sm" variant="outline" onClick={() => load({ showRefreshing: true, showSuccessToast: true })} disabled={loading || formsLoading || refreshing}><IconRefresh className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />Refresh</Button>
-    <Can permission="forms:import"><Button size="sm" variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />Import JSON</Button></Can>
-    <Can permission="forms:create"><Button size="sm" onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button></Can>
+    <Button size="sm" variant="outline" onClick={() => load({ showRefreshing: true, showSuccessToast: true })} disabled={loading || formsLoading || refreshing}><IconRefresh className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />{tUi("Refresh")}</Button>
+    <Can permission="forms:import"><Button size="sm" variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />{tUi("Import JSON")}</Button></Can>
+    <Can permission="forms:create"><Button size="sm" onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />{tUi("New form")}</Button></Can>
   </>;
 
   return <AdminPageShell>
-    <AdminPageHeader title="Agent Forms" badges={<Badge variant="secondary">{forms.length} forms</Badge>} actions={headerActions} />
+    <AdminPageHeader title={tUi("Agent Forms")} badges={<Badge variant="secondary">{forms.length}{tUi(" forms")}</Badge>} actions={headerActions} />
     <AutomationsSectionPage activeId="forms">
       <div className="space-y-5">
     <AlertDialog open={Boolean(archiveTarget)} onOpenChange={(open) => { if (!open && !loading) setArchiveTarget(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Archive form?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Archive “{archiveTarget?.name || "this form"}”? It will be hidden from published form lists, but can still be restored from archived records.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{tUi("Archive form?")}</AlertDialogTitle>
+          <AlertDialogDescription>{tUi("Archive “")}{archiveTarget?.name || tUi("this form")}{tUi("”? It will be hidden from published form lists, but can still be restored from archived records.")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={confirmArchiveForm} disabled={loading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Archive form</AlertDialogAction>
+          <AlertDialogCancel disabled={loading}>{tUi("Cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmArchiveForm} disabled={loading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{tUi("Archive form")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -236,14 +238,14 @@ export default function AdminFormsPage() {
       {Array.from({ length: 6 }).map((_, index) => <FormCardSkeleton key={index} />)}
     </div> : null}
 
-    {!formsLoading && forms.length === 0 ? <Card><CardContent className="p-10 text-center"><h2 className="font-medium">{showArchived ? "No forms yet" : "No active forms"}</h2><p className="mt-1 text-sm text-muted-foreground">{showArchived ? "Create the first form, then refine it in the visual builder or with the AI agent." : "Archived forms are hidden by default. Enable Show Archived to include them."}</p><Button className="mt-4" onClick={createForm}>Create form</Button></CardContent></Card> : null}
+    {!formsLoading && forms.length === 0 ? <Card><CardContent className="p-10 text-center"><h2 className="font-medium">{showArchived ? tUi("No forms yet") : tUi("No active forms")}</h2><p className="mt-1 text-sm text-muted-foreground">{showArchived ? tUi("Create the first form, then refine it in the visual builder or with the AI agent.") : tUi("Archived forms are hidden by default. Enable Show Archived to include them.")}</p><Button className="mt-4" onClick={createForm}>{tUi("Create form")}</Button></CardContent></Card> : null}
 
     {!formsLoading ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       {forms.map((form) => <Card key={form.id} className="overflow-hidden flex flex-col">
         <CardHeader className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0"><CardTitle className="text-base truncate">{form.name}</CardTitle><p className="text-xs text-muted-foreground truncate">{form.slug}</p></div>
-            <Badge variant={form.status === "published" ? "default" : "outline"}>{form.status}</Badge>
+            <Badge variant={form.status === "published" ? "default" : "outline"}>{operationalStatusLabel(tUi, form.status)}</Badge>
           </div>
           <div className="flex flex-wrap gap-1 text-xs">{form.category ? <Badge variant="secondary">{form.category}</Badge> : null}{(form.queue_names || []).slice(0, 2).map((queue) => <Badge key={queue} variant="outline">{queue}</Badge>)}{(form.queue_names || []).length > 2 ? <Badge variant="outline">+{form.queue_names.length - 2}</Badge> : null}</div>
         </CardHeader>
@@ -256,10 +258,10 @@ export default function AdminFormsPage() {
           {form.description ? <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{form.description}</p> : null}
         </CardContent>
         <CardFooter className="flex flex-wrap gap-2 border-t bg-muted/30 p-3">
-          <Button size="sm" onClick={() => router.push(`/admin/forms/${form.id}`)}><IconPencil className="h-4 w-4 mr-1" />Edit</Button>
-          <Can permission="forms:publish"><Button size="sm" variant="outline" onClick={() => publishForm(form)} disabled={loading || form.status === "published"}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button></Can>
-          <Button size="sm" variant="outline" onClick={() => exportForm(form)} disabled={loading}><IconDownload className="h-4 w-4 mr-1" />Export</Button>
-          <Can permission="forms:delete"><Button size="sm" variant="ghost" className="text-destructive" onClick={() => archiveForm(form)} disabled={loading || form.status === "archived"}><IconArchive className="h-4 w-4 mr-1" />Archive</Button></Can>
+          <Button size="sm" onClick={() => router.push(`/admin/forms/${form.id}`)}><IconPencil className="h-4 w-4 mr-1" />{tUi("Edit")}</Button>
+          <Can permission="forms:publish"><Button size="sm" variant="outline" onClick={() => publishForm(form)} disabled={loading || form.status === "published"}><IconWorldUpload className="h-4 w-4 mr-1" />{tUi("Publish")}</Button></Can>
+          <Button size="sm" variant="outline" onClick={() => exportForm(form)} disabled={loading}><IconDownload className="h-4 w-4 mr-1" />{tUi("Export")}</Button>
+          <Can permission="forms:delete"><Button size="sm" variant="ghost" className="text-destructive" onClick={() => archiveForm(form)} disabled={loading || form.status === "archived"}><IconArchive className="h-4 w-4 mr-1" />{tUi("Archive")}</Button></Can>
         </CardFooter>
       </Card>)}
     </div> : null}

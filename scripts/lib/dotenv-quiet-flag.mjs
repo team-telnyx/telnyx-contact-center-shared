@@ -23,3 +23,5 @@
 // where these scripts write their JSON: one stray line and the output no longer
 // parses.
 process.env.DOTENV_CONFIG_QUIET = "true";
+// dotenv 18.0.6 restores dotenv/config and prefers the shorter variable name.
+process.env.DOTENV_QUIET = "true";

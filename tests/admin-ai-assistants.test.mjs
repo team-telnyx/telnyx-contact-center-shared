@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import test from "node:test";
 import vm from "node:vm";
 import { normalizeAssistantPayload } from "../lib/ai/assistant-payload.mjs";
 import { telnyxErrorDetail } from "../lib/telnyx-error.mjs";
 import { stripTtsExpressionTags } from "../lib/ai/tts-expression-text.mjs";
+import { schemaTypeBranches } from "../lib/ai/assistant-contract.mjs";
 
 const root = new URL("../", import.meta.url);
 
@@ -21,6 +22,7 @@ test("AI Assistant editor represents every demo portal tab in the section rail",
     "dashboard",
     "agent",
     "voice",
+    "avatar",
     "workflow",
     "integrations",
     "insights",
@@ -39,9 +41,7 @@ test("AI Assistant editor represents every demo portal tab in the section rail",
 test("AI Assistant Call opens the dedicated AI phone widget and unsaved exit uses a custom dialog", async () => {
   const editor = await readFile(new URL("components/assistants/AssistantEditor.jsx", root), "utf8");
   const phone = await readFile(new URL("components/assistants/AssistantPhoneWidget.jsx", root), "utf8");
-  const messages = await readFile(new URL("components/ai-widget-messages.jsx", root), "utf8");
-  const provider = await readFile(new URL("components/ai-widget-ui-provider.jsx", root), "utf8");
-  const status = await readFile(new URL("components/ai-widget-status.jsx", root), "utf8");
+  const transcript = await readFile(new URL("components/assistants/AssistantCallTranscript.jsx", root), "utf8");
   assert.match(editor, /import AssistantPhoneWidget/);
   assert.match(editor, /setShowPhone\(true\)/);
   assert.match(editor, /<AssistantPhoneWidget/);
@@ -54,28 +54,29 @@ test("AI Assistant Call opens the dedicated AI phone widget and unsaved exit use
   assert.match(editor, /setLeaveTarget\(target\)/);
   assert.match(editor, /skipLeaveGuardRef\.current = true/);
   assert.match(editor, /window\.location\.assign\(target\)/);
-  assert.match(phone, /TelnyxAIAgentProvider/);
-  assert.match(phone, /widgetVersion="contact-center-ai-widget\/1\.0"/);
-  assert.match(phone, /<AIWidgetUIProvider>/);
-  assert.match(phone, /await startConversation\(callOptions\)/);
-  assert.doesNotMatch(phone, /await client\.connect\(\)/);
-  assert.match(messages, /client\.sendConversationMessage/);
-  assert.match(phone, /navigator\.mediaDevices\.getUserMedia/);
-  assert.match(phone, /track\.enabled = !nextMuted/);
-  assert.match(phone, /PANEL_WIDTH = 320/);
-  assert.match(phone, /PANEL_HEIGHT = 690/);
-  assert.match(phone, /data-drag-handle/);
+  // Call uses a Contact Center session for both modes. The behavior of the
+  // authenticated relay and media client is exercised in assistant-call.test.
+  assert.match(phone, /\/call-session/);
+  assert.match(phone, /credentials: "same-origin"/);
+  assert.doesNotMatch(phone, /TelnyxAIAgentProvider|anonymous_login|TELNYX_API_KEY/);
+  assert.match(phone, /client\.sendConversationMessage/);
   assert.match(phone, /<AudioVisualizer/);
-  assert.match(phone, /min-h-0 flex-1 border-t/);
-  assert.match(phone, /Audio visualizer will appear during calls/);
-  assert.match(phone, /<AIWidgetStatus compact \/>/);
-  assert.match(phone, /<AIWidgetMessages compact \/>/);
+  assert.match(phone, /<AvatarMediaPanel/);
+  assert.match(phone, /!configuration\?\.avatar && <AssistantCallTranscript/);
+  assert.match(transcript, /stripTtsExpressionTags\(item\.content\)/);
+  assert.match(transcript, /Voice and typed messages will appear here in real time/);
+});
+
+test("shared web widget retains transcript cleanup and connection diagnostics", async () => {
+  const messages = await readFile(new URL("components/ai-widget-messages.jsx", root), "utf8");
+  const provider = await readFile(new URL("components/ai-widget-ui-provider.jsx", root), "utf8");
+  const status = await readFile(new URL("components/ai-widget-status.jsx", root), "utf8");
+  assert.match(messages, /client\.sendConversationMessage/);
   assert.match(messages, /Voice and typed messages will appear here in real time/);
   assert.match(messages, /stripTtsExpressionTags\(message\.content\)/);
   assert.match(provider, /agent\.login\.started/);
   assert.match(provider, /client\.clearReconnectToken\(\)/);
   assert.match(status, /Copy diagnostics/);
-  assert.doesNotMatch(phone, /streamingAudio|AIConversationMedia|mediaSettings/);
 });
 
 test("assistant webhook presets only expose Contact Center data sources", async () => {
@@ -118,9 +119,9 @@ test("assistant payload normalization converts UI-only voice, voicemail, webhook
     conversation_flow: { nodes: [{ id: "n1", tools_override: true, tools_mode: "replace" }] },
   });
   assert.equal(payload.voice_settings.similarity_boost, 0.8);
-  assert.equal(payload.voice_settings.voice_speed, 1.2);
+  assert.equal(payload.voice_settings.speed, 1.2);
   assert.equal(payload.telephony_settings.voicemail_detection.on_voicemail_detected.action, "leave_message_and_stop_assistant");
-  assert.equal(payload.tools[0].webhook.timeout_ms, 12000);
+  assert.equal(payload.tools[0].timeout_ms, 12000);
   assert.equal(payload.tools[0].webhook.async, true);
   assert.equal("tools_override" in payload.conversation_flow.nodes[0], false);
 });
@@ -276,25 +277,20 @@ test("AI Assistant dashboard matches the demo portal executive review layout", a
   assert.match(source, /min-h-\[20rem\] flex-1/);
 });
 
-test("Dashboard summary uses a Telnyx-hosted chat completion model without requiring an OpenAI key", async () => {
+test("Dashboard summary uses the AI Copilot model chain, with no model in code", async () => {
   const source = await readFile(new URL("app/api/ai/assistants/[id]/dashboard-summary/route.js", root), "utf8");
   assert.match(source, /\/ai\/chat\/completions/);
-  assert.match(source, /meta-llama\/Llama-3\.3-70B-Instruct/);
-  assert.doesNotMatch(source, /\|\| "openai\/gpt-4o-mini"/);
+  assert.match(source, /prepareAiOperation\("assistant-summary"/);
+  assert.doesNotMatch(source, /meta-llama\/|openai\/gpt|TELNYX_AI_DASHBOARD_SUMMARY_MODEL/);
 });
 
-test("Agent model selectors match the demo portal and only show Telnyx-recommended assistant models", async () => {
+test("Agent uses provider-aware primary and fallback configuration with the current model endpoint", async () => {
   const agentSource = await readFile(new URL("components/assistants/AgentSettingsPanel.jsx", root), "utf8");
-  const pickerSource = await readFile(new URL("components/assistants/AIModels.jsx", root), "utf8");
   const apiSource = await readFile(new URL("app/api/ai/models/route.js", root), "utf8");
-  assert.match(agentSource, /filter\(\(model\) => model\.recommended_for_assistants\)/);
-  assert.match(agentSource, /<AIModels[\s\S]*models=\{recommendedModels\}/);
-  assert.match(agentSource, /Fallback Model[\s\S]*<AIModels/);
-  assert.match(pickerSource, /Search models\.\.\./);
-  assert.match(pickerSource, /<SelectGroup>/);
-  assert.match(pickerSource, /<ModelDetails/);
+  assert.match(agentSource, /<AssistantModelConfiguration/);
+  assert.match(agentSource, /label="Fallback model"/);
+  assert.match(apiSource, /ai\/openai\/models/);
   assert.match(apiSource, /recommended_for_assistants: model\?\.recommended_for_assistants === true/);
-  assert.match(apiSource, /raw: model \|\| null/);
 });
 
 test("Workflow settings reuse the detailed provider model picker without filtering the Telnyx catalog", async () => {
@@ -363,11 +359,70 @@ test("Voice through Privacy use the demo portal tabs inside fixed rail-height ca
   assert.match(workflow, /flex h-full min-h-0 flex-col[\s\S]*overflow-hidden/);
   const calling = await readFile(new URL("components/assistants/CallingTab.jsx", root), "utf8");
   assert.match(calling, /h-full min-h-0 w-full overflow-y-auto/);
-  assert.match(calling, /Voice Numbers[\s\S]*Call Settings Card[\s\S]*Call Settings/);
+  assert.match(calling, /Voice Numbers[\s\S]*AssistantCallingSettings/);
+  const callingSettings = await readFile(new URL("components/assistants/AssistantCallingSettings.jsx", root), "utf8");
+  assert.match(callingSettings, /Call Settings/);
   assert.doesNotMatch(calling, /<Card className="h-full min-h-0 w-full overflow-hidden">/);
   const widgetRoute = await readFile(new URL("app/api/ai/assistants\/\[id\]\/route.js", root), "utf8");
   // POST stays exposed for demo-portal components such as WidgetTab; since the
   // Phase 0 hardening it is exported through the permission guard.
   assert.match(widgetRoute, /async function POST_handler\(request, context\)/);
   assert.match(widgetRoute, /export const POST = withPermission\("ai_assistants:update", POST_handler/);
+});
+
+test("AI Assistant editor keeps Find setting and Review changes in its header, and the review previews the mode the save uses", async () => {
+  const editor = await readFile(new URL("components/assistants/AssistantEditor.jsx", root), "utf8");
+  assert.match(editor, /<AssistantSettingsSearch onSelect=\{findSetting\} \/>/);
+  assert.match(editor, /onClick=\{\(\) => setReviewOpen\(true\)\} disabled=\{!dirty\}/);
+  assert.match(editor, /<AssistantChangeReview values=\{values\} assistantId=\{assistantId\} open=\{reviewOpen\}/);
+  const review = await readFile(new URL("components/assistants/AssistantChangeReview.jsx", root), "utf8");
+  assert.match(review, /patch: Boolean\(assistantId \|\| values\.id\)/);
+});
+
+test("a multi-type schema's default stays on the branch it belongs to", () => {
+  const branches = schemaTypeBranches({ type: ["string", "array", "null"], default: null, description: "d" });
+  assert.deepEqual(branches.map((b) => b.type), ["string", "array", "null"]);
+  assert.equal(Object.hasOwn(branches[0], "default"), false);
+  assert.equal(Object.hasOwn(branches[1], "default"), false);
+  assert.equal(branches[2].default, null);
+  assert.equal(branches[0].description, "d");
+  const numeric = schemaTypeBranches({ type: ["integer", "null"], default: 5 });
+  assert.equal(numeric[0].default, 5);
+  assert.equal(Object.hasOwn(numeric[1], "default"), false);
+});
+
+test("assistant components import every contract helper they call (Interruptions tab crash)", async () => {
+  // AssistantSchemaFields called schemaTypeBranches without importing it, so the
+  // first multi-type field (Voice → Interruptions) threw a ReferenceError and
+  // blanked the page. Unit tests import the helper directly and never saw it.
+  const contract = await import("../lib/ai/assistant-contract.mjs");
+  const helpers = Object.keys(contract).filter((name) => typeof contract[name] === "function");
+  const { readdir } = await import("node:fs/promises");
+  const dir = new URL("components/assistants/", root);
+  for (const file of (await readdir(dir)).filter((name) => name.endsWith(".jsx"))) {
+    const source = await readFile(new URL(file, dir), "utf8");
+    const imported = new Set([...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*["'][^"']*assistant-contract(?:\.mjs)?["']/g)]
+      .flatMap((match) => match[1].split(",").map((part) => part.trim().split(/\s+as\s+/).pop()).filter(Boolean)));
+    for (const name of helpers) {
+      const called = new RegExp(`(?<![\\w.$])${name}\\(`).test(source);
+      const local = new RegExp(`(function\\s+${name}\\b|(const|let|var)\\s+${name}\\b)`).test(source);
+      if (called && !local) assert.ok(imported.has(name), `${file} calls ${name} without importing it`);
+    }
+  }
+});
+
+test("Find setting can land on the agent and model controls", async () => {
+  const agent = await readFile(new URL("components/assistants/AgentSettingsPanel.jsx", root), "utf8");
+  for (const path of ["name", "description", "instructions", "tags", "greeting", "delegation_settings", "model", "fallback_config"]) assert.match(agent, new RegExp(`data-setting-path="${path}"`), path);
+  assert.match(agent, /settingPath="fallback_config"/);
+  const integrations = await readFile(new URL("components/assistants/IntegrationsTab.jsx", root), "utf8");
+  assert.match(integrations, /data-setting-path="dynamic_variables_webhook_url"/);
+  const editor = await readFile(new URL("components/assistants/AssistantEditor.jsx", root), "utf8");
+  assert.match(editor, /setSearchTarget\(\{ path: item\.path \}\)/, "choosing a result again scrolls again");
+  assert.match(editor, /\.reduce\(\(best, el\) => \(!best \|\| el\.dataset\.settingPath\.length >= best\.dataset\.settingPath\.length \? el : best\), null\)/, "the innermost element wins a tie");
+  const model = await readFile(new URL("components/assistants/AssistantModelConfiguration.jsx", root), "utf8");
+  for (const key of ["external_llm", "external_llm.base_url", "external_llm.model", "llm_api_key_ref", "external_llm.authentication_method", "external_llm.certificate_ref", "external_llm.token_retrieval_url", "external_llm.forward_metadata"]) assert.match(model, new RegExp(`at\\("${key.replaceAll(".", "\\.")}"\\)`), key);
+  // The prefix really is joined to the key, and every label keeps the generated id prefix.
+  assert.match(model, /const at = \(key\) => \(settingPath \? `\$\{settingPath\}\.\$\{key\}` : key\)/);
+  assert.equal((model.match(/htmlFor=\{`\$\{id\}-/g) || []).length, (model.match(/htmlFor=\{`/g) || []).length, "every htmlFor keeps the id prefix");
 });

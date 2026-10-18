@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +32,7 @@ const RECORDING_CHANNELS = [
 ];
 
 export default function VoiceApiCommandToolEditor({ value, onChange }) {
+  const tUi = useUiText();
   const vc = value?.voice_api_command || {};
 
   function update(partial) {
@@ -45,40 +48,38 @@ export default function VoiceApiCommandToolEditor({ value, onChange }) {
   return (
     <div className="space-y-4">
       <div>
-        <Label className="text-xs">Description (optional)</Label>
+        <Label className="text-xs">{tUi("Description (optional)")}</Label>
         <Textarea
           rows={2}
           value={vc.description || ""}
           onChange={(e) => update({ description: e.target.value })}
-          placeholder="Describe when the assistant should invoke this command"
+          placeholder={tUi("Describe when the assistant should invoke this command")}
         />
       </div>
 
       <div>
-        <Label className="text-xs">Intent Message (optional)</Label>
+        <Label className="text-xs">{tUi("Intent Message (optional)")}</Label>
         <Input
           value={vc.intent_message || ""}
           onChange={(e) => update({ intent_message: e.target.value })}
-          placeholder="Message to speak before executing the command"
+          placeholder={tUi("Message to speak before executing the command")}
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Optional message spoken to the caller before the command executes.
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Optional message spoken to the caller before the command executes.")}</p>
       </div>
 
       <div>
-        <Label className="text-xs">Command</Label>
+        <Label className="text-xs">{tUi("Command")}</Label>
         <Select
           value={command}
           onValueChange={(val) => update({ command: val })}
         >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select a command…" />
+            <SelectValue placeholder={tUi("Select a command…")} />
           </SelectTrigger>
           <SelectContent>
             {VOICE_API_COMMANDS.map(({ value, label }) => (
               <SelectItem key={value} value={value}>
-                {label}
+                {tUi(label)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -88,11 +89,11 @@ export default function VoiceApiCommandToolEditor({ value, onChange }) {
       {/* Recording-start specific options */}
       {isRecordingStart && (
         <div className="border rounded-md p-3 space-y-3 bg-muted/20">
-          <div className="text-xs font-medium">Recording Options</div>
+          <div className="text-xs font-medium">{tUi("Recording Options")}</div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Format</Label>
+              <Label className="text-xs">{tUi("Format")}</Label>
               <Select
                 value={vc.format || "mp3"}
                 onValueChange={(val) => update({ format: val })}
@@ -111,7 +112,7 @@ export default function VoiceApiCommandToolEditor({ value, onChange }) {
             </div>
 
             <div>
-              <Label className="text-xs">Channels</Label>
+              <Label className="text-xs">{tUi("Channels")}</Label>
               <Select
                 value={vc.channels || "single"}
                 onValueChange={(val) => update({ channels: val })}
@@ -122,7 +123,7 @@ export default function VoiceApiCommandToolEditor({ value, onChange }) {
                 <SelectContent>
                   {RECORDING_CHANNELS.map(({ value, label }) => (
                     <SelectItem key={value} value={value}>
-                      {label}
+                      {tUi(label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -131,7 +132,7 @@ export default function VoiceApiCommandToolEditor({ value, onChange }) {
           </div>
 
           <div>
-            <Label className="text-xs">Max Length (seconds)</Label>
+            <Label className="text-xs">{tUi("Max Length (seconds)")}</Label>
             <Input
               type="number"
               min={0}
@@ -141,7 +142,7 @@ export default function VoiceApiCommandToolEditor({ value, onChange }) {
                   max_length: e.target.value ? Number(e.target.value) : undefined,
                 })
               }
-              placeholder="e.g. 600"
+              placeholder={tUi("e.g. 600")}
             />
           </div>
 
@@ -151,9 +152,7 @@ export default function VoiceApiCommandToolEditor({ value, onChange }) {
               checked={vc.beep_enabled === true}
               onCheckedChange={(v) => update({ beep_enabled: v })}
             />
-            <Label htmlFor="vc-beep" className="text-xs cursor-pointer">
-              Beep Enabled
-            </Label>
+            <Label htmlFor="vc-beep" className="text-xs cursor-pointer">{tUi("Beep Enabled")}</Label>
           </div>
         </div>
       )}

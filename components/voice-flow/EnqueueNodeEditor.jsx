@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Label } from "@/components/ui/label";
@@ -72,14 +74,14 @@ function getQueueTypeBadgeColor(routingStrategy) {
 }
 
 // Helper function to get display name for queue type
-function getQueueTypeDisplayName(routingStrategy) {
+function getQueueTypeDisplayName(routingStrategy, tUi) {
   switch (routingStrategy) {
     case "FIFO":
       return "FIFO";
     case "Skill-based":
-      return "SKILLS";
+      return tUi("Skill-based");
     case "Priority-based":
-      return "PRIORITY";
+      return tUi("Priority-based");
     default:
       return routingStrategy || "FIFO";
   }
@@ -87,6 +89,7 @@ function getQueueTypeDisplayName(routingStrategy) {
 
 // Star rating component
 function StarRating({ value, onChange, maxStars = 5 }) {
+  const tUi = useUiText();
   return (
     <div className="flex gap-1">
       {Array.from({ length: maxStars }, (_, i) => {
@@ -98,7 +101,7 @@ function StarRating({ value, onChange, maxStars = 5 }) {
             type="button"
             onClick={() => onChange(starValue)}
             className="focus:outline-none"
-            aria-label={`Set rating to ${starValue} stars`}
+            aria-label={tUi("Set rating to {value0} stars", { value0: starValue })}
           >
             {filled ? (
               <IconStarFilled className="w-4 h-4 text-yellow-400" />
@@ -120,6 +123,7 @@ export default function EnqueueNodeEditor({
   edges = [],
   currentNodeId = null,
 }) {
+  const tUi = useUiText();
   // Check if Set Queue Options node exists before this node
   const hasSetQueueOptionsBefore = useMemo(() => {
     if (!currentNodeId) {
@@ -422,12 +426,8 @@ export default function EnqueueNodeEditor({
         <div className="p-4 border rounded-lg bg-muted/50">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
-              <Label htmlFor="use_queue_options" className="text-sm font-semibold">
-                Use Queue Options
-              </Label>
-              <p className="text-xs text-muted-foreground mt-1">
-                Use queue options (name, priority, skills) set by Set Queue Options node
-              </p>
+              <Label htmlFor="use_queue_options" className="text-sm font-semibold">{tUi("Use Queue Options")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{tUi("Use queue options (name, priority, skills) set by Set Queue Options node")}</p>
             </div>
             <Switch
               id="use_queue_options"
@@ -448,12 +448,11 @@ export default function EnqueueNodeEditor({
       {!useQueueOptions && (
         <>
       <div className="mt-4">
-        <Label htmlFor="queue_name">
-          Queue Name <span className="text-red-500 mt-0.5">*</span>
+        <Label htmlFor="queue_name">{tUi("Queue Name ")}<span className="text-red-500 mt-0.5">*</span>
         </Label>
         <Select value={selectedQueueName} onValueChange={setSelectedQueueName}>
           <SelectTrigger className="mt-1 w-full">
-            <SelectValue placeholder="Select a queue" />
+            <SelectValue placeholder={tUi("Select a queue")} />
           </SelectTrigger>
           <SelectContent>
             {queues.length > 0 ? (
@@ -467,27 +466,23 @@ export default function EnqueueNodeEditor({
                         getQueueTypeBadgeColor(queue.routing_strategy)
                       )}
                     >
-                      {getQueueTypeDisplayName(queue.routing_strategy)}
+                      {getQueueTypeDisplayName(queue.routing_strategy, tUi)}
                     </Badge>
                   </div>
                 </SelectItem>
               ))
             ) : (
-              <SelectItem value="__no_queues__" disabled>
-                No enabled queues available
-              </SelectItem>
+              <SelectItem value="__no_queues__" disabled>{tUi("No enabled queues available")}</SelectItem>
             )}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          Select the queue to enqueue the call to
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Select the queue to enqueue the call to")}</p>
       </div>
 
       {/* Call Priority (1-5 stars) - Available for Skill-based and Priority-based queues */}
       {!useQueueOptions && (
         <div className={`space-y-3 p-4 border rounded-lg bg-muted/50 mt-4 ${queueType === "FIFO" ? "opacity-60" : ""}`}>
-          <Label className="text-sm font-semibold">Call Priority</Label>
+          <Label className="text-sm font-semibold">{tUi("Call Priority")}</Label>
           <div className="flex items-center gap-3">
             <div className={queueType === "FIFO" ? "pointer-events-none" : ""}>
               <StarRating
@@ -497,18 +492,18 @@ export default function EnqueueNodeEditor({
               />
             </div>
             <span className="text-sm text-muted-foreground">
-              {callPriority === 1 && "Low"}
-              {callPriority === 2 && "Below Normal"}
-              {callPriority === 3 && "Normal"}
-              {callPriority === 4 && "Above Normal"}
-              {callPriority === 5 && "High"}
+              {callPriority === 1 && tUi("Low")}
+              {callPriority === 2 && tUi("Below Normal")}
+              {callPriority === 3 && tUi("Normal")}
+              {callPriority === 4 && tUi("Above Normal")}
+              {callPriority === 5 && tUi("High")}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
             {queueType === "FIFO" ? (
-              "Call priority is set to Normal (3 stars) by default for FIFO queues. Priority-based routing is not used in FIFO strategy."
+              tUi("Call priority is set to Normal (3 stars) by default for FIFO queues. Priority-based routing is not used in FIFO strategy.")
             ) : (
-              "Call-level priority (1-5 stars). Higher priority calls are routed first. Works with all routing types including skills-based routing."
+              tUi("Call-level priority (1-5 stars). Higher priority calls are routed first. Works with all routing types including skills-based routing.")
             )}
           </p>
         </div>
@@ -518,7 +513,7 @@ export default function EnqueueNodeEditor({
       {queueType === "Skill-based" && (
         <div className="space-y-3 p-4 border rounded-lg bg-muted/50 mt-4">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold">Required Skills</Label>
+            <Label className="text-sm font-semibold">{tUi("Required Skills")}</Label>
             <Button
               type="button"
               variant="outline"
@@ -531,22 +526,16 @@ export default function EnqueueNodeEditor({
               }
               title={
                 skills.length >= availableSkills.length
-                  ? "All available skills have been added"
-                  : "Add a skill"
+                  ? tUi("All available skills have been added")
+                  : tUi("Add a skill")
               }
             >
-              <IconPlus className="w-4 h-4 mr-1" />
-              Add Skill
-            </Button>
+              <IconPlus className="w-4 h-4 mr-1" />{tUi("Add Skill")}</Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Define skills required for this call with minimum proficiency levels
-          </p>
+          <p className="text-xs text-muted-foreground">{tUi("Define skills required for this call with minimum proficiency levels")}</p>
 
           {skills.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No skills defined. Add skills to enable skills-based routing.
-            </p>
+            <p className="text-sm text-muted-foreground italic">{tUi("No skills defined. Add skills to enable skills-based routing.")}</p>
           ) : (
             <div className="space-y-3">
               {skills.map((skill, index) => (
@@ -558,13 +547,11 @@ export default function EnqueueNodeEditor({
                     }
                   >
                     <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Select a skill" />
+                      <SelectValue placeholder={tUi("Select a skill")} />
                     </SelectTrigger>
                     <SelectContent>
                       {loadingSkills ? (
-                        <SelectItem value="__loading__" disabled>
-                          Loading skills...
-                        </SelectItem>
+                        <SelectItem value="__loading__" disabled>{tUi("Loading skills...")}</SelectItem>
                       ) : availableSkills.length > 0 ? (
                         availableSkills
                           .filter((s) => {
@@ -586,9 +573,7 @@ export default function EnqueueNodeEditor({
                             </SelectItem>
                           ))
                       ) : (
-                        <SelectItem value="__no_skills__" disabled>
-                          No skills available
-                        </SelectItem>
+                        <SelectItem value="__no_skills__" disabled>{tUi("No skills available")}</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
@@ -617,7 +602,7 @@ export default function EnqueueNodeEditor({
 
       {/* Other enqueue config fields */}
       <div>
-        <Label htmlFor="max_wait_time_secs">Max Wait Time (seconds)</Label>
+        <Label htmlFor="max_wait_time_secs">{tUi("Max Wait Time (seconds)")}</Label>
         <Input
           id="max_wait_time_secs"
           type="number"
@@ -633,14 +618,11 @@ export default function EnqueueNodeEditor({
           placeholder="600"
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          The number of seconds after which the call will be removed from the
-          queue
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("The number of seconds after which the call will be removed from the queue")}</p>
       </div>
 
       <div>
-        <Label htmlFor="max_size">Max Queue Size</Label>
+        <Label htmlFor="max_size">{tUi("Max Queue Size")}</Label>
         <Input
           id="max_size"
           type="number"
@@ -656,13 +638,11 @@ export default function EnqueueNodeEditor({
           placeholder="200"
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          The maximum number of calls allowed in the queue at a given time
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("The maximum number of calls allowed in the queue at a given time")}</p>
       </div>
 
       <div>
-        <Label htmlFor="keep_after_hangup">Keep After Hangup</Label>
+        <Label htmlFor="keep_after_hangup">{tUi("Keep After Hangup")}</Label>
         <Select
           value={String(config.keep_after_hangup || false)}
           onValueChange={(value) =>
@@ -676,13 +656,11 @@ export default function EnqueueNodeEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="true">Yes</SelectItem>
-            <SelectItem value="false">No</SelectItem>
+            <SelectItem value="true">{tUi("Yes")}</SelectItem>
+            <SelectItem value="false">{tUi("No")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          If set to true, the call will remain in the queue after hangup
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("If set to true, the call will remain in the queue after hangup")}</p>
       </div>
     </div>
   );

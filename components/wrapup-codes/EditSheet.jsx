@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useState, useEffect } from "react";
 import {
@@ -39,6 +41,7 @@ export default function WrapupCodeEditSheet({
   wrapupCodeId,
   onSave,
 }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
@@ -134,7 +137,7 @@ export default function WrapupCodeEditSheet({
 
       notify({
         title: "Wrapup code saved",
-        description: `Wrapup code ${wrapupCodeId ? "updated" : "created"} successfully`,
+        description: (wrapupCodeId ? tUi("Wrapup code updated successfully") : tUi("Wrapup code created successfully")),
         variant: "success",
       });
 
@@ -157,21 +160,17 @@ export default function WrapupCodeEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             {wrapupCodeId ? (
               <>
-                <IconEdit className="size-5" />
-                Edit Wrapup Code
-              </>
+                <IconEdit className="size-5" />{tUi("Edit Wrapup Code")}</>
             ) : (
               <>
-                <IconPlus className="size-5" />
-                Create Wrapup Code
-              </>
+                <IconPlus className="size-5" />{tUi("Create Wrapup Code")}</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -195,9 +194,7 @@ export default function WrapupCodeEditSheet({
               ) : (
                 <>
                   <div className="flex items-center justify-between pb-4 border-b">
-                    <Label htmlFor="isActive" className="text-sm font-medium">
-                      Active
-                    </Label>
+                    <Label htmlFor="isActive" className="text-sm font-medium">{tUi("Active")}</Label>
                     <Switch
                       id="isActive"
                       checked={isActive}
@@ -206,9 +203,7 @@ export default function WrapupCodeEditSheet({
                   </div>
 
                   <div className="flex items-center justify-between pb-4 border-b">
-                    <Label htmlFor="isDefault" className="text-sm font-medium">
-                      Default
-                    </Label>
+                    <Label htmlFor="isDefault" className="text-sm font-medium">{tUi("Default")}</Label>
                     <Switch
                       id="isDefault"
                       checked={isDefault}
@@ -217,17 +212,17 @@ export default function WrapupCodeEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Name *</Label>
+                    <Label htmlFor="name">{tUi("Name *")}</Label>
                     <Input
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g., Resolved, Escalated"
+                      placeholder={tUi("e.g., Resolved, Escalated")}
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="icon">Icon</Label>
+                    <Label htmlFor="icon">{tUi("Icon")}</Label>
                     <Combobox
                       value={icon}
                       onChange={setIcon}
@@ -236,7 +231,7 @@ export default function WrapupCodeEditSheet({
                         label: opt.label,
                         Icon: opt.Icon,
                       }))}
-                      placeholder="Select icon"
+                      placeholder={tUi("Select icon")}
                       searchable
                       contentClassName="w-[--radix-dropdown-menu-trigger-width]"
                       renderSelected={(selected) => {
@@ -251,7 +246,7 @@ export default function WrapupCodeEditSheet({
                               style={color ? { color } : undefined}
                             />
                             <span className="truncate">
-                              {selected?.label || "Select icon"}
+                              {selected?.label || tUi("Select icon")}
                             </span>
                           </div>
                         );
@@ -260,7 +255,7 @@ export default function WrapupCodeEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="color">Icon Color</Label>
+                    <Label htmlFor="color">{tUi("Icon Color")}</Label>
                     <Select value={color} onValueChange={setColor}>
                       <SelectTrigger id="color">
                         <SelectValue />
@@ -273,7 +268,7 @@ export default function WrapupCodeEditSheet({
                                 className="inline-block size-3 rounded-full border"
                                 style={{ backgroundColor: opt.value }}
                               />
-                              <span>{opt.label}</span>
+                              <span>{tUi(opt.label)}</span>
                             </span>
                           </SelectItem>
                         ))}
@@ -284,7 +279,7 @@ export default function WrapupCodeEditSheet({
                   <div className="border-t" />
 
                   <div className="grid gap-2">
-                    <Label htmlFor="displayOrder">Display Order</Label>
+                    <Label htmlFor="displayOrder">{tUi("Display Order")}</Label>
                     <Input
                       id="displayOrder"
                       type="number"
@@ -295,12 +290,12 @@ export default function WrapupCodeEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description">{tUi("Description")}</Label>
                     <Input
                       id="description"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Optional description for this code"
+                      placeholder={tUi("Optional description for this code")}
                     />
                   </div>
                 </>
@@ -314,11 +309,9 @@ export default function WrapupCodeEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={handleSave} disabled={saving || !name.trim()}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

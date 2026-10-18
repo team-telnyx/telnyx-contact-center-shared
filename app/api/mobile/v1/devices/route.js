@@ -26,7 +26,7 @@ function ready() {
 /**
  * `PUT /api/mobile/v1/devices` — register or update this device.
  *
- * A PUT because the app calls it on every launch and whenever iOS rotates a
+ * A PUT because the app calls it on every launch and whenever the OS rotates a
  * token, which it does without warning. A POST would leave a row per call and
  * the ACD ringing tokens that no longer exist.
  */

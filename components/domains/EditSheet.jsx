@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useState, useEffect } from "react";
 import {
@@ -23,6 +25,7 @@ export default function DomainEditSheet({
   domainId,
   onSave,
 }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [domain, setDomain] = useState("");
@@ -109,7 +112,7 @@ export default function DomainEditSheet({
 
       notify({
         title: "Domain saved",
-        description: `Domain ${domainId ? "updated" : "created"} successfully`,
+        description: (domainId ? tUi("Domain updated successfully") : tUi("Domain created successfully")),
         variant: "success",
       });
 
@@ -132,21 +135,17 @@ export default function DomainEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             {domainId ? (
               <>
-                <IconEdit className="size-5" />
-                Edit Domain
-              </>
+                <IconEdit className="size-5" />{tUi("Edit Domain")}</>
             ) : (
               <>
-                <IconPlus className="size-5" />
-                Create Domain
-              </>
+                <IconPlus className="size-5" />{tUi("Create Domain")}</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -168,9 +167,7 @@ export default function DomainEditSheet({
               ) : (
                 <>
                   <div className="flex items-center justify-between pb-4 border-b">
-                    <Label htmlFor="isActive" className="text-sm font-medium">
-                      Active
-                    </Label>
+                    <Label htmlFor="isActive" className="text-sm font-medium">{tUi("Active")}</Label>
                     <Switch
                       id="isActive"
                       checked={isActive}
@@ -179,12 +176,12 @@ export default function DomainEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="domain">Domain *</Label>
+                    <Label htmlFor="domain">{tUi("Domain *")}</Label>
                     <Input
                       id="domain"
                       value={domain}
                       onChange={(e) => setDomain(e.target.value)}
-                      placeholder="e.g., example.com"
+                      placeholder={tUi("e.g., example.com")}
                     />
                   </div>
                 </>
@@ -198,11 +195,9 @@ export default function DomainEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={handleSave} disabled={saving || !domain.trim()}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

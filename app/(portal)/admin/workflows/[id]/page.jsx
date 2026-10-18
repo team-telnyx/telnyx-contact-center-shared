@@ -1,4 +1,7 @@
 "use client";
+import { sourceText } from "@/lib/i18n/source-text.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -110,11 +113,12 @@ function isFormSubmitFlow(flow = {}) {
   return textFields.includes("form_submit") || flowNodes(flow).some((node) => node?.data?.nodeType === "form_submit" || node?.type === "form_submit");
 }
 
-function dataActionTitle(flow = {}) {
-  return flow.name || flow.display_name || flow.displayName || "Untitled data action";
+function dataActionTitle(flow = {}, tUi = sourceText) {
+  return flow.name || flow.display_name || flow.displayName || tUi("Untitled data action");
 }
 
 export default function WorkflowEditorPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const params = useParams();
   const workflowId = params.id;
@@ -147,8 +151,8 @@ export default function WorkflowEditorPage() {
     description: "",
     category: "",
     is_active: false,
-    llm_model: "openai/gpt-4o",
-    llm_fallback_model: "openai/gpt-5.6-luna",
+    llm_model: "", // empty = inherit the Admin → AI Copilot "Workflow analysis" model
+    llm_fallback_model: "", // optional; empty = no fallback model
     llm_reasoning_enabled: false,
     llm_max_output_tokens: 1200,
     llm_confidence_threshold: 0.95,
@@ -159,6 +163,7 @@ export default function WorkflowEditorPage() {
   
   // LLM models
   const [llmModels, setLlmModels] = useState([]);
+  const [inheritedModel, setInheritedModel] = useState(null); // AI Copilot "Workflow analysis" default {model, source}
   const [loadingModels, setLoadingModels] = useState(false);
   
   // AI Agent
@@ -308,8 +313,8 @@ export default function WorkflowEditorPage() {
         description: data.workflow.description || "",
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
-        llm_model: data.workflow.llm_model || "openai/gpt-4o",
-        llm_fallback_model: data.workflow.llm_fallback_model || "openai/gpt-5.6-luna",
+        llm_model: data.workflow.llm_model || "",
+        llm_fallback_model: data.workflow.llm_fallback_model || "",
         llm_reasoning_enabled: data.workflow.llm_reasoning_enabled === true,
         llm_max_output_tokens: data.workflow.llm_max_output_tokens ?? 1200,
         llm_confidence_threshold: data.workflow.llm_confidence_threshold ?? 0.95,
@@ -433,6 +438,9 @@ export default function WorkflowEditorPage() {
         if (data.ok && data.models) {
           setLlmModels(data.models);
         }
+        // The model used when this workflow has none of its own.
+        const inherited = await fetch(`/api/admin/workflows/${workflowId}/model-catalog`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        if (inherited?.inherited?.analysis) setInheritedModel(inherited.inherited.analysis);
       } catch (err) {
         console.error("Failed to load models:", err);
       } finally {
@@ -440,7 +448,7 @@ export default function WorkflowEditorPage() {
       }
     }
     fetchModels();
-  }, []);
+  }, [workflowId]);
 
   // Get selected stage and its items
   const selectedStage = stages.find((s) => s.id === selectedStageId);
@@ -719,12 +727,11 @@ export default function WorkflowEditorPage() {
       const fallbackModel = typeof workflowForm.llm_fallback_model === "string"
         ? workflowForm.llm_fallback_model.trim()
         : "";
-      if (!fallbackModel) {
-        throw new Error("Select a slot filling fallback model.");
-      }
       const workflowPayload = {
         ...workflowForm,
-        llm_fallback_model: fallbackModel,
+        // An empty model is stored as NULL: the workflow inherits AI Copilot.
+        llm_model: typeof workflowForm.llm_model === "string" && workflowForm.llm_model.trim() ? workflowForm.llm_model.trim() : null,
+        llm_fallback_model: fallbackModel || null,
         llm_confidence_threshold: Math.round(confidenceThreshold * 100) / 100,
         llm_max_output_tokens: outputCap,
       };
@@ -761,8 +768,8 @@ export default function WorkflowEditorPage() {
       workflowForm.description !== (workflow.description || "") ||
       workflowForm.category !== (workflow.category || "") ||
       workflowForm.is_active !== Boolean(workflow.is_active) ||
-      workflowForm.llm_model !== (workflow.llm_model || "openai/gpt-4o") ||
-      workflowForm.llm_fallback_model !== (workflow.llm_fallback_model || "openai/gpt-5.6-luna") ||
+      workflowForm.llm_model !== (workflow.llm_model || "") ||
+      workflowForm.llm_fallback_model !== (workflow.llm_fallback_model || "") ||
       workflowForm.llm_reasoning_enabled !== Boolean(workflow.llm_reasoning_enabled) ||
       Number(workflowForm.llm_max_output_tokens) !== Number(workflow.llm_max_output_tokens ?? 1200) ||
       Number(workflowForm.llm_confidence_threshold) !== Number(workflow.llm_confidence_threshold ?? 0.95) ||
@@ -1103,7 +1110,7 @@ export default function WorkflowEditorPage() {
   if (loading) {
     return (
       <AdminPageShell>
-        <AdminPageHeader title="Workflow Editor" badges={<Badge variant="secondary">Loading</Badge>} />
+        <AdminPageHeader title={tUi("Workflow Editor")} badges={<Badge variant="secondary">{tUi("Loading")}</Badge>} />
         <AutomationsSectionPage activeId="workflows">
           <AdminPageContent>
             <div className="space-y-4">
@@ -1127,9 +1134,7 @@ export default function WorkflowEditorPage() {
         size="sm"
         onClick={() => setEditingWorkflow(true)}
       >
-        <IconEdit className="size-4 mr-1" />
-        Edit Details
-      </Button>
+        <IconEdit className="size-4 mr-1" />{tUi("Edit Details")}</Button>
       <Button
         variant="outline"
         size="sm"
@@ -1137,13 +1142,11 @@ export default function WorkflowEditorPage() {
         disabled={!!workflow?.ai_assistant_id && assistantExists}
         title={
           workflow?.ai_assistant_id && assistantExists
-            ? "AI Agent already created"
-            : "Create AI Agent"
+            ? tUi("AI Agent already created")
+            : tUi("Create AI Agent")
         }
       >
-        <IconRobot className="size-4 mr-1" />
-        Create AI Agent
-      </Button>
+        <IconRobot className="size-4 mr-1" />{tUi("Create AI Agent")}</Button>
       {workflow?.ai_assistant_id && assistantExists && (
         <>
           <Button
@@ -1151,30 +1154,26 @@ export default function WorkflowEditorPage() {
             size="sm"
             onClick={() => setShowUpdateConfirmDialog(true)}
             disabled={updatingAssistant}
-            title="Sync assistant instructions with current workflow"
+            title={tUi("Sync assistant instructions with current workflow")}
           >
             {updatingAssistant ? (
               <IconLoader2 className="size-4 mr-1 animate-spin" />
             ) : (
               <IconRefresh className="size-4 mr-1" />
-            )}
-            Update AI Agent
-          </Button>
+            )}{tUi("Update AI Agent")}</Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setShowDeleteAgentDialog(true)}
             disabled={deletingAgent}
             className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            title="Delete AI Agent and associated insights"
+            title={tUi("Delete AI Agent and associated insights")}
           >
             {deletingAgent ? (
               <IconLoader2 className="size-4 mr-1 animate-spin" />
             ) : (
               <IconTrash className="size-4 mr-1" />
-            )}
-            Delete AI Agent
-          </Button>
+            )}{tUi("Delete AI Agent")}</Button>
         </>
       )}
       <Button
@@ -1184,28 +1183,26 @@ export default function WorkflowEditorPage() {
         disabled={!workflow?.ai_assistant_id || !assistantExists}
         title={
           !workflow?.ai_assistant_id || !assistantExists
-            ? "Create an AI Agent first"
-            : "Test AI Agent"
+            ? tUi("Create an AI Agent first")
+            : tUi("Test AI Agent")
         }
       >
-        <IconTestPipe2 className="size-4 mr-1" />
-        Test AI Agent
-      </Button>
+        <IconTestPipe2 className="size-4 mr-1" />{tUi("Test AI Agent")}</Button>
     </>
   );
 
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title={workflow?.name || "Workflow Editor"}
+        title={workflow?.name || tUi("Workflow Editor")}
         badges={<>
           {workflow?.is_active ? (
-            <Badge className="border-green-500 text-green-600" variant="outline">Active</Badge>
+            <Badge className="border-green-500 text-green-600" variant="outline">{tUi("Active")}</Badge>
           ) : (
-            <Badge className="border-gray-400 text-gray-500" variant="outline">Inactive</Badge>
+            <Badge className="border-gray-400 text-gray-500" variant="outline">{tUi("Inactive")}</Badge>
           )}
           {hasUnsavedChanges ? (
-            <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge>
+            <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">{tUi("Unsaved")}</Badge>
           ) : null}
         </>}
         actions={workflowActions}
@@ -1213,20 +1210,15 @@ export default function WorkflowEditorPage() {
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved changes. Are you sure you want to leave? All
-              unsaved changes will be lost.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Unsaved Changes")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("You have unsaved changes. Are you sure you want to leave? All unsaved changes will be lost.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelExit}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={cancelExit}>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmExit}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Leave without saving
-            </AlertDialogAction>
+            >{tUi("Leave without saving")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1241,9 +1233,7 @@ export default function WorkflowEditorPage() {
             <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <IconGitBranch className="size-4" />
-                  Stages
-                </CardTitle>
+                  <IconGitBranch className="size-4" />{tUi("Stages")}</CardTitle>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1256,14 +1246,12 @@ export default function WorkflowEditorPage() {
             <CardContent className="p-2 flex-1 overflow-auto">
               {stages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                  <p className="text-sm">No stages yet</p>
+                  <p className="text-sm">{tUi("No stages yet")}</p>
                   <Button
                     variant="link"
                     size="sm"
                     onClick={() => setShowNewStageDialog(true)}
-                  >
-                    Add your first stage
-                  </Button>
+                  >{tUi("Add your first stage")}</Button>
                 </div>
               ) : (
                 <DndContext
@@ -1312,7 +1300,7 @@ export default function WorkflowEditorPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <IconCheck className="size-4" />
-                  {selectedStage ? `Items in "${selectedStage.name}"` : "Items"}
+                  {selectedStage ? tUi("Items in \"{value0}\"", { value0: selectedStage.name }) : tUi("Items")}
                 </CardTitle>
                 {selectedStageId && (
                   <Button
@@ -1328,18 +1316,16 @@ export default function WorkflowEditorPage() {
             <CardContent className="p-2 flex-1 overflow-auto">
               {!selectedStageId ? (
                 <div className="flex items-center justify-center h-full text-center text-muted-foreground">
-                  <p className="text-sm">Select a stage to view items</p>
+                  <p className="text-sm">{tUi("Select a stage to view items")}</p>
                 </div>
               ) : stageItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                  <p className="text-sm">No items in this stage</p>
+                  <p className="text-sm">{tUi("No items in this stage")}</p>
                   <Button
                     variant="link"
                     size="sm"
                     onClick={() => setShowNewItemDialog(true)}
-                  >
-                    Add your first item
-                  </Button>
+                  >{tUi("Add your first item")}</Button>
                 </div>
               ) : (
                 <DndContext
@@ -1375,12 +1361,12 @@ export default function WorkflowEditorPage() {
             <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <IconEdit className="size-4" />
-                {selectedItem ? "Edit Item" : "Item Details"}
+                {selectedItem ? tUi("Edit Item") : tUi("Item Details")}
               </CardTitle>
             </CardHeader>
             {!selectedItem ? (
               <CardContent className="flex-1 flex items-center justify-center text-center text-muted-foreground">
-                <p className="text-sm">Select an item to edit</p>
+                <p className="text-sm">{tUi("Select an item to edit")}</p>
               </CardContent>
             ) : (
               <div className="flex-1 min-h-0 overflow-hidden">
@@ -1399,23 +1385,19 @@ export default function WorkflowEditorPage() {
       {/* Edit Workflow Sheet */}
       <Sheet open={editingWorkflow} onOpenChange={setEditingWorkflow}>
         <SheetContent
-          side="right"
+          side="end"
           className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
         >
           <SheetHeader className="px-6 py-4 border-b">
             <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
-              <IconEdit className="size-5" />
-              Edit Workflow
-            </SheetTitle>
-            <SheetDescription>
-              Update the workflow name, description, and settings.
-            </SheetDescription>
+              <IconEdit className="size-5" />{tUi("Edit Workflow")}</SheetTitle>
+            <SheetDescription>{tUi("Update the workflow name, description, and settings.")}</SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto">
             <Card className="mx-5 my-4">
               <CardContent className="p-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Name</Label>
+              <Label htmlFor="edit-name">{tUi("Name")}</Label>
               <Input
                 id="edit-name"
                 value={workflowForm.name}
@@ -1425,7 +1407,7 @@ export default function WorkflowEditorPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
+              <Label htmlFor="edit-description">{tUi("Description")}</Label>
               <Textarea
                 id="edit-description"
                 value={workflowForm.description}
@@ -1436,7 +1418,7 @@ export default function WorkflowEditorPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-category">Category</Label>
+              <Label htmlFor="edit-category">{tUi("Category")}</Label>
               <Select
                 value={workflowForm.category}
                 onValueChange={(value) =>
@@ -1444,61 +1426,77 @@ export default function WorkflowEditorPage() {
                 }
               >
                 <SelectTrigger id="edit-category">
-                  <SelectValue placeholder="Select a category..." />
+                  <SelectValue placeholder={tUi("Select a category...")} />
                 </SelectTrigger>
                 <SelectContent>
                   {WORKFLOW_CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat}>
-                      {cat}
+                      {tUi(cat)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-llm-model">LLM Model</Label>
+              <Label htmlFor="edit-llm-model">{tUi("LLM Model")}</Label>
               <AIModels
                 value={workflowForm.llm_model}
                 onValueChange={(value) =>
                   setWorkflowForm((f) => ({ ...f, llm_model: value }))
                 }
                 models={llmModels}
-                placeholder={loadingModels ? "Loading models..." : "Select model..."}
+                placeholder={loadingModels
+                  ? tUi("Loading models...")
+                  : inheritedModel?.model
+                    ? tUi("AI Copilot default · {value0}", { value0: inheritedModel.model })
+                    : tUi("AI Copilot default")}
                 searchable
                 disabled={loadingModels}
                 triggerClassName="w-full border bg-background"
                 contentClassName="w-[450px]"
-                emptyMessage={loadingModels ? "Loading models..." : "No Telnyx models found."}
+                emptyMessage={loadingModels ? tUi("Loading models...") : tUi("No Telnyx models found.")}
               />
-              <p className="text-xs text-muted-foreground">
-                Model used for workflow analysis and suggestions
-              </p>
+              <p className="text-xs text-muted-foreground">{tUi("Slot filling, intent and suggestions. Leave empty to use the Admin → AI Copilot default; a model chosen here overrides it for this workflow.")}</p>
+              {workflowForm.llm_model && (
+                <button
+                  type="button"
+                  className="text-xs text-primary underline-offset-2 hover:underline"
+                  onClick={() => setWorkflowForm((f) => ({ ...f, llm_model: "" }))}
+                >
+                  {tUi("Use AI Copilot default")}
+                </button>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-llm-fallback-model">Slot filling fallback model</Label>
+              <Label htmlFor="edit-llm-fallback-model">{tUi("Slot filling fallback model")}</Label>
               <AIModels
                 value={workflowForm.llm_fallback_model}
                 onValueChange={(value) =>
                   setWorkflowForm((f) => ({ ...f, llm_fallback_model: value }))
                 }
                 models={llmModels}
-                placeholder={loadingModels ? "Loading models..." : "Select fallback model..."}
+                placeholder={loadingModels ? tUi("Loading models...") : tUi("No fallback model")}
                 searchable
                 disabled={loadingModels}
                 triggerClassName="w-full border bg-background"
                 contentClassName="w-[450px]"
-                emptyMessage={loadingModels ? "Loading models..." : "No Telnyx models found."}
+                emptyMessage={loadingModels ? tUi("Loading models...") : tUi("No Telnyx models found.")}
               />
-              <p className="text-xs text-muted-foreground">
-                Used only if the primary slot-filling request fails or times out. Default: GPT-5.6-luna.
-              </p>
+              <p className="text-xs text-muted-foreground">{tUi("Optional. Used only if the primary slot-filling request fails or times out. Leave empty for no fallback.")}</p>
+              {workflowForm.llm_fallback_model && (
+                <button
+                  type="button"
+                  className="text-xs text-primary underline-offset-2 hover:underline"
+                  onClick={() => setWorkflowForm((f) => ({ ...f, llm_fallback_model: "" }))}
+                >
+                  {tUi("No fallback model")}
+                </button>
+              )}
             </div>
             <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
               <div className="space-y-1">
-                <Label htmlFor="edit-llm-reasoning-enabled">Reasoning enabled</Label>
-                <p className="text-xs text-muted-foreground">
-                  Optional for complex workflows. Disabled by default to keep slot filling fast and predictable.
-                </p>
+                <Label htmlFor="edit-llm-reasoning-enabled">{tUi("Reasoning enabled")}</Label>
+                <p className="text-xs text-muted-foreground">{tUi("Optional for complex workflows. Disabled by default to keep slot filling fast and predictable.")}</p>
               </div>
               <Switch
                 id="edit-llm-reasoning-enabled"
@@ -1509,7 +1507,7 @@ export default function WorkflowEditorPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-llm-max-output-tokens">Slot filling output cap</Label>
+              <Label htmlFor="edit-llm-max-output-tokens">{tUi("Slot filling output cap")}</Label>
               <Input
                 id="edit-llm-max-output-tokens"
                 type="number"
@@ -1532,12 +1530,10 @@ export default function WorkflowEditorPage() {
                   })
                 }
               />
-              <p className="text-xs text-muted-foreground">
-                Default: 1,200. Use 800 for simple workflows; keep 1,200 for complex or multi-slot intake. Lower values reduce latency but may truncate unusually large responses.
-              </p>
+              <p className="text-xs text-muted-foreground">{tUi("Default: 1,200. Use 800 for simple workflows; keep 1,200 for complex or multi-slot intake. Lower values reduce latency but may truncate unusually large responses.")}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-llm-confidence-threshold">LLM Confidence Threshold</Label>
+              <Label htmlFor="edit-llm-confidence-threshold">{tUi("LLM Confidence Threshold")}</Label>
               <Input
                 id="edit-llm-confidence-threshold"
                 type="number"
@@ -1563,31 +1559,25 @@ export default function WorkflowEditorPage() {
                   })
                 }
               />
-              <p className="text-xs text-muted-foreground">
-                Default: 0.95. Auto-filled LLM slots below this threshold stay red until the agent confirms or edits them.
-              </p>
+              <p className="text-xs text-muted-foreground">{tUi("Default: 0.95. Auto-filled LLM slots below this threshold stay red until the agent confirms or edits them.")}</p>
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <Label>Data Action Buttons</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Optional Form Submit call flows shown on the agent desktop workflow footer.
-                  </p>
+                  <Label>{tUi("Data Action Buttons")}</Label>
+                  <p className="text-xs text-muted-foreground">{tUi("Optional Form Submit call flows shown on the agent desktop workflow footer.")}</p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addDataActionButton}>
-                  <IconPlus className="size-4 mr-1" />
-                  Add Button
-                </Button>
+                  <IconPlus className="size-4 mr-1" />{tUi("Add Button")}</Button>
               </div>
-              {dataActionsLoading ? <p className="text-xs text-muted-foreground">Loading Form Submit flows...</p> : null}
+              {dataActionsLoading ? <p className="text-xs text-muted-foreground">{tUi("Loading Form Submit flows...")}</p> : null}
               {(workflowForm.data_action_buttons || []).map((button, index) => (
                 <div key={button.id || index} className="space-y-3 rounded-md border bg-muted/20 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <Input
                       value={button.label || ""}
                       onChange={(e) => updateDataActionButton(index, { label: e.target.value })}
-                      placeholder="Button label"
+                      placeholder={tUi("Button label")}
                     />
                     <Button type="button" variant="ghost" size="icon" onClick={() => removeDataActionButton(index)}>
                       <IconTrash className="size-4" />
@@ -1597,30 +1587,30 @@ export default function WorkflowEditorPage() {
                     if (value === "none") updateDataActionButton(index, { data_action_flow_id: "", data_action_label: "" });
                     else {
                       const action = dataActions.find((item) => String(item.id) === String(value));
-                      updateDataActionButton(index, { data_action_flow_id: value, data_action_label: action ? dataActionTitle(action) : "" });
+                      updateDataActionButton(index, { data_action_flow_id: value, data_action_label: action ? dataActionTitle(action, tUi) : "" });
                     }
                   }}>
-                    <SelectTrigger><SelectValue placeholder="Select Form Submit flow" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={tUi("Select Form Submit flow")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No data action</SelectItem>
-                      {dataActions.map((action) => <SelectItem key={action.id} value={String(action.id)}>{dataActionTitle(action)}</SelectItem>)}
+                      <SelectItem value="none">{tUi("No data action")}</SelectItem>
+                      {dataActions.map((action) => <SelectItem key={action.id} value={String(action.id)}>{dataActionTitle(action, tUi)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label>One-click</Label>
-                      <p className="text-xs text-muted-foreground">Disable this button after a successful data action during the same call.</p>
+                      <Label>{tUi("One-click")}</Label>
+                      <p className="text-xs text-muted-foreground">{tUi("Disable this button after a successful data action during the same call.")}</p>
                     </div>
                     <Switch checked={button.one_click === true} onCheckedChange={(checked) => updateDataActionButton(index, { one_click: checked })} />
                   </div>
                 </div>
               ))}
               {!dataActionsLoading && !(workflowForm.data_action_buttons || []).length ? (
-                <p className="text-xs text-muted-foreground">No workflow data action buttons configured.</p>
+                <p className="text-xs text-muted-foreground">{tUi("No workflow data action buttons configured.")}</p>
               ) : null}
             </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="edit-active">Active</Label>
+              <Label htmlFor="edit-active">{tUi("Active")}</Label>
               <Switch
                 id="edit-active"
                 checked={workflowForm.is_active}
@@ -1637,20 +1627,14 @@ export default function WorkflowEditorPage() {
               variant="outline"
               onClick={() => setEditingWorkflow(false)}
               disabled={saving}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button onClick={saveWorkflow} disabled={saving}>
               {saving ? (
                 <>
-                  <IconLoader2 className="size-4 mr-1 animate-spin" />
-                  Saving...
-                </>
+                  <IconLoader2 className="size-4 mr-1 animate-spin" />{tUi("Saving...")}</>
               ) : (
                 <>
-                  <IconDeviceFloppy className="size-4 mr-1" />
-                  Save
-                </>
+                  <IconDeviceFloppy className="size-4 mr-1" />{tUi("Save")}</>
               )}
             </Button>
           </SheetFooter>
@@ -1661,19 +1645,17 @@ export default function WorkflowEditorPage() {
       <Dialog open={showNewStageDialog} onOpenChange={setShowNewStageDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Stage</DialogTitle>
-            <DialogDescription>
-              Create a new stage for this workflow.
-            </DialogDescription>
+            <DialogTitle>{tUi("Add Stage")}</DialogTitle>
+            <DialogDescription>{tUi("Create a new stage for this workflow.")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="new-stage-name">Stage Name</Label>
+              <Label htmlFor="new-stage-name">{tUi("Stage Name")}</Label>
               <Input
                 id="new-stage-name"
                 value={newStageName}
                 onChange={(e) => setNewStageName(e.target.value)}
-                placeholder="e.g., New Leads, In Progress, Completed"
+                placeholder={tUi("e.g., New Leads, In Progress, Completed")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") addStage();
                 }}
@@ -1688,17 +1670,13 @@ export default function WorkflowEditorPage() {
                 setNewStageName("");
               }}
               disabled={savingStage}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button onClick={addStage} disabled={savingStage || !newStageName.trim()}>
               {savingStage ? (
                 <>
-                  <IconLoader2 className="size-4 mr-1 animate-spin" />
-                  Creating...
-                </>
+                  <IconLoader2 className="size-4 mr-1 animate-spin" />{tUi("Creating...")}</>
               ) : (
-                "Create Stage"
+                tUi("Create Stage")
               )}
             </Button>
           </div>
@@ -1709,32 +1687,30 @@ export default function WorkflowEditorPage() {
       <Dialog open={showNewItemDialog} onOpenChange={setShowNewItemDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Item</DialogTitle>
-            <DialogDescription>
-              Create a new item in the &quot;{selectedStage?.name}&quot; stage.
-            </DialogDescription>
+            <DialogTitle>{tUi("Add Item")}</DialogTitle>
+            <DialogDescription>{tUi("Create a new item in the \"")}{selectedStage?.name}{tUi("\" stage.")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="new-item-label">Item Label</Label>
+              <Label htmlFor="new-item-label">{tUi("Item Label")}</Label>
               <Input
                 id="new-item-label"
                 value={newItemForm.label}
                 onChange={(e) =>
                   setNewItemForm((f) => ({ ...f, label: e.target.value }))
                 }
-                placeholder="Enter item label..."
+                placeholder={tUi("Enter item label...")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-item-description">Description (optional)</Label>
+              <Label htmlFor="new-item-description">{tUi("Description (optional)")}</Label>
               <Textarea
                 id="new-item-description"
                 value={newItemForm.description}
                 onChange={(e) =>
                   setNewItemForm((f) => ({ ...f, description: e.target.value }))
                 }
-                placeholder="Enter item description..."
+                placeholder={tUi("Enter item description...")}
                 rows={3}
               />
             </div>
@@ -1747,20 +1723,16 @@ export default function WorkflowEditorPage() {
                 setNewItemForm({ label: "", description: "" });
               }}
               disabled={savingItem}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               onClick={addItem}
               disabled={savingItem || !newItemForm.label.trim()}
             >
               {savingItem ? (
                 <>
-                  <IconLoader2 className="size-4 mr-1 animate-spin" />
-                  Creating...
-                </>
+                  <IconLoader2 className="size-4 mr-1 animate-spin" />{tUi("Creating...")}</>
               ) : (
-                "Create Item"
+                tUi("Create Item")
               )}
             </Button>
           </div>
@@ -1792,11 +1764,11 @@ export default function WorkflowEditorPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update AI Agent</DialogTitle>
+            <DialogTitle>{tUi("Update AI Agent")}</DialogTitle>
             <DialogDescription>
               {updatingAssistant || updateComplete
-                ? "Updating AI agent with current workflow configuration..."
-                : "This will sync the AI assistant with the current workflow configuration."}
+                ? tUi("Updating AI agent with current workflow configuration...")
+                : tUi("This will sync the AI assistant with the current workflow configuration.")}
             </DialogDescription>
           </DialogHeader>
           
@@ -1836,9 +1808,7 @@ export default function WorkflowEditorPage() {
                         {step.label}
                       </span>
                       {step.status === "skipped" && (
-                        <Badge variant="secondary" className="text-xs">
-                          Skipped
-                        </Badge>
+                        <Badge variant="secondary" className="text-xs">{tUi("Skipped")}</Badge>
                       )}
                     </div>
                     {step.error && (
@@ -1852,13 +1822,9 @@ export default function WorkflowEditorPage() {
               {updateComplete && (
                 <div className="pt-2 text-center">
                   {updateSteps.some(s => s.status === "error") ? (
-                    <p className="text-sm text-red-600 font-medium">
-                      Update failed. Please check the errors above.
-                    </p>
+                    <p className="text-sm text-red-600 font-medium">{tUi("Update failed. Please check the errors above.")}</p>
                   ) : (
-                    <p className="text-sm text-green-600 font-medium">
-                      AI Agent updated successfully!
-                    </p>
+                    <p className="text-sm text-green-600 font-medium">{tUi("AI Agent updated successfully!")}</p>
                   )}
                 </div>
               )}
@@ -1868,22 +1834,16 @@ export default function WorkflowEditorPage() {
             <div className="py-4 space-y-4">
               {/* Warning about overwriting */}
               <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
-                  ⚠️ Warning: Manual changes will be overwritten
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                  Any changes made directly to the AI assistant in Telnyx Portal will be replaced with the workflow configuration.
-                </p>
+                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">{tUi("⚠️ Warning: Manual changes will be overwritten")}</p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">{tUi("Any changes made directly to the AI assistant in Telnyx Portal will be replaced with the workflow configuration.")}</p>
               </div>
               
               <div>
-                <p className="text-sm text-muted-foreground">
-                  The following will be updated:
-                </p>
+                <p className="text-sm text-muted-foreground">{tUi("The following will be updated:")}</p>
                 <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
-                  <li>Assistant instructions (from workflow stages)</li>
-                  <li>Insight templates (slot extraction, summary, sentiment)</li>
-                  <li>Insight group assignment</li>
+                  <li>{tUi("Assistant instructions (from workflow stages)")}</li>
+                  <li>{tUi("Insight templates (slot extraction, summary, sentiment)")}</li>
+                  <li>{tUi("Insight group assignment")}</li>
                 </ul>
               </div>
             </div>
@@ -1896,32 +1856,24 @@ export default function WorkflowEditorPage() {
                   setShowUpdateConfirmDialog(false);
                   resetUpdateSteps();
                 }}
-              >
-                Close
-              </Button>
+              >{tUi("Close")}</Button>
             ) : (
               <>
                 <Button
                   variant="outline"
                   onClick={() => setShowUpdateConfirmDialog(false)}
                   disabled={updatingAssistant}
-                >
-                  Cancel
-                </Button>
+                >{tUi("Cancel")}</Button>
                 <Button
                   onClick={handleUpdateAgent}
                   disabled={updatingAssistant}
                 >
                   {updatingAssistant ? (
                     <>
-                      <IconLoader2 className="size-4 mr-1 animate-spin" />
-                      Updating...
-                    </>
+                      <IconLoader2 className="size-4 mr-1 animate-spin" />{tUi("Updating...")}</>
                   ) : (
                     <>
-                      <IconRefresh className="size-4 mr-1" />
-                      Update Agent
-                    </>
+                      <IconRefresh className="size-4 mr-1" />{tUi("Update Agent")}</>
                   )}
                 </Button>
               </>
@@ -1942,11 +1894,11 @@ export default function WorkflowEditorPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-red-600">Delete AI Agent</DialogTitle>
+            <DialogTitle className="text-red-600">{tUi("Delete AI Agent")}</DialogTitle>
             <DialogDescription>
               {deletingAgent || deletionComplete
-                ? "Deleting AI agent and associated resources..."
-                : "Are you sure you want to delete this AI agent? This action cannot be undone."}
+                ? tUi("Deleting AI agent and associated resources...")
+                : tUi("Are you sure you want to delete this AI agent? This action cannot be undone.")}
             </DialogDescription>
           </DialogHeader>
           
@@ -1986,9 +1938,7 @@ export default function WorkflowEditorPage() {
                         {step.label}
                       </span>
                       {step.status === "skipped" && (
-                        <Badge variant="secondary" className="text-xs">
-                          Skipped
-                        </Badge>
+                        <Badge variant="secondary" className="text-xs">{tUi("Skipped")}</Badge>
                       )}
                     </div>
                     {step.error && (
@@ -2002,13 +1952,9 @@ export default function WorkflowEditorPage() {
               {deletionComplete && (
                 <div className="pt-2 text-center">
                   {deletionSteps.every(s => s.status === "success" || s.status === "skipped") ? (
-                    <p className="text-sm text-green-600 font-medium">
-                      All resources deleted successfully!
-                    </p>
+                    <p className="text-sm text-green-600 font-medium">{tUi("All resources deleted successfully!")}</p>
                   ) : deletionSteps.some(s => s.status === "error") ? (
-                    <p className="text-sm text-amber-600 font-medium">
-                      Completed with some errors. Workflow references have been cleared.
-                    </p>
+                    <p className="text-sm text-amber-600 font-medium">{tUi("Completed with some errors. Workflow references have been cleared.")}</p>
                   ) : null}
                 </div>
               )}
@@ -2018,23 +1964,17 @@ export default function WorkflowEditorPage() {
             <div className="py-4 space-y-4">
               {/* Warning box */}
               <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-                <p className="text-sm text-red-800 dark:text-red-200 font-medium">
-                  ⚠️ Warning: This action cannot be undone
-                </p>
-                <p className="text-xs text-red-700 dark:text-red-300 mt-1">
-                  All resources will be permanently deleted from Telnyx. The workflow definition will remain intact.
-                </p>
+                <p className="text-sm text-red-800 dark:text-red-200 font-medium">{tUi("⚠️ Warning: This action cannot be undone")}</p>
+                <p className="text-xs text-red-700 dark:text-red-300 mt-1">{tUi("All resources will be permanently deleted from Telnyx. The workflow definition will remain intact.")}</p>
               </div>
               
               {/* Items to be deleted */}
               <div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  The following will be permanently deleted:
-                </p>
+                <p className="text-sm text-muted-foreground mb-2">{tUi("The following will be permanently deleted:")}</p>
                 <ul className="space-y-1 text-sm list-disc list-inside text-red-600">
-                  <li>AI Assistant on Telnyx</li>
-                  <li>Insight Templates (slots, summary, sentiment)</li>
-                  <li>Insight Group</li>
+                  <li>{tUi("AI Assistant on Telnyx")}</li>
+                  <li>{tUi("Insight Templates (slots, summary, sentiment)")}</li>
+                  <li>{tUi("Insight Group")}</li>
                 </ul>
               </div>
             </div>
@@ -2047,18 +1987,14 @@ export default function WorkflowEditorPage() {
                   setShowDeleteAgentDialog(false);
                   resetDeletionSteps();
                 }}
-              >
-                Close
-              </Button>
+              >{tUi("Close")}</Button>
             ) : (
               <>
                 <Button
                   variant="outline"
                   onClick={() => setShowDeleteAgentDialog(false)}
                   disabled={deletingAgent}
-                >
-                  Cancel
-                </Button>
+                >{tUi("Cancel")}</Button>
                 <Button
                   variant="destructive"
                   onClick={handleDeleteAgent}
@@ -2066,14 +2002,10 @@ export default function WorkflowEditorPage() {
                 >
                   {deletingAgent ? (
                     <>
-                      <IconLoader2 className="size-4 mr-1 animate-spin" />
-                      Deleting...
-                    </>
+                      <IconLoader2 className="size-4 mr-1 animate-spin" />{tUi("Deleting...")}</>
                   ) : (
                     <>
-                      <IconTrash className="size-4 mr-1" />
-                      Delete Agent
-                    </>
+                      <IconTrash className="size-4 mr-1" />{tUi("Delete Agent")}</>
                   )}
                 </Button>
               </>
@@ -2128,6 +2060,7 @@ function getHintColor(index) {
 
 // Item Editor Component with all slot fields
 function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
+  const tUi = useUiText();
   // Determine default completion_trigger based on type
   const getDefaultCompletionTrigger = (itemType) => {
     if (itemType === "slot") return "customer";
@@ -2299,12 +2232,10 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
       {/* Basic Info Section */}
       <div className="space-y-4">
-        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Basic Info
-        </h4>
+        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Basic Info")}</h4>
         
         <div className="space-y-2">
-          <Label htmlFor="item-type">Type</Label>
+          <Label htmlFor="item-type">{tUi("Type")}</Label>
           <Select
             value={form.type}
             onValueChange={(value) => setForm((f) => ({ ...f, type: value }))}
@@ -2316,46 +2247,44 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
               {ITEM_TYPES.map((t) => (
                 <SelectItem key={t.value} value={t.value}>
                   <div className="flex flex-col">
-                    <span>{t.label}</span>
+                    <span>{tUi(t.label)}</span>
                   </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            {ITEM_TYPES.find((t) => t.value === form.type)?.description}
+            {tUi(ITEM_TYPES.find((t) => t.value === form.type)?.description)}
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="item-label">Label</Label>
+          <Label htmlFor="item-label">{tUi("Label")}</Label>
           <Input
             id="item-label"
             value={form.label}
             onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-            placeholder="e.g., Verify customer identity"
+            placeholder={tUi("e.g., Verify customer identity")}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="item-description">Description</Label>
+          <Label htmlFor="item-description">{tUi("Description")}</Label>
           <Textarea
             id="item-description"
             value={form.description}
             onChange={(e) =>
               setForm((f) => ({ ...f, description: e.target.value }))
             }
-            placeholder="Additional context for the agent..."
+            placeholder={tUi("Additional context for the agent...")}
             rows={2}
           />
         </div>
 
         <div className="flex items-center justify-between py-2">
           <div className="space-y-0.5">
-            <Label htmlFor="item-required">Required</Label>
-            <p className="text-xs text-muted-foreground">
-              Agent must complete this item
-            </p>
+            <Label htmlFor="item-required">{tUi("Required")}</Label>
+            <p className="text-xs text-muted-foreground">{tUi("Agent must complete this item")}</p>
           </div>
           <Switch
             id="item-required"
@@ -2367,7 +2296,7 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="completion-trigger">Completion Trigger</Label>
+          <Label htmlFor="completion-trigger">{tUi("Completion Trigger")}</Label>
           <Select
             value={form.completion_trigger}
             onValueChange={(value) =>
@@ -2381,29 +2310,23 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
               {COMPLETION_TRIGGERS.map((t) => (
                 <SelectItem key={t.value} value={t.value}>
                   <div className="flex flex-col">
-                    <span>{t.label}</span>
+                    <span>{tUi(t.label)}</span>
                     <span className="text-xs text-muted-foreground">
-                      {t.description}
+                      {tUi(t.description)}
                     </span>
                   </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            Who needs to speak for this item to be marked complete
-          </p>
+          <p className="text-xs text-muted-foreground">{tUi("Who needs to speak for this item to be marked complete")}</p>
         </div>
       </div>
 
       {/* Prompt Hints Section */}
       <div className="space-y-4 border-t pt-4">
-        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Prompt Hints
-        </h4>
-        <p className="text-xs text-muted-foreground -mt-2">
-          Keywords or phrases to help AI detect when this item is completed
-        </p>
+        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Prompt Hints")}</h4>
+        <p className="text-xs text-muted-foreground -mt-2">{tUi("Keywords or phrases to help AI detect when this item is completed")}</p>
 
         {/* Current hints as colored badges */}
         {form.hints.length > 0 && (
@@ -2442,7 +2365,7 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
           <Input
             value={newHint}
             onChange={(e) => setNewHint(e.target.value)}
-            placeholder="Add a hint..."
+            placeholder={tUi("Add a hint...")}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -2465,27 +2388,23 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
       {/* Slot Configuration Section - Only visible when type is "slot" */}
       {isSlotType && (
         <div className="space-y-4 border-t pt-4">
-          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Slot Configuration
-          </h4>
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Slot Configuration")}</h4>
 
           <div className="space-y-2">
-            <Label htmlFor="slot-name">Slot Name</Label>
+            <Label htmlFor="slot-name">{tUi("Slot Name")}</Label>
             <Input
               id="slot-name"
               value={form.slot_name}
               onChange={(e) =>
                 setForm((f) => ({ ...f, slot_name: e.target.value }))
               }
-              placeholder="e.g., customer_name, account_number"
+              placeholder={tUi("e.g., customer_name, account_number")}
             />
-            <p className="text-xs text-muted-foreground">
-              Identifier used to store the collected value (use snake_case)
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Identifier used to store the collected value (use snake_case)")}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="slot-type">Data Type</Label>
+            <Label htmlFor="slot-type">{tUi("Data Type")}</Label>
             <Select
               value={form.slot_type}
               onValueChange={(value) =>
@@ -2498,7 +2417,7 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
               <SelectContent>
                 {SLOT_TYPES.map((t) => (
                   <SelectItem key={t.value} value={t.value}>
-                    {t.label}
+                    {tUi(t.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2510,12 +2429,8 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
       {/* Options Section - Only visible when slot_type is "select" */}
       {showOptions && (
         <div className="space-y-4 border-t pt-4">
-          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Options
-          </h4>
-          <p className="text-xs text-muted-foreground -mt-2">
-            Customer must choose one of these options
-          </p>
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Options")}</h4>
+          <p className="text-xs text-muted-foreground -mt-2">{tUi("Customer must choose one of these options")}</p>
 
           {/* Current options as colored badges */}
           {form.slot_options.length > 0 && (
@@ -2554,7 +2469,7 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
             <Input
               value={newOption}
               onChange={(e) => setNewOption(e.target.value)}
-              placeholder="Add an option..."
+              placeholder={tUi("Add an option...")}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -2578,9 +2493,7 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
       {/* Validation Section - Only visible when type is "slot" */}
       {isSlotType && (
         <div className="space-y-4 border-t pt-4">
-          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Validation Instructions
-          </h4>
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("Validation Instructions")}</h4>
 
           <div className="space-y-2">
             <Textarea
@@ -2589,12 +2502,10 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
               onChange={(e) =>
                 setForm((f) => ({ ...f, slot_validation: e.target.value }))
               }
-              placeholder="Instructions for the AI on how to validate/format this data.&#10;&#10;Examples:&#10;- Format as MM/DD/YYYY&#10;- Must be a valid US phone number (+1...)&#10;- Accept full name with at least first and last name"
+              placeholder={tUi("Instructions for the AI on how to validate/format this data.\n\nExamples:\n- Format as MM/DD/YYYY\n- Must be a valid US phone number (+1...)\n- Accept full name with at least first and last name")}
               rows={4}
             />
-            <p className="text-xs text-muted-foreground">
-              LLM instructions for validating and formatting the captured value
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("LLM instructions for validating and formatting the captured value")}</p>
           </div>
 
           <SlotMcpBindingEditor
@@ -2614,14 +2525,10 @@ function ItemEditor({ item, onSave, onDirtyChange, availableSlotNames = [] }) {
         <Button onClick={handleSave} disabled={saving || !hasChanges} className="w-full">
           {saving ? (
             <>
-              <IconLoader2 className="size-4 mr-2 animate-spin" />
-              Saving...
-            </>
+              <IconLoader2 className="size-4 mr-2 animate-spin" />{tUi("Saving...")}</>
           ) : (
             <>
-              <IconDeviceFloppy className="size-4 mr-2" />
-              Save Changes
-            </>
+              <IconDeviceFloppy className="size-4 mr-2" />{tUi("Save Changes")}</>
           )}
         </Button>
       </div>
@@ -2642,6 +2549,7 @@ function SortableStage({
   onSaveName,
   onDelete,
 }) {
+  const tUi = useUiText();
   const {
     attributes,
     listeners,
@@ -2720,8 +2628,7 @@ function SortableStage({
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium truncate">{stage.name}</div>
             <div className="text-xs text-muted-foreground">
-              {stage.items?.length || 0} items
-            </div>
+              {stage.items?.length || 0}{tUi(" items")}</div>
           </div>
           <div className="hidden group-hover:flex items-center gap-1">
             <Button

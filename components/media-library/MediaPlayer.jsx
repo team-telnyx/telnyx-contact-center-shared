@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -23,6 +25,7 @@ function formatDuration(seconds) {
 }
 
 export default function MediaPlayer({ mediaName, onClose }) {
+  const tUi = useUiText();
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
   const [duration, setDuration] = useState(0);
@@ -136,7 +139,7 @@ export default function MediaPlayer({ mediaName, onClose }) {
             {mediaName}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Duration:</span>
+            <span>{tUi("Duration:")}</span>
             <Badge
               variant="outline"
               className="border-telnyx-green/60 text-telnyx-green"
@@ -165,14 +168,10 @@ export default function MediaPlayer({ mediaName, onClose }) {
           >
             {playing ? (
               <>
-                <IconPlayerPause className="h-4 w-4 mr-2" />
-                Pause
-              </>
+                <IconPlayerPause className="h-4 w-4 mr-2" />{tUi("Pause")}</>
             ) : (
               <>
-                <IconPlayerPlay className="h-4 w-4 mr-2" />
-                Play
-              </>
+                <IconPlayerPlay className="h-4 w-4 mr-2" />{tUi("Play")}</>
             )}
           </Button>
           <Button size="sm" variant="outline" onClick={() => seek(5)}>
@@ -192,7 +191,7 @@ export default function MediaPlayer({ mediaName, onClose }) {
               value={Math.round(volume * 100)}
               onChange={(e) => setVolume(Number(e.target.value) / 100)}
               className="h-2 w-full cursor-pointer accent-primary"
-              aria-label="Volume"
+              aria-label={tUi("Volume")}
             />
           </div>
           <Button
@@ -202,14 +201,10 @@ export default function MediaPlayer({ mediaName, onClose }) {
           >
             {muted ? (
               <>
-                <IconVolumeOff className="h-4 w-4 mr-2" />
-                Unmute
-              </>
+                <IconVolumeOff className="h-4 w-4 mr-2" />{tUi("Unmute")}</>
             ) : (
               <>
-                <IconVolume className="h-4 w-4 mr-2" />
-                Mute
-              </>
+                <IconVolume className="h-4 w-4 mr-2" />{tUi("Mute")}</>
             )}
           </Button>
         </div>

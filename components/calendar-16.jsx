@@ -1,4 +1,6 @@
 "use client"
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import * as React from "react"
 import { Clock2Icon } from "lucide-react"
@@ -9,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 export default function Calendar16() {
+  const tUi = useUiText();
   const [date, setDate] = React.useState(new Date(2025, 5, 12))
 
   return (
@@ -22,7 +25,7 @@ export default function Calendar16() {
       </CardContent>
       <CardFooter className="flex flex-col gap-6 border-t px-4 pb-0 pt-4">
         <div className="flex w-full flex-col gap-3">
-          <Label htmlFor="time-from">Start Time</Label>
+          <Label htmlFor="time-from">{tUi("Start Time")}</Label>
           <div className="relative flex w-full items-center gap-2">
             <Clock2Icon
               className="text-muted-foreground pointer-events-none absolute left-2.5 size-4 select-none" />
@@ -35,7 +38,7 @@ export default function Calendar16() {
           </div>
         </div>
         <div className="flex w-full flex-col gap-3">
-          <Label htmlFor="time-to">End Time</Label>
+          <Label htmlFor="time-to">{tUi("End Time")}</Label>
           <div className="relative flex w-full items-center gap-2">
             <Clock2Icon
               className="text-muted-foreground pointer-events-none absolute left-2.5 size-4 select-none" />

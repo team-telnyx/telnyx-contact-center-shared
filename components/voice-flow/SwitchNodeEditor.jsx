@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -17,6 +19,7 @@ export default function SwitchNodeEditor({
   availableVariables = [],
   onOutputsChange,
 }) {
+  const tUi = useUiText();
   const variable = config.variable || "";
   const cases = config.cases || [];
   const defaultLabel = config.defaultLabel || "Default";
@@ -98,22 +101,20 @@ export default function SwitchNodeEditor({
   return (
     <div className="space-y-4">
       <div>
-        <Label className="text-xs">Variable to Evaluate</Label>
+        <Label className="text-xs">{tUi("Variable to Evaluate")}</Label>
         <VariableInput
           value={variable}
           onChange={(value) => handleChange("variable", value)}
           availableVariables={availableVariables}
-          placeholder="{{variable}}"
+          placeholder={tUi("{{variable}}")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Variable whose value determines the route
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Variable whose value determines the route")}</p>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <Label className="text-xs">Cases</Label>
+          <Label className="text-xs">{tUi("Cases")}</Label>
           <Button
             type="button"
             size="sm"
@@ -121,9 +122,7 @@ export default function SwitchNodeEditor({
             onClick={addCase}
             className="h-7 text-xs"
           >
-            <IconPlus className="h-3 w-3 mr-1" />
-            Add Case
-          </Button>
+            <IconPlus className="h-3 w-3 mr-1" />{tUi("Add Case")}</Button>
         </div>
 
         <div className="space-y-2">
@@ -136,7 +135,7 @@ export default function SwitchNodeEditor({
 
               <div className="flex-1 space-y-2">
                 <div>
-                  <Label className="text-xs">Value</Label>
+                  <Label className="text-xs">{tUi("Value")}</Label>
                   <Input
                     value={caseItem.value || ""}
                     onChange={(e) =>
@@ -148,13 +147,13 @@ export default function SwitchNodeEditor({
                 </div>
 
                 <div>
-                  <Label className="text-xs">Label</Label>
+                  <Label className="text-xs">{tUi("Label")}</Label>
                   <Input
                     value={caseItem.label || ""}
                     onChange={(e) =>
                       handleCaseChange(index, "label", e.target.value)
                     }
-                    placeholder="Sales"
+                    placeholder={tUi("Sales")}
                     className="mt-1"
                   />
                 </div>
@@ -174,38 +173,32 @@ export default function SwitchNodeEditor({
         </div>
 
         {cases.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4 border rounded-md bg-muted/30">
-            No cases defined. Add a case to get started.
-          </p>
+          <p className="text-xs text-muted-foreground text-center py-4 border rounded-md bg-muted/30">{tUi("No cases defined. Add a case to get started.")}</p>
         )}
       </div>
 
       <div>
-        <Label className="text-xs">Default Label</Label>
+        <Label className="text-xs">{tUi("Default Label")}</Label>
         <Input
           value={defaultLabel}
           onChange={(e) => handleChange("defaultLabel", e.target.value)}
-          placeholder="Default"
+          placeholder={tUi("Default")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Label for the default output when no case matches
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Label for the default output when no case matches")}</p>
       </div>
 
       {variable && cases.length > 0 && (
         <div className="p-3 bg-muted rounded-md">
-          <p className="text-xs font-medium mb-2">Routing Table:</p>
+          <p className="text-xs font-medium mb-2">{tUi("Routing Table:")}</p>
           <div className="space-y-1 text-xs font-mono">
             {cases.map((c, i) => (
-              <div key={i}>
-                When <span className="text-blue-600">{variable}</span> ==={" "}
+              <div key={i}>{tUi("When ")}<span className="text-blue-600">{variable}</span> ==={" "}
                 <span className="text-orange-600">{c.value}</span> →{" "}
                 <span className="text-green-600">{c.label}</span>
               </div>
             ))}
-            <div>
-              Otherwise → <span className="text-green-600">{defaultLabel}</span>
+            <div>{tUi("Otherwise → ")}<span className="text-green-600">{defaultLabel}</span>
             </div>
           </div>
         </div>

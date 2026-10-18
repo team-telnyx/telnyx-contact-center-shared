@@ -58,6 +58,8 @@ test("live + test analyze routes compute and pass the current-target slot", asyn
   );
   assert.match(live, /analyzeWorkflowTranscript\(\{[\s\S]*?currentTarget,/);
   const testRoute = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
-  assert.match(testRoute, /const currentTarget =/);
+  // The test route's item selection lives in its pure helper module.
+  const testAnalysis = await read("../lib/agent-assist/test-workflow-analysis.mjs");
+  assert.match(testAnalysis, /const currentTarget =/);
   assert.match(testRoute, /analyzeWorkflowTranscript\(\{[\s\S]*?currentTarget,/);
 });

@@ -29,7 +29,7 @@ test("greeting drops the 'the company' placeholder when no brand is configured (
 });
 
 test("LLM fallback guidance is brand-forward, not agent-name", async () => {
-  const route = await read();
+  const route = await readFile(new URL("../lib/ai-operations/prompts/suggestion.mjs", import.meta.url), "utf8");
   assert.match(route, /thank the caller for calling \$\{brand\}/);
   assert.match(route, /never say "the company"/);
   assert.doesNotMatch(route, /introduce the agent by name when known/);

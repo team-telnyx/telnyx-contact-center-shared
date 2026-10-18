@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  * Implements best practices for iframe security
  */
 export function SecureIframe({ url, title, refreshKey = 0 }) {
+  const tUi = useUiText();
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -145,9 +148,7 @@ export function SecureIframe({ url, title, refreshKey = 0 }) {
 
   if (!url) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        No URL provided
-      </div>
+      <div className="flex items-center justify-center h-full text-muted-foreground">{tUi("No URL provided")}</div>
     );
   }
 
@@ -157,7 +158,7 @@ export function SecureIframe({ url, title, refreshKey = 0 }) {
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <div className="text-center space-y-2">
             <Skeleton className="h-4 w-32 mx-auto" />
-            <p className="text-xs text-muted-foreground">Loading...</p>
+            <p className="text-xs text-muted-foreground">{tUi("Loading...")}</p>
           </div>
         </div>
       )}
@@ -167,33 +168,29 @@ export function SecureIframe({ url, title, refreshKey = 0 }) {
             <p className="font-medium mb-2">{error}</p>
             {url.includes("google.com/maps/embed") && (
               <div className="text-xs text-muted-foreground space-y-1 mt-2 text-left max-w-md mx-auto">
-                <p className="font-semibold mb-2">Google Maps Embed API 404 Troubleshooting:</p>
+                <p className="font-semibold mb-2">{tUi("Google Maps Embed API 404 Troubleshooting:")}</p>
                 <ol className="list-decimal list-inside space-y-1.5">
                   <li>
-                    <strong>Enable Maps Embed API:</strong> Go to Google Cloud Console → APIs & Services → Enable "Maps Embed API"
+                    <strong>{tUi("Enable Maps Embed API:")}</strong>{tUi(" Go to Google Cloud Console → APIs & Services → Enable \"Maps Embed API\"")}</li>
+                  <li>
+                    <strong>{tUi("Verify API Key:")}</strong>{tUi(" Ensure your API key is valid and not expired")}</li>
+                  <li>
+                    <strong>{tUi("Check API Key Restrictions:")}</strong>{tUi(" If restrictions are set, ensure your domain/IP is allowed")}</li>
+                  <li>
+                    <strong>{tUi("URL Format:")}</strong>{tUi(" Must be exactly: ")}<code className="bg-muted px-1 rounded">https://www.google.com/maps/embed/v1/MAP_MODE?key=API_KEY&PARAMETERS</code>
                   </li>
                   <li>
-                    <strong>Verify API Key:</strong> Ensure your API key is valid and not expired
-                  </li>
+                    <strong>{tUi("Valid MAP_MODE values:")}</strong>{tUi(" place, directions, view, search, streetview")}</li>
                   <li>
-                    <strong>Check API Key Restrictions:</strong> If restrictions are set, ensure your domain/IP is allowed
-                  </li>
-                  <li>
-                    <strong>URL Format:</strong> Must be exactly: <code className="bg-muted px-1 rounded">https://www.google.com/maps/embed/v1/MAP_MODE?key=API_KEY&PARAMETERS</code>
-                  </li>
-                  <li>
-                    <strong>Valid MAP_MODE values:</strong> place, directions, view, search, streetview
-                  </li>
-                  <li>
-                    <strong>Required Parameters:</strong> Each mode requires specific parameters (e.g., place needs <code className="bg-muted px-1 rounded">q</code> or <code className="bg-muted px-1 rounded">place_id</code>)
+                    <strong>{tUi("Required Parameters:")}</strong>{tUi(" Each mode requires specific parameters (e.g., place needs ")}<code className="bg-muted px-1 rounded">q</code>{tUi(" or ")}<code className="bg-muted px-1 rounded">place_id</code>)
                   </li>
                 </ol>
                 <div className="mt-3 pt-2 border-t">
-                  <p className="font-semibold mb-1">Example URLs:</p>
+                  <p className="font-semibold mb-1">{tUi("Example URLs:")}</p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Place: <code className="bg-muted px-1 rounded">.../place?key=KEY&q=New+York</code></li>
-                    <li>View: <code className="bg-muted px-1 rounded">.../view?key=KEY&center=40.7128,-74.0060&zoom=12</code></li>
-                    <li>Directions: <code className="bg-muted px-1 rounded">.../directions?key=KEY&origin=...&destination=...</code></li>
+                    <li>{tUi("Place: ")}<code className="bg-muted px-1 rounded">{tUi(".../place?key=KEY&q=New+York")}</code></li>
+                    <li>{tUi("View: ")}<code className="bg-muted px-1 rounded">{tUi(".../view?key=KEY&center=40.7128,-74.0060&zoom=12")}</code></li>
+                    <li>{tUi("Directions: ")}<code className="bg-muted px-1 rounded">{tUi(".../directions?key=KEY&origin=...&destination=...")}</code></li>
                   </ul>
                 </div>
               </div>
@@ -206,7 +203,7 @@ export function SecureIframe({ url, title, refreshKey = 0 }) {
         key={`${url}-${refreshKey}`}
         ref={iframeRef}
         src={url}
-        title={title || "External Content"}
+        title={title || tUi("External Content")}
         className="w-full h-full border-0"
         {...(sandboxValue ? { sandbox: sandboxValue } : {})}
         referrerPolicy={referrerPolicy}

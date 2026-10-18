@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import { test } from "node:test";
 
 const PAGE = new URL("../app/(portal)/admin/logging/page.jsx", import.meta.url);
@@ -62,8 +62,8 @@ test("Admin logging Filters render grouped topic multi-select", async () => {
   assert.match(page, /function TopicMultiSelect\(\{ label, topicGroups, selectedTopics, onChange \}\)/);
   assert.match(page, /data-testid="logging-topic-filter-groups"/);
   assert.match(page, /data-testid=\{`logging-topic-filter-group-\$\{group\.id\}`\}/);
-  assert.match(page, /aria-label=\{`Select \$\{group\.label\} topics`\}/);
-  assert.match(page, /aria-label=\{`Clear \$\{group\.label\} topics`\}/);
+  assert.match(page, /aria-label=\{`Select \$\{tUi\(group\.label\)\} topics`\}/);
+  assert.match(page, /aria-label=\{`Clear \$\{tUi\(group\.label\)\} topics`\}/);
   assert.match(page, /<IconCheck className="h-3\.5 w-3\.5" \/>/);
   assert.match(page, /<IconX className="h-3\.5 w-3\.5" \/>/);
   assert.doesNotMatch(page, />Select group<|>Clear group</);

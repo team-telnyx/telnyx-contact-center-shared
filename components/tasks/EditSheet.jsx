@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React from "react";
 import {
@@ -68,6 +70,7 @@ export default function TaskEditSheet({
   prefillContactId,
   prefillCallerData,
 }) {
+  const tUi = useUiText();
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [taskType, setTaskType] = React.useState("");
@@ -314,21 +317,17 @@ export default function TaskEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             {taskId ? (
               <>
-                <IconEdit className="size-5" />
-                Edit Task
-              </>
+                <IconEdit className="size-5" />{tUi("Edit Task")}</>
             ) : (
               <>
-                <IconChecklist className="size-5" />
-                New Task
-              </>
+                <IconChecklist className="size-5" />{tUi("New Task")}</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -359,36 +358,32 @@ export default function TaskEditSheet({
                 <>
                   {/* Task Information Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Task Information
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Task Information")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">
-                          Title <span className="text-red-500">*</span>
+                        <Label className="text-sm">{tUi("Title ")}<span className="text-red-500">*</span>
                         </Label>
                         <Input
                           value={title}
                           onChange={(e) => setTitle(e.target.value)}
-                          placeholder="Enter task title"
+                          placeholder={tUi("Enter task title")}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Description</Label>
+                        <Label className="text-sm">{tUi("Description")}</Label>
                         <Textarea
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
-                          placeholder="Enter task description"
+                          placeholder={tUi("Enter task description")}
                           rows={4}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">
-                          Task Type <span className="text-red-500">*</span>
+                        <Label className="text-sm">{tUi("Task Type ")}<span className="text-red-500">*</span>
                         </Label>
                         <Select value={taskType} onValueChange={setTaskType}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select task type" />
+                            <SelectValue placeholder={tUi("Select task type")} />
                           </SelectTrigger>
                           <SelectContent>
                             {PREDEFINED_TASK_TYPES.map((type) => (
@@ -398,21 +393,21 @@ export default function TaskEditSheet({
                                   .replace(/\b\w/g, (l) => l.toUpperCase())}
                               </SelectItem>
                             ))}
-                            <SelectItem value="custom">Custom</SelectItem>
+                            <SelectItem value="custom">{tUi("Custom")}</SelectItem>
                           </SelectContent>
                         </Select>
                         {taskType === "custom" && (
                           <Input
                             value={customTaskType}
                             onChange={(e) => setCustomTaskType(e.target.value)}
-                            placeholder="Enter custom task type"
+                            placeholder={tUi("Enter custom task type")}
                             className="mt-2"
                           />
                         )}
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Status</Label>
+                          <Label className="text-sm">{tUi("Status")}</Label>
                           <Select value={status} onValueChange={setStatus}>
                             <SelectTrigger>
                               <SelectValue />
@@ -420,14 +415,14 @@ export default function TaskEditSheet({
                             <SelectContent>
                               {STATUS_OPTIONS.map((opt) => (
                                 <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
+                                  {tUi(opt.label)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Priority</Label>
+                          <Label className="text-sm">{tUi("Priority")}</Label>
                           <Select value={priority} onValueChange={setPriority}>
                             <SelectTrigger>
                               <SelectValue />
@@ -435,7 +430,7 @@ export default function TaskEditSheet({
                             <SelectContent>
                               {PRIORITY_OPTIONS.map((opt) => (
                                 <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
+                                  {tUi(opt.label)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -449,14 +444,10 @@ export default function TaskEditSheet({
 
                   {/* Caller Information Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Caller Information
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Caller Information")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">
-                          Link to Contact (Optional)
-                        </Label>
+                        <Label className="text-sm">{tUi("Link to Contact (Optional)")}</Label>
                         {loadingContacts ? (
                           <Skeleton className="h-9 w-full" />
                         ) : (
@@ -467,15 +458,15 @@ export default function TaskEditSheet({
                             }
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Select a contact" />
+                              <SelectValue placeholder={tUi("Select a contact")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
+                              <SelectItem value="none">{tUi("None")}</SelectItem>
                               {contacts.map((contact) => (
                                 <SelectItem key={contact.id} value={contact.id}>
                                   {getContactDisplayName(contact)}
                                   {contact.company_name &&
-                                    ` - ${contact.company_name}`}
+                                    tUi(" - {value0}", { value0: contact.company_name })}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -483,29 +474,29 @@ export default function TaskEditSheet({
                         )}
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Caller Name</Label>
+                        <Label className="text-sm">{tUi("Caller Name")}</Label>
                         <Input
                           value={callerName}
                           onChange={(e) => setCallerName(e.target.value)}
-                          placeholder="Caller name"
+                          placeholder={tUi("Caller name")}
                         />
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Caller Phone</Label>
+                          <Label className="text-sm">{tUi("Caller Phone")}</Label>
                           <Input
                             value={callerPhone}
                             onChange={(e) => setCallerPhone(e.target.value)}
-                            placeholder="Caller phone"
+                            placeholder={tUi("Caller phone")}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Caller Email</Label>
+                          <Label className="text-sm">{tUi("Caller Email")}</Label>
                           <Input
                             type="email"
                             value={callerEmail}
                             onChange={(e) => setCallerEmail(e.target.value)}
-                            placeholder="Caller email"
+                            placeholder={tUi("Caller email")}
                           />
                         </div>
                       </div>
@@ -516,12 +507,10 @@ export default function TaskEditSheet({
 
                   {/* Assignment Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Assignment
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Assignment")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Assigned To</Label>
+                        <Label className="text-sm">{tUi("Assigned To")}</Label>
                         {loadingUsers ? (
                           <Skeleton className="h-9 w-full" />
                         ) : (
@@ -532,12 +521,10 @@ export default function TaskEditSheet({
                             }
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Select user" />
+                              <SelectValue placeholder={tUi("Select user")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="unassigned">
-                                Unassigned
-                              </SelectItem>
+                              <SelectItem value="unassigned">{tUi("Unassigned")}</SelectItem>
                               {users.map((user) => (
                                 <SelectItem key={user.id} value={user.id}>
                                   {getUserDisplayName(user)}
@@ -548,7 +535,7 @@ export default function TaskEditSheet({
                         )}
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Due Date</Label>
+                        <Label className="text-sm">{tUi("Due Date")}</Label>
                         <Input
                           type="date"
                           value={dueDate}
@@ -556,28 +543,24 @@ export default function TaskEditSheet({
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Tags</Label>
+                        <Label className="text-sm">{tUi("Tags")}</Label>
                         <Input
                           value={tags}
                           onChange={(e) => setTags(e.target.value)}
-                          placeholder="Comma-separated tags"
+                          placeholder={tUi("Comma-separated tags")}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Separate multiple tags with commas
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Separate multiple tags with commas")}</p>
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Custom Data</Label>
+                        <Label className="text-sm">{tUi("Custom Data")}</Label>
                         <Textarea
                           value={customDataText}
                           onChange={(e) => setCustomDataText(e.target.value)}
-                          placeholder={'{"caseId":"CASE-123","source":"voice"}'}
+                          placeholder={tUi("{\"caseId\":\"CASE-123\",\"source\":\"voice\"}")}
                           rows={6}
                           className="font-mono text-xs"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Enter a valid JSON object. Leave empty to save an empty object.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Enter a valid JSON object. Leave empty to save an empty object.")}</p>
                       </div>
                     </div>
                   </div>
@@ -592,11 +575,9 @@ export default function TaskEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={onSave} disabled={saving || loading}>
-            {saving ? "Saving..." : taskId ? "Update" : "Create"}
+            {saving ? tUi("Saving...") : taskId ? tUi("Update") : tUi("Create")}
           </Button>
         </SheetFooter>
       </SheetContent>

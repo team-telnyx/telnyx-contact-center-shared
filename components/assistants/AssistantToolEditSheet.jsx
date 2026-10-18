@@ -1,4 +1,10 @@
 "use client";
+import AssistantToolAdditionalSettings from "./AssistantToolAdditionalSettings";
+import { AssistantJsonDraftContext } from "./AssistantSchemaFields";
+import PaymentToolEditor from "./tools/PaymentToolEditor";
+import UpdateVariablesToolEditor from "./tools/UpdateVariablesToolEditor";
+import { useUiText, UiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import {
@@ -18,6 +24,10 @@ import {
 } from "@/components/ui/tooltip";
 import {
   IconArrowsLeftRight,
+  IconCreditCard,
+  IconVariable,
+  IconCode,
+  IconEye,
   IconDatabaseSearch,
   IconDialpad,
   IconFlask,
@@ -53,6 +63,10 @@ export function labelForAssistantToolType(type) {
 
 export function descriptionForAssistantToolType(type) {
   switch (type) {
+    case "vision": return ASSISTANT_TOOL_TYPES.find(tool => tool.type === "vision").description;
+    case "pay": return "Collect a secure card payment during the call";
+    case "update_dynamic_variables": return "Capture details and update conversation variables";
+    case "function": return "Define a function the assistant can call";
     case "webhook":
       return "Call external API endpoints with optional parameters";
     case "retrieval":
@@ -84,6 +98,10 @@ export function descriptionForAssistantToolType(type) {
 
 export function renderAssistantToolIcon(type, className = "size-4") {
   switch (type) {
+    case "vision": return <IconEye className={`${className} text-violet-500`} />;
+    case "pay": return <IconCreditCard className={`${className} text-emerald-500`} />;
+    case "update_dynamic_variables": return <IconVariable className={`${className} text-sky-500`} />;
+    case "function": return <IconCode className={`${className} text-violet-500`} />;
     case "webhook":
       return <IconWebhook className={`${className} text-orange-500`} />;
     case "handoff":
@@ -116,7 +134,9 @@ export function renderAssistantToolIcon(type, className = "size-4") {
 export function getAssistantToolDisplay(tool) {
   const type = tool?.type || "";
   let name = tool?.display_name || labelForAssistantToolType(type);
-  if (type === "webhook") {
+  if (["function", "update_dynamic_variables"].includes(type)) {
+    name = tool[type]?.name || name;
+  } else if (type === "webhook") {
     name = tool?.webhook?.name || tool?.display_name || "";
   } else if (type === "client_side_tool") {
     name =
@@ -126,7 +146,9 @@ export function getAssistantToolDisplay(tool) {
   }
 
   let description = "";
-  if (type === "webhook") {
+  if (["function", "pay", "update_dynamic_variables"].includes(type)) {
+    description = tool[type]?.description || descriptionForAssistantToolType(type);
+  } else if (type === "webhook") {
     description = tool?.webhook?.description || "";
   } else if (type === "client_side_tool") {
     description =
@@ -159,7 +181,11 @@ export function getAssistantToolDisplay(tool) {
   };
 }
 
-export function renderAssistantToolEditor(
+export function renderAssistantToolEditor(type,tool,onChange,assistantId,availableVariables=[],onValidationChange) {
+  return <div className="space-y-5">{renderDedicatedToolEditor(type,tool,onChange,assistantId,availableVariables,onValidationChange)}<AssistantToolAdditionalSettings type={type} tool={tool} onChange={onChange}/></div>;
+}
+
+function renderDedicatedToolEditor(
   type,
   tool,
   onChange,
@@ -167,6 +193,9 @@ export function renderAssistantToolEditor(
   availableVariables = [],
   onValidationChange
 ) {
+  if (type === "pay") return <PaymentToolEditor value={tool} onChange={onChange} onValidationChange={onValidationChange} />;
+  if (type === "update_dynamic_variables") return <UpdateVariablesToolEditor value={tool} onChange={onChange} />;
+  if (type === "function") return <ClientSideToolEditor executionTarget="function" value={{...tool, client_side_tool:tool.function}} onValidationChange={onValidationChange} onChange={next => { const {client_side_tool, timeout_ms, ...rest} = next; onChange({...rest, type:"function", function:client_side_tool}); }} />;
   switch (type) {
     case "webhook":
       return (
@@ -240,6 +269,8 @@ export function renderAssistantToolEditor(
           availableVariables={availableVariables}
         />
       );
+    case "vision":
+      return <label className="grid gap-2 text-sm"><UiText>Maximum frame age (seconds)</UiText><input type="number" min="1" step="1" className="rounded border bg-background p-2" value={tool.vision?.max_frame_age_secs ?? 10} onChange={e=>onChange({...tool,vision:{...tool.vision,max_frame_age_secs:Number(e.target.value)}})} /><span className="text-xs text-muted-foreground"><UiText>Requires a Vision model. Kimi-K2.6 is recommended. Each participant chooses whether to share their camera or screen.</UiText></span></label>;
     case "skip_turn":
       return (
         <SkipTurnToolEditor
@@ -250,9 +281,7 @@ export function renderAssistantToolEditor(
       );
     default:
       return (
-        <div className="text-xs text-muted-foreground">
-          Unsupported tool type
-        </div>
+        <div className="text-xs text-muted-foreground"><UiText>Unsupported tool type</UiText></div>
       );
   }
 }
@@ -267,15 +296,17 @@ export default function AssistantToolEditSheet({
   showTrigger,
   trigger,
 }) {
+  const tUi = useUiText();
   const [draft, setDraft] = useState(tool);
   const [testOpen, setTestOpen] = useState(false);
+  const [jsonDrafts, setJsonDrafts] = useState({});
   const [editorValidationError, setEditorValidationError] = useState("");
   const type = tool?.type || "";
   const label = labelForAssistantToolType(type);
   const canShowTestIcon = type === "webhook" && assistantId && tool?.tool_id;
   const testWebhookConfig = open ? draft?.webhook : tool?.webhook;
   const validationError =
-    editorValidationError || validateAssistantToolConfiguration(draft);
+    (Object.values(jsonDrafts).some(item => item.error) ? tUi("Fix advanced JSON before saving") : "") || editorValidationError || validateAssistantToolConfiguration(draft, tUi);
 
   useEffect(() => {
     if (open) {
@@ -284,6 +315,7 @@ export default function AssistantToolEditSheet({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(tool);
       setEditorValidationError("");
+      setJsonDrafts({});
     }
   }, [open, tool]);
 
@@ -298,25 +330,22 @@ export default function AssistantToolEditSheet({
         <SheetContent className="w-[90vw] sm:w-[800px] h-full flex flex-col overflow-hidden">
           <SheetHeader>
             <SheetTitle className="inline-flex items-center gap-2">
-              {renderAssistantToolIcon(type)}
-              Edit {label}
+              {renderAssistantToolIcon(type)}{tUi("Edit ")}{tUi(label)}
             </SheetTitle>
-            <SheetDescription>
-              Configure the {label} settings
-            </SheetDescription>
+            <SheetDescription>{tUi("Configure the ")}{tUi(label)}{tUi(" settings")}</SheetDescription>
           </SheetHeader>
 
           <div className="mt-6 flex flex-col flex-1 min-h-0">
             <div className="flex-1 min-h-0 overflow-y-auto">
               <Card className="p-6 mx-4">
-                {renderAssistantToolEditor(
+                <AssistantJsonDraftContext.Provider value={{drafts:jsonDrafts,setDrafts:setJsonDrafts}}>{renderAssistantToolEditor(
                   type,
                   draft,
                   setDraft,
                   assistantId,
                   availableVariables,
                   setEditorValidationError
-                )}
+                )}</AssistantJsonDraftContext.Provider>
               </Card>
             </div>
 
@@ -327,9 +356,7 @@ export default function AssistantToolEditSheet({
                   variant="outline"
                   onClick={() => setTestOpen(true)}
                 >
-                  <IconFlask className="size-4 mr-2" />
-                  Test
-                </Button>
+                  <IconFlask className="size-4 mr-2" />{tUi("Test")}</Button>
               )}
               {validationError ? (
                 <p className="max-w-sm text-xs text-destructive">
@@ -344,9 +371,7 @@ export default function AssistantToolEditSheet({
                     onOpenChange(false);
                     setDraft(tool);
                   }}
-                >
-                  Cancel
-                </Button>
+                >{tUi("Cancel")}</Button>
                 <Button
                   type="button"
                   disabled={Boolean(validationError)}
@@ -354,9 +379,7 @@ export default function AssistantToolEditSheet({
                     onSave(draft);
                     onOpenChange(false);
                   }}
-                >
-                  Save
-                </Button>
+                >{tUi("Save")}</Button>
               </div>
             </div>
           </div>
@@ -377,21 +400,20 @@ export default function AssistantToolEditSheet({
 }
 
 export function AssistantToolEditIconButton({ onClick }) {
+  const tUi = useUiText();
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             className="inline-flex items-center text-telnyx-green"
-            aria-label="Edit tool"
+            aria-label={tUi("Edit tool")}
             onClick={onClick}
             type="button"
-          >
-            Edit
-          </button>
+          >{tUi("Edit")}</button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Edit tool</p>
+          <p>{tUi("Edit tool")}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

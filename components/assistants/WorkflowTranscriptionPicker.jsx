@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { Combobox } from "@/components/ui/combobox";
@@ -89,6 +91,7 @@ function BooleanSetting({ id, label, checked, description, onCheckedChange }) {
 }
 
 function SecretsCombobox({ value, onChange }) {
+  const tUi = useUiText();
   const [options, setOptions] = useState([]);
 
   useEffect(() => {
@@ -119,8 +122,8 @@ function SecretsCombobox({ value, onChange }) {
       value={value || ""}
       onChange={onChange}
       options={options}
-      placeholder="Select Azure API key reference…"
-      emptyLabel="No integration secrets found"
+      placeholder={tUi("Select Azure API key reference…")}
+      emptyLabel={tUi("No integration secrets found")}
       triggerClassName="w-full"
       searchable
     />
@@ -133,6 +136,7 @@ export default function WorkflowTranscriptionPicker({
   availableVariables = [],
   onChange,
 }) {
+  const tUi = useUiText();
   const model = String(value?.model || "");
   const settings = value?.settings || {};
   const issues = validateTranscriptionOverride(value);
@@ -160,13 +164,13 @@ export default function WorkflowTranscriptionPicker({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label className="text-xs font-medium text-muted-foreground">Transcription Model</Label>
+        <Label className="text-xs font-medium text-muted-foreground">{tUi("Transcription Model")}</Label>
         <Select
           value={model}
           onValueChange={(nextModel) => onChange?.(createTranscriptionOverride(nextModel))}
         >
           <SelectTrigger className="w-full text-sm">
-            <SelectValue placeholder="Select transcription model" />
+            <SelectValue placeholder={tUi("Select transcription model")} />
           </SelectTrigger>
           <SelectContent>
             {ASSISTANT_TRANSCRIPTION_MODELS.map((modelName) => (
@@ -180,15 +184,13 @@ export default function WorkflowTranscriptionPicker({
 
       {languages.length > 0 && (
         <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">
-            Transcription Language
-          </Label>
+          <Label className="text-xs font-medium text-muted-foreground">{tUi("Transcription Language")}</Label>
           <Combobox
             value={value?.language || ""}
             onChange={(language) => updateTranscription({ language: language || undefined })}
             options={languages}
-            placeholder="Use provider default"
-            emptyLabel="No matching language"
+            placeholder={tUi("Use provider default")}
+            emptyLabel={tUi("No matching language")}
             triggerClassName="w-full"
             searchable
           />
@@ -199,16 +201,16 @@ export default function WorkflowTranscriptionPicker({
         <div className="space-y-3">
           <BooleanSetting
             id={`${idPrefix}-smart-format`}
-            label="Smart Format"
+            label={tUi("Smart Format")}
             checked={settings.smart_format ?? true}
-            description="Adds punctuation, casing, and readable transcript formatting."
+            description={tUi("Adds punctuation, casing, and readable transcript formatting.")}
             onCheckedChange={(checked) => updateSettings({ smart_format: checked })}
           />
           <BooleanSetting
             id={`${idPrefix}-numerals`}
-            label="Numerals"
+            label={tUi("Numerals")}
             checked={settings.numerals ?? true}
-            description="Converts spoken numbers to numerical digits."
+            description={tUi("Converts spoken numbers to numerical digits.")}
             onCheckedChange={(checked) => updateSettings({ numerals: checked })}
           />
         </div>
@@ -218,35 +220,35 @@ export default function WorkflowTranscriptionPicker({
         <div className="space-y-3">
           <NumberSetting
             id={`${idPrefix}-eot-threshold`}
-            label="End-of-turn Threshold"
+            label={tUi("End-of-turn Threshold")}
             value={settings.eot_threshold}
             defaultValue={0.8}
             min={0.5}
             max={0.9}
             step={0.05}
-            description="Confidence required to trigger a final end of turn (0.5–0.9)."
+            description={tUi("Confidence required to trigger a final end of turn (0.5–0.9).")}
             onChange={(next) => updateSettings({ eot_threshold: next })}
           />
           <NumberSetting
             id={`${idPrefix}-eot-timeout`}
-            label="End-of-turn Timeout (ms)"
+            label={tUi("End-of-turn Timeout (ms)")}
             value={settings.eot_timeout_ms}
             defaultValue={5000}
             min={500}
             max={10000}
             step={100}
-            description="Maximum silence before forcing an end of turn (500–10000 ms)."
+            description={tUi("Maximum silence before forcing an end of turn (500–10000 ms).")}
             onChange={(next) => updateSettings({ eot_timeout_ms: next })}
           />
           <NumberSetting
             id={`${idPrefix}-eager-eot-threshold`}
-            label="Eager End-of-turn Threshold"
+            label={tUi("Eager End-of-turn Threshold")}
             value={settings.eager_eot_threshold}
             defaultValue={0.4}
             min={0.3}
             max={0.9}
             step={0.05}
-            description="Starts speculative LLM processing early. Must be no higher than the final threshold."
+            description={tUi("Starts speculative LLM processing early. Must be no higher than the final threshold.")}
             onChange={(next) => updateSettings({ eager_eot_threshold: next })}
           />
         </div>
@@ -254,7 +256,7 @@ export default function WorkflowTranscriptionPicker({
 
       {(model === "deepgram/nova-3" || model === "deepgram/flux") && (
         <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground">Keyterm Boost</Label>
+          <Label className="text-xs font-medium text-muted-foreground">{tUi("Keyterm Boost")}</Label>
           <VariableTextarea
             value={settings.keyterm || ""}
             onChange={(keyterm) => updateSettings({ keyterm: keyterm || undefined })}
@@ -262,11 +264,9 @@ export default function WorkflowTranscriptionPicker({
             includeSecrets={false}
             highlightVariables
             rows={3}
-            placeholder="Telnyx,VoIP,{{customer_name}}"
+            placeholder={tUi("Telnyx,VoIP,{{customer_name}}")}
           />
-          <p className="text-xs text-muted-foreground">
-            Comma-separated terms to boost. Dynamic variables are resolved at call time.
-          </p>
+          <p className="text-xs text-muted-foreground">{tUi("Comma-separated terms to boost. Dynamic variables are resolved at call time.")}</p>
         </div>
       )}
 
@@ -274,37 +274,37 @@ export default function WorkflowTranscriptionPicker({
         <div className="space-y-3">
           <NumberSetting
             id={`${idPrefix}-assembly-confidence`}
-            label="End-of-turn Confidence Threshold"
+            label={tUi("End-of-turn Confidence Threshold")}
             value={settings.end_of_turn_confidence_threshold}
             defaultValue={0.4}
             min={0}
             max={1}
             step={0.05}
-            description="Confidence required to trigger an end of turn (0–1)."
+            description={tUi("Confidence required to trigger an end of turn (0–1).")}
             onChange={(next) =>
               updateSettings({ end_of_turn_confidence_threshold: next })
             }
           />
           <NumberSetting
             id={`${idPrefix}-assembly-min-silence`}
-            label="Minimum Turn Silence (ms)"
+            label={tUi("Minimum Turn Silence (ms)")}
             value={settings.min_turn_silence}
             defaultValue={400}
             min={100}
             max={5000}
             step={100}
-            description="Must be no higher than maximum turn silence."
+            description={tUi("Must be no higher than maximum turn silence.")}
             onChange={(next) => updateSettings({ min_turn_silence: next })}
           />
           <NumberSetting
             id={`${idPrefix}-assembly-max-silence`}
-            label="Maximum Turn Silence (ms)"
+            label={tUi("Maximum Turn Silence (ms)")}
             value={settings.max_turn_silence}
             defaultValue={1280}
             min={100}
             max={5000}
             step={100}
-            description="Maximum silence before forcing an end of turn."
+            description={tUi("Maximum silence before forcing an end of turn.")}
             onChange={(next) => updateSettings({ max_turn_silence: next })}
           />
         </div>
@@ -313,7 +313,7 @@ export default function WorkflowTranscriptionPicker({
       {model === "azure/fast" && (
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Azure Region</Label>
+            <Label className="text-xs font-medium text-muted-foreground">{tUi("Azure Region")}</Label>
             <Select
               value={value?.region || "latency"}
               onValueChange={(region) => updateTranscription({ region })}
@@ -324,25 +324,21 @@ export default function WorkflowTranscriptionPicker({
               <SelectContent>
                 {AZURE_TRANSCRIPTION_REGIONS.map((region) => (
                   <SelectItem key={region} value={region}>
-                    {region === "latency" ? "Latency (auto-select closest region)" : region}
+                    {region === "latency" ? tUi("Latency (auto-select closest region)") : region}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">
-              Azure API Key Reference
-            </Label>
+            <Label className="text-xs font-medium text-muted-foreground">{tUi("Azure API Key Reference")}</Label>
             <SecretsCombobox
               value={value?.api_key_ref || ""}
               onChange={(apiKeyRef) =>
                 updateTranscription({ api_key_ref: apiKeyRef || undefined })
               }
             />
-            <p className="text-xs text-muted-foreground">
-              Optional integration secret for Azure regions that require a customer key.
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Optional integration secret for Azure regions that require a customer key.")}</p>
           </div>
         </div>
       )}
@@ -351,16 +347,16 @@ export default function WorkflowTranscriptionPicker({
         <div className="space-y-3">
           <BooleanSetting
             id={`${idPrefix}-soniox-interim`}
-            label="Interim Results"
+            label={tUi("Interim Results")}
             checked={settings.interim_results ?? false}
-            description="Streams non-final results in addition to finalized transcripts."
+            description={tUi("Streams non-final results in addition to finalized transcripts.")}
             onCheckedChange={(checked) => updateSettings({ interim_results: checked })}
           />
           <BooleanSetting
             id={`${idPrefix}-soniox-endpoint`}
-            label="Endpoint Detection"
+            label={tUi("Endpoint Detection")}
             checked={settings.enable_endpoint_detection ?? false}
-            description="Emits end-of-utterance events using the maximum endpoint delay."
+            description={tUi("Emits end-of-utterance events using the maximum endpoint delay.")}
             onCheckedChange={(checked) =>
               updateSettings({
                 enable_endpoint_detection: checked,
@@ -373,13 +369,13 @@ export default function WorkflowTranscriptionPicker({
           {(settings.enable_endpoint_detection ?? false) && (
             <NumberSetting
               id={`${idPrefix}-soniox-endpoint-delay`}
-              label="Maximum Endpoint Delay (ms)"
+              label={tUi("Maximum Endpoint Delay (ms)")}
               value={settings.max_endpoint_delay_ms}
               defaultValue={1750}
               min={500}
               max={3000}
               step={50}
-              description="Maximum silence before Soniox emits an end-of-utterance event."
+              description={tUi("Maximum silence before Soniox emits an end-of-utterance event.")}
               onChange={(next) => updateSettings({ max_endpoint_delay_ms: next })}
             />
           )}
@@ -387,28 +383,20 @@ export default function WorkflowTranscriptionPicker({
       )}
 
       {model === "nvidia/parakeet-v3" && (
-        <p className="rounded-md border p-3 text-xs text-muted-foreground">
-          Parakeet V3 uses automatic multilingual detection and has no provider-specific
-          settings.
-        </p>
+        <p className="rounded-md border p-3 text-xs text-muted-foreground">{tUi("Parakeet V3 uses automatic multilingual detection and has no provider-specific settings.")}</p>
       )}
 
       {model === "speechmatics/standard" && (
-        <p className="rounded-md border p-3 text-xs text-muted-foreground">
-          Speechmatics Standard uses the selected language hint and has no additional
-          provider-specific settings.
-        </p>
+        <p className="rounded-md border p-3 text-xs text-muted-foreground">{tUi("Speechmatics Standard uses the selected language hint and has no additional provider-specific settings.")}</p>
       )}
 
       {model === "humain/realtime" && (
-        <p className="rounded-md border p-3 text-xs text-muted-foreground">
-          Humain Realtime supports Arabic, English, and Arabic/English code-switching.
-        </p>
+        <p className="rounded-md border p-3 text-xs text-muted-foreground">{tUi("Humain Realtime supports Arabic, English, and Arabic/English code-switching.")}</p>
       )}
 
       {issues.length > 0 && (
         <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-300">
-          <div className="mb-1 font-medium">Fix transcription settings before saving</div>
+          <div className="mb-1 font-medium">{tUi("Fix transcription settings before saving")}</div>
           <ul className="list-disc space-y-1 pl-4">
             {issues.map((issue) => (
               <li key={issue}>{issue}</li>

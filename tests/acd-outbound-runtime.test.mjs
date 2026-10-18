@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { prepareAcdTestPool, makeTxRunner, seedAgent, seedQueue, makeFakeProvider } from './helpers/acd-test-db.mjs';
 import { ensureOutboundTestSchema } from './helpers/acd-outbound-db.mjs';
 import { startOutboundConnect } from '../lib/acd/sagas/outbound-connect.mjs';
-import { driveSaga, sweepDueSagas, clearSagaDeadlineWakeups } from '../lib/acd/saga-engine.mjs';
+import { driveSaga, sweepDueSagas, setSagaDeadlineWakeupsEnabled } from '../lib/acd/saga-engine.mjs';
 import { applyOutboundVoiceEvent } from '../lib/acd/outbound-intake.mjs';
 import { claimAutonomousOutbound, claimNextAutonomousOutbound, requestOutboundDial } from '../lib/acd/outbound-runtime.mjs';
 import { tryReserveCapacity } from '../lib/acd/capacity.mjs';
@@ -13,13 +13,20 @@ import { createWorkItem, applyTransition } from '../lib/acd/lifecycle.mjs';
 
 const pool = await prepareAcdTestPool('acd_core_test_outbound_runtime');
 const tx = makeTxRunner(pool);
-after(() => { clearSagaDeadlineWakeups(); return pool.end(); });
-// Deadline wake-ups are process-global and sweeps are database-wide: without
-// this an earlier test's saga is driven concurrently with, or through the
-// provider of, a later one. Both produce failures unrelated to the behaviour
-// under test.
+// Every saga here is driven explicitly, and the pre-dial path carries
+// one-second step deadlines (await_dial, wait_agent, agent_first_wait_customer).
+// Each drive that leaves a saga waiting arms a local wake-up for that deadline,
+// so on a slow runner a wake-up fires in the middle of a test, claims the saga
+// and sends its next command in the background while the test's own drive
+// returns not_claimable: the assertion then sees ['outbound_agent_dial'] and
+// 'outbound_dial' arrives a few milliseconds too late. Deadlines that matter
+// to a test are swept explicitly with sweepDueSagas.
+setSagaDeadlineWakeupsEnabled(false);
+after(() => { setSagaDeadlineWakeupsEnabled(true); return pool.end(); });
+// Sweeps are database-wide: without this an earlier test's saga is driven
+// through the provider of a later one, failing for reasons unrelated to the
+// behaviour under test.
 beforeEach(async () => {
-  clearSagaDeadlineWakeups();
   await pool.query(`UPDATE acd_sagas SET state = 'cancelled', terminal_at = now(),
     lease_owner = NULL, lease_expires_at = NULL WHERE state IN ('running', 'compensating')`);
   await pool.query(`UPDATE acd_outbound_lines line SET released_at=now(),release_reason='test isolation'
@@ -66,7 +73,8 @@ async function answerPreDialAgent(f) {
   const agentCallId=`device:${randomUUID()}`;
   const agentEvent=eventType=>applyClaimedAcdVoiceEvent(pool,f.provider,{eventId:randomUUID(),eventType,payload:{call_control_id:agentCallId,direction:'incoming',custom_headers:[{name:'X-CC-Work-Item-Id',value:f.workItemId},{name:'X-CC-Offer-Generation',value:'1'}]}});
   await agentEvent('call.initiated');await agentEvent('call.answered');
-  await driveSaga(pool,f.sagaId,{provider:f.provider});
+  const driven=await driveSaga(pool,f.sagaId,{provider:f.provider});
+  assert.notEqual(driven.state,'not_claimable','the test drive must own the outbound saga after the agent answered; nothing else may be driving it');
   return {connect,agentEvent};
 }
 

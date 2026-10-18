@@ -806,13 +806,37 @@ test('an E.164 direct destination is admitted from the configured user number', 
       WHERE work_item_id=$1 ORDER BY created_at`,[work.id])).rows,[{
       role:'customer',state:'parked',provider_call_id:payload.call_control_id,
     }]);
-    const connect=(await pool.query(`SELECT state,step,data FROM acd_sagas
+    const connect=(await pool.query(`SELECT id,state,step,data FROM acd_sagas
       WHERE work_item_id=$1 AND type='connect'`,[work.id])).rows[0];
     assert.equal(connect.state,'running');assert.equal(connect.step,'dial_agent');
     assert.equal(connect.data.customerProviderCallId,payload.call_control_id);
     assert.equal(connect.data.agentId,a.id);
     assert.ok(provider.calls.some(call=>call.operation==='transfer_to_agent'
       && call.endpoint.includes(encodeURIComponent(payload.call_control_id))));
+    const agentPayload={...payload,call_control_id:`v3:direct-device-${randomUUID()}`,
+      to:`sip:${a.id}@sip.telnyx.com`,custom_headers:provider.calls.find(c=>c.operation==='transfer_to_agent').request.custom_headers};
+    const deliver=async(eventType,body)=>{
+      assert.equal((await admitAcdVoiceEvent(pool,{eventId:randomUUID(),eventType,sourceRoute:'voice',payload:body})).durable,true);
+      await drainInboxOnce(pool,provider,{node:'direct-e164-lifecycle',limit:100});
+      await driveSaga(pool,connect.id,{provider});
+    };
+    await deliver('call.initiated',agentPayload);
+    delete agentPayload.custom_headers;
+    // The bridge can arrive before answer; subsequent device events often
+    // omit routing headers. They still belong exclusively to the connect saga.
+    await deliver('call.bridged',{...payload,bridged_call_control_id:agentPayload.call_control_id});
+    await deliver('call.answered',agentPayload);
+    await deliver('call.bridged',agentPayload);
+    await deliver('call.answered',agentPayload);
+    await deliver('call.bridged',payload);
+    assert.equal((await pool.query('SELECT state FROM acd_work_items WHERE id=$1',[work.id])).rows[0].state,'active');
+    assert.equal((await pool.query('SELECT step FROM acd_sagas WHERE id=$1',[connect.id])).rows[0].step,'in_call');
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM acd_events WHERE work_item_id=$1 AND type='illegal_transition_rejected'",[work.id])).rows[0].n,0);
+    assert.equal(provider.calls.some(c=>/hangup/.test(c.operation)),false,'duplicates must not clean up a live bridge');
+    await deliver('call.hangup',{...agentPayload,hangup_cause:'normal_clearing'});
+    await deliver('call.hangup',{...payload,hangup_cause:'normal_clearing'});
+    assert.equal((await pool.query('SELECT state FROM acd_work_items WHERE id=$1',[work.id])).rows[0].state,'completed');
+
   } finally {
     if (previousConnection === undefined) delete process.env.TELNYX_SIP_CONNECTION_ID;
     else process.env.TELNYX_SIP_CONNECTION_ID = previousConnection;
@@ -1067,5 +1091,28 @@ test('manual voice and supervision cannot overlap an offered or active video ses
     await assert.rejects(reserveDirectVoice(pool, { agentId: a.id, target: '+15550002222' }), { status: 409 });
     await assert.rejects(reserveSupervisionVoice(pool, { agentId: a.id, target: 'sip:test@sip.telnyx.com', supervisedCallControlId: 'v3:test', role: 'monitor' }), { status: 409 });
     assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM acd_reservations WHERE agent_id=$1 AND channel='voice'", [a.id])).rows[0].n, 0);
+  }
+});
+
+
+test('a legacy owner main-number assignment cannot hijack the application flow', async () => {
+  const before=process.env.TELNYX_MAIN_FROM_NUMBER;
+  const connection=process.env.TELNYX_SIP_CONNECTION_ID;
+  process.env.TELNYX_MAIN_FROM_NUMBER='+15550009001';
+  process.env.TELNYX_SIP_CONNECTION_ID='test-service-connection';
+  try {
+    const a=await agent();
+    await pool.query('UPDATE users SET voice_number=$2 WHERE id=$1',[a.id,'+15550009001']);
+    for (const sourceRoute of ['voice','incoming']) {
+      const result=await admitAcdVoiceEvent(pool,{eventId:randomUUID(),eventType:'call.initiated',sourceRoute,
+        payload:{call_control_id:`v3:service-${randomUUID()}`,call_session_id:randomUUID(),direction:'incoming',
+          connection_id:'test-service-connection',to:'tel:+1 (555) 000-9001',from:'+15550001111'}});
+      assert.equal(result.handled,false,'the application or configured flow must receive the service DID');
+      assert.equal(result.classification.decision,'pass_domain');
+    }
+    assert.equal((await pool.query('SELECT voice_number FROM users WHERE id=$1',[a.id])).rows[0].voice_number,'+15550009001','preserve existing user data');
+  } finally {
+    if(before===undefined)delete process.env.TELNYX_MAIN_FROM_NUMBER;else process.env.TELNYX_MAIN_FROM_NUMBER=before;
+    if(connection===undefined)delete process.env.TELNYX_SIP_CONNECTION_ID;else process.env.TELNYX_SIP_CONNECTION_ID=connection;
   }
 });

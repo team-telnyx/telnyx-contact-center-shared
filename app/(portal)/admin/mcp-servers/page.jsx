@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import * as React from "react";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
@@ -45,6 +47,7 @@ function ServerTypeBadge({ type }) {
 }
 
 function AdminMCPServersPageContent() {
+  const tUi = useUiText();
   const [loading, setLoading] = React.useState(true);
   const [rows, setRows] = React.useState([]);
   const [expandedServers, setExpandedServers] = React.useState(new Set());
@@ -121,20 +124,18 @@ function AdminMCPServersPageContent() {
 
   const headerActions = (
     <>
-      <Button onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</Button>
+      <Button onClick={load} disabled={loading}>{loading ? tUi("Loading…") : tUi("Refresh")}</Button>
       <Can permission="mcp_servers:create"><Button onClick={() => setSheetServerId("new")}>
-        <IconPlus className="size-4 mr-2" />
-        Add MCP Server
-      </Button></Can>
+        <IconPlus className="size-4 mr-2" />{tUi("Add MCP Server")}</Button></Can>
     </>
   );
 
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="MCP Servers"
+        title={tUi("MCP Servers")}
         icon={IconTools}
-        badges={<Badge variant="secondary">{rows.length} servers</Badge>}
+        badges={<Badge variant="secondary">{rows.length}{tUi(" servers")}</Badge>}
         actions={headerActions}
       />
       <AiAssistantsSectionPage activeId="mcp-servers">
@@ -143,9 +144,7 @@ function AdminMCPServersPageContent() {
             <CardContent className="space-y-3 pt-6">
               {loading && [...Array(3)].map((_, index) => <Skeleton key={index} className="h-24 w-full" />)}
               {!loading && rows.length === 0 && (
-                <div className="text-sm text-muted-foreground border rounded-lg p-6 text-center">
-                  No MCP servers configured yet.
-                </div>
+                <div className="text-sm text-muted-foreground border rounded-lg p-6 text-center">{tUi("No MCP servers configured yet.")}</div>
               )}
               {!loading && rows.map((server) => {
                 const isExpanded = expandedServers.has(server.id);
@@ -165,12 +164,12 @@ function AdminMCPServersPageContent() {
                         )}
                         {!isExpanded && allowedTools.length > 0 && (
                           <Badge variant="outline" className="text-xs bg-telnyx-green/10 text-telnyx-green border-telnyx-green/30">
-                            {allowedTools.length} {allowedTools.length === 1 ? "tool" : "tools"}
+                            {allowedTools.length} {allowedTools.length === 1 ? tUi("tool") : tUi("tools")}
                           </Badge>
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground truncate max-w-[70ch]">{server.url}</div>
-                      {server.api_key_ref && <div className="text-xs text-muted-foreground">API Key Ref: {server.api_key_ref}</div>}
+                      {server.api_key_ref && <div className="text-xs text-muted-foreground">{tUi("API Key Ref: ")}{server.api_key_ref}</div>}
                       {isExpanded && (
                         <div className="flex items-center flex-wrap gap-2 mt-2 pt-2 border-t">
                           {allowedTools.map((toolName) => (
@@ -178,7 +177,7 @@ function AdminMCPServersPageContent() {
                               key={toolName}
                               type="button"
                               className="inline-flex items-center rounded-md border border-telnyx-green/30 bg-telnyx-green/10 px-2.5 py-0.5 text-xs font-semibold text-telnyx-green shadow-sm transition-colors hover:bg-telnyx-green/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telnyx-green/50"
-                              title={`View ${toolName} tool details`}
+                              title={tUi("View {value0} tool details", { value0: toolName })}
                               onClick={() => setToolDetails({ server, tool: toolsByName.get(toolName) || { name: toolName } })}
                             >
                               {toolName}
@@ -186,28 +185,26 @@ function AdminMCPServersPageContent() {
                           ))}
                         </div>
                       )}
-                      {allowedTools.length === 0 && <Badge variant="outline" className="text-xs">No allowed tools</Badge>}
+                      {allowedTools.length === 0 && <Badge variant="outline" className="text-xs">{tUi("No allowed tools")}</Badge>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => setSheetServerId(server.id)} title="Edit MCP server">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => setSheetServerId(server.id)} title={tUi("Edit MCP server")}>
                         <IconEdit className="size-4" />
                       </Button>
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Can permission="mcp_servers:delete"><Button type="button" variant="ghost" size="icon" title="Delete MCP server">
+                          <Can permission="mcp_servers:delete"><Button type="button" variant="ghost" size="icon" title={tUi("Delete MCP server")}>
                             <IconTrash className="size-4 text-red-500" />
                           </Button></Can>
                         </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
-                            <DialogTitle>Delete MCP server?</DialogTitle>
-                            <DialogDescription>
-                              This removes &quot;{server.name}&quot; from the configured MCP servers list.
-                            </DialogDescription>
+                            <DialogTitle>{tUi("Delete MCP server?")}</DialogTitle>
+                            <DialogDescription>{tUi("This removes \"")}{server.name}{tUi("\" from the configured MCP servers list.")}</DialogDescription>
                           </DialogHeader>
                           <div className="flex justify-end gap-2 pt-2">
-                            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                            <DialogClose asChild><Button variant="destructive" onClick={() => onDelete(server.id)}>Delete</Button></DialogClose>
+                            <DialogClose asChild><Button variant="outline">{tUi("Cancel")}</Button></DialogClose>
+                            <DialogClose asChild><Button variant="destructive" onClick={() => onDelete(server.id)}>{tUi("Delete")}</Button></DialogClose>
                           </div>
                         </DialogContent>
                       </Dialog>

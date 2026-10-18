@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
@@ -50,6 +52,7 @@ function formatMessageTimestamps(msg) {
 }
 
 function CopyInline({ value }) {
+  const tUi = useUiText();
   const [copied, setCopied] = useState(false);
   async function doCopy() {
     try {
@@ -64,7 +67,7 @@ function CopyInline({ value }) {
       variant="ghost"
       className={copied ? "h-7 w-7 text-telnyx-green" : "h-7 w-7"}
       onClick={doCopy}
-      title={copied ? "Copied" : "Copy"}
+      title={copied ? tUi("Copied") : tUi("Copy")}
     >
       {copied ? (
         <IconCheck className="size-4 text-telnyx-green" />
@@ -76,6 +79,7 @@ function CopyInline({ value }) {
 }
 
 export default function ConversationMessagesSheet({ conversation, children }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("conversation");
   const [recording, setRecording] = useState(null);
@@ -390,7 +394,7 @@ export default function ConversationMessagesSheet({ conversation, children }) {
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right">
+      <SheetContent side="end">
         <SheetHeader className="gap-1">
           <SheetTitle className="truncate">
             {fullConversation?.name || fullConversation?.id || conversation?.name || conversation?.id}
@@ -410,51 +414,42 @@ export default function ConversationMessagesSheet({ conversation, children }) {
               {latencyMetrics.avgTurn > 0 && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground font-medium">
-                      Average Latency
-                    </span>
+                    <span className="text-muted-foreground font-medium">{tUi("Average Latency")}</span>
                     <span className="font-mono font-semibold text-blue-600">
-                      {latencyMetrics.avgTurn}ms
-                    </span>
+                      {latencyMetrics.avgTurn}{tUi("ms")}</span>
                   </div>
                   <div className="flex h-2 rounded-full overflow-hidden bg-muted">
                     {latencyPercentages.stt > 0 && (
                       <div
                         className="bg-red-500"
                         style={{ width: `${latencyPercentages.stt}%` }}
-                        title={`STT: ${latencyMetrics.avgSTT}ms`}
+                        title={tUi("STT: {value0}ms", { value0: latencyMetrics.avgSTT })}
                       />
                     )}
                     {latencyPercentages.llm > 0 && (
                       <div
                         className="bg-green-500"
                         style={{ width: `${latencyPercentages.llm}%` }}
-                        title={`LLM: ${latencyMetrics.avgLLM}ms`}
+                        title={tUi("LLM: {value0}ms", { value0: latencyMetrics.avgLLM })}
                       />
                     )}
                     {latencyPercentages.tts > 0 && (
                       <div
                         className="bg-orange-500"
                         style={{ width: `${latencyPercentages.tts}%` }}
-                        title={`TTS: ${latencyMetrics.avgTTS}ms`}
+                        title={tUi("TTS: {value0}ms", { value0: latencyMetrics.avgTTS })}
                       />
                     )}
                   </div>
                   <div className="flex items-center justify-between text-[9px] font-mono">
                     {latencyMetrics.avgSTT > 0 && (
-                      <span className="text-red-600">
-                        STT:{latencyMetrics.avgSTT}ms
-                      </span>
+                      <span className="text-red-600">{tUi("STT:")}{latencyMetrics.avgSTT}{tUi("ms")}</span>
                     )}
                     {latencyMetrics.avgLLM > 0 && (
-                      <span className="text-green-600">
-                        LLM:{latencyMetrics.avgLLM}ms
-                      </span>
+                      <span className="text-green-600">{tUi("LLM:")}{latencyMetrics.avgLLM}{tUi("ms")}</span>
                     )}
                     {latencyMetrics.avgTTS > 0 && (
-                      <span className="text-orange-600">
-                        TTS:{latencyMetrics.avgTTS}ms
-                      </span>
+                      <span className="text-orange-600">{tUi("TTS:")}{latencyMetrics.avgTTS}{tUi("ms")}</span>
                     )}
                   </div>
                 </div>
@@ -469,11 +464,11 @@ export default function ConversationMessagesSheet({ conversation, children }) {
             className="flex-1 min-h-0 flex flex-col"
           >
             <TabsList className="mt-2">
-              <TabsTrigger value="conversation">Conversation</TabsTrigger>
-              <TabsTrigger value="insights">Insights</TabsTrigger>
-              <TabsTrigger value="metadata">Metadata</TabsTrigger>
-              <TabsTrigger value="dynamic">Dynamic Variables</TabsTrigger>
-              <TabsTrigger value="costs">Costs</TabsTrigger>
+              <TabsTrigger value="conversation">{tUi("Conversation")}</TabsTrigger>
+              <TabsTrigger value="insights">{tUi("Insights")}</TabsTrigger>
+              <TabsTrigger value="metadata">{tUi("Metadata")}</TabsTrigger>
+              <TabsTrigger value="dynamic">{tUi("Dynamic Variables")}</TabsTrigger>
+              <TabsTrigger value="costs">{tUi("Costs")}</TabsTrigger>
             </TabsList>
 
             <TabsContent
@@ -543,7 +538,7 @@ export default function ConversationMessagesSheet({ conversation, children }) {
               <Card>
                 <CardContent className="px-3 space-y-2">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="font-medium">Recording</span>
+                    <span className="font-medium">{tUi("Recording", undefined, "saved media")}</span>
                     <span>
                       {formatTime(currentTime)} / {formatTime(duration)}
                     </span>

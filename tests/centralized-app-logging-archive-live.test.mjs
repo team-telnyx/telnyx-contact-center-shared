@@ -9,7 +9,6 @@ const archiveUrl = new URL("../lib/logger/object-archive.mjs", import.meta.url).
 const sinksUrl = new URL("../lib/logger/app-log-sinks.mjs", import.meta.url).href;
 const sinksPath = new URL("../lib/logger/app-log-sinks.mjs", import.meta.url);
 const streamRoutePath = new URL("../app/api/admin/logging/stream/route.js", import.meta.url);
-const logsRoutePath = new URL("../app/api/admin/logging/logs/route.js", import.meta.url);
 const pagePath = new URL("../app/(portal)/admin/logging/page.jsx", import.meta.url);
 
 async function fresh(url) {
@@ -267,16 +266,13 @@ test("fire-and-forget application sinks use a bounded queue instead of spawning 
   assert.doesNotMatch(source, /fireAndForgetApplicationLogSinks[\s\S]*writeApplicationLogSinks\(entry/);
 });
 
-test("admin logging APIs prefer Postgres live buffer when live logging is enabled", async () => {
+test("admin logging stream prefers Postgres live buffer when live logging is enabled", async () => {
   const streamRoute = await readFile(streamRoutePath, "utf8");
-  const logsRoute = await readFile(logsRoutePath, "utf8");
   const page = await readFile(pagePath, "utf8");
 
   assert.match(streamRoute, /queryLiveLogEvents/);
   assert.match(streamRoute, /config\.liveEnabled/);
   assert.match(streamRoute, /nodeName/);
-  assert.match(logsRoute, /mode === "live"/);
-  assert.match(logsRoute, /queryLiveLogEvents/);
   assert.match(page, /params\.set\("mode", "live"\)/);
 });
 

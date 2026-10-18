@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import test from "node:test";
 
 import {
@@ -73,7 +73,14 @@ test("an accepted queue transfer keeps the reused interaction visible", async ()
 
   assert.match(modal, /contact-center:queue-transfer-accepted/);
   assert.match(desktop, /queueTransferContinuationsRef/);
-  assert.match(desktop, /!isQueueTransferContinuation\(interaction\)/);
+  // Disconnect tombstones apply only to optimistic SDK-only entries; rows the
+  // server owns leave solely through the authoritative activeOnly read. The
+  // continuation guard therefore lives on the store-only filter.
+  assert.match(desktop, /!isQueueTransferContinuation\(call\)/);
+  assert.match(
+    desktop,
+    /Tombstones apply solely to optimistic SDK-only entries/,
+  );
   assert.match(desktop, /isOwnedQueueTransferContinuation/);
   assert.match(desktop, /contact-center:queue-transfer-accepted/);
 });

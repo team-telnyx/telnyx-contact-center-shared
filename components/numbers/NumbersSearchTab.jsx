@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Fragment, useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
@@ -84,6 +86,7 @@ function getStateFromRegionInfo(regionInfo) {
 }
 
 export default function NumbersSearchTab() {
+  const tUi = useUiText();
   const [searchParams, setSearchParams] = useState({
     country_code: "US",
     search_by: "area_code", // area_code or city_region
@@ -290,7 +293,7 @@ export default function NumbersSearchTab() {
       if (!res.ok) throw new Error(data?.error || "Search failed");
       setSearchResults(data.data || []);
       setSelectedNumbers([]);
-      notify({ title: `Found ${data.data?.length || 0} available numbers`, variant: "success" });
+      notify({ title: tUi("Found {value0} available numbers", {value0: data.data?.length || 0}), variant: "success" });
     } catch (err) {
       notify({ title: "Search failed", description: String(err.message || err), variant: "error" });
     } finally {
@@ -399,7 +402,7 @@ export default function NumbersSearchTab() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{featureData.label}</p>
+                  <p>{tUi(featureData.label)}</p>
                 </TooltipContent>
               </Tooltip>
             );
@@ -415,20 +418,17 @@ export default function NumbersSearchTab() {
       case "completed":
         return (
           <Badge className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-            <IconCheck className="size-3 mr-1" /> Success
-          </Badge>
+            <IconCheck className="size-3 mr-1" />{tUi(" Success")}</Badge>
         );
       case "pending":
         return (
           <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
-            <IconClock className="size-3 mr-1" /> Pending
-          </Badge>
+            <IconClock className="size-3 mr-1" />{tUi(" Pending")}</Badge>
         );
       case "failed":
         return (
           <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-            <IconX className="size-3 mr-1" /> Failed
-          </Badge>
+            <IconX className="size-3 mr-1" />{tUi(" Failed")}</Badge>
         );
       default:
         return <Badge variant="outline">{status}</Badge>;
@@ -438,19 +438,19 @@ export default function NumbersSearchTab() {
   return (
     <div className="space-y-6">
       <div className="border rounded-lg p-4 space-y-4">
-        <h3 className="text-sm font-semibold">Search Criteria</h3>
+        <h3 className="text-sm font-semibold">{tUi("Search Criteria")}</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="text-xs font-medium">Country</label>
+            <label className="text-xs font-medium">{tUi("Country")}</label>
             <div className="flex items-center gap-2 h-9 px-3 border rounded-md bg-muted/50">
               <span className="text-base leading-none">🇺🇸</span>
-              <span className="text-sm">United States</span>
+              <span className="text-sm">{tUi("United States")}</span>
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-medium">Search By</label>
+            <label className="text-xs font-medium">{tUi("Search By")}</label>
             <Select
               value={searchParams.search_by}
               onValueChange={(value) => {
@@ -468,8 +468,8 @@ export default function NumbersSearchTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="area_code">Area Code</SelectItem>
-                <SelectItem value="city_region">State / Region</SelectItem>
+                <SelectItem value="area_code">{tUi("Area Code")}</SelectItem>
+                <SelectItem value="city_region">{tUi("State / Region")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -477,8 +477,8 @@ export default function NumbersSearchTab() {
           <div>
             <label className="text-xs font-medium">
               {searchParams.search_by === "area_code"
-                ? "Area Code"
-                : "State / Region"}
+                ? tUi("Area Code")
+                : tUi("State / Region")}
             </label>
             {searchParams.search_by === "area_code" ? (
               <Popover
@@ -499,20 +499,20 @@ export default function NumbersSearchTab() {
                       ? areaCodes.find(
                           (c) => c.value === searchParams.area_code
                         )?.label || searchParams.area_code
-                      : "Select area code"}
+                      : tUi("Select area code")}
                     <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[300px] p-0">
                   <Command shouldFilter={false}>
                     <CommandInput
-                      placeholder="Filter area codes..."
+                      placeholder={tUi("Filter area codes...")}
                       className="h-9"
                       value={areaCodeSearchQuery}
                       onValueChange={setAreaCodeSearchQuery}
                     />
                     <CommandEmpty>
-                      {loadingAreaCodes ? "Loading..." : "No area code found."}
+                      {loadingAreaCodes ? tUi("Loading...") : tUi("No area code found.")}
                     </CommandEmpty>
                     <CommandGroup className="max-h-[300px] overflow-auto">
                       {areaCodes
@@ -562,24 +562,24 @@ export default function NumbersSearchTab() {
                     {searchParams.region
                       ? regions.find((r) => r.value === searchParams.region)
                           ?.label || searchParams.region
-                      : "Type at least 3 characters..."}
+                      : tUi("Type at least 3 characters...")}
                     <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[400px] p-0">
                   <Command shouldFilter={false}>
                     <CommandInput
-                      placeholder="Type city or region name..."
+                      placeholder={tUi("Type city or region name...")}
                       className="h-9"
                       value={regionSearchQuery}
                       onValueChange={setRegionSearchQuery}
                     />
                     <CommandEmpty>
                       {loadingRegions
-                        ? "Searching..."
+                        ? tUi("Searching...")
                         : regionSearchQuery.length < 3
-                        ? "Type at least 3 characters to search"
-                        : "No regions found."}
+                        ? tUi("Type at least 3 characters to search")
+                        : tUi("No regions found.")}
                     </CommandEmpty>
                     <CommandGroup className="max-h-[300px] overflow-auto">
                       {regions.map((region, idx) => (
@@ -612,7 +612,7 @@ export default function NumbersSearchTab() {
           </div>
 
           <div>
-            <label className="text-xs font-medium">Number Type</label>
+            <label className="text-xs font-medium">{tUi("Number Type")}</label>
             <Select
               value={searchParams.phone_number_type}
               onValueChange={(value) =>
@@ -623,17 +623,17 @@ export default function NumbersSearchTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="local">Local</SelectItem>
-                <SelectItem value="toll_free">Toll Free</SelectItem>
-                <SelectItem value="mobile">Mobile</SelectItem>
-                <SelectItem value="national">National</SelectItem>
+                <SelectItem value="local">{tUi("Local")}</SelectItem>
+                <SelectItem value="toll_free">{tUi("Toll Free")}</SelectItem>
+                <SelectItem value="mobile">{tUi("Mobile")}</SelectItem>
+                <SelectItem value="national">{tUi("National")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
         <div>
-          <label className="text-xs font-medium mb-2 block">Features</label>
+          <label className="text-xs font-medium mb-2 block">{tUi("Features")}</label>
           <div className="flex flex-wrap gap-2">
             {[
               "voice",
@@ -672,16 +672,14 @@ export default function NumbersSearchTab() {
               <IconChevronUp className="size-4" />
             ) : (
               <IconChevronDown className="size-4" />
-            )}
-            Advanced Search
-          </button>
+            )}{tUi("Advanced Search")}</button>
 
           {showAdvancedSearch && (
             <div className="mt-4 space-y-4">
               {/* Number Pattern Filters */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs font-medium">Starts With</label>
+                  <label className="text-xs font-medium">{tUi("Starts With")}</label>
                   <Input
                     value={searchParams.phone_number_starts_with}
                     onChange={(e) =>
@@ -690,12 +688,12 @@ export default function NumbersSearchTab() {
                         phone_number_starts_with: e.target.value,
                       }))
                     }
-                    placeholder="e.g., 212"
+                    placeholder={tUi("e.g., 212")}
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium">Contains</label>
+                  <label className="text-xs font-medium">{tUi("Contains")}</label>
                   <Input
                     value={searchParams.phone_number_contains}
                     onChange={(e) =>
@@ -704,12 +702,12 @@ export default function NumbersSearchTab() {
                         phone_number_contains: e.target.value,
                       }))
                     }
-                    placeholder="e.g., 555"
+                    placeholder={tUi("e.g., 555")}
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium">Ends With</label>
+                  <label className="text-xs font-medium">{tUi("Ends With")}</label>
                   <Input
                     value={searchParams.phone_number_ends_with}
                     onChange={(e) =>
@@ -718,12 +716,12 @@ export default function NumbersSearchTab() {
                         phone_number_ends_with: e.target.value,
                       }))
                     }
-                    placeholder="e.g., 1234"
+                    placeholder={tUi("e.g., 1234")}
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium">Limit</label>
+                  <label className="text-xs font-medium">{tUi("Limit")}</label>
                   <Select
                     value={String(searchParams.limit)}
                     onValueChange={(value) =>
@@ -745,9 +743,7 @@ export default function NumbersSearchTab() {
 
               {/* Search Options Switches */}
               <div>
-                <label className="text-xs font-medium mb-2 block">
-                  Search Options
-                </label>
+                <label className="text-xs font-medium mb-2 block">{tUi("Search Options")}</label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex items-center space-x-2">
                     <Switch
@@ -760,9 +756,7 @@ export default function NumbersSearchTab() {
                     <Label
                       htmlFor="best_effort"
                       className="text-xs cursor-pointer"
-                    >
-                      Best Effort
-                    </Label>
+                    >{tUi("Best Effort")}</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -776,9 +770,7 @@ export default function NumbersSearchTab() {
                     <Label
                       htmlFor="quickship"
                       className="text-xs cursor-pointer"
-                    >
-                      Quickship
-                    </Label>
+                    >{tUi("Quickship")}</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -792,9 +784,7 @@ export default function NumbersSearchTab() {
                     <Label
                       htmlFor="reservable"
                       className="text-xs cursor-pointer"
-                    >
-                      Reservable Numbers
-                    </Label>
+                    >{tUi("Reservable Numbers")}</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -811,9 +801,7 @@ export default function NumbersSearchTab() {
                     <Label
                       htmlFor="exclude_held_numbers"
                       className="text-xs cursor-pointer"
-                    >
-                      Exclude Held Numbers
-                    </Label>
+                    >{tUi("Exclude Held Numbers")}</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -830,9 +818,7 @@ export default function NumbersSearchTab() {
                     <Label
                       htmlFor="exclude_prev_owned_numbers"
                       className="text-xs cursor-pointer"
-                    >
-                      Exclude Previously Owned Numbers
-                    </Label>
+                    >{tUi("Exclude Previously Owned Numbers")}</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -849,9 +835,7 @@ export default function NumbersSearchTab() {
                     <Label
                       htmlFor="telnyx_bundle"
                       className="text-xs cursor-pointer"
-                    >
-                      Telnyx Bundle
-                    </Label>
+                    >{tUi("Telnyx Bundle")}</Label>
                   </div>
                 </div>
               </div>
@@ -859,9 +843,7 @@ export default function NumbersSearchTab() {
               {/* Consecutive Numbers */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-xs font-medium">
-                    Consecutive Numbers
-                  </label>
+                  <label className="text-xs font-medium">{tUi("Consecutive Numbers")}</label>
                   <Input
                     type="number"
                     min="1"
@@ -872,7 +854,7 @@ export default function NumbersSearchTab() {
                         consecutive: e.target.value,
                       }))
                     }
-                    placeholder="e.g., 5"
+                    placeholder={tUi("e.g., 5")}
                   />
                 </div>
               </div>
@@ -887,7 +869,7 @@ export default function NumbersSearchTab() {
             className="flex items-center gap-2"
           >
             <IconSearch className="size-4" />
-            {loading ? "Searching…" : "Search Numbers"}
+            {loading ? tUi("Searching…") : tUi("Search Numbers")}
           </Button>
           {selectedNumbers.length > 0 && (
             <Button
@@ -898,8 +880,8 @@ export default function NumbersSearchTab() {
             >
               <IconShoppingCart className="size-4" />
               {ordering
-                ? "Ordering…"
-                : `Order ${selectedNumbers.length} Number(s)`}
+                ? tUi("Ordering…")
+                : tUi("Order {value0} Number(s)", { value0: selectedNumbers.length })}
             </Button>
           )}
         </div>
@@ -911,13 +893,13 @@ export default function NumbersSearchTab() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12"></TableHead>
-                <TableHead className="px-[10px]">Phone Number</TableHead>
-                <TableHead className="px-[10px]">Type</TableHead>
-                <TableHead className="px-[10px]">Features</TableHead>
-                <TableHead className="px-[10px]">City</TableHead>
-                <TableHead className="px-[10px]">State/Region</TableHead>
-                <TableHead className="px-[10px]">Upfront Cost</TableHead>
-                <TableHead className="px-[10px]">Monthly Cost</TableHead>
+                <TableHead className="px-[10px]">{tUi("Phone Number")}</TableHead>
+                <TableHead className="px-[10px]">{tUi("Type")}</TableHead>
+                <TableHead className="px-[10px]">{tUi("Features")}</TableHead>
+                <TableHead className="px-[10px]">{tUi("City")}</TableHead>
+                <TableHead className="px-[10px]">{tUi("State/Region")}</TableHead>
+                <TableHead className="px-[10px]">{tUi("Upfront Cost")}</TableHead>
+                <TableHead className="px-[10px]">{tUi("Monthly Cost")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -988,10 +970,7 @@ export default function NumbersSearchTab() {
       {!loading && searchResults.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
           <IconSearch className="size-12 mx-auto mb-4 opacity-50" />
-          <p>
-            No search results yet. Use the search form above to find available
-            numbers.
-          </p>
+          <p>{tUi("No search results yet. Use the search form above to find available numbers.")}</p>
         </div>
       )}
 
@@ -1002,15 +981,13 @@ export default function NumbersSearchTab() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Order</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to order the selected number(s)?
-            </DialogDescription>
+            <DialogTitle>{tUi("Confirm Order")}</DialogTitle>
+            <DialogDescription>{tUi("Are you sure you want to order the selected number(s)?")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="border rounded p-4 bg-muted/30">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Selected Numbers:</span>
+                <span className="text-sm font-medium">{tUi("Selected Numbers:")}</span>
                 <Badge variant="outline">{selectedNumbers.length}</Badge>
               </div>
               <div className="border rounded p-2 max-h-48 overflow-y-auto bg-background">
@@ -1032,16 +1009,14 @@ export default function NumbersSearchTab() {
                 onClick={() => setShowOrderConfirmation(false)}
                 variant="outline"
                 className="flex-1"
-              >
-                Cancel
-              </Button>
+              >{tUi("Cancel")}</Button>
               <Button
                 onClick={handleOrderConfirm}
                 disabled={ordering}
                 className="flex-1 bg-telnyx-green hover:bg-telnyx-green/90 text-white"
               >
                 <IconShoppingCart className="size-4 mr-2" />
-                {ordering ? "Ordering…" : "Confirm Order"}
+                {ordering ? tUi("Ordering…") : tUi("Confirm Order")}
               </Button>
             </div>
           </div>
@@ -1052,23 +1027,21 @@ export default function NumbersSearchTab() {
       <Dialog open={showOrderStatus} onOpenChange={setShowOrderStatus}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Order Status</DialogTitle>
-            <DialogDescription>
-              Your number order has been placed.
-            </DialogDescription>
+            <DialogTitle>{tUi("Order Status")}</DialogTitle>
+            <DialogDescription>{tUi("Your number order has been placed.")}</DialogDescription>
           </DialogHeader>
           {orderStatus && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Order ID:</span>
+                <span className="text-sm font-medium">{tUi("Order ID:")}</span>
                 <span className="text-sm font-mono">{orderStatus.id}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Status:</span>
+                <span className="text-sm font-medium">{tUi("Status:")}</span>
                 {orderStatusBadge(orderStatus.status)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Numbers:</span>
+                <span className="text-sm font-medium">{tUi("Numbers:")}</span>
                 <span className="text-sm">
                   {orderStatus.phone_numbers?.length || 0}
                 </span>
@@ -1097,9 +1070,7 @@ export default function NumbersSearchTab() {
               <Button
                 onClick={() => setShowOrderStatus(false)}
                 className="w-full"
-              >
-                Close
-              </Button>
+              >{tUi("Close")}</Button>
             </div>
           )}
         </DialogContent>

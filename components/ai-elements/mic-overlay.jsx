@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 /**
  * MicOverlay — self-contained mic transcription overlay.
@@ -31,6 +33,7 @@ export default function MicOverlay({
   className,
   buttonClassName,
 }) {
+  const tUi = useUiText();
   // ── Overlay open / close ───────────────────────────────────────────────────
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -364,7 +367,7 @@ export default function MicOverlay({
           buttonClassName
         )}
         onClick={handleToggle}
-        aria-label={open ? "Stop transcription" : "Start transcription"}
+        aria-label={open ? tUi("Stop transcription") : tUi("Start transcription")}
       >
         <MicIcon className="size-3.5" />
       </Button>
@@ -379,7 +382,7 @@ export default function MicOverlay({
           {isConnecting && (
             <div className="flex items-center gap-1.5 px-1">
               <Loader2Icon className="h-4 w-4 animate-spin text-telnyx-green" />
-              <span className="text-xs text-muted-foreground">Connecting…</span>
+              <span className="text-xs text-muted-foreground">{tUi("Connecting…")}</span>
             </div>
           )}
 
@@ -401,7 +404,7 @@ export default function MicOverlay({
               onClick={handleStop}
             >
               <SquareIcon className="size-4" />
-              <span className="sr-only">Stop recording</span>
+              <span className="sr-only">{tUi("Stop recording")}</span>
             </Button>
           )}
         </div>

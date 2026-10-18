@@ -24,6 +24,7 @@ import {
 import { startConnectSaga } from "../lib/acd/sagas/connect.mjs";
 import {
   classifyProviderResult,
+  createTelnyxProvider,
   hangupEndpointCallId,
   isAlreadyEndedResponse,
   isHangupEndpoint,
@@ -39,6 +40,7 @@ const seedQueue = (queueId, agentIds, overrides) => seedQueueIn(pool, queueId, a
 async function routedConnect({
   answerTimeoutMs = 20_000,
   queueAudioMediaName = null,
+  customerCallId = null,
 } = {}) {
   const queue = `queue-${randomUUID().slice(0, 8)}`;
   const agent = `agent-${randomUUID().slice(0, 8)}`;
@@ -67,7 +69,7 @@ async function routedConnect({
   const routeResult = await routeOne(pool, workItem.id);
   assert.equal(routeResult.routed, true);
 
-  const customerProviderCallId = `v3:${randomUUID()}`;
+  const customerProviderCallId = customerCallId || `v3:${randomUUID()}`;
   await pool.query(
     `INSERT INTO acd_legs (id, work_item_id, role, provider_call_id, state, answered_at)
      VALUES ($1, $2, 'customer', $3, 'answered', now())`,
@@ -464,6 +466,177 @@ for (const operation of ['stop_queue_playback', 'transfer_to_agent', 'enqueue_cu
     assert.equal(calls.length,after);
   });
 }
+
+async function expireCustomerEndWait(sagaId, provider) {
+  await pool.query("UPDATE acd_sagas SET deadline_at=now()-interval '1 second' WHERE id=$1", [sagaId]);
+  await sweepDueSagas(pool, { provider });
+}
+
+function missingHangupProvider(operation = 'stop_queue_playback', probe = command => ({
+  outcome: 'accepted', httpStatus: 200,
+  response: { data: { ended: true, isAlive: false, callControlId: command.request.callControlId,
+    checkedAt: new Date().toISOString() } },
+})) {
+  const calls = [];
+  return { calls, async send(command) {
+    calls.push(command);
+    if (command.operation === 'verify_customer_leg_end') return probe(command);
+    if (command.operation === operation) return { outcome: 'failed', httpStatus: 422,
+      response: { errors: [{ code: '90018', title: 'Call has already ended' }] } };
+    if (operation === 'enqueue_customer_leg' && command.operation === 'transfer_to_agent') {
+      return { outcome: 'failed', httpStatus: 422, response: { error: 'invalid destination' } };
+    }
+    return { outcome: 'accepted', httpStatus: 200, response: { data: { result: 'ok' } } };
+  } };
+}
+
+for (const operation of ['stop_queue_playback', 'transfer_to_agent', 'enqueue_customer_leg']) {
+  test(`connect: missing hangup after ${operation} 90018 is recovered by an exact-call probe`, { skip }, async () => {
+    const provider = missingHangupProvider(operation);
+    const { workItem, routeResult, sagaId, customerProviderCallId, agent } = await routedConnect();
+    await driveSaga(pool, sagaId, { provider });
+    assert.equal((await sagaRow(sagaId)).step, 'await_customer_end');
+    assert.equal(provider.calls.filter(c => c.operation === 'verify_customer_leg_end').length, 0);
+    await expireCustomerEndWait(sagaId, provider);
+
+    assert.equal((await sagaRow(sagaId)).state, 'succeeded');
+    assert.equal((await pool.query('SELECT state FROM acd_work_items WHERE id=$1', [workItem.id])).rows[0].state, 'abandoned');
+    assert.equal((await pool.query('SELECT state FROM acd_reservations WHERE id=$1', [routeResult.reservationId])).rows[0].state, 'released');
+    assert.equal((await pool.query('SELECT workflow_state FROM acd_agent_state WHERE agent_id=$1', [agent])).rows[0].workflow_state, 'idle');
+    const leg = (await pool.query("SELECT * FROM acd_legs WHERE work_item_id=$1 AND role='customer'", [workItem.id])).rows[0];
+    assert.equal(leg.state, 'ended');
+    assert.equal(leg.ended_reason, 'provider_verified_ended');
+    assert.ok(leg.ended_at);
+    const probe = (await commandRows(sagaId)).find(c => c.operation === 'verify_customer_leg_end');
+    assert.equal(probe.status, 'accepted');
+    assert.equal(probe.request.callControlId, customerProviderCallId);
+    const events = (await pool.query('SELECT type,payload FROM acd_events WHERE work_item_id=$1', [workItem.id])).rows;
+    const evidence = events.filter(e => e.type === 'customer_media_end_verified');
+    assert.equal(evidence.length, 1);
+    assert.equal(evidence[0].payload.probe_command_id, probe.command_id);
+    assert.equal(evidence[0].payload.actual_hangup_time_unknown, true);
+    assert.ok(!events.some(e => e.type === 'manual_intervention_required'));
+
+    const before = provider.calls.length;
+    await driveSaga(pool, sagaId, { provider, node: 'restarted-worker' });
+    await applySagaEvent(pool, { workItemId: workItem.id, name: 'leg.ended', role: 'customer', provider });
+    assert.equal(provider.calls.length, before);
+    assert.deepEqual(await checkInvariants(pool), {});
+  });
+}
+
+for (const [label, result] of [
+  ['active', { outcome: 'accepted', httpStatus: 200, response: { data: { ended: false, isAlive: true } } }],
+  ['missing', { outcome: 'accepted', httpStatus: 200, response: { data: {} } }],
+  ['string false', { outcome: 'accepted', httpStatus: 200, response: { data: { ended: true, isAlive: 'false' } } }],
+  ['contradictory', { outcome: 'accepted', httpStatus: 200, response: { data: { ended: true, isAlive: true } } }],
+  ['wrong call', { outcome: 'accepted', httpStatus: 200, response: { data: { ended: true, isAlive: false, callControlId: 'another-call' } } }],
+  ['HTTP error', { outcome: 'failed', httpStatus: 404, response: { error: 'not found' } }],
+  ['timeout', { outcome: 'ambiguous', httpStatus: null, response: { error: 'timeout' } }],
+]) {
+  test(`connect: ${label} customer probe retains the offer and retries only after a deadline`, { skip }, async () => {
+    const provider = missingHangupProvider('stop_queue_playback', command => ({ ...result,
+      response: { ...result.response, data: { callControlId: command.request.callControlId, ...result.response.data } },
+    }));
+    const { workItem, routeResult, sagaId } = await routedConnect();
+    await driveSaga(pool, sagaId, { provider });
+    await expireCustomerEndWait(sagaId, provider);
+    if (label === 'timeout') {
+      assert.equal((await sagaRow(sagaId)).step, 'verify_customer_end');
+      await expireCustomerEndWait(sagaId, provider);
+    }
+    assert.equal((await sagaRow(sagaId)).step, 'await_customer_end');
+    const before = provider.calls.length;
+    await driveSaga(pool, sagaId, { provider, node: 'restarted-worker' });
+    assert.equal(provider.calls.length, before);
+    assert.equal((await pool.query('SELECT terminal_at FROM acd_work_items WHERE id=$1', [workItem.id])).rows[0].terminal_at, null);
+    assert.equal((await pool.query('SELECT state FROM acd_reservations WHERE id=$1', [routeResult.reservationId])).rows[0].state, 'reserved');
+    assert.equal((await pool.query("SELECT ended_at FROM acd_legs WHERE work_item_id=$1 AND role='customer'", [workItem.id])).rows[0].ended_at, null);
+    await expireCustomerEndWait(sagaId, provider);
+    assert.equal(provider.calls.filter(c => c.operation === 'verify_customer_leg_end').length, 2);
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM acd_events WHERE work_item_id=$1 AND type='manual_intervention_required'", [workItem.id])).rows[0].n, 1);
+    await applySagaEvent(pool, { workItemId: workItem.id, name: 'leg.ended', role: 'customer', provider });
+    assert.equal((await sagaRow(sagaId)).state, 'succeeded');
+  });
+}
+
+test('connect: an initially active customer is recovered when a later probe confirms end', { skip }, async () => {
+  let probes = 0;
+  const provider = missingHangupProvider('stop_queue_playback', command => {
+    probes += 1;
+    return { outcome: 'accepted', httpStatus: 200, response: { data: {
+      ended: probes > 1, isAlive: probes === 1, callControlId: command.request.callControlId,
+    } } };
+  });
+  const { sagaId, routeResult } = await routedConnect();
+  await driveSaga(pool, sagaId, { provider });
+  await expireCustomerEndWait(sagaId, provider);
+  assert.equal((await sagaRow(sagaId)).step, 'await_customer_end');
+  await expireCustomerEndWait(sagaId, provider);
+  assert.equal((await sagaRow(sagaId)).state, 'succeeded');
+  assert.equal((await pool.query('SELECT state FROM acd_reservations WHERE id=$1', [routeResult.reservationId])).rows[0].state, 'released');
+});
+
+test('connect: a hangup arriving during the provider probe wins without duplicate cleanup', { skip }, async () => {
+  const fixture = await routedConnect();
+  const provider = missingHangupProvider('stop_queue_playback', async command => {
+    await applySagaEvent(pool, { workItemId: fixture.workItem.id, name: 'leg.ended', role: 'customer', provider, node: 'webhook-worker' });
+    return { outcome: 'accepted', httpStatus: 200, response: { data: {
+      ended: true, isAlive: false, callControlId: command.request.callControlId,
+    } } };
+  });
+  await driveSaga(pool, fixture.sagaId, { provider });
+  await expireCustomerEndWait(fixture.sagaId, provider);
+  // The original probe worker releases its lease after its now-stale result;
+  // a reconciler/worker can then finish the webhook's normal compensation.
+  await driveSaga(pool, fixture.sagaId, { provider, node: 'reconciler' });
+  assert.equal((await sagaRow(fixture.sagaId)).state, 'succeeded');
+  const events = (await pool.query('SELECT type FROM acd_events WHERE work_item_id=$1', [fixture.workItem.id])).rows;
+  assert.equal(events.filter(e => e.type === 'reservation_released').length, 1);
+  assert.equal(events.filter(e => e.type === 'work_item_abandoned').length, 1);
+  assert.equal(events.filter(e => e.type === 'customer_media_end_verified').length, 0);
+});
+
+test('connect: customer probe cannot release a still-live agent device reservation', { skip }, async () => {
+  const provider = missingHangupProvider('transfer_to_agent');
+  const { sagaId, workItem, agent, routeResult } = await routedConnect();
+  await driveSaga(pool, sagaId, { provider });
+  const { generation } = (await sagaRow(sagaId)).data;
+  await pool.query(`INSERT INTO acd_legs
+    (id,work_item_id,role,provider_call_id,agent_id,owner_saga_id,offer_generation,state)
+    VALUES($1,$2,'agent_device',$3,$4,$5,$6,'ringing')`,
+  [randomUUID(), workItem.id, `v3:${randomUUID()}`, agent, sagaId, generation]);
+  await expireCustomerEndWait(sagaId, provider);
+  assert.equal((await sagaRow(sagaId)).state, 'succeeded');
+  assert.equal((await pool.query('SELECT state FROM acd_reservations WHERE id=$1', [routeResult.reservationId])).rows[0].state, 'ringing');
+  assert.equal((await pool.query("SELECT ended_at FROM acd_legs WHERE work_item_id=$1 AND role='agent_device'", [workItem.id])).rows[0].ended_at, null);
+  await applySagaEvent(pool, { workItemId: workItem.id, name: 'leg.ended', role: 'agent_device', provider });
+  assert.equal((await pool.query('SELECT state FROM acd_reservations WHERE id=$1', [routeResult.reservationId])).rows[0].state, 'released');
+});
+
+test('connect: live Telnyx ended call recovers the offer without a hangup webhook', {
+  skip: skip || (!process.env.ACD_LIVE_ENDED_CALL_ID && 'Set ACD_LIVE_ENDED_CALL_ID to a controlled ended call'),
+}, async () => {
+  const provider = createTelnyxProvider();
+  const preflight = await provider.send({ operation: 'verify_customer_leg_end',
+    request: { callControlId: process.env.ACD_LIVE_ENDED_CALL_ID } });
+  assert.equal(preflight.response?.data?.isAlive, false, 'Live fixture must already have ended');
+  const { sagaId, routeResult } = await routedConnect({ customerCallId: process.env.ACD_LIVE_ENDED_CALL_ID });
+  await driveSaga(pool, sagaId, { provider });
+  const rejected = (await commandRows(sagaId)).find(c => c.operation === 'stop_queue_playback');
+  assert.equal(rejected.http_status, 422);
+  assert.ok(isAlreadyEndedResponse(rejected.response));
+  assert.equal((await sagaRow(sagaId)).step, 'await_customer_end');
+  await expireCustomerEndWait(sagaId, provider);
+  const probe = (await commandRows(sagaId)).find(c => c.operation === 'verify_customer_leg_end');
+  assert.equal(probe.http_status, 200);
+  assert.equal(probe.response.data.isAlive, false);
+  assert.equal((await sagaRow(sagaId)).state, 'succeeded');
+  assert.equal((await pool.query('SELECT state FROM acd_reservations WHERE id=$1', [routeResult.reservationId])).rows[0].state, 'released');
+  const invalid = await provider.send({ operation: 'verify_customer_leg_end', request: { callControlId: 'invalid-call-id' } });
+  assert.notEqual(invalid.outcome, 'accepted');
+  assert.notEqual(invalid.response?.data?.ended, true);
+});
 
 test('connect: a rejected device requeues its live customer and remains distinct from timeout', {skip}, async()=>{
   for(const [cause,expected] of [['user_busy','rejected'],['call_rejected','rejected'],['timeout','no_answer']]){
@@ -889,4 +1062,21 @@ test("engine: 90018 on a non-hangup command is still a rejection", { skip }, asy
 
 test.after(async () => {
   await pool?.end().catch(() => {});
+});
+
+
+test('connect: missed or declined push calls retain standby; invalid destinations revoke it', {skip}, async()=>{
+  for(const [cause,retained] of [['timeout',true],['user_busy',true],['unallocated_number',false]]) {
+    const {workItem,sagaId,agent}=await routedConnect();
+    const provider=makeFakeProvider();await driveSaga(pool,sagaId,{provider});
+    const endpoint=randomUUID();
+    await pool.query(`INSERT INTO cc_voice_endpoints(id,agent_id,auth_session_id,device_id,kind,label,secret_hash,push_ready,expires_at)
+      VALUES($1,$2,'test','test','ios','iPhone','test',true,now()+interval '8 hours')`,[endpoint,agent]);
+    await pool.query(`UPDATE acd_sagas SET data=data || jsonb_build_object('voiceEndpointId',$2::text) WHERE id=$1`,[sagaId,endpoint]);
+    const generation=(await sagaRow(sagaId)).data.generation;
+    await pool.query(`INSERT INTO acd_legs(id,work_item_id,role,provider_call_id,agent_id,owner_saga_id,offer_generation,state,ended_at,ended_reason)
+      VALUES($1,$2,'agent_device',$3,$4,$5,$6,'ended',now(),$7)`,[randomUUID(),workItem.id,`device:${randomUUID()}`,agent,sagaId,generation,cause]);
+    await applySagaEventRaw(pool,{workItemId:workItem.id,name:'leg.ended',role:'agent_device',provider});
+    assert.equal((await pool.query('SELECT push_ready FROM cc_voice_endpoints WHERE id=$1',[endpoint])).rows[0].push_ready,retained);
+  }
 });

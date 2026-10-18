@@ -133,7 +133,7 @@ async function rail(page,label){
     await page.screenshot({path:path.join(output,'admin-details-dark.png')});
     await rail(page,'Templates');
     await page.waitForSelector('[data-testid=whatsapp-template-select]');
-    await page.waitForFunction(()=>document.querySelector('[data-testid=whatsapp-template-count]')?.textContent.startsWith('1 template on waba-1'));
+    await page.waitForFunction(()=>document.querySelector('[data-testid=whatsapp-template-count]')?.textContent.startsWith('Templates on waba-1: 1.'));
     await page.waitForSelector('[data-testid=whatsapp-templates] [data-testid=whatsapp-phone-preview]');
     await page.click('[data-testid=whatsapp-template-language]');await page.waitForSelector('[cmdk-input]');await page.type('[cmdk-input]','pol');
     await page.waitForFunction(()=>[...document.querySelectorAll('[cmdk-item]')].some(el=>el.textContent.includes('Polish')&&el.textContent.includes('🇵🇱')));checks.push('the language picker filters languages and shows flags');

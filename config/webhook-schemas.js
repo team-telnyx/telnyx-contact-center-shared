@@ -2,7 +2,7 @@
  * Telnyx Webhook Payload Schemas
  *
  * Complete payload structures for all Telnyx Call Control webhook events
- * Extracted from openapi/telnyx.json
+ * Extracted from the Telnyx API reference (developers.telnyx.com)
  *
  * Each schema includes:
  * - Field name

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { InteractionChannel } from "./InteractionChannel";
@@ -6,10 +8,11 @@ import InteractionSla from "./InteractionSla";
 import InteractionStateBadge from "./InteractionStateBadge";
 
 export default function LiveInteractionDetails({ open, onOpenChange, interaction: row }) {
+  const tUi = useUiText();
   const fields = [
     ["From", row.fromNumber], ["To", row.toNumber],
-    ["Queue", row.queueName || "Outside queues"], ["Agent", row.agentName || row.agentUsername],
-    ["Started", row.createdAt ? new Date(row.createdAt).toLocaleString() : null],
+    ["Queue", row.queueName || tUi("Outside queues")], ["Agent", row.agentName || row.agentUsername],
+    ["Started", row.createdAt ? new Date(row.createdAt).toLocaleString(tUi.locale) : null],
     ["Waiting reason", row.waitingReason],
     ["Interaction ID", row.workItemId || row.id], ["Leg ID", row.legId],
     ["Flow", row.flowName || row.flowId],
@@ -18,8 +21,8 @@ export default function LiveInteractionDetails({ open, onOpenChange, interaction
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle className="flex items-center gap-3"><InteractionChannel channel={row.channel} />Live interaction</DialogTitle>
-        <DialogDescription>Read-only details of the selected interaction{row.legId ? " leg" : ""}.</DialogDescription>
+        <DialogTitle className="flex items-center gap-3"><InteractionChannel channel={row.channel} />{tUi("Live interaction")}</DialogTitle>
+        <DialogDescription>{tUi("Read-only details of the selected interaction")}{row.legId ? tUi(" leg") : ""}.</DialogDescription>
       </DialogHeader>
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 p-4">
         <Badge variant="outline">{row.kind?.replaceAll("_", " ") || row.direction}</Badge>
@@ -28,7 +31,7 @@ export default function LiveInteractionDetails({ open, onOpenChange, interaction
       </div>
       <dl className="grid gap-4 sm:grid-cols-2">
         {fields.map(([label, value]) => <div key={label} className="min-w-0 rounded-xl border p-4">
-          <dt className="mb-1 text-xs text-muted-foreground">{label}</dt>
+          <dt className="mb-1 text-xs text-muted-foreground">{tUi(label)}</dt>
           <dd className="break-words text-sm font-medium [overflow-wrap:anywhere]">{value}</dd>
         </div>)}
       </dl>

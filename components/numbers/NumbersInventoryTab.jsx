@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -78,6 +81,7 @@ import {
 import NumberEditSheet from "@/components/numbers/NumberEditSheet";
 
 export default function NumbersInventoryTab() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -376,7 +380,7 @@ export default function NumbersInventoryTab() {
     const features = numberFeatures[phoneNumber] || [];
 
     if (features.length === 0) {
-      return <span className="text-muted-foreground text-xs">Loading...</span>;
+      return <span className="text-muted-foreground text-xs">{tUi("Loading...")}</span>;
     }
 
     const featureIcons = {
@@ -414,7 +418,7 @@ export default function NumbersInventoryTab() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="font-medium">{featureData.label}</p>
+                  <p className="font-medium">{tUi(featureData.label)}</p>
                 </TooltipContent>
               </Tooltip>
             );
@@ -430,18 +434,18 @@ export default function NumbersInventoryTab() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
         <div>
-          <label className="text-xs">Phone Number</label>
+          <label className="text-xs">{tUi("Phone Number")}</label>
           <Input
             value={filters.phone_number}
             onChange={(e) =>
               setFilters((f) => ({ ...f, phone_number: e.target.value }))
             }
-            placeholder="Search number…"
+            placeholder={tUi("Search number…")}
             className="h-9"
           />
         </div>
         <div>
-          <label className="text-xs">Type</label>
+          <label className="text-xs">{tUi("Type")}</label>
           <Select
             value={filters.number_type || "all"}
             onValueChange={(value) =>
@@ -449,19 +453,19 @@ export default function NumbersInventoryTab() {
             }
           >
             <SelectTrigger className="w-full h-9">
-              <SelectValue placeholder="All" />
+              <SelectValue placeholder={tUi("All")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="local">Local</SelectItem>
-              <SelectItem value="toll_free">Toll Free</SelectItem>
-              <SelectItem value="mobile">Mobile</SelectItem>
-              <SelectItem value="national">National</SelectItem>
+              <SelectItem value="all">{tUi("All")}</SelectItem>
+              <SelectItem value="local">{tUi("Local")}</SelectItem>
+              <SelectItem value="toll_free">{tUi("Toll Free")}</SelectItem>
+              <SelectItem value="mobile">{tUi("Mobile")}</SelectItem>
+              <SelectItem value="national">{tUi("National")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <label className="text-xs">Status</label>
+          <label className="text-xs">{tUi("Status")}</label>
           <Select
             value={filters.status || "all"}
             onValueChange={(value) =>
@@ -469,19 +473,19 @@ export default function NumbersInventoryTab() {
             }
           >
             <SelectTrigger className="w-full h-9">
-              <SelectValue placeholder="All" />
+              <SelectValue placeholder={tUi("All")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="purchase-pending">Purchase Pending</SelectItem>
-              <SelectItem value="port-pending">Port Pending</SelectItem>
-              <SelectItem value="emergency-only">Emergency Only</SelectItem>
+              <SelectItem value="all">{tUi("All")}</SelectItem>
+              <SelectItem value="active">{tUi("Active")}</SelectItem>
+              <SelectItem value="purchase-pending">{tUi("Purchase Pending")}</SelectItem>
+              <SelectItem value="port-pending">{tUi("Port Pending")}</SelectItem>
+              <SelectItem value="emergency-only">{tUi("Emergency Only")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <label className="text-xs">Country</label>
+          <label className="text-xs">{tUi("Country")}</label>
           <Popover
             open={countryPopoverOpen}
             onOpenChange={setCountryPopoverOpen}
@@ -498,20 +502,19 @@ export default function NumbersInventoryTab() {
                       {countries.find((c) => c.code === filters.country)?.flag}
                     </span>
                     <span>
-                      {countries.find((c) => c.code === filters.country)
-                        ?.name || filters.country}
+                      {(countries.find(c => c.code === filters.country)?.name ? tUi(countries.find(c => c.code === filters.country).name) : filters.country)}
                     </span>
                   </span>
                 ) : (
-                  "All Countries"
+                  tUi("All Countries")
                 )}
                 <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0">
               <Command>
-                <CommandInput placeholder="Search country..." className="h-9" />
-                <CommandEmpty>No country found.</CommandEmpty>
+                <CommandInput placeholder={tUi("Search country...")} className="h-9" />
+                <CommandEmpty>{tUi("No country found.")}</CommandEmpty>
                 <CommandGroup className="max-h-[300px] overflow-auto">
                   <CommandItem
                     value="all-countries"
@@ -527,7 +530,7 @@ export default function NumbersInventoryTab() {
                           : "opacity-0"
                       }`}
                     />
-                    <span>All Countries</span>
+                    <span>{tUi("All Countries")}</span>
                   </CommandItem>
                   {countries.map((country) => (
                     <CommandItem
@@ -548,7 +551,7 @@ export default function NumbersInventoryTab() {
                       <span className="text-base leading-none mr-2">
                         {country.flag}
                       </span>
-                      <span>{country.name}</span>
+                      <span>{tUi(country.name)}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -568,11 +571,9 @@ export default function NumbersInventoryTab() {
               })
             }
             className="h-9"
-          >
-            Clear
-          </Button>
+          >{tUi("Clear")}</Button>
           <Button onClick={() => load()} disabled={loading} className="h-9">
-            {loading ? "Loading…" : "Refresh"}
+            {loading ? tUi("Loading…") : tUi("Refresh")}
           </Button>
         </div>
       </div>
@@ -590,22 +591,14 @@ export default function NumbersInventoryTab() {
             <Table className="table-fixed min-w-[1200px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-[10px] w-[100px]">Number</TableHead>
-                  <TableHead className="px-[10px] w-[80px]">Type</TableHead>
-                  <TableHead className="px-[10px] w-[80px]">Status</TableHead>
-                  <TableHead className="px-[10px] w-[140px]">
-                    Services
-                  </TableHead>
-                  <TableHead className="px-[10px] w-[180px]">
-                    Voice Connection
-                  </TableHead>
-                  <TableHead className="px-[10px] w-[180px]">
-                    Messaging Profile
-                  </TableHead>
-                  <TableHead className="px-[10px] w-[100px]">Country</TableHead>
-                  <TableHead className="px-[10px] w-[100px] text-right">
-                    Actions
-                  </TableHead>
+                  <TableHead className="px-[10px] w-[100px]">{tUi("Number")}</TableHead>
+                  <TableHead className="px-[10px] w-[80px]">{tUi("Type")}</TableHead>
+                  <TableHead className="px-[10px] w-[80px]">{tUi("Status")}</TableHead>
+                  <TableHead className="px-[10px] w-[140px]">{tUi("Services")}</TableHead>
+                  <TableHead className="px-[10px] w-[180px]">{tUi("Voice Connection")}</TableHead>
+                  <TableHead className="px-[10px] w-[180px]">{tUi("Messaging Profile")}</TableHead>
+                  <TableHead className="px-[10px] w-[100px]">{tUi("Country")}</TableHead>
+                  <TableHead className="px-[10px] w-[100px] text-right">{tUi("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -641,9 +634,7 @@ export default function NumbersInventoryTab() {
                             className={statusBadgeColor(number.status)}
                             variant="outline"
                           >
-                            {String(number.status || "unknown")
-                              .replace("-", " ")
-                              .toUpperCase()}
+                            {operationalStatusLabel(tUi, number.status || "unknown")}
                           </Badge>
                         </TableCell>
                         <TableCell className="px-[10px] text-xs">
@@ -677,7 +668,7 @@ export default function NumbersInventoryTab() {
                                           (c) => c.id === number.connection_id
                                         )?.friendly_name ||
                                         number.connection_id
-                                      : "None"}
+                                      : tUi("None")}
                                   </span>
                                   <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
@@ -685,12 +676,10 @@ export default function NumbersInventoryTab() {
                               <PopoverContent className="w-[320px] p-0">
                                 <Command>
                                   <CommandInput
-                                    placeholder="Search connection..."
+                                    placeholder={tUi("Search connection...")}
                                     className="h-9"
                                   />
-                                  <CommandEmpty>
-                                    No connection found.
-                                  </CommandEmpty>
+                                  <CommandEmpty>{tUi("No connection found.")}</CommandEmpty>
                                   <CommandGroup className="max-h-[250px] overflow-auto">
                                     <CommandItem
                                       value="none"
@@ -708,9 +697,7 @@ export default function NumbersInventoryTab() {
                                             ? "opacity-100"
                                             : "opacity-0"
                                         }`}
-                                      />
-                                      None
-                                    </CommandItem>
+                                      />{tUi("None")}</CommandItem>
                                     {connections.map((conn) => (
                                       <CommandItem
                                         key={conn.id}
@@ -758,9 +745,7 @@ export default function NumbersInventoryTab() {
                               </PopoverContent>
                             </Popover>
                           ) : (
-                            <span className="text-muted-foreground text-xs">
-                              N/A
-                            </span>
+                            <span className="text-muted-foreground text-xs">{tUi("N/A")}</span>
                           )}
                         </TableCell>
                         <TableCell className="px-[10px] text-xs whitespace-nowrap overflow-hidden">
@@ -793,7 +778,7 @@ export default function NumbersInventoryTab() {
                                             p.id === number.messaging_profile_id
                                         )?.friendly_name ||
                                         number.messaging_profile_id
-                                      : "None"}
+                                      : tUi("None")}
                                   </span>
                                   <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
@@ -801,10 +786,10 @@ export default function NumbersInventoryTab() {
                               <PopoverContent className="w-[320px] p-0">
                                 <Command>
                                   <CommandInput
-                                    placeholder="Search profile..."
+                                    placeholder={tUi("Search profile...")}
                                     className="h-9"
                                   />
-                                  <CommandEmpty>No profile found.</CommandEmpty>
+                                  <CommandEmpty>{tUi("No profile found.")}</CommandEmpty>
                                   <CommandGroup className="max-h-[250px] overflow-auto">
                                     <CommandItem
                                       value="none"
@@ -825,9 +810,7 @@ export default function NumbersInventoryTab() {
                                             ? "opacity-100"
                                             : "opacity-0"
                                         }`}
-                                      />
-                                      None
-                                    </CommandItem>
+                                      />{tUi("None")}</CommandItem>
                                     {messagingProfiles.map((profile) => (
                                       <CommandItem
                                         key={profile.id}
@@ -865,9 +848,7 @@ export default function NumbersInventoryTab() {
                               </PopoverContent>
                             </Popover>
                           ) : (
-                            <span className="text-muted-foreground text-xs">
-                              N/A
-                            </span>
+                            <span className="text-muted-foreground text-xs">{tUi("N/A")}</span>
                           )}
                         </TableCell>
                         <TableCell className="px-[10px] text-xs whitespace-nowrap">
@@ -881,9 +862,7 @@ export default function NumbersInventoryTab() {
                                 }
                               </span>
                               <span>
-                                {countries.find(
-                                  (c) => c.code === number.country_iso_alpha2
-                                )?.name || number.country_iso_alpha2}
+                                {(countries.find(c => c.code === number.country_iso_alpha2)?.name ? tUi(countries.find(c => c.code === number.country_iso_alpha2).name) : number.country_iso_alpha2)}
                               </span>
                             </span>
                           ) : (
@@ -894,7 +873,7 @@ export default function NumbersInventoryTab() {
                           <div className="inline-flex items-center gap-2 justify-end">
                             <button
                               className="text-[#00C08B] hover:text-[#00A074] transition-colors"
-                              title="Edit number"
+                              title={tUi("Edit number")}
                               onClick={() => {
                                 setSelectedNumber(number);
                                 setEditSheetOpen(true);
@@ -909,15 +888,13 @@ export default function NumbersInventoryTab() {
                                     <button
                                       className="text-gray-400 opacity-50 cursor-not-allowed"
                                       disabled
-                                      title="Deletion lock enabled"
+                                      title={tUi("Deletion lock enabled")}
                                     >
                                       <IconTrash className="size-4" />
                                     </button>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>
-                                      Deletion lock is enabled for this number
-                                    </p>
+                                    <p>{tUi("Deletion lock is enabled for this number")}</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
@@ -926,31 +903,26 @@ export default function NumbersInventoryTab() {
                                 <DialogTrigger asChild>
                                   <button
                                     className="text-red-500 hover:text-red-700 transition-colors"
-                                    title="Delete number"
+                                    title={tUi("Delete number")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete number?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the number "
-                                      {number.phone_number}".
+                                    <DialogTitle>{tUi("Delete number?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the number \"")}{number.phone_number}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(number.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -967,9 +939,7 @@ export default function NumbersInventoryTab() {
                     <TableCell
                       colSpan={8}
                       className="text-center py-8 text-sm text-muted-foreground"
-                    >
-                      No phone numbers found
-                    </TableCell>
+                    >{tUi("No phone numbers found")}</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -979,12 +949,10 @@ export default function NumbersInventoryTab() {
       )}
 
       <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">Total: {total}</div>
+        <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
         <div className="flex w-full items-center gap-8 lg:w-fit">
           <div className="hidden items-center gap-2 lg:flex">
-            <Label htmlFor="rows-per-page" className="text-sm font-medium">
-              Rows per page
-            </Label>
+            <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
             <Select
               value={`${pageSize}`}
               onValueChange={(value) => {
@@ -1004,8 +972,7 @@ export default function NumbersInventoryTab() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex w-fit items-center justify-center text-sm font-medium">
-            Page {page} of {pageCount}
+          <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
           </div>
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
             <Button
@@ -1014,7 +981,7 @@ export default function NumbersInventoryTab() {
               onClick={() => setPage(1)}
               disabled={page <= 1}
             >
-              <span className="sr-only">Go to first page</span>
+              <span className="sr-only">{tUi("Go to first page")}</span>
               <IconChevronsLeft />
             </Button>
             <Button
@@ -1024,7 +991,7 @@ export default function NumbersInventoryTab() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
             >
-              <span className="sr-only">Go to previous page</span>
+              <span className="sr-only">{tUi("Go to previous page")}</span>
               <IconChevronLeft />
             </Button>
             <Button
@@ -1034,7 +1001,7 @@ export default function NumbersInventoryTab() {
               onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
               disabled={page >= pageCount}
             >
-              <span className="sr-only">Go to next page</span>
+              <span className="sr-only">{tUi("Go to next page")}</span>
               <IconChevronRight />
             </Button>
             <Button
@@ -1044,7 +1011,7 @@ export default function NumbersInventoryTab() {
               onClick={() => setPage(pageCount)}
               disabled={page >= pageCount}
             >
-              <span className="sr-only">Go to last page</span>
+              <span className="sr-only">{tUi("Go to last page")}</span>
               <IconChevronsRight />
             </Button>
           </div>
@@ -1060,24 +1027,23 @@ export default function NumbersInventoryTab() {
           <DialogHeader>
             <DialogTitle>
               {confirmDialog.type === "connection"
-                ? "Update Voice Connection"
-                : "Update Messaging Profile"}
+                ? tUi("Update Voice Connection")
+                : tUi("Update Messaging Profile")}
             </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to update this setting for{" "}
+            <DialogDescription>{tUi("Are you sure you want to update this setting for")}{" "}
               {confirmDialog.phoneNumber}?
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium min-w-[80px]">From:</span>
+                <span className="font-medium min-w-[80px]">{tUi("From:")}</span>
                 <Badge variant="outline" className="max-w-full">
                   <span className="truncate">{confirmDialog.oldName}</span>
                 </Badge>
               </div>
               <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium min-w-[80px]">To:</span>
+                <span className="font-medium min-w-[80px]">{tUi("To:")}</span>
                 <Badge variant="default" className="max-w-full">
                   <span className="truncate">{confirmDialog.newName}</span>
                 </Badge>
@@ -1086,10 +1052,10 @@ export default function NumbersInventoryTab() {
           </div>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tUi("Cancel")}</Button>
             </DialogClose>
             <DialogClose asChild>
-              <Button onClick={handleConfirmChange}>Confirm Update</Button>
+              <Button onClick={handleConfirmChange}>{tUi("Confirm Update")}</Button>
             </DialogClose>
           </div>
         </DialogContent>

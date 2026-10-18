@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -31,6 +33,7 @@ export default function SkillEditSheet({
   skillId,
   onSave,
 }) {
+  const tUi = useUiText();
   const { openHelp, registerHelpPortalContainer } = useHelp();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -122,7 +125,7 @@ export default function SkillEditSheet({
 
       notify({
         title: "Skill saved",
-        description: `Skill ${skillId ? "updated" : "created"} successfully`,
+        description: (skillId ? tUi("Skill updated successfully") : tUi("Skill created successfully")),
         variant: "success",
       });
 
@@ -146,7 +149,7 @@ export default function SkillEditSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         ref={registerHelpPortalContainer}
-        side="right"
+        side="end"
         data-context-help-host="true"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
@@ -155,14 +158,10 @@ export default function SkillEditSheet({
             <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
               {skillId ? (
                 <>
-                  <IconEdit className="size-5" />
-                  Edit Skill
-                </>
+                  <IconEdit className="size-5" />{tUi("Edit Skill")}</>
               ) : (
                 <>
-                  <IconPlus className="size-5" />
-                  Create Skill
-                </>
+                  <IconPlus className="size-5" />{tUi("Create Skill")}</>
               )}
             </SheetTitle>
             <Button
@@ -171,13 +170,11 @@ export default function SkillEditSheet({
               size="sm"
               aria-controls="context-help-sheet"
               aria-keyshortcuts="F1"
-              title="Help for skills (F1)"
+              title={tUi("Help for skills (F1)")}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => openHelp()}
             >
-              <IconHelpCircle aria-hidden="true" />
-              Help
-            </Button>
+              <IconHelpCircle aria-hidden="true" />{tUi("Help")}</Button>
           </div>
         </SheetHeader>
 
@@ -210,9 +207,7 @@ export default function SkillEditSheet({
                 <>
                   {/* Active Switch at the top */}
                   <div className="flex items-center justify-between pb-4 border-b">
-                    <Label htmlFor="isActive" className="text-sm font-medium">
-                      Active
-                    </Label>
+                    <Label htmlFor="isActive" className="text-sm font-medium">{tUi("Active")}</Label>
                     <Switch
                       id="isActive"
                       checked={isActive}
@@ -221,32 +216,32 @@ export default function SkillEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Name *</Label>
+                    <Label htmlFor="name">{tUi("Name *")}</Label>
                     <Input
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g., Sales, Support, Technical"
+                      placeholder={tUi("e.g., Sales, Support, Technical")}
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="category">Category</Label>
+                    <Label htmlFor="category">{tUi("Category")}</Label>
                     <Input
                       id="category"
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
-                      placeholder="e.g., Customer Service, Technical"
+                      placeholder={tUi("e.g., Customer Service, Technical")}
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description">{tUi("Description")}</Label>
                     <Input
                       id="description"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Optional description for this skill"
+                      placeholder={tUi("Optional description for this skill")}
                     />
                   </div>
                 </>
@@ -260,11 +255,9 @@ export default function SkillEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={handleSave} disabled={saving || !name.trim()}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

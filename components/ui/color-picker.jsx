@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Input } from "@/components/ui/input";
@@ -34,6 +36,7 @@ function convertOklchToHexSync(oklchStr) {
 }
 
 export function ColorPicker({ value, onChange, label, className, initialHex }) {
+  const tUi = useUiText();
   const [hexValue, setHexValue] = useState(initialHex || "#000000");
   const [oklchValue, setOklchValue] = useState(value || "");
 
@@ -185,7 +188,7 @@ export function ColorPicker({ value, onChange, label, className, initialHex }) {
             type="text"
             value={oklchValue}
             onChange={handleOklchChange}
-            placeholder="oklch(...)"
+            placeholder={tUi("oklch(...)")}
             className="font-mono text-xs"
           />
         </div>

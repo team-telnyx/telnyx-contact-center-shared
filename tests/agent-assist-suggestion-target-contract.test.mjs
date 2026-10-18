@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const ui = () => readFile(new URL("../components/contact-center/AgentAssistWorkflow.jsx", import.meta.url), "utf8");
-const route = () => readFile(new URL("../app/api/agent-assist/workflow/generate-suggestion/route.js", import.meta.url), "utf8");
+const route = async () => (await Promise.all(["../app/api/agent-assist/workflow/generate-suggestion/route.js", "../lib/ai-operations/prompts/suggestion.mjs"].map(path=>readFile(new URL(path, import.meta.url), "utf8")))).join("\n");
 
 test("suggested responses use a conversation-aware target resolver instead of first pending item", async () => {
   const source = await ui();

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { ChannelFilter } from "@/components/contact-center/InteractionChannel";
 import { useEffect, useMemo, useState } from "react";
@@ -85,16 +87,17 @@ const SECTION_META = {
 };
 
 function CommandCard({ icon: Icon, kicker, title, description, controls }) {
+  const tUi = useUiText();
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             <Icon className="h-4 w-4 text-telnyx-green" />
-            {kicker}
+            {tUi(kicker)}
           </div>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight">{title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight">{tUi(title)}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{tUi(description)}</p>
         </div>
         {controls}
       </div>
@@ -103,6 +106,7 @@ function CommandCard({ icon: Icon, kicker, title, description, controls }) {
 }
 
 export default function SupervisorQualityPage() {
+  const tUi = useUiText();
   const [channel,setChannel]=useState("all");
   const [activeSection, setActiveSection] = useState("evaluations");
   const [range, setRange] = useState("7d");
@@ -148,17 +152,17 @@ export default function SupervisorQualityPage() {
   const commandControls = showDateControls ? (
     <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="quality-command-card-controls">
       <div className="flex rounded-xl border bg-muted/40 p-1">
-        <Button type="button" size="sm" variant={range === "1d" ? "default" : "ghost"} className={range === "1d" ? neutralActionClass : ""} onClick={() => setQuickRange(1)}>1 day</Button>
-        <Button type="button" size="sm" variant={range === "7d" ? "default" : "ghost"} className={range === "7d" ? neutralActionClass : ""} onClick={() => setQuickRange(7)}>7 days</Button>
-        <Button type="button" size="sm" variant={range === "30d" ? "default" : "ghost"} className={range === "30d" ? neutralActionClass : ""} onClick={() => setQuickRange(30)}>30 days</Button>
-        <Button type="button" size="sm" variant={range === "custom" ? "default" : "ghost"} className={range === "custom" ? neutralActionClass : ""} onClick={() => setRange("custom")}>Custom range</Button>
+        <Button type="button" size="sm" variant={range === "1d" ? "default" : "ghost"} className={range === "1d" ? neutralActionClass : ""} onClick={() => setQuickRange(1)}>{tUi("1 day")}</Button>
+        <Button type="button" size="sm" variant={range === "7d" ? "default" : "ghost"} className={range === "7d" ? neutralActionClass : ""} onClick={() => setQuickRange(7)}>{tUi("7 days")}</Button>
+        <Button type="button" size="sm" variant={range === "30d" ? "default" : "ghost"} className={range === "30d" ? neutralActionClass : ""} onClick={() => setQuickRange(30)}>{tUi("30 days")}</Button>
+        <Button type="button" size="sm" variant={range === "custom" ? "default" : "ghost"} className={range === "custom" ? neutralActionClass : ""} onClick={() => setRange("custom")}>{tUi("Custom range")}</Button>
       </div>
       <div>
-        <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">From</div>
+        <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{tUi("From")}</div>
         <Input type="datetime-local" value={dateRange.from} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, from: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
       </div>
       <div>
-        <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">To</div>
+        <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{tUi("To")}</div>
         <Input type="datetime-local" value={dateRange.to} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, to: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
       </div>
     </div>
@@ -167,11 +171,9 @@ export default function SupervisorQualityPage() {
   return (
     <SupervisorPageShell>
       <SupervisorPageHeader
-        title="Quality"
+        title={tUi("Quality")}
         badges={(
-          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-            Quality management
-          </Badge>
+          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">{tUi("Quality management")}</Badge>
         )}
         actions={(
           <Button
@@ -179,18 +181,16 @@ export default function SupervisorQualityPage() {
             size="sm"
             onClick={() => setRefreshNonce((nonce) => nonce + 1)}
           >
-            <IconRefresh className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
+            <IconRefresh className="mr-2 h-4 w-4" />{tUi("Refresh")}</Button>
         )}
       />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
-        <SectionRail items={QUALITY_RAIL_ITEMS} activeId={activeSection} onSelect={setActiveSection} ariaLabel="Supervisor quality management sections" screenGroup="supervisor.quality" />
+        <SectionRail items={QUALITY_RAIL_ITEMS} activeId={activeSection} onSelect={setActiveSection} ariaLabel={tUi("Supervisor quality management sections")} screenGroup="supervisor.quality" />
         <section className="h-full min-h-0 overflow-hidden pr-1">
           <Card className="flex h-full min-h-0 flex-col overflow-hidden">
             <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
               <div className="space-y-5">
-                <CommandCard icon={meta.icon} kicker={meta.kicker} title={meta.title} description={meta.description} controls={commandControls} />
+                <CommandCard icon={meta.icon} kicker={meta.kicker} title={tUi(meta.title)} description={tUi(meta.description)} controls={commandControls} />
                 {activeSection!=="forms"&&<ChannelFilter value={channel} onChange={setChannel}/>}
                 {activeSection === "dashboard" ? (
                   <QualityDashboardView key={channel} channel={channel} from={fromIso} to={toIso} refreshNonce={refreshNonce} />

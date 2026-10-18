@@ -50,7 +50,7 @@ test("live analyze route guards the read-back item and accumulates notes slots",
 });
 
 test("admin analyze-test route mirrors the guard + accumulation", async () => {
-  const route = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
+  const route = await read("../lib/agent-assist/test-workflow-analysis.mjs");
   assert.match(route, /hasUnconfirmedSlot = pendingItems\.some\(\(p\) => p\.type === "slot"\)/);
   assert.match(route, /isReadBackItem\(\{/);
   assert.match(route, /isAccumulatingSlot\(item\)\s*\?\s*accumulateSlotValue\(/);
@@ -91,8 +91,9 @@ test("live route fetches completed notes BEFORE the empty-pending return and gat
 
 test("analyze-test route also re-includes completed notes slots and appends", async () => {
   const route = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
-  assert.match(route, /completedNotesItems = items[\s\S]*?isAccumulatingSlot\(item\)/);
-  assert.match(route, /const analyzerItems = \[\.\.\.pendingItems, \.\.\.completedNotesItems\]/);
-  assert.match(route, /pendingItems: analyzerItems/);
-  assert.match(route, /item\.current_status === "completed" && item\.type === "slot" && isAccumulatingSlot\(item\)/);
+  const testAnalysis = await read("../lib/agent-assist/test-workflow-analysis.mjs");
+  assert.match(testAnalysis, /completedNotesItems = completedSlotItems\.filter\(\(item\) => isAccumulatingSlot\(item\)\)/);
+  assert.match(testAnalysis, /const analyzerItems = \[\.\.\.pendingItems, \.\.\.completedNotesItems, \.\.\.correctionCandidateItems\]/);
+  assert.match(route, /pendingItems: plan\.analyzerItems/);
+  assert.match(testAnalysis, /item\.current_status === "completed" && item\.type === "slot" && isAccumulatingSlot\(item\)/);
 });

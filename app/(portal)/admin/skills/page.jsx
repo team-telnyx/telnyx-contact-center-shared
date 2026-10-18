@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -46,6 +48,7 @@ import EditSheet from "@/components/skills/EditSheet";
 import { Can } from "@/components/auth-provider";
 
 export default function AdminSkillsPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -138,37 +141,33 @@ export default function AdminSkillsPage() {
           q: "",
         })
       }
-    >
-      Clear
-    </Button>
+    >{tUi("Clear")}</Button>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
-    <Can permission="skills:create"><Button onClick={handleNewSkill} variant="default">
-      New Skill
-    </Button></Can>
+    <Can permission="skills:create"><Button onClick={handleNewSkill} variant="default">{tUi("New Skill")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Skills" badges={<Badge variant="secondary">{total} skills</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Skills")} badges={<Badge variant="secondary">{total}{tUi(" skills")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="skills">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
-              <label className="text-xs">Name</label>
+              <label className="text-xs">{tUi("Name")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="name, description…"
+                placeholder={tUi("name, description…")}
               />
             </div>
             <div>
-              <label className="text-xs">Category</label>
+              <label className="text-xs">{tUi("Category")}</label>
               <Select
                 value={filters.category || "all"}
                 onValueChange={(value) =>
@@ -176,10 +175,10 @@ export default function AdminSkillsPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
                   {availableCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -189,7 +188,7 @@ export default function AdminSkillsPage() {
               </Select>
             </div>
             <div>
-              <label className="text-xs">Active</label>
+              <label className="text-xs">{tUi("Active")}</label>
               <Select
                 value={filters.active || "all"}
                 onValueChange={(value) =>
@@ -197,12 +196,12 @@ export default function AdminSkillsPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="true">Yes</SelectItem>
-                  <SelectItem value="false">No</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
+                  <SelectItem value="true">{tUi("Yes")}</SelectItem>
+                  <SelectItem value="false">{tUi("No")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -223,11 +222,11 @@ export default function AdminSkillsPage() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">Category</TableHead>
-                    <TableHead className="px-[10px]">Active</TableHead>
-                    <TableHead className="px-[10px]">Description</TableHead>
-                    <TableHead className="px-[10px] text-right">Actions</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Category")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Active")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Description")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -251,7 +250,7 @@ export default function AdminSkillsPage() {
                                   : "border-red-500 text-red-600 min-w-[56px] justify-center"
                               }
                             >
-                              {skill.is_active ? "YES" : "NO"}
+                              {skill.is_active ? tUi("YES") : tUi("NO")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs max-w-md truncate">
@@ -266,7 +265,7 @@ export default function AdminSkillsPage() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit skill"
+                                title={tUi("Edit skill")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -275,31 +274,26 @@ export default function AdminSkillsPage() {
                                   <Can permission="skills:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete skill"
+                                    title={tUi("Delete skill")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete skill?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the skill "
-                                      {skill.name}".
+                                    <DialogTitle>{tUi("Delete skill?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the skill \"")}{skill.name}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(skill.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -315,9 +309,7 @@ export default function AdminSkillsPage() {
                       <TableCell
                         colSpan={5}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No skills
-                      </TableCell>
+                      >{tUi("No skills")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -327,12 +319,10 @@ export default function AdminSkillsPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -368,8 +358,7 @@ export default function AdminSkillsPage() {
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm">
-                  Page {page} of {pageCount}
+                <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
                 </span>
                 <Button
                   variant="outline"

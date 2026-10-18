@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +37,7 @@ import {
 } from "@tabler/icons-react";
 
 function SecretRefCombobox({ value, onChange }) {
+  const tUi = useUiText();
   const [options, setOptions] = React.useState([]);
 
   React.useEffect(() => {
@@ -62,8 +65,8 @@ function SecretRefCombobox({ value, onChange }) {
       value={value}
       onChange={onChange}
       options={options}
-      placeholder="Select local secret…"
-      emptyLabel="No local Contact Center secrets found"
+      placeholder={tUi("Select local secret…")}
+      emptyLabel={tUi("No local Contact Center secrets found")}
       triggerClassName="w-full"
       searchable
     />
@@ -112,6 +115,7 @@ function reservedHeaderRowNames(rows) {
 }
 
 export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onSaved, oauthStatus = null }) {
+  const tUi = useUiText();
   const id = serverId;
   const isNew = id === "new";
   const toolsRequestRef = React.useRef(0);
@@ -395,13 +399,13 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
+      <SheetContent side="end" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background">
         <SheetHeader className="px-6 py-4 border-b border-border">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             <IconTools className="size-5" />
-            {isNew ? "Add MCP Server" : "Edit MCP Server"}
+            {isNew ? tUi("Add MCP Server") : tUi("Edit MCP Server")}
           </SheetTitle>
-          <SheetDescription>Configure MCP server connection, discovery, and allowed tools.</SheetDescription>
+          <SheetDescription>{tUi("Configure MCP server connection, discovery, and allowed tools.")}</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto">
           <Card className="mx-5 my-4 border-muted-foreground/20 bg-card">
@@ -415,57 +419,53 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
               ) : (
                 <>
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium">Name</label>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CRM MCP" />
+                    <label className="text-sm font-medium">{tUi("Name")}</label>
+                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={tUi("CRM MCP")} />
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-[88px_minmax(0,1fr)]">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Type</label>
+                      <label className="text-sm font-medium">{tUi("Type")}</label>
                       <Select value={type} onValueChange={setType}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="sse">SSE</SelectItem>
-                          <SelectItem value="http">HTTP</SelectItem>
+                          <SelectItem value="sse">{tUi("SSE")}</SelectItem>
+                          <SelectItem value="http">{tUi("HTTP")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="min-w-0 space-y-2">
-                      <label className="text-sm font-medium">URL</label>
+                      <label className="text-sm font-medium">{tUi("URL")}</label>
                       <div className="flex gap-2">
                         <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.example.com/mcp" />
                         <Button type="button" variant="outline" onClick={connectServer} disabled={authDetecting || oauthConnecting || !name || !type || !url} className="shrink-0">
-                          {authDetecting || oauthConnecting ? "Connecting…" : "Connect"}
+                          {authDetecting || oauthConnecting ? tUi("Connecting…") : tUi("Connect")}
                         </Button>
                       </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Authentication</label>
+                      <label className="text-sm font-medium">{tUi("Authentication")}</label>
                       <Select value={authType} onValueChange={setAuthType}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="bearer">Bearer token</SelectItem>
-                          <SelectItem value="oauth_authorization_code">OAuth Authorization Code (PKCE)</SelectItem>
-                          <SelectItem value="oauth_client_credentials">OAuth Client Credentials</SelectItem>
-                          <SelectItem value="api_key">API key header</SelectItem>
-                          <SelectItem value="custom_header">Custom header</SelectItem>
+                          <SelectItem value="none">{tUi("None")}</SelectItem>
+                          <SelectItem value="bearer">{tUi("Bearer token")}</SelectItem>
+                          <SelectItem value="oauth_authorization_code">{tUi("OAuth Authorization Code (PKCE)")}</SelectItem>
+                          <SelectItem value="oauth_client_credentials">{tUi("OAuth Client Credentials")}</SelectItem>
+                          <SelectItem value="api_key">{tUi("API key header")}</SelectItem>
+                          <SelectItem value="custom_header">{tUi("Custom header")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     {authType !== "none" && authType !== "oauth_authorization_code" && (
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Local Secret</label>
+                        <label className="text-sm font-medium">{tUi("Local Secret")}</label>
                         <SecretRefCombobox value={authSecretName} onChange={setAuthSecretName} />
                         {authType === "oauth_client_credentials" && (
                           <>
-                            <p className="text-xs text-muted-foreground">
-                              Store OAuth credentials as JSON {`{"client_id":"...","client_secret":"..."}`} or as client_id:client_secret. Telnyx MCP HTTP uses resource https://api.telnyx.com/v2/mcp.
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              For a non-Telnyx provider, add its token endpoint and scope to the same secret: {`{"client_id":"...","client_secret":"...","token_url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","scope":"<app-id>/.default"}`}. Optional keys: audience, resource, and auth_style (post or basic).
-                            </p>
+                            <p className="text-xs text-muted-foreground">{tUi("Store OAuth credentials as JSON ")}{`{"client_id":"...","client_secret":"..."}`}{tUi(" or as client_id:client_secret. Telnyx MCP HTTP uses resource https://api.telnyx.com/v2/mcp.")}</p>
+                            <p className="text-xs text-muted-foreground">{tUi("For a non-Telnyx provider, add its token endpoint and scope to the same secret: ")}{`{"client_id":"...","client_secret":"...","token_url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","scope":"<app-id>/.default"}`}{tUi(". Optional keys: audience, resource, and auth_style (post or basic).")}</p>
                           </>
                         )}
                       </div>
@@ -479,37 +479,29 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                                 <IconShieldCheck className="h-5 w-5" />
                               </span>
                               <div>
-                                <label className="text-sm font-semibold">OAuth Authorization</label>
-                                <p className="text-xs text-muted-foreground">Authorization Code + PKCE for OAuth-protected remote MCP servers.</p>
+                                <label className="text-sm font-semibold">{tUi("OAuth Authorization")}</label>
+                                <p className="text-xs text-muted-foreground">{tUi("Authorization Code + PKCE for OAuth-protected remote MCP servers.")}</p>
                               </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               {oauthSessionIssue ? (
                                 <Badge className="border-transparent bg-red-500/15 text-red-700 dark:text-red-300">
-                                  <IconAlertTriangle className="mr-1 h-3.5 w-3.5" /> Reconnect required
-                                </Badge>
+                                  <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />{tUi(" Reconnect required")}</Badge>
                               ) : activeOauthStatus?.status === "connected" ? (
                                 <Badge className="border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                                  <IconCheck className="mr-1 h-3.5 w-3.5" /> Authentication connected
-                                </Badge>
+                                  <IconCheck className="mr-1 h-3.5 w-3.5" />{tUi(" Authentication connected")}</Badge>
                               ) : activeOauthStatus?.status === "error" ? (
                                 <Badge className="border-transparent bg-red-500/15 text-red-700 dark:text-red-300">
-                                  <IconAlertTriangle className="mr-1 h-3.5 w-3.5" /> Authentication failed
-                                </Badge>
+                                  <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />{tUi(" Authentication failed")}</Badge>
                               ) : isOAuthConnected ? (
                                 <Badge className="border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                                  <IconCheck className="mr-1 h-3.5 w-3.5" /> Connected
-                                </Badge>
+                                  <IconCheck className="mr-1 h-3.5 w-3.5" />{tUi(" Connected")}</Badge>
                               ) : (
-                                <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                                  Not connected
-                                </Badge>
+                                <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">{tUi("Not connected")}</Badge>
                               )}
-                              {authSecretName && <Badge variant="outline" className="max-w-full truncate">Session: {authSecretName}</Badge>}
+                              {authSecretName && <Badge variant="outline" className="max-w-full truncate">{tUi("Session: ")}{authSecretName}</Badge>}
                               {detectedAuth?.detected && (
-                                <Badge className="border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-300">
-                                  OAuth auto-detected
-                                </Badge>
+                                <Badge className="border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-300">{tUi("OAuth auto-detected")}</Badge>
                               )}
                             </div>
                             {activeOauthStatus?.message && (
@@ -519,14 +511,12 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                             )}
                             {detectedAuth?.detected && (
                               <div className="rounded-lg border bg-background/60 p-3 text-xs text-muted-foreground space-y-1">
-                                <div><span className="font-medium text-foreground">Resource:</span> {detectedAuth.resourceName || detectedAuth.resource || "OAuth protected MCP resource"}</div>
-                                {detectedAuth.authorizationServer && <div><span className="font-medium text-foreground">Authorization server:</span> {detectedAuth.authorizationServer}</div>}
-                                {detectedAuth.scope && <div><span className="font-medium text-foreground">Scope:</span> {detectedAuth.scope}</div>}
+                                <div><span className="font-medium text-foreground">{tUi("Resource:")}</span> {detectedAuth.resourceName || detectedAuth.resource || tUi("OAuth protected MCP resource")}</div>
+                                {detectedAuth.authorizationServer && <div><span className="font-medium text-foreground">{tUi("Authorization server:")}</span> {detectedAuth.authorizationServer}</div>}
+                                {detectedAuth.scope && <div><span className="font-medium text-foreground">{tUi("Scope:")}</span> {detectedAuth.scope}</div>}
                               </div>
                             )}
-                            <p className="text-xs text-muted-foreground">
-                              Click Connect to detect the MCP server authentication method. For OAuth-protected servers, review the detected resource details here, then click Authenticate to start Authorization Code + PKCE. After callback this sheet reopens so you can review tools and save the final configuration.
-                            </p>
+                            <p className="text-xs text-muted-foreground">{tUi("Click Connect to detect the MCP server authentication method. For OAuth-protected servers, review the detected resource details here, then click Authenticate to start Authorization Code + PKCE. After callback this sheet reopens so you can review tools and save the final configuration.")}</p>
                           </div>
                           <Button
                             type="button"
@@ -534,52 +524,47 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                             disabled={oauthConnecting || !name || !type || !url || authType !== "oauth_authorization_code"}
                             className="shrink-0 bg-telnyx-green text-black hover:bg-telnyx-green/90"
                           >
-                            {oauthConnecting ? "Authenticating…" : isOAuthConnected ? "Re-authenticate" : "Authenticate"}
+                            {oauthConnecting ? tUi("Authenticating…") : isOAuthConnected ? tUi("Re-authenticate") : tUi("Authenticate")}
                           </Button>
                         </div>
                       </div>
                     )}
                     {(authType === "api_key" || authType === "custom_header") && (
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Header Name</label>
-                        <Input value={authHeaderName} onChange={(e) => setAuthHeaderName(e.target.value)} placeholder={authType === "api_key" ? "x-api-key" : "Authorization"} />
+                        <label className="text-sm font-medium">{tUi("Header Name")}</label>
+                        <Input value={authHeaderName} onChange={(e) => setAuthHeaderName(e.target.value)} placeholder={authType === "api_key" ? tUi("x-api-key") : tUi("Authorization")} />
                       </div>
                     )}
                     {authType === "oauth_client_credentials" && (
                       <div className="space-y-2 sm:col-span-2">
-                        <label className="text-sm font-medium">OAuth Resource URL</label>
+                        <label className="text-sm font-medium">{tUi("OAuth Resource URL")}</label>
                         <Input value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} placeholder="https://mcp.example.com/mcp" />
-                        <p className="text-xs text-muted-foreground">
-                          Required for non-Telnyx OAuth-protected MCP servers. Telnyx MCP URLs automatically use https://api.telnyx.com/v2/mcp.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Required for non-Telnyx OAuth-protected MCP servers. Telnyx MCP URLs automatically use https://api.telnyx.com/v2/mcp.")}</p>
                       </div>
                     )}
                     {authType === "custom_header" && (
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Header Scheme (optional)</label>
-                        <Input value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} placeholder="Bearer" />
+                        <label className="text-sm font-medium">{tUi("Header Scheme (optional)")}</label>
+                        <Input value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} placeholder={tUi("Bearer")} />
                       </div>
                     )}
                   </div>
                   <div className="grid gap-2 pt-4">
                     <div className="flex items-center justify-between gap-3">
-                      <label className="text-sm font-medium">Custom Headers</label>
-                      <Button size="sm" variant="outline" onClick={addHeaderRow}>Add Header</Button>
+                      <label className="text-sm font-medium">{tUi("Custom Headers")}</label>
+                      <Button size="sm" variant="outline" onClick={addHeaderRow}>{tUi("Add Header")}</Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Sent on every request to this MCP server, alongside the authentication above. Use this for gateway keys such as Ocp-Apim-Subscription-Key — tick &ldquo;local secret&rdquo; so the credential is stored encrypted rather than on this record.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tUi("Sent on every request to this MCP server, alongside the authentication above. Use this for gateway keys such as Ocp-Apim-Subscription-Key — tick “local secret” so the credential is stored encrypted rather than on this record.")}</p>
                     {reservedHeaderNames.length > 0 && (
                       <Alert variant="destructive">
                         <IconAlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Reserved header</AlertTitle>
+                        <AlertTitle>{tUi("Reserved header")}</AlertTitle>
                         <AlertDescription>
-                          {reservedHeaderNames.join(", ")} is generated from the Authentication setting above. Remove the custom row or it will be ignored.
-                        </AlertDescription>
+                          {reservedHeaderNames.join(", ")}{tUi(" is generated from the Authentication setting above. Remove the custom row or it will be ignored.")}</AlertDescription>
                       </Alert>
                     )}
                     {headerRows.length === 0 ? (
-                      <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">No custom headers</div>
+                      <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">{tUi("No custom headers")}</div>
                     ) : (
                       <div className="space-y-3">
                         {headerRows.map((row, index) => (
@@ -588,7 +573,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                               <Input
                                 value={row.name}
                                 onChange={(e) => updateHeaderRow(index, { name: e.target.value })}
-                                placeholder="Header name"
+                                placeholder={tUi("Header name")}
                                 className="min-w-0 flex-1"
                               />
                               <Button
@@ -596,7 +581,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                                 variant="ghost"
                                 size="icon"
                                 className="shrink-0"
-                                aria-label={`Remove header ${row.name || index + 1}`}
+                                aria-label={tUi("Remove header {value0}", { value0: row.name || index + 1 })}
                                 onClick={() => removeHeaderRow(index)}
                               >
                                 <IconTrash className="h-4 w-4" />
@@ -611,16 +596,14 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                               <Input
                                 value={row.value}
                                 onChange={(e) => updateHeaderRow(index, { value: e.target.value })}
-                                placeholder="Header value"
+                                placeholder={tUi("Header value")}
                               />
                             )}
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                               <Checkbox
                                 checked={Boolean(row.fromSecret)}
                                 onCheckedChange={(checked) => updateHeaderRow(index, { fromSecret: checked === true, value: "" })}
-                              />
-                              Value is a local secret (required for credentials — the value is resolved at request time and never stored on this record)
-                            </label>
+                              />{tUi("Value is a local secret (required for credentials — the value is resolved at request time and never stored on this record)")}</label>
                           </div>
                         ))}
                       </div>
@@ -628,30 +611,30 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                   </div>
                   <div className="grid gap-2 pt-4">
                     <div className="flex items-center justify-between gap-3">
-                      <label className="text-sm font-medium">Available Tools</label>
+                      <label className="text-sm font-medium">{tUi("Available Tools")}</label>
                       <Button size="sm" variant="outline" onClick={loadTools} disabled={toolsLoading || !type || !url}>
-                        {toolsLoading ? "Loading…" : isNew ? "Load Tools" : "Refresh Tools"}
+                        {toolsLoading ? tUi("Loading…") : isNew ? tUi("Load Tools") : tUi("Refresh Tools")}
                       </Button>
                     </div>
                     {toolsError && (
                       <Alert variant="destructive">
                         <IconAlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Connection Error</AlertTitle>
+                        <AlertTitle>{tUi("Connection Error")}</AlertTitle>
                         <AlertDescription>{toolsError}</AlertDescription>
                       </Alert>
                     )}
                     {!toolsError && toolsLoading && <Skeleton className="h-32 w-full" />}
                     {!toolsError && !toolsLoading && availableTools.length === 0 && (
-                      <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">No tools available from this MCP server</div>
+                      <div className="text-sm text-muted-foreground border rounded-lg p-4 text-center">{tUi("No tools available from this MCP server")}</div>
                     )}
                     {!toolsError && !toolsLoading && availableTools.length > 0 && (
                       <div className="border rounded-lg p-4 space-y-3 overflow-hidden">
                         <div className="flex items-center justify-between gap-3 pb-2 border-b">
                           <div className="flex items-center gap-2 min-w-0">
                             <Checkbox id="select-all-mcp-tools" checked={allowedTools.length === availableTools.length} onCheckedChange={toggleAllTools} />
-                            <label htmlFor="select-all-mcp-tools" className="text-sm font-medium cursor-pointer">Select All ({availableTools.length} tools)</label>
+                            <label htmlFor="select-all-mcp-tools" className="text-sm font-medium cursor-pointer">{tUi("Select All (")}{availableTools.length}{tUi(" tools)")}</label>
                           </div>
-                          <Badge variant="outline">{allowedTools.length} selected</Badge>
+                          <Badge variant="outline">{allowedTools.length}{tUi(" selected")}</Badge>
                         </div>
                         <div className="grid gap-3 max-h-96 overflow-y-auto pr-1">
                           {availableTools.map((tool) => {
@@ -684,8 +667,8 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
           </Card>
         </div>
         <SheetFooter className="px-6 py-4 border-t border-border flex flex-row justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange?.(false)}>Cancel</Button>
-          <Button type="button" onClick={onSave} disabled={saving || !name || !url}>{saving ? "Saving…" : "Save"}</Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange?.(false)}>{tUi("Cancel")}</Button>
+          <Button type="button" onClick={onSave} disabled={saving || !name || !url}>{saving ? tUi("Saving…") : tUi("Save")}</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>

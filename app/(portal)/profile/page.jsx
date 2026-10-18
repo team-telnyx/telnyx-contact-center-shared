@@ -1,6 +1,8 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
-import { useEffect, useState } from "react";
+
+import { Suspense, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -21,6 +23,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BellRing } from "lucide-react";
 import NotificationSoundSettings from "@/components/admin/NotificationSoundSettings";
+import MobileAppSetupCard from "@/components/profile/MobileAppSetupCard";
+import VoiceDevicesCard from "@/components/profile/VoiceDevicesCard";
+import { useSearchParams } from "next/navigation";
 import { notificationSoundOverridesFrom } from "@/lib/contact-center/notification-sounds.mjs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -38,6 +43,9 @@ import {
   getProfileAction,
 } from "@/app/actions/user";
 import { languages as baseLanguageOptions } from "@/lib/languages";
+import { UI_LOCALES } from "@/lib/i18n/locales.mjs";
+import { useUiLocale } from "@/components/i18n/UiLocaleProvider";
+import { loadUiMessages } from "@/lib/i18n/messages";
 
 const PROFILE_LANGUAGE_OVERRIDES = [
   { code: "en-US", name: "English (United States)", flag: "🇺🇸" },
@@ -53,13 +61,32 @@ const languageOptions = [
   ),
 ];
 
+async function requestNotificationSounds() {
+  const response = await fetch("/api/user/notification-sounds", { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.ok) throw new Error(data?.error || "Unable to load your notification sounds");
+  return data;
+}
+
+// The page reads `?tab=` with useSearchParams(), which Next.js only allows under a
+// Suspense boundary during the static prerender; without one `next build` fails here.
 export default function ProfilePage() {
+  return <Suspense fallback={<div className="px-4 lg:px-6"><Skeleton className="h-10 w-full max-w-md" /></div>}><ProfileWorkspace /></Suspense>;
+}
+
+function ProfileWorkspace() {
+  const tUi = useUiText();
+  // The phone panel's gear opens the Devices tab straight away: /profile?tab=devices.
+  const searchParams = useSearchParams();
+  const initialTab = ["profile", "security", "devices"].includes(searchParams?.get("tab")) ? searchParams.get("tab") : "profile";
+  const { changeLocale } = useUiLocale();
   const { theme } = useTheme();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     nick: "",
     language: "en-US",
+    uiLocale: "en-US",
     mobile: "",
     voiceNumber: "",
   });
@@ -77,9 +104,7 @@ export default function ProfilePage() {
   const loadSounds = async () => {
     setSoundsLoading(true); setSoundsError("");
     try {
-      const response = await fetch("/api/user/notification-sounds", { cache: "no-store" });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data?.ok) throw new Error(data?.error || "Unable to load your notification sounds");
+      const data = await requestNotificationSounds();
       setSounds(data); setSoundDraft(data.effective);
     } catch (error) {
       setSoundsError(error.message);
@@ -87,7 +112,24 @@ export default function ProfilePage() {
       setSoundsLoading(false);
     }
   };
-  useEffect(() => { void loadSounds(); }, []);
+  useEffect(() => {
+    let active = true;
+    void requestNotificationSounds()
+      .then((data) => {
+        if (!active) return;
+        setSounds(data);
+        setSoundDraft(data.effective);
+      })
+      .catch((error) => {
+        if (active) setSoundsError(error.message);
+      })
+      .finally(() => {
+        if (active) setSoundsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [authStrategy, setAuthStrategy] = useState("local");
   const [hasPassword, setHasPassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -202,12 +244,21 @@ export default function ProfilePage() {
       const fd = new FormData();
       fd.set("nick", (form.nick || "").trim());
       fd.set("language", form.language || "en-US");
+      fd.set("uiLocale", form.uiLocale || "en-US");
       fd.set("mobile", (form.mobile || "").trim());
 
+      // Load the chosen bundle before persistence so a failed download cannot
+      // leave the saved preference different from the displayed interface.
+      try {
+        await loadUiMessages(form.uiLocale);
+      } catch {
+        throw new Error(tUi("Unable to load the selected interface language. Try again."));
+      }
       const result = await updateProfileAction(fd);
       if (!result?.ok) {
         throw new Error(result?.error || "Failed to save profile");
       }
+      await changeLocale(form.uiLocale);
 
       // Refresh profile data after successful update
       try {
@@ -332,18 +383,23 @@ export default function ProfilePage() {
 
   return (
     <div className="px-4 lg:px-6">
-      <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
+      <Tabs key={initialTab} defaultValue={initialTab} className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="profile">{tUi("Profile")}</TabsTrigger>
+          <TabsTrigger value="security">{tUi("Security")}</TabsTrigger>
+          <TabsTrigger value="devices">{tUi("Devices")}</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="devices" className="space-y-6">
+          <VoiceDevicesCard />
+          <MobileAppSetupCard />
+        </TabsContent>
 
         <TabsContent value="profile" className="space-y-6">
           <Card className="w-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <IconUser className="size-6 text-brand-primary" /> Profile
-              </CardTitle>
+                <IconUser className="size-6 text-brand-primary" />{tUi(" Profile")}</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               {profileLoading ? (
@@ -410,7 +466,7 @@ export default function ProfilePage() {
                     {/* Read-only fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="firstName">First name</Label>
+                        <Label htmlFor="firstName">{tUi("First name")}</Label>
                         <Input
                           id="firstName"
                           value={form.firstName}
@@ -419,7 +475,7 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="lastName">Last name</Label>
+                        <Label htmlFor="lastName">{tUi("Last name")}</Label>
                         <Input
                           id="lastName"
                           value={form.lastName}
@@ -430,7 +486,7 @@ export default function ProfilePage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="nick">Nick</Label>
+                        <Label htmlFor="nick">{tUi("Nick")}</Label>
                         <Input
                           id="nick"
                           value={form.nick}
@@ -438,18 +494,18 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="language">Language</Label>
+                        <Label htmlFor="language">{tUi("Agent speech language")}</Label>
                         <Select
                           value={form.language || "en-US"}
                           onValueChange={(value) => setField("language", value)}
                         >
                           <SelectTrigger id="language">
-                            <SelectValue placeholder="Select language" />
+                            <SelectValue placeholder={tUi("Select language")} />
                           </SelectTrigger>
                           <SelectContent>
                             {languageOptions.map((language) => (
                               <SelectItem key={language.code} value={language.code}>
-                                {language.flag} {language.name}
+                                {language.flag} {tUi(language.name)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -458,17 +514,31 @@ export default function ProfilePage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="mobile">Mobile</Label>
+                        <Label htmlFor="uiLocale">{tUi("Interface language")}</Label>
+                        <Select value={form.uiLocale || "en-US"} disabled={saving} onValueChange={(value) => setField("uiLocale", value)}>
+                          <SelectTrigger id="uiLocale"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {UI_LOCALES.map((locale) => (
+                              <SelectItem key={locale.id} value={locale.id}><span lang={locale.id} dir={locale.direction}>{locale.name}</span></SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">{tUi("Changes the interface for your account on every device. Your speech language stays separate.")}</p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="mobile">{tUi("Mobile")}</Label>
                         <Input
                           id="mobile"
+                          type="tel"
                           value={form.mobile}
                           onChange={(e) => setField("mobile", e.target.value)}
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="voiceNumber">Voice number</Label>
+                        <Label htmlFor="voiceNumber">{tUi("Voice number")}</Label>
                         <Input
                           id="voiceNumber"
+                          type="tel"
                           value={form.voiceNumber}
                           disabled
                           className="bg-muted"
@@ -477,7 +547,7 @@ export default function ProfilePage() {
                     </div>
                     <div className="flex justify-end">
                       <Button type="submit" disabled={saving}>
-                        {saving ? "Saving..." : "Save changes"}
+                        {saving ? tUi("Saving...") : tUi("Save changes")}
                       </Button>
                     </div>
                   </form>
@@ -490,9 +560,7 @@ export default function ProfilePage() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <IconUser className="size-6 text-brand-primary" /> Skills &
-                Proficiency
-              </CardTitle>
+                <IconUser className="size-6 text-brand-primary" />{tUi(" Skills & Proficiency")}</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               {profileLoading || loadingSkills ? (
@@ -514,10 +582,7 @@ export default function ProfilePage() {
 
                   if (skillEntries.length === 0) {
                     return (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No skills assigned. Contact your administrator to assign
-                        skills.
-                      </p>
+                      <p className="text-sm text-muted-foreground text-center py-4">{tUi("No skills assigned. Contact your administrator to assign skills.")}</p>
                     );
                   }
 
@@ -565,18 +630,17 @@ export default function ProfilePage() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BellRing className="size-6 text-brand-primary" /> Notifications
-                {!soundsLoading && soundDraft && (
-                  <Badge variant="outline" className="ml-auto font-normal">{sounds.overrides ? "Personalized" : "Using system settings"}</Badge>
+                <BellRing className="size-6 text-brand-primary" />{tUi(" Notifications")}{!soundsLoading && soundDraft && (
+                  <Badge variant="outline" className="ml-auto font-normal">{sounds.overrides ? tUi("Personalized") : tUi("Using system settings")}</Badge>
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
-              <p className="text-sm text-muted-foreground">Sounds played when a new interaction is offered to you while you are away from the desktop. They start from the settings your administrator chose; anything you change here applies to you only.</p>
+              <p className="text-sm text-muted-foreground">{tUi("Sounds played when a new interaction is offered to you while you are away from the desktop. They start from the settings your administrator chose; anything you change here applies to you only.")}</p>
               {soundsError ? (
                 <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                   <span>{soundsError}</span>
-                  <Button type="button" variant="outline" size="sm" onClick={() => void loadSounds()}>Try again</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void loadSounds()}>{tUi("Try again")}</Button>
                 </div>
               ) : (
                 <NotificationSoundSettings embedded value={soundDraft || sounds.effective} onChange={setSoundDraft} loading={soundsLoading || !soundDraft} disabled={soundsSaving} />
@@ -584,11 +648,11 @@ export default function ProfilePage() {
               {!soundsLoading && soundDraft && (
                 <div className="flex flex-wrap items-center gap-2">
                   <Button type="button" disabled={soundsSaving || JSON.stringify(soundDraft) === JSON.stringify(sounds.effective)} onClick={() => void saveSounds(notificationSoundOverridesFrom(sounds.system, soundDraft))}>
-                    {soundsSaving ? "Saving…" : "Save notifications"}
+                    {soundsSaving ? tUi("Saving…") : tUi("Save notifications")}
                   </Button>
-                  <Button type="button" variant="outline" disabled={soundsSaving || !sounds.overrides} onClick={() => void saveSounds(null)}>Use system settings</Button>
+                  <Button type="button" variant="outline" disabled={soundsSaving || !sounds.overrides} onClick={() => void saveSounds(null)}>{tUi("Use system settings")}</Button>
                   {sounds.system && soundDraft && JSON.stringify(soundDraft) !== JSON.stringify(sounds.effective) && (
-                    <Button type="button" variant="ghost" disabled={soundsSaving} onClick={() => setSoundDraft(sounds.effective)}>Discard changes</Button>
+                    <Button type="button" variant="ghost" disabled={soundsSaving} onClick={() => setSoundDraft(sounds.effective)}>{tUi("Discard changes")}</Button>
                   )}
                 </div>
               )}
@@ -601,9 +665,7 @@ export default function ProfilePage() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <IconShieldCheck className="size-6 text-brand-primary" />{" "}
-                Authentication Methods
-              </CardTitle>
+                <IconShieldCheck className="size-6 text-brand-primary" />{" "}{tUi("Authentication Methods")}</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               {profileLoading ? (
@@ -631,9 +693,9 @@ export default function ProfilePage() {
                       <IconKey className="size-6" />
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold">Email & Password</div>
+                      <div className="font-semibold">{tUi("Email & Password")}</div>
                       <div className="text-sm text-muted-foreground">
-                        {hasPassword ? "Enabled" : "Not configured"}
+                        {hasPassword ? tUi("Enabled") : tUi("Not configured")}
                       </div>
                     </div>
                     {hasPassword && (
@@ -661,11 +723,11 @@ export default function ProfilePage() {
                       <IconBrandGoogle className="size-6" />
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold">Google Account</div>
+                      <div className="font-semibold">{tUi("Google Account")}</div>
                       <div className="text-sm text-muted-foreground">
                         {authStrategy === "google"
-                          ? "Connected"
-                          : "Not connected"}
+                          ? tUi("Connected")
+                          : tUi("Not connected")}
                       </div>
                     </div>
                     {authStrategy === "google" && (
@@ -682,7 +744,7 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <IconKey className="size-6 text-brand-primary" />
-                {hasPassword ? "Change Password" : "Set Password"}
+                {hasPassword ? tUi("Change Password") : tUi("Set Password")}
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
@@ -697,21 +759,14 @@ export default function ProfilePage() {
                 <>
                   {!hasPassword && authStrategy === "google" && (
                     <div className="mb-4 p-4 border border-blue-500/30 bg-blue-500/10 rounded-lg text-sm">
-                      <p className="text-blue-400 font-medium mb-1">
-                        Enable Credentials Authentication
-                      </p>
-                      <p className="text-muted-foreground">
-                        You have Google authentication enabled. Set a password
-                        to also enable signing in with email and password.
-                      </p>
+                      <p className="text-blue-400 font-medium mb-1">{tUi("Enable Credentials Authentication")}</p>
+                      <p className="text-muted-foreground">{tUi("You have Google authentication enabled. Set a password to also enable signing in with email and password.")}</p>
                     </div>
                   )}
                   <form onSubmit={onPasswordSubmit} className="space-y-4">
                     {hasPassword && (
                       <div className="grid gap-2">
-                        <Label htmlFor="currentPassword">
-                          Current Password
-                        </Label>
+                        <Label htmlFor="currentPassword">{tUi("Current Password")}</Label>
                         <Input
                           id="currentPassword"
                           type="password"
@@ -727,7 +782,7 @@ export default function ProfilePage() {
                       </div>
                     )}
                     <div className="grid gap-2">
-                      <Label htmlFor="newPassword">New Password</Label>
+                      <Label htmlFor="newPassword">{tUi("New Password")}</Label>
                       <Input
                         id="newPassword"
                         type="password"
@@ -740,14 +795,10 @@ export default function ProfilePage() {
                         }
                         required
                       />
-                      <p className="text-xs text-muted-foreground">
-                        At least 8 chars, upper, lower, special
-                      </p>
+                      <p className="text-xs text-muted-foreground">{tUi("At least 8 chars, upper, lower, special")}</p>
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="confirmPassword">
-                        Confirm New Password
-                      </Label>
+                      <Label htmlFor="confirmPassword">{tUi("Confirm New Password")}</Label>
                       <Input
                         id="confirmPassword"
                         type="password"
@@ -764,10 +815,10 @@ export default function ProfilePage() {
                     <div className="flex justify-end">
                       <Button type="submit" disabled={passwordSaving}>
                         {passwordSaving
-                          ? "Updating..."
+                          ? tUi("Updating...")
                           : hasPassword
-                          ? "Update Password"
-                          : "Set Password"}
+                          ? tUi("Update Password")
+                          : tUi("Set Password")}
                       </Button>
                     </div>
                   </form>

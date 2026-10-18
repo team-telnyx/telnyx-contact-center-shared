@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TelnyxAIAgent } from "@telnyx/ai-agent-lib";
+import { TelnyxAvatarClient } from "@/lib/ai/telnyx-avatar-client.mjs";
 import { widgetDirection, widgetTranslations } from "@/lib/widgets/locales";
 import { requestFreshWidgetBootstrap } from "@/lib/widgets/bootstrap-client";
 import { widgetDynamicVariableHeaders } from "@/lib/widgets/dynamic-variables";
@@ -147,6 +148,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
     [config.channels.voice.avatar]
   );
   const avatarEnabled = avatarSettings.avatarEnabled;
+  const nativeAvatar = avatarEnabled && avatarSettings.avatarConfig.provider === "telnyx";
   const {
     abortConversationStart,
     beginConversation,
@@ -215,7 +217,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
     if (config.channels.voice.region && config.channels.voice.region !== "auto") {
       agentOptions.region = config.channels.voice.region;
     }
-    const client = new TelnyxAIAgent(agentOptions);
+    const client = nativeAvatar ? new TelnyxAvatarClient() : new TelnyxAIAgent(agentOptions);
     clientRef.current = client;
     setVoiceClient(client);
 
@@ -283,7 +285,9 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
         clientConnectPromiseRef.current = null;
       }
     };
-  }, [avatarEnabled, clientEpoch, config, preview, recycleVoiceClient]);
+  }, [avatarEnabled, nativeAvatar, clientEpoch, config, preview, recycleVoiceClient]);
+
+  useEffect(() => { if (nativeAvatar) voiceClient?.setPlaybackHeld?.(speakerMuted); }, [nativeAvatar, speakerMuted, voiceClient]);
 
   // The expanded avatar needs more room than the panel: the loader grows the
   // embedding iframe to the whole screen or to a centered 75%-wide modal.
@@ -395,7 +399,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
       // The avatar session is authorised by the voice session token, so it can
       // only start now. A provider failure falls back to the waveform through the
       // stage's onUnavailable; the call itself continues over WebRTC audio.
-      if (avatarEnabled) {
+      if (avatarEnabled && !nativeAvatar) {
         await prepareAvatar().catch((avatarError) => {
           console.warn("[telnyx-widget-voice] avatar preparation failed:", avatarError);
         });
@@ -408,6 +412,14 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
       beginConversation();
 
       await client.startConversation({
+        ...(nativeAvatar ? { avatarSession: async () => {
+          const response = await fetch(`/api/widgets/${encodeURIComponent(widget.id)}/avatar-session`, {
+            method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ provider: "telnyx", avatarId: avatarSettings.avatarId, assistantId: config.channels.voice.assistantId }),
+          });
+          const session = await readAvatarSessionResponse(response);
+          return { ...session, token, publicId: widget.id };
+        } } : {}),
         callerNumber: config.channels.voice.callerNumber,
         callerName: "Web Call",
         customHeaders: [
@@ -425,7 +437,8 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
       if (attempt !== callAttemptRef.current) {
         await client.endConversation();
       }
-    } catch {
+    } catch (startError) {
+      console.error("[telnyx-widget-voice] call start failed:", startError);
       abortConversationStart();
       await stopAvatar();
       if (attempt !== callAttemptRef.current) return;
@@ -433,7 +446,7 @@ export default function VoiceWidgetRuntime({ widget, preview = false, onClose, o
       setConnectionStatus("error");
       await reportVoiceState(token, { status: "failed" });
     }
-  }, [abortConversationStart, avatarEnabled, beginConversation, config.channels.voice.callerNumber, config.content.voiceErrorMessage, connectionStatus, prepareAvatar, stopAvatar, widget]);
+  }, [abortConversationStart, avatarEnabled, avatarSettings.avatarId, nativeAvatar, beginConversation, config.channels.voice.assistantId, config.channels.voice.callerNumber, config.content.voiceErrorMessage, connectionStatus, prepareAvatar, stopAvatar, widget]);
 
   const endCall = useCallback(async () => {
     const client = clientRef.current;

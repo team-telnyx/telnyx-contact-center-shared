@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -35,6 +37,7 @@ import SecretEditSheet from "@/components/secrets/EditSheet";
 import { Can } from "@/components/auth-provider";
 
 export default function AdminSecretsPage() {
+  const tUi = useUiText();
   const [secrets, setSecrets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingSecretId, setEditingSecretId] = useState(null);
@@ -102,9 +105,9 @@ export default function AdminSecretsPage() {
   }
 
   function formatDate(dateString) {
-    if (!dateString) return "Never";
+    if (!dateString) return tUi("Never");
     try {
-      return new Date(dateString).toLocaleString();
+      return new Date(dateString).toLocaleString(tUi.locale);
     } catch {
       return dateString;
     }
@@ -117,17 +120,15 @@ export default function AdminSecretsPage() {
 
   const headerActions = <>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
     <Can permission="secrets:create"><Button onClick={openCreateSheet}>
-      <IconPlus className="size-4 mr-2" />
-      Add Secret
-    </Button></Can>
+      <IconPlus className="size-4 mr-2" />{tUi("Add Secret")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Secrets" badges={<Badge variant="secondary">{secrets.length} secrets</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Secrets")} badges={<Badge variant="secondary">{secrets.length}{tUi(" secrets")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="secrets">
         <div className="space-y-4">
       <Card className="w-full">
@@ -145,19 +146,17 @@ export default function AdminSecretsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">Description</TableHead>
-                    <TableHead className="px-[10px]">Expires</TableHead>
-                    <TableHead className="px-[10px]">Status</TableHead>
-                    <TableHead className="px-[10px] text-right">Actions</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Description")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Expires")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Status")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {secrets.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                        No secrets found. Click "Add Secret" to create one.
-                      </TableCell>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{tUi("No secrets found. Click \"Add Secret\" to create one.")}</TableCell>
                     </TableRow>
                   ) : (
                     secrets.map((secret) => (
@@ -173,13 +172,9 @@ export default function AdminSecretsPage() {
                         </TableCell>
                         <TableCell className="px-[10px] text-xs">
                           {isExpired(secret.expires_at) ? (
-                            <span className="text-red-600 dark:text-red-400">
-                              Expired
-                            </span>
+                            <span className="text-red-600 dark:text-red-400">{tUi("Expired")}</span>
                           ) : (
-                            <span className="text-green-600 dark:text-green-400">
-                              Active
-                            </span>
+                            <span className="text-green-600 dark:text-green-400">{tUi("Active")}</span>
                           )}
                         </TableCell>
                         <TableCell className="px-[10px] text-xs text-right">
@@ -188,7 +183,7 @@ export default function AdminSecretsPage() {
                               type="button"
                               onClick={() => openEditSheet(secret.id)}
                               className="inline-flex items-center text-telnyx-green"
-                              title="Edit secret"
+                              title={tUi("Edit secret")}
                             >
                               <IconEdit className="size-4" />
                             </button>
@@ -197,30 +192,26 @@ export default function AdminSecretsPage() {
                                 <Can permission="secrets:delete"><button
                                   type="button"
                                   className="inline-flex items-center text-red-500"
-                                  title="Delete secret"
+                                  title={tUi("Delete secret")}
                                 >
                                   <IconTrash className="size-4" />
                                 </button></Can>
                               </DialogTrigger>
                               <DialogContent>
                                 <DialogHeader>
-                                  <DialogTitle>Delete secret?</DialogTitle>
-                                  <DialogDescription>
-                                    This action cannot be undone. This will
-                                    permanently delete the secret "{secret.name}".
+                                  <DialogTitle>{tUi("Delete secret?")}</DialogTitle>
+                                  <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the secret \"")}{secret.name}&quot;.
                                   </DialogDescription>
                                 </DialogHeader>
                                 <div className="flex justify-end gap-2 pt-2">
                                   <DialogClose asChild>
-                                    <Button variant="outline">Cancel</Button>
+                                    <Button variant="outline">{tUi("Cancel")}</Button>
                                   </DialogClose>
                                   <DialogClose asChild>
                                     <Button
                                       variant="destructive"
                                       onClick={() => handleDelete(secret.id)}
-                                    >
-                                      Delete
-                                    </Button>
+                                    >{tUi("Delete")}</Button>
                                   </DialogClose>
                                 </div>
                               </DialogContent>

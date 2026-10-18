@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React from "react";
 import {
@@ -31,6 +33,7 @@ export default function SecretEditSheet({
   secretId,
   onSaveComplete,
 }) {
+  const tUi = useUiText();
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [value, setValue] = React.useState("");
@@ -132,23 +135,21 @@ export default function SecretEditSheet({
       if (r.ok) {
         notify({
           title: secretId ? "Secret updated" : "Secret created",
-          description: `The secret has been ${
-            secretId ? "updated" : "created"
-          } successfully`,
+          description: (secretId ? tUi("The secret has been updated successfully") : tUi("The secret has been created successfully")),
           variant: "success",
         });
         onOpenChange(false);
         onSaveComplete && onSaveComplete();
       } else {
         notify({
-          title: `Failed to ${secretId ? "update" : "create"} secret`,
+          title: (secretId ? tUi("Failed to update secret") : tUi("Failed to create secret")),
           description: d?.error || "",
           variant: "error",
         });
       }
     } catch (err) {
       notify({
-        title: `Failed to ${secretId ? "update" : "create"} secret`,
+        title: (secretId ? tUi("Failed to update secret") : tUi("Failed to create secret")),
         description: String(err.message || err),
         variant: "error",
       });
@@ -160,21 +161,17 @@ export default function SecretEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             {secretId ? (
               <>
-                <IconEdit className="size-5" />
-                Edit Secret
-              </>
+                <IconEdit className="size-5" />{tUi("Edit Secret")}</>
             ) : (
               <>
-                <IconPlus className="size-5" />
-                Create Secret
-              </>
+                <IconPlus className="size-5" />{tUi("Create Secret")}</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -208,38 +205,32 @@ export default function SecretEditSheet({
                 <>
                   <div className="space-y-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="name" className="text-sm">
-                        Name <span className="text-red-500">*</span>
+                      <Label htmlFor="name" className="text-sm">{tUi("Name ")}<span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g., API_KEY_OPENAI"
+                        placeholder={tUi("e.g., API_KEY_OPENAI")}
                         disabled={!!secretId}
                       />
                       {secretId && (
-                        <p className="text-xs text-muted-foreground">
-                          Secret name cannot be changed after creation.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Secret name cannot be changed after creation.")}</p>
                       )}
                     </div>
 
                     <div className="grid gap-2">
-                      <Label htmlFor="description" className="text-sm">
-                        Description
-                      </Label>
+                      <Label htmlFor="description" className="text-sm">{tUi("Description")}</Label>
                       <Input
                         id="description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Optional description"
+                        placeholder={tUi("Optional description")}
                       />
                     </div>
 
                     <div className="grid gap-2">
-                      <Label htmlFor="value" className="text-sm">
-                        Value{" "}
+                      <Label htmlFor="value" className="text-sm">{tUi("Value")}{" "}
                         {!secretId && <span className="text-red-500">*</span>}
                       </Label>
                       <Textarea
@@ -248,37 +239,28 @@ export default function SecretEditSheet({
                         onChange={(e) => setValue(e.target.value)}
                         placeholder={
                           secretId
-                            ? "Leave empty to keep current value"
-                            : "Enter secret value"
+                            ? tUi("Leave empty to keep current value")
+                            : tUi("Enter secret value")
                         }
                         rows={6}
                         className="font-mono text-sm"
                       />
                       {secretId ? (
-                        <p className="text-xs text-muted-foreground">
-                          Leave empty to keep the current encrypted value
-                          unchanged. Enter a new value to update it.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("Leave empty to keep the current encrypted value unchanged. Enter a new value to update it.")}</p>
                       ) : (
-                        <p className="text-xs text-muted-foreground">
-                          The value will be encrypted and stored securely.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{tUi("The value will be encrypted and stored securely.")}</p>
                       )}
                     </div>
 
                     <div className="grid gap-2">
-                      <Label htmlFor="expires_at" className="text-sm">
-                        Expires At (Optional)
-                      </Label>
+                      <Label htmlFor="expires_at" className="text-sm">{tUi("Expires At (Optional)")}</Label>
                       <Input
                         id="expires_at"
                         type="datetime-local"
                         value={expiresAt}
                         onChange={(e) => setExpiresAt(e.target.value)}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Leave empty for secrets that never expire.
-                      </p>
+                      <p className="text-xs text-muted-foreground">{tUi("Leave empty for secrets that never expire.")}</p>
                     </div>
                   </div>
                 </>
@@ -293,17 +275,15 @@ export default function SecretEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving || loading}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={onSave} disabled={saving || loading}>
             {saving
               ? secretId
-                ? "Updating..."
-                : "Creating..."
+                ? tUi("Updating...")
+                : tUi("Creating...")
               : secretId
-              ? "Save Changes"
-              : "Create Secret"}
+              ? tUi("Save Changes")
+              : tUi("Create Secret")}
           </Button>
         </SheetFooter>
       </SheetContent>

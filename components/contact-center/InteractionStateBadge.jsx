@@ -1,5 +1,7 @@
 "use client";
 import { Badge } from "@/components/ui/badge";
+import { useUiText } from "@/components/i18n/use-ui-text";
+import { interactionStateLabel } from "@/lib/i18n/interaction-labels.mjs";
 
 const tones = {
   open: "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
@@ -22,8 +24,9 @@ const tones = {
   failed: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
 };
 export default function InteractionStateBadge({ state, className = "" }) {
+  const tUi = useUiText();
   const key = String(state || "unknown").toLowerCase();
   return <Badge variant="outline" data-interaction-state={key} className={`whitespace-nowrap ${tones[key] || "border-border bg-muted/50 text-muted-foreground"} ${className}`}>
-    {key.replaceAll("_", " ")}
+    {interactionStateLabel(tUi, key)}
   </Badge>;
 }

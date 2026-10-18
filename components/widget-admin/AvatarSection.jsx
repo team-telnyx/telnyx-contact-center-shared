@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle, Images, Loader2, Search } from "lucide-react";
@@ -15,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import TelnyxAvatarLibrary from "@/components/assistants/TelnyxAvatarLibrary";
 import {
   ANAM_AVATAR_PROVIDER,
   AVATAR_EXPAND_FULLSCREEN,
@@ -24,6 +28,10 @@ import {
 } from "@/lib/ai/avatar-config.mjs";
 
 export const AVATAR_PROVIDER_OPTIONS = {
+  telnyx: {
+    label: "Telnyx", shortLabel: "Telnyx", catalogLabel: "Telnyx avatars",
+    envName: "TELNYX_API_KEY", description: "Native Telnyx avatar with synchronized audio and video. Requires a Telnyx assistant voice.",
+  },
   [HEYGEN_AVATAR_PROVIDER]: {
     label: "HeyGen LiveAvatar",
     shortLabel: "HeyGen",
@@ -39,6 +47,12 @@ export const AVATAR_PROVIDER_OPTIONS = {
     description: "Anam audio passthrough with real-time lip sync driven by the Telnyx assistant.",
   },
 };
+
+function AvatarPreview({ entry, className }) {
+  if (!entry.previewUrl) return <div className={`flex items-center justify-center bg-emerald-950 text-3xl text-white ${className}`} aria-label={entry.name}>{entry.name.slice(0, 1)}</div>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={entry.previewUrl} alt={entry.name} className={className} />;
+}
 
 // Value of the "Expanded view" select: fullscreen or modal:<width>.
 export const AVATAR_EXPAND_OPTIONS = [
@@ -87,12 +101,17 @@ export function avatarSelection(avatar, displayFormat) {
 // Uses the provider catalog (admin route) to let a widget administrator pick
 // the avatar shown in the voice panel of this widget revision.
 export default function AvatarPicker({ avatar, onChange }) {
-  const provider = avatar.provider || HEYGEN_AVATAR_PROVIDER;
+  if (!avatar.provider || avatar.provider === "telnyx") return <TelnyxAvatarLibrary selectedId={avatar.avatarId} onSelect={entry => onChange({ ...avatar, ...avatarSelection(entry, avatar.displayFormat) })} />;
+  return <OtherAvatarPicker avatar={avatar} onChange={onChange} />;
+}
+function OtherAvatarPicker({ avatar, onChange }) {
+  const tUi = useUiText();
+  const provider = avatar.provider || "telnyx";
   const providerInfo = AVATAR_PROVIDER_OPTIONS[provider] || AVATAR_PROVIDER_OPTIONS[HEYGEN_AVATAR_PROVIDER];
   // The catalog is keyed by provider: a mismatch means it is still loading.
   const [catalog, setCatalog] = useState({ provider: null, featured: [], all: [], configured: true, error: null });
   const loading = catalog.provider !== provider;
-  const error = catalog.error;
+  const error = loading ? null : catalog.error;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [identity, setIdentity] = useState(null);
@@ -142,8 +161,7 @@ export default function AvatarPicker({ avatar, onChange }) {
         <Alert className="border-amber-500/40 bg-amber-500/10">
           <AlertTriangle className="size-4 text-amber-600" />
           <AlertDescription className="text-xs">
-            {providerInfo.envName} is not configured on the server. Publishing with the avatar enabled will fail until the key is available.
-          </AlertDescription>
+            {tUi(providerInfo.envName)}{tUi(" is not configured on the server. Publishing with the avatar enabled will fail until the key is available.")}</AlertDescription>
         </Alert>
       )}
       {error && (
@@ -153,13 +171,13 @@ export default function AvatarPicker({ avatar, onChange }) {
         </Alert>
       )}
       <div className="flex items-center justify-between">
-        <Label>{providerInfo.catalogLabel}</Label>
+        <Label>{tUi(providerInfo.catalogLabel)}</Label>
         {loading && (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin" /> Loading…</span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin" />{tUi(" Loading…")}</span>
         )}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {catalog.featured.map((entry) => {
+        {loading ? Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="aspect-[4/3] w-full rounded-lg" />) : catalog.featured.map((entry) => {
           const isSelected = avatar.avatarId === entry.id;
           return (
             <button
@@ -170,36 +188,34 @@ export default function AvatarPicker({ avatar, onChange }) {
               aria-pressed={isSelected}
             >
               {/* Preview URLs are normalized by the catalog route. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={entry.previewUrl} alt={entry.name} className="aspect-[4/3] w-full rounded-md bg-zinc-950 object-cover" />
+              <AvatarPreview entry={entry} className="aspect-[4/3] w-full rounded-md bg-zinc-950 object-cover" />
               <span className="mt-1 block truncate px-0.5 text-[11px] font-medium">{entry.name}</span>
             </button>
           );
         })}
-        <button
+        {!loading && <button
           type="button"
           className={`group rounded-lg border p-1 text-left transition ${customSelection ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-dashed border-border hover:border-emerald-500/50"}`}
           onClick={() => { setSearch(""); setIdentity(null); setPickerOpen(true); }}
           disabled={loading || !catalog.all.length}
-          aria-label={`Browse all ${providerInfo.shortLabel} avatars`}
+          aria-label={tUi("Browse all {value0} avatars", { value0: providerInfo.shortLabel })}
           aria-pressed={Boolean(customSelection)}
         >
           <div className="relative aspect-[4/3] overflow-hidden rounded-md bg-muted">
             {customSelection ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={customSelection.previewUrl} alt={customSelection.name} className="size-full object-cover" />
+              <AvatarPreview entry={customSelection} className="size-full object-cover" />
             ) : (
               <div className="flex size-full items-center justify-center bg-gradient-to-br from-emerald-500/15 via-muted to-cyan-500/10">
                 <Images className="size-6 text-emerald-600 transition-transform group-hover:scale-105" />
               </div>
             )}
-            <span className="absolute inset-x-1 bottom-1 rounded bg-black/60 px-1 py-0.5 text-center text-[10px] font-medium text-white backdrop-blur-sm">Browse all</span>
+            <span className="absolute inset-x-1 bottom-1 rounded bg-black/60 px-1 py-0.5 text-center text-[10px] font-medium text-white backdrop-blur-sm">{tUi("Browse all")}</span>
           </div>
           <span className="mt-1 block truncate px-0.5 text-[11px] font-medium">{customSelection?.name || `${catalog.all.length || ""} looks`.trim()}</span>
-        </button>
+        </button>}
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {avatar.avatarId ? `Selected: ${avatar.name || avatar.avatarId}` : "No avatar selected yet."} · {providerInfo.description}
+        {avatar.avatarId ? tUi("Selected: {value0}", { value0: avatar.name || avatar.avatarId }) : tUi("No avatar selected yet.")} · {tUi(providerInfo.description)}
       </p>
 
       <Dialog open={pickerOpen} onOpenChange={(open) => { setPickerOpen(open); if (!open) { setSearch(""); setIdentity(null); } }}>
@@ -207,21 +223,21 @@ export default function AvatarPicker({ avatar, onChange }) {
           <DialogHeader>
             <div className="flex items-center gap-3">
               {selectedGroup && (
-                <Button type="button" variant="outline" size="icon" className="size-8 shrink-0 rounded-full" onClick={() => { setIdentity(null); setSearch(""); }} aria-label="Back to avatar gallery">
+                <Button type="button" variant="outline" size="icon" className="size-8 shrink-0 rounded-full" onClick={() => { setIdentity(null); setSearch(""); }} aria-label={tUi("Back to avatar gallery")}>
                   <ArrowLeft className="size-4" />
                 </Button>
               )}
               <div>
-                <DialogTitle>{selectedGroup ? selectedGroup.name : `Choose a ${providerInfo.shortLabel} avatar`}</DialogTitle>
+                <DialogTitle>{selectedGroup ? selectedGroup.name : tUi("Choose a {value0} avatar", { value0: providerInfo.shortLabel })}</DialogTitle>
                 <DialogDescription className="mt-1">
-                  {selectedGroup ? `${selectedGroup.avatars.length} available looks` : "Browse compatible real-time avatars and open a person to see every available look."}
+                  {selectedGroup ? tUi("{value0} available looks", { value0: selectedGroup.avatars.length }) : tUi("Browse compatible real-time avatars and open a person to see every available look.")}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={selectedGroup ? "Search looks…" : "Search avatars…"} className="pl-9" autoFocus />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={selectedGroup ? tUi("Search looks…") : tUi("Search avatars…")} className="pl-9" autoFocus />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             {!selectedGroup ? (
@@ -232,27 +248,25 @@ export default function AvatarPicker({ avatar, onChange }) {
                     return (
                       <button key={group.key} type="button" className="overflow-hidden rounded-2xl border bg-card text-left transition hover:border-emerald-500/60 hover:shadow-md" onClick={() => { setIdentity(group.key); setSearch(""); }}>
                         <div className="flex aspect-[16/9] gap-0.5 overflow-hidden bg-muted">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={previews[0].previewUrl} alt="" className={`h-full object-cover ${previews.length > 1 ? "w-2/3" : "w-full"}`} />
+                          <AvatarPreview entry={previews[0]} className={`h-full object-cover ${previews.length > 1 ? "w-2/3" : "w-full"}`} />
                           {previews.length > 1 && (
                             <div className="grid h-full w-1/3 grid-rows-2 gap-0.5">
                               {previews.slice(1).map((entry) => (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img key={entry.id} src={entry.previewUrl} alt="" className="size-full object-cover" />
+                                <AvatarPreview key={entry.id} entry={entry} className="size-full object-cover" />
                               ))}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center justify-between gap-3 p-3">
                           <span className="font-semibold">{group.name}</span>
-                          <span className="text-xs text-muted-foreground">{group.avatars.length} looks</span>
+                          <span className="text-xs text-muted-foreground">{group.avatars.length}{tUi(" looks")}</span>
                         </div>
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                <p className="py-12 text-center text-sm text-muted-foreground">No avatars match “{search}”.</p>
+                <p className="py-12 text-center text-sm text-muted-foreground">{tUi("No avatars match “")}{search}”.</p>
               )
             ) : visibleLooks.length ? (
               <div className="grid grid-cols-2 gap-3 pb-1 sm:grid-cols-3 lg:grid-cols-4">
@@ -260,8 +274,7 @@ export default function AvatarPicker({ avatar, onChange }) {
                   const isSelected = avatar.avatarId === entry.id;
                   return (
                     <button key={entry.id} type="button" className={`overflow-hidden rounded-xl border bg-card text-left transition ${isSelected ? "border-emerald-500 ring-2 ring-emerald-500/20" : "hover:border-emerald-500/60"}`} onClick={() => choose(entry)} aria-pressed={isSelected}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={entry.previewUrl} alt={entry.name} className="aspect-[4/3] w-full bg-zinc-950 object-cover" />
+                      <AvatarPreview entry={entry} className="aspect-[4/3] w-full bg-zinc-950 object-cover" />
                       <div className="flex items-center justify-between gap-2 p-2.5">
                         <span className="truncate text-xs font-medium">{entry.name}</span>
                         {isSelected && <CheckCircle className="size-4 shrink-0 text-emerald-500" />}
@@ -271,12 +284,12 @@ export default function AvatarPicker({ avatar, onChange }) {
                 })}
               </div>
             ) : (
-              <p className="py-12 text-center text-sm text-muted-foreground">No looks match “{search}”.</p>
+              <p className="py-12 text-center text-sm text-muted-foreground">{tUi("No looks match “")}{search}”.</p>
             )}
           </div>
           <DialogFooter className="border-t pt-3 sm:justify-between">
-            <span className="text-xs text-muted-foreground">Only avatars available to {providerInfo.shortLabel} on this account are shown.</span>
-            <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
+            <span className="text-xs text-muted-foreground">{tUi("Only avatars available to ")}{tUi(providerInfo.shortLabel)}{tUi(" on this account are shown.")}</span>
+            <DialogClose asChild><Button type="button" variant="outline">{tUi("Close")}</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -30,6 +32,7 @@ const WORKFLOW_CATEGORIES = [
 ];
 
 export default function NewWorkflowPage() {
+  const tUi = useUiText();
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -90,7 +93,7 @@ export default function NewWorkflowPage() {
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Create New Workflow" badges={<Badge variant="secondary">Workflow builder</Badge>} />
+      <AdminPageHeader title={tUi("Create New Workflow")} badges={<Badge variant="secondary">{tUi("Workflow builder")}</Badge>} />
       <AdminPageContent>
         <div className="space-y-4">
       <div className="mb-4">
@@ -99,26 +102,19 @@ export default function NewWorkflowPage() {
           size="sm"
           onClick={() => router.push("/admin/workflows")}
         >
-          <IconArrowLeft className="size-4 mr-1" />
-          Back to Workflows
-        </Button>
+          <IconArrowLeft className="size-4 mr-1" />{tUi("Back to Workflows")}</Button>
       </div>
 
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <IconGitBranch className="size-6 text-telnyx-green" />
-            Create New Workflow
-          </CardTitle>
-          <CardDescription>
-            Create a new workflow to manage stages and items for your processes.
-          </CardDescription>
+            <IconGitBranch className="size-6 text-telnyx-green" />{tUi("Create New Workflow")}</CardTitle>
+          <CardDescription>{tUi("Create a new workflow to manage stages and items for your processes.")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">
-                Name <span className="text-red-500">*</span>
+              <Label htmlFor="name">{tUi("Name ")}<span className="text-red-500">*</span>
               </Label>
               <Input
                 id="name"
@@ -126,27 +122,27 @@ export default function NewWorkflowPage() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))
                 }
-                placeholder="e.g., Sales Pipeline, Support Tickets"
+                placeholder={tUi("e.g., Sales Pipeline, Support Tickets")}
                 disabled={saving}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{tUi("Description")}</Label>
               <Textarea
                 id="description"
                 value={form.description}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
-                placeholder="Describe the purpose of this workflow..."
+                placeholder={tUi("Describe the purpose of this workflow...")}
                 rows={3}
                 disabled={saving}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="category">{tUi("Category")}</Label>
               <Select
                 value={form.category}
                 onValueChange={(value) =>
@@ -155,12 +151,12 @@ export default function NewWorkflowPage() {
                 disabled={saving}
               >
                 <SelectTrigger id="category">
-                  <SelectValue placeholder="Select a category..." />
+                  <SelectValue placeholder={tUi("Select a category...")} />
                 </SelectTrigger>
                 <SelectContent>
                   {WORKFLOW_CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat}>
-                      {cat}
+                      {tUi(cat)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -173,17 +169,13 @@ export default function NewWorkflowPage() {
                 variant="outline"
                 onClick={() => router.push("/admin/workflows")}
                 disabled={saving}
-              >
-                Cancel
-              </Button>
+              >{tUi("Cancel")}</Button>
               <Button type="submit" disabled={saving}>
                 {saving ? (
                   <>
-                    <IconLoader2 className="size-4 mr-1 animate-spin" />
-                    Creating...
-                  </>
+                    <IconLoader2 className="size-4 mr-1 animate-spin" />{tUi("Creating...")}</>
                 ) : (
-                  "Create Workflow"
+                  tUi("Create Workflow")
                 )}
               </Button>
             </div>

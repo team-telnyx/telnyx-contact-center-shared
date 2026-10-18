@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
@@ -42,6 +44,7 @@ export default function DataActionsNodeEditor({
   globalVariables = {},
   selectedNodeId = null,
 }) {
+  const tUi = useUiText();
   const dataSource = config?.dataSource || "";
   const action = config?.action || "";
   const fields = config?.fields || {};
@@ -198,7 +201,7 @@ export default function DataActionsNodeEditor({
           onValueChange={(value) => handleFieldChange(fieldName, value)}
         >
           <SelectTrigger className="mt-1">
-            <SelectValue placeholder={`Select ${fieldName}`} />
+            <SelectValue placeholder={tUi("Select {value0}", { value0: fieldName })} />
           </SelectTrigger>
           <SelectContent>
             {fieldDef.enum.map((enumValue) => (
@@ -230,7 +233,7 @@ export default function DataActionsNodeEditor({
             }
           }}
           availableVariables={availableVariables}
-          placeholder='e.g., "tag1, tag2" or {{tags}}'
+          placeholder={tUi("e.g., \"tag1, tag2\" or {{tags}}")}
           className="mt-1"
         />
       );
@@ -257,7 +260,7 @@ export default function DataActionsNodeEditor({
             }
           }}
           availableVariables={availableVariables}
-          placeholder='{"key": "value"} or {{metadata}}'
+          placeholder={tUi("{\"key\": \"value\"} or {{metadata}}")}
           rows={4}
           className="mt-1 font-mono text-xs"
         />
@@ -275,7 +278,7 @@ export default function DataActionsNodeEditor({
             value={fieldValue}
             onChange={(value) => handleFieldChange(fieldName, value)}
             availableVariables={availableVariables}
-            placeholder={`Enter ${fieldName}`}
+            placeholder={tUi("Enter {value0}", { value0: fieldName })}
             rows={4}
             className="mt-1"
           />
@@ -286,7 +289,7 @@ export default function DataActionsNodeEditor({
           value={fieldValue}
           onChange={(value) => handleFieldChange(fieldName, value)}
           availableVariables={availableVariables}
-          placeholder={`Enter ${fieldName}`}
+          placeholder={tUi("Enter {value0}", { value0: fieldName })}
           className="mt-1"
         />
       );
@@ -297,8 +300,7 @@ export default function DataActionsNodeEditor({
     <div className="space-y-4">
       {/* Data Source Selector */}
       <div>
-        <Label className="text-xs">
-          Data Source <span className="text-red-500">*</span>
+        <Label className="text-xs">{tUi("Data Source ")}<span className="text-red-500">*</span>
         </Label>
         <div className="flex items-center gap-2 mt-1">
           <Select
@@ -317,12 +319,12 @@ export default function DataActionsNodeEditor({
             }}
           >
             <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Select data source" />
+              <SelectValue placeholder={tUi("Select data source")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="contacts">Contacts</SelectItem>
-              <SelectItem value="kb_articles">KB Articles</SelectItem>
-              <SelectItem value="tasks">Tasks</SelectItem>
+              <SelectItem value="contacts">{tUi("Contacts")}</SelectItem>
+              <SelectItem value="kb_articles">{tUi("KB Articles")}</SelectItem>
+              <SelectItem value="tasks">{tUi("Tasks")}</SelectItem>
             </SelectContent>
           </Select>
           {dataSource && (
@@ -332,22 +334,19 @@ export default function DataActionsNodeEditor({
               size="icon"
               className="h-10 w-10 flex-shrink-0"
               onClick={() => setSchemaSheetOpen(true)}
-              title="View API Schema"
+              title={tUi("View API Schema")}
             >
               <IconApi className="h-4 w-4" />
             </Button>
           )}
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Select the data source to operate on
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Select the data source to operate on")}</p>
       </div>
 
       {/* Action Selector */}
       {dataSource && (
         <div>
-          <Label className="text-xs">
-            Action <span className="text-red-500">*</span>
+          <Label className="text-xs">{tUi("Action ")}<span className="text-red-500">*</span>
           </Label>
           <Select
             value={action || undefined}
@@ -362,23 +361,19 @@ export default function DataActionsNodeEditor({
             }}
           >
             <SelectTrigger className="mt-1 w-full">
-              <SelectValue placeholder="Select action" />
+              <SelectValue placeholder={tUi("Select action")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="create">Create</SelectItem>
-              <SelectItem value="read">Read (Get Single)</SelectItem>
-              <SelectItem value="update">Update</SelectItem>
-              <SelectItem value="delete">Delete</SelectItem>
-              <SelectItem value="list">List/Search</SelectItem>
+              <SelectItem value="create">{tUi("Create")}</SelectItem>
+              <SelectItem value="read">{tUi("Read (Get Single)")}</SelectItem>
+              <SelectItem value="update">{tUi("Update")}</SelectItem>
+              <SelectItem value="delete">{tUi("Delete")}</SelectItem>
+              <SelectItem value="list">{tUi("List/Search")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Select the operation to perform
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Select the operation to perform")}</p>
           {!action && (
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-              Please select an action to configure fields
-            </p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">{tUi("Please select an action to configure fields")}</p>
           )}
         </div>
       )}
@@ -386,19 +381,16 @@ export default function DataActionsNodeEditor({
       {/* Record ID for read/update/delete */}
       {(action === "read" || action === "update" || action === "delete") && (
         <div>
-          <Label className="text-xs">
-            Record ID <span className="text-red-500">*</span>
+          <Label className="text-xs">{tUi("Record ID ")}<span className="text-red-500">*</span>
           </Label>
           <VariableInput
             value={recordId}
             onChange={(value) => handleChange("recordId", value)}
             availableVariables={availableVariables}
-            placeholder="Enter record ID or {{variable}}"
+            placeholder={tUi("Enter record ID or {{variable}}")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            ID of the record to {action} (supports variable substitution)
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("ID of the record to ")}{action}{tUi(" (supports variable substitution)")}</p>
         </div>
       )}
 
@@ -410,7 +402,7 @@ export default function DataActionsNodeEditor({
         >
           {Object.keys(actionFields).length > 0 ? (
             <>
-              <Label className="text-xs font-semibold">Fields</Label>
+              <Label className="text-xs font-semibold">{tUi("Fields")}</Label>
               {Object.entries(actionFields).map(([fieldName, fieldDef]) => (
                 <div key={fieldName}>
                   <Label className="text-xs">
@@ -426,17 +418,14 @@ export default function DataActionsNodeEditor({
                     </p>
                   )}
                   {fieldDef.enum && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Allowed values: {fieldDef.enum.join(", ")}
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Allowed values: ")}{fieldDef.enum.join(", ")}
                     </p>
                   )}
                 </div>
               ))}
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              Loading fields for {action} action...
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Loading fields for ")}{action}{tUi(" action...")}</p>
           )}
         </div>
       )}
@@ -446,7 +435,7 @@ export default function DataActionsNodeEditor({
         <div className="space-y-4 border-t pt-4">
           {Object.keys(actionFields).length > 0 ? (
             <>
-              <Label className="text-xs font-semibold">Query Parameters</Label>
+              <Label className="text-xs font-semibold">{tUi("Query Parameters")}</Label>
               {Object.entries(actionFields).map(([paramName, paramDef]) => {
                 const isQParam = paramName === "q";
                 const isPhoneParam = paramName === "phone";
@@ -487,19 +476,17 @@ export default function DataActionsNodeEditor({
                             <div className="space-y-2">
                               <div className="font-semibold text-sm">
                                 {isQParam
-                                  ? "Search Query (q)"
+                                  ? tUi("Search Query (q)")
                                   : isPhoneParam
-                                    ? "Phone Search (phone)"
+                                    ? tUi("Phone Search (phone)")
                                     : paramName}
                               </div>
                               <p className="text-xs text-muted-foreground">
-                                {paramInfo.description}
+                                {tUi(paramInfo.description)}
                               </p>
                               {paramInfo.searches && (
                                 <div>
-                                  <div className="text-xs font-medium mb-1">
-                                    Searches in fields:
-                                  </div>
+                                  <div className="text-xs font-medium mb-1">{tUi("Searches in fields:")}</div>
                                   <div className="flex flex-wrap gap-1">
                                     {paramInfo.searches.map((field) => (
                                       <span
@@ -514,9 +501,7 @@ export default function DataActionsNodeEditor({
                               )}
                               {paramInfo.examples && (
                                 <div>
-                                  <div className="text-xs font-medium mb-1">
-                                    Examples:
-                                  </div>
+                                  <div className="text-xs font-medium mb-1">{tUi("Examples:")}</div>
                                   <div className="space-y-1">
                                     {paramInfo.examples.map((example, idx) => (
                                       <code
@@ -531,7 +516,7 @@ export default function DataActionsNodeEditor({
                               )}
                               {paramInfo.note && (
                                 <div className="text-xs text-blue-600 dark:text-blue-400 pt-1 border-t">
-                                  <strong>Note:</strong> {paramInfo.note}
+                                  <strong>{tUi("Note:")}</strong> {tUi(paramInfo.note)}
                                 </div>
                               )}
                             </div>
@@ -545,7 +530,7 @@ export default function DataActionsNodeEditor({
                         handleQueryParamChange(paramName, value)
                       }
                       availableVariables={availableVariables}
-                      placeholder={`Enter ${paramName}`}
+                      placeholder={tUi("Enter {value0}", { value0: paramName })}
                       className="mt-1"
                     />
                     {paramDef.description && (
@@ -558,27 +543,24 @@ export default function DataActionsNodeEditor({
               })}
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              Loading query parameters...
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Loading query parameters...")}</p>
           )}
         </div>
       )}
 
       {/* Response Variable */}
       <div className="border-t pt-4">
-        <Label className="text-xs">Response Variable Name</Label>
+        <Label className="text-xs">{tUi("Response Variable Name")}</Label>
         <Input
           value={responseVariable}
           onChange={(e) => handleChange("responseVariable", e.target.value)}
-          placeholder="data_response"
+          placeholder={tUi("data_response")}
           className={`mt-1 ${
             responseVariable &&
             checkDuplicateVariableName(
               responseVariable,
               { nodes, edges, globalVariables },
-              { type: "data_action", id: selectedNodeId },
-            ).isDuplicate
+              { type: "data_action", id: selectedNodeId }, tUi).isDuplicate
               ? "border-yellow-500"
               : ""
           }`}
@@ -587,27 +569,22 @@ export default function DataActionsNodeEditor({
           checkDuplicateVariableName(
             responseVariable,
             { nodes, edges, globalVariables },
-            { type: "data_action", id: selectedNodeId },
-          ).isDuplicate && (
+            { type: "data_action", id: selectedNodeId }, tUi).isDuplicate && (
             <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1 flex items-center gap-1">
               <IconAlertCircle className="h-3 w-3" />
               {
                 checkDuplicateVariableName(
                   responseVariable,
                   { nodes, edges, globalVariables },
-                  { type: "data_action", id: selectedNodeId },
-                ).message
+                  { type: "data_action", id: selectedNodeId }, tUi).message
               }
             </p>
           )}
         {!checkDuplicateVariableName(
           responseVariable || "data_response",
           { nodes, edges, globalVariables },
-          { type: "data_action", id: selectedNodeId },
-        ).isDuplicate && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Variable name to store the API response data
-          </p>
+          { type: "data_action", id: selectedNodeId }, tUi).isDuplicate && (
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Variable name to store the API response data")}</p>
         )}
       </div>
 
@@ -618,9 +595,7 @@ export default function DataActionsNodeEditor({
         onClick={() => setTestSheetOpen(true)}
         disabled={!dataSource || !action}
       >
-        <IconFlask className="h-4 w-4 mr-2" />
-        Test Data Action
-      </Button>
+        <IconFlask className="h-4 w-4 mr-2" />{tUi("Test Data Action")}</Button>
 
       {/* API Schema Sheet */}
       {dataSource && (

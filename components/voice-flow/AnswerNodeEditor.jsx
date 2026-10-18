@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Label } from "@/components/ui/label";
@@ -127,6 +129,7 @@ export default function AnswerNodeEditor({
   experimentalFeaturesEnabled = false,
   hasCallerLanguageParameterBefore = false,
 }) {
+  const tUi = useUiText();
   // Basic fields
   const [billingGroupId, setBillingGroupId] = useState(
     config.billing_group_id || ""
@@ -722,57 +725,49 @@ export default function AnswerNodeEditor({
       {/* Basic Settings */}
       <div className="space-y-3">
         <div>
-          <Label>Billing Group ID</Label>
+          <Label>{tUi("Billing Group ID")}</Label>
           <Input
             type="text"
             value={billingGroupId}
             onChange={(e) => {
               setBillingGroupId(e.target.value);
             }}
-            placeholder="f5586561-8ff0-4291-a0ac-84fe544797bd"
+            placeholder={tUi("f5586561-8ff0-4291-a0ac-84fe544797bd")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Use this field to set the Billing Group ID for the call. Must be a
-            valid and existing Billing Group ID.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Use this field to set the Billing Group ID for the call. Must be a valid and existing Billing Group ID.")}</p>
         </div>
 
         <div>
-          <Label>Client State</Label>
+          <Label>{tUi("Client State")}</Label>
           <Input
             type="text"
             value={clientState}
             onChange={(e) => {
               setClientState(e.target.value);
             }}
-            placeholder="aGF2ZSBhIG5pY2UgZGF5ID1d"
+            placeholder={tUi("aGF2ZSBhIG5pY2UgZGF5ID1d")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Base-64 encoded string to add state to every subsequent webhook
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Base-64 encoded string to add state to every subsequent webhook")}</p>
         </div>
 
         <div>
-          <Label>Command ID</Label>
+          <Label>{tUi("Command ID")}</Label>
           <Input
             type="text"
             value={commandId}
             onChange={(e) => {
               setCommandId(e.target.value);
             }}
-            placeholder="891510ac-f3e4-11e8-af5b-de00688a4901"
+            placeholder={tUi("891510ac-f3e4-11e8-af5b-de00688a4901")}
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Use this field to avoid duplicate commands. Telnyx will ignore any
-            command with the same command_id for the same call_control_id.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Use this field to avoid duplicate commands. Telnyx will ignore any command with the same command_id for the same call_control_id.")}</p>
         </div>
 
         <div>
-          <Label>Webhook URL</Label>
+          <Label>{tUi("Webhook URL")}</Label>
           <Input
             type="text"
             value={webhookUrl}
@@ -782,10 +777,7 @@ export default function AnswerNodeEditor({
             placeholder="https://www.example.com/server-b/"
             className="mt-1"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Use this field to override the URL for which Telnyx will send
-            subsequent webhooks to for this call.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Use this field to override the URL for which Telnyx will send subsequent webhooks to for this call.")}</p>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -799,13 +791,9 @@ export default function AnswerNodeEditor({
           <Label
             htmlFor="send_silence_when_idle"
             className="text-sm font-normal cursor-pointer"
-          >
-            Send Silence When Idle
-          </Label>
+          >{tUi("Send Silence When Idle")}</Label>
         </div>
-        <p className="text-xs text-muted-foreground -mt-2">
-          Generate silence RTP packets when no transmission available
-        </p>
+        <p className="text-xs text-muted-foreground -mt-2">{tUi("Generate silence RTP packets when no transmission available")}</p>
       </div>
 
       {/* Recording - Collapsible */}
@@ -821,9 +809,7 @@ export default function AnswerNodeEditor({
                 recordingExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Recording
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Recording")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
@@ -838,18 +824,14 @@ export default function AnswerNodeEditor({
             <Label
               htmlFor="record"
               className="text-sm font-normal cursor-pointer"
-            >
-              Record Call
-            </Label>
+            >{tUi("Record Call")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            Whether to record the call
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2">{tUi("Whether to record the call")}</p>
 
           {record && (
             <>
               <div>
-                <Label>Record Channels</Label>
+                <Label>{tUi("Record Channels")}</Label>
                 <Select
                   value={recordChannels}
                   onValueChange={(value) => {
@@ -857,20 +839,18 @@ export default function AnswerNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select channels" />
+                    <SelectValue placeholder={tUi("Select channels")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single">Single</SelectItem>
-                    <SelectItem value="dual">Dual</SelectItem>
+                    <SelectItem value="single">{tUi("Single")}</SelectItem>
+                    <SelectItem value="dual">{tUi("Dual")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  The recording channels
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The recording channels")}</p>
               </div>
 
               <div>
-                <Label>Record Format</Label>
+                <Label>{tUi("Record Format")}</Label>
                 <Select
                   value={recordFormat}
                   onValueChange={(value) => {
@@ -878,20 +858,18 @@ export default function AnswerNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select format" />
+                    <SelectValue placeholder={tUi("Select format")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mp3">MP3</SelectItem>
-                    <SelectItem value="wav">WAV</SelectItem>
+                    <SelectItem value="mp3">{tUi("MP3")}</SelectItem>
+                    <SelectItem value="wav">{tUi("WAV")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  The recording format
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The recording format")}</p>
               </div>
 
               <div>
-                <Label>Record Max Length (seconds)</Label>
+                <Label>{tUi("Record Max Length (seconds)")}</Label>
                 <Input
                   type="number"
                   value={recordMaxLength}
@@ -901,13 +879,11 @@ export default function AnswerNodeEditor({
                   placeholder="3600"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The maximum length of the recording in seconds
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The maximum length of the recording in seconds")}</p>
               </div>
 
               <div>
-                <Label>Record Timeout (seconds)</Label>
+                <Label>{tUi("Record Timeout (seconds)")}</Label>
                 <Input
                   type="number"
                   value={recordTimeoutSecs}
@@ -917,13 +893,11 @@ export default function AnswerNodeEditor({
                   placeholder="30"
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The timeout for recording in seconds
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The timeout for recording in seconds")}</p>
               </div>
 
               <div>
-                <Label>Record Track</Label>
+                <Label>{tUi("Record Track")}</Label>
                 <Select
                   value={recordTrack}
                   onValueChange={(value) => {
@@ -931,21 +905,19 @@ export default function AnswerNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select track" />
+                    <SelectValue placeholder={tUi("Select track")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="inbound">Inbound</SelectItem>
-                    <SelectItem value="outbound">Outbound</SelectItem>
-                    <SelectItem value="both">Both</SelectItem>
+                    <SelectItem value="inbound">{tUi("Inbound")}</SelectItem>
+                    <SelectItem value="outbound">{tUi("Outbound")}</SelectItem>
+                    <SelectItem value="both">{tUi("Both")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Which track(s) to record
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Which track(s) to record")}</p>
               </div>
 
               <div>
-                <Label>Record Trim</Label>
+                <Label>{tUi("Record Trim")}</Label>
                 <Select
                   value={recordTrim}
                   onValueChange={(value) => {
@@ -953,35 +925,28 @@ export default function AnswerNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select option" />
+                    <SelectValue placeholder={tUi("Select option")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="trim-silence">Trim Silence</SelectItem>
+                    <SelectItem value="trim-silence">{tUi("Trim Silence")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  When set to 'trim-silence', silence will be removed from the
-                  beginning and end of the recording.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("When set to 'trim-silence', silence will be removed from the beginning and end of the recording.")}</p>
               </div>
 
               <div>
-                <Label>Record Custom File Name</Label>
+                <Label>{tUi("Record Custom File Name")}</Label>
                 <Input
                   type="text"
                   value={recordCustomFileName}
                   onChange={(e) => {
                     setRecordCustomFileName(e.target.value);
                   }}
-                  placeholder="my_recording_file_name"
+                  placeholder={tUi("my_recording_file_name")}
                   maxLength={40}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The custom recording file name to be used instead of the
-                  default call_leg_id. Telnyx will still add a Unix timestamp
-                  suffix. Maximum 40 characters.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The custom recording file name to be used instead of the default call_leg_id. Telnyx will still add a Unix timestamp suffix. Maximum 40 characters.")}</p>
               </div>
             </>
           )}
@@ -1001,9 +966,7 @@ export default function AnswerNodeEditor({
                 headersExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Headers
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Headers")}</Label>
             {(sipHeaders.length > 0 || customHeaders.length > 0) && (
               <span className="text-xs text-muted-foreground">
                 ({sipHeaders.length + customHeaders.length})
@@ -1013,7 +976,7 @@ export default function AnswerNodeEditor({
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>SIP Headers</Label>
+            <Label>{tUi("SIP Headers")}</Label>
             <div className="space-y-2 mt-1">
               {sipHeaders.map((header, index) => (
                 <div
@@ -1028,7 +991,7 @@ export default function AnswerNodeEditor({
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select header name" />
+                        <SelectValue placeholder={tUi("Select header name")} />
                       </SelectTrigger>
                       <SelectContent>
                         {SIP_HEADER_NAMES.map((name) => {
@@ -1049,7 +1012,7 @@ export default function AnswerNodeEditor({
                   </div>
                   <Input
                     className="flex-1 min-w-0 max-w-[calc(100%-12rem)]"
-                    placeholder="Header value"
+                    placeholder={tUi("Header value")}
                     value={header?.value || ""}
                     onChange={(e) =>
                       handleSipHeaderChange(index, "value", e.target.value)
@@ -1061,7 +1024,7 @@ export default function AnswerNodeEditor({
                       variant="outline"
                       size="icon"
                       onClick={() => removeSipHeader(index)}
-                      aria-label="Remove header"
+                      aria-label={tUi("Remove header")}
                     >
                       <IconTrash className="w-4 h-4" />
                     </Button>
@@ -1080,18 +1043,13 @@ export default function AnswerNodeEditor({
                 }
                 className="w-full"
               >
-                <IconPlus className="w-4 h-4 mr-2" />
-                Add SIP Header
-              </Button>
+                <IconPlus className="w-4 h-4 mr-2" />{tUi("Add SIP Header")}</Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              SIP headers to be added to the SIP INVITE response. Currently only
-              User-to-User and Diversion headers are supported.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("SIP headers to be added to the SIP INVITE response. Currently only User-to-User and Diversion headers are supported.")}</p>
           </div>
 
           <div>
-            <Label>Custom Headers</Label>
+            <Label>{tUi("Custom Headers")}</Label>
             <div className="space-y-2 mt-1">
               {customHeaders.map((header, index) => (
                 <div
@@ -1100,7 +1058,7 @@ export default function AnswerNodeEditor({
                 >
                   <Input
                     className="flex-shrink-0 w-32"
-                    placeholder="Header name"
+                    placeholder={tUi("Header name")}
                     value={header?.name || ""}
                     onChange={(e) =>
                       handleCustomHeaderChange(index, "name", e.target.value)
@@ -1108,7 +1066,7 @@ export default function AnswerNodeEditor({
                   />
                   <Input
                     className="flex-1 min-w-0 max-w-[calc(100%-12rem)]"
-                    placeholder="Header value"
+                    placeholder={tUi("Header value")}
                     value={header?.value || ""}
                     onChange={(e) =>
                       handleCustomHeaderChange(index, "value", e.target.value)
@@ -1120,7 +1078,7 @@ export default function AnswerNodeEditor({
                       variant="outline"
                       size="icon"
                       onClick={() => removeCustomHeader(index)}
-                      aria-label="Remove header"
+                      aria-label={tUi("Remove header")}
                     >
                       <IconTrash className="w-4 h-4" />
                     </Button>
@@ -1134,13 +1092,9 @@ export default function AnswerNodeEditor({
                 onClick={addCustomHeader}
                 className="w-full"
               >
-                <IconPlus className="w-4 h-4 mr-2" />
-                Add Custom Header
-              </Button>
+                <IconPlus className="w-4 h-4 mr-2" />{tUi("Add Custom Header")}</Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Custom headers to be added to the SIP INVITE response.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Custom headers to be added to the SIP INVITE response.")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -1158,14 +1112,12 @@ export default function AnswerNodeEditor({
                 streamingExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Streaming
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Streaming")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label>Provider</Label>
+            <Label>{tUi("Provider")}</Label>
             <Select
               value={streamingProvider}
               onValueChange={(value) => {
@@ -1193,7 +1145,7 @@ export default function AnswerNodeEditor({
               }}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select provider" />
+                <SelectValue placeholder={tUi("Select provider")} />
               </SelectTrigger>
               <SelectContent>
                 {STREAMING_PROVIDER_OPTIONS.filter(
@@ -1202,7 +1154,7 @@ export default function AnswerNodeEditor({
                     experimentalFeaturesEnabled,
                 ).map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                    {tUi(option.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1214,15 +1166,13 @@ export default function AnswerNodeEditor({
               <div className="flex items-start gap-2 p-3 bg-emerald-50 dark:bg-emerald-950 rounded-md border border-emerald-200 dark:border-emerald-800">
                 <IconMicrophone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-emerald-700 dark:text-emerald-300">
-                  <strong>Telnyx Standalone STT</strong>
-                  <p className="mt-1">
-                    Native Telnyx Speech-to-Text WebSocket using PCMU/mulaw @ 8 kHz.
-                  </p>
+                  <strong>{tUi("Telnyx Standalone STT")}</strong>
+                  <p className="mt-1">{tUi("Native Telnyx Speech-to-Text WebSocket using PCMU/mulaw @ 8 kHz.")}</p>
                 </div>
               </div>
 
               <div>
-                <Label>Model</Label>
+                <Label>{tUi("Model")}</Label>
                 <Select
                   value={telnyxSttModel}
                   onValueChange={(value) => {
@@ -1238,7 +1188,7 @@ export default function AnswerNodeEditor({
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select model" />
+                    <SelectValue placeholder={tUi("Select model")} />
                   </SelectTrigger>
                   <SelectContent>
                     {TELNYX_STT_MODEL_OPTIONS.map((option) => (
@@ -1248,19 +1198,15 @@ export default function AnswerNodeEditor({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Telnyx STT model in provider/model format.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Telnyx STT model in provider/model format.")}</p>
               </div>
 
 
               {hasCallerLanguageParameterBefore && (
                 <div className="flex items-center justify-between rounded-md border p-3">
                   <div className="space-y-0.5">
-                    <Label>Use Caller Language</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Use client_state.caller_language set by an upstream Update Client State node.
-                    </p>
+                    <Label>{tUi("Use Caller Language")}</Label>
+                    <p className="text-xs text-muted-foreground">{tUi("Use client_state.caller_language set by an upstream Update Client State node.")}</p>
                   </div>
                   <Switch
                     checked={useCallerLanguage}
@@ -1273,10 +1219,8 @@ export default function AnswerNodeEditor({
                 <div className="space-y-3 rounded-md border p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <Label>Language</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Choose a supported language for the selected STT model or provide it dynamically.
-                      </p>
+                      <Label>{tUi("Language")}</Label>
+                      <p className="text-xs text-muted-foreground">{tUi("Choose a supported language for the selected STT model or provide it dynamically.")}</p>
                     </div>
                     <Select
                       value={telnyxSttLanguageSource || "static"}
@@ -1286,8 +1230,8 @@ export default function AnswerNodeEditor({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="static">Static</SelectItem>
-                        <SelectItem value="variable">Variable</SelectItem>
+                        <SelectItem value="static">{tUi("Static")}</SelectItem>
+                        <SelectItem value="variable">{tUi("Variable")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1296,7 +1240,7 @@ export default function AnswerNodeEditor({
                       value={telnyxSttLanguageValue || ""}
                       onChange={setTelnyxSttLanguageValue}
                       availableVariables={availableVariables}
-                      placeholder="{{caller_language}}"
+                      placeholder={tUi("{{caller_language}}")}
                     />
                   ) : (
                     <Select
@@ -1304,7 +1248,7 @@ export default function AnswerNodeEditor({
                       onValueChange={setTelnyxSttLanguageValue}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select language" />
+                        <SelectValue placeholder={tUi("Select language")} />
                       </SelectTrigger>
                       <SelectContent>
                         {telnyxSttLanguageOptions.map((opt) => (
@@ -1319,30 +1263,26 @@ export default function AnswerNodeEditor({
               )}
 
               <div>
-                <Label>Transcription Channels</Label>
+                <Label>{tUi("Transcription Channels")}</Label>
                 <Select value={telnyxSttTracks} onValueChange={setTelnyxSttTracks}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select channels" />
+                    <SelectValue placeholder={tUi("Select channels")} />
                   </SelectTrigger>
                   <SelectContent>
                     {TELNYX_STT_TRACK_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+                        {tUi(option.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Both uses the inbound and outbound tracks of the customer media stream.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Both uses the inbound and outbound tracks of the customer media stream.")}</p>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Interim Results</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Stream partial transcript deltas to Agent Desktop. Turn off to wait for final transcripts only.
-                  </p>
+                  <Label>{tUi("Interim Results")}</Label>
+                  <p className="text-xs text-muted-foreground">{tUi("Stream partial transcript deltas to Agent Desktop. Turn off to wait for final transcripts only.")}</p>
                 </div>
                 <Switch
                   checked={telnyxSttInterimResults}
@@ -1353,24 +1293,18 @@ export default function AnswerNodeEditor({
               </div>
 
               <div>
-                <Label className="flex items-center gap-2">
-                  Stream URL
-                  {streamUrlError && (
+                <Label className="flex items-center gap-2">{tUi("Stream URL")}{streamUrlError && (
                     <IconAlertTriangle className="h-4 w-4 text-destructive" />
                   )}
                 </Label>
                 <Input value={streamUrl} readOnly className="mt-1" />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Auto-configured WebSocket URL for Telnyx STT streaming.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Auto-configured WebSocket URL for Telnyx STT streaming.")}</p>
               </div>
             </>
           ) : (
             <>
               <div>
-                <Label className="flex items-center gap-2">
-                  Stream URL
-                  {streamUrlError && (
+                <Label className="flex items-center gap-2">{tUi("Stream URL")}{streamUrlError && (
                     <IconAlertTriangle className="h-4 w-4 text-destructive" />
                   )}
                 </Label>
@@ -1382,94 +1316,90 @@ export default function AnswerNodeEditor({
                     setStreamUrlError(validation.valid ? null : validation.error);
                   }}
                   availableVariables={availableVariables}
-                  placeholder="wss://www.example.com/websocket"
+                  placeholder={tUi("wss://www.example.com/websocket")}
                   className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  The destination WebSocket address where the stream is going to be delivered
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("The destination WebSocket address where the stream is going to be delivered")}</p>
               </div>
 
               {streamUrl && (
                 <>
                   <div>
-                    <Label>Stream Track</Label>
+                    <Label>{tUi("Stream Track")}</Label>
                     <Select value={streamTrack} onValueChange={setStreamTrack}>
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select track" />
+                        <SelectValue placeholder={tUi("Select track")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="inbound_track">Inbound Track</SelectItem>
-                        <SelectItem value="outbound_track">Outbound Track</SelectItem>
-                        <SelectItem value="both_tracks">Both Tracks</SelectItem>
+                        <SelectItem value="inbound_track">{tUi("Inbound Track")}</SelectItem>
+                        <SelectItem value="outbound_track">{tUi("Outbound Track")}</SelectItem>
+                        <SelectItem value="both_tracks">{tUi("Both Tracks")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label>Stream Codec</Label>
+                    <Label>{tUi("Stream Codec")}</Label>
                     <Select
                       value={streamCodec || "default"}
                       onValueChange={(value) => setStreamCodec(value === "default" ? "" : value)}
                     >
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select codec (optional)" />
+                        <SelectValue placeholder={tUi("Select codec (optional)")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="default">Default (from call)</SelectItem>
-                        <SelectItem value="PCMU">PCMU</SelectItem>
-                        <SelectItem value="PCMA">PCMA</SelectItem>
-                        <SelectItem value="G722">G722</SelectItem>
-                        <SelectItem value="OPUS">OPUS</SelectItem>
-                        <SelectItem value="AMR-WB">AMR-WB</SelectItem>
-                        <SelectItem value="L16">L16</SelectItem>
+                        <SelectItem value="default">{tUi("Default (from call)")}</SelectItem>
+                        <SelectItem value="PCMU">{tUi("PCMU")}</SelectItem>
+                        <SelectItem value="PCMA">{tUi("PCMA")}</SelectItem>
+                        <SelectItem value="G722">{tUi("G722")}</SelectItem>
+                        <SelectItem value="OPUS">{tUi("OPUS")}</SelectItem>
+                        <SelectItem value="AMR-WB">{tUi("AMR-WB")}</SelectItem>
+                        <SelectItem value="L16">{tUi("L16")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label>Bidirectional Stream Mode</Label>
+                    <Label>{tUi("Bidirectional Stream Mode")}</Label>
                     <Select
                       value={streamBidirectionalMode}
                       onValueChange={setStreamBidirectionalMode}
                     >
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select bidirectional mode" />
+                        <SelectValue placeholder={tUi("Select bidirectional mode")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="mp3">MP3</SelectItem>
-                        <SelectItem value="rtp">RTP</SelectItem>
+                        <SelectItem value="mp3">{tUi("MP3")}</SelectItem>
+                        <SelectItem value="rtp">{tUi("RTP")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Method used when sending audio back over the bidirectional stream.
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Method used when sending audio back over the bidirectional stream.")}</p>
                   </div>
 
                   {streamBidirectionalMode === "rtp" && (
                     <>
                       <div>
-                        <Label>Bidirectional RTP Codec</Label>
+                        <Label>{tUi("Bidirectional RTP Codec")}</Label>
                         <Select
                           value={streamBidirectionalCodec}
                           onValueChange={setStreamBidirectionalCodec}
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select RTP codec" />
+                            <SelectValue placeholder={tUi("Select RTP codec")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="PCMU">PCMU</SelectItem>
-                            <SelectItem value="PCMA">PCMA</SelectItem>
-                            <SelectItem value="G722">G722</SelectItem>
-                            <SelectItem value="OPUS">OPUS</SelectItem>
-                            <SelectItem value="AMR-WB">AMR-WB</SelectItem>
-                            <SelectItem value="L16">L16</SelectItem>
+                            <SelectItem value="PCMU">{tUi("PCMU")}</SelectItem>
+                            <SelectItem value="PCMA">{tUi("PCMA")}</SelectItem>
+                            <SelectItem value="G722">{tUi("G722")}</SelectItem>
+                            <SelectItem value="OPUS">{tUi("OPUS")}</SelectItem>
+                            <SelectItem value="AMR-WB">{tUi("AMR-WB")}</SelectItem>
+                            <SelectItem value="L16">{tUi("L16")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
                       <div>
-                        <Label>Bidirectional RTP Sampling Rate</Label>
+                        <Label>{tUi("Bidirectional RTP Sampling Rate")}</Label>
                         <Select
                           value={String(streamBidirectionalSamplingRate)}
                           onValueChange={(value) =>
@@ -1477,13 +1407,13 @@ export default function AnswerNodeEditor({
                           }
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select sampling rate" />
+                            <SelectValue placeholder={tUi("Select sampling rate")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="8000">8000 Hz</SelectItem>
-                            <SelectItem value="16000">16000 Hz</SelectItem>
-                            <SelectItem value="24000">24000 Hz</SelectItem>
-                            <SelectItem value="48000">48000 Hz</SelectItem>
+                            <SelectItem value="8000">{tUi("8000 Hz")}</SelectItem>
+                            <SelectItem value="16000">{tUi("16000 Hz")}</SelectItem>
+                            <SelectItem value="24000">{tUi("24000 Hz")}</SelectItem>
+                            <SelectItem value="48000">{tUi("48000 Hz")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1491,31 +1421,27 @@ export default function AnswerNodeEditor({
                   )}
 
                   <div>
-                    <Label>Bidirectional Stream Target Legs</Label>
+                    <Label>{tUi("Bidirectional Stream Target Legs")}</Label>
                     <Select
                       value={streamBidirectionalTargetLegs}
                       onValueChange={setStreamBidirectionalTargetLegs}
                     >
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select target legs" />
+                        <SelectValue placeholder={tUi("Select target legs")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="self">Self</SelectItem>
-                        <SelectItem value="opposite">Opposite</SelectItem>
-                        <SelectItem value="both">Both</SelectItem>
+                        <SelectItem value="self">{tUi("Self")}</SelectItem>
+                        <SelectItem value="opposite">{tUi("Opposite")}</SelectItem>
+                        <SelectItem value="both">{tUi("Both")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Call legs that should receive bidirectional stream audio.
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Call legs that should receive bidirectional stream audio.")}</p>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Establish Before Call Originate</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Establish the stream before originating a following outbound call.
-                      </p>
+                      <Label>{tUi("Establish Before Call Originate")}</Label>
+                      <p className="text-xs text-muted-foreground">{tUi("Establish the stream before originating a following outbound call.")}</p>
                     </div>
                     <Switch
                       checked={streamEstablishBeforeCallOriginate}
@@ -1542,9 +1468,7 @@ export default function AnswerNodeEditor({
                 transcriptionExpanded ? "rotate-90" : ""
               }`}
             />
-            <Label className="text-xs font-semibold cursor-pointer">
-              Transcription
-            </Label>
+            <Label className="text-xs font-semibold cursor-pointer">{tUi("Transcription")}</Label>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0">
@@ -1573,13 +1497,9 @@ export default function AnswerNodeEditor({
             <Label
               htmlFor="transcription_enabled"
               className="text-sm font-normal cursor-pointer"
-            >
-              Enable Transcription
-            </Label>
+            >{tUi("Enable Transcription")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2 mb-4">
-            Start real-time transcription when the call is answered
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2 mb-4">{tUi("Start real-time transcription when the call is answered")}</p>
 
           {transcriptionEnabled && (
             <TranscriptionNodeEditor

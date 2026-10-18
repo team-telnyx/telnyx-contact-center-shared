@@ -13,6 +13,7 @@ import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, plat
 import { effectiveAccess, publishAuthzChanged } from "@/lib/authz/effective.mjs";
 import { validateRoleAssignment, recordRoleAssignment } from "@/lib/authz/roles-store.mjs";
 import { withPermission } from "@/lib/authz/guard";
+import { resolveMobileAppBaseUrl } from "@/lib/mobile-app-setup.mjs";
 import { agentInScope, agentScopeSql, queueInScope, resolveScopeForKeys } from "@/lib/authz/scope.mjs";
 
 const sameRoleSet = (a = [], b = []) => a.length === b.length && a.every((key) => b.includes(key));
@@ -232,7 +233,7 @@ async function POST_handler(request, _context, authz) {
 
     // Send invite email if requested
     if (sendInvite && inviteToken) {
-      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+      const baseUrl = resolveMobileAppBaseUrl(process.env);
       const inviteUrl = `${baseUrl}/set-password/${inviteToken}`;
       try {
         const { sendUserInviteEmail } = await import("@/lib/email-notifications.js");

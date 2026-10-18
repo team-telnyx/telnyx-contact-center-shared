@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
@@ -61,6 +63,7 @@ export default function AiConversationMessagesTab({
   onMessagesLoaded,
   onSeek,
 }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([]);
   const messageRefs = useRef({});
@@ -240,7 +243,7 @@ export default function AiConversationMessagesTab({
           </div>
         )}
         {!loading && messages.length === 0 && (
-          <div className="text-sm text-muted-foreground">No messages</div>
+          <div className="text-sm text-muted-foreground">{tUi("No messages")}</div>
         )}
         {[...messages].reverse().map((m, reversedIdx) => {
           const originalIdx = messages.length - 1 - reversedIdx;
@@ -399,9 +402,7 @@ export default function AiConversationMessagesTab({
                           <div className="flex items-center gap-1 text-[9px] font-mono">
                             {m.metadata.transcription_duration_ms && (
                               <>
-                                <span className="px-1 py-0.5 rounded bg-red-500/10 text-red-600 border border-red-500/20">
-                                  STT:{m.metadata.transcription_duration_ms}ms
-                                </span>
+                                <span className="px-1 py-0.5 rounded bg-red-500/10 text-red-600 border border-red-500/20">{tUi("STT:")}{m.metadata.transcription_duration_ms}{tUi("ms")}</span>
                                 {(m.metadata.llm_first_token_duration_ms ||
                                   m.metadata.audio_first_token_duration_ms) && (
                                   <span className="text-muted-foreground">
@@ -412,10 +413,7 @@ export default function AiConversationMessagesTab({
                             )}
                             {m.metadata.llm_first_token_duration_ms && (
                               <>
-                                <span className="px-1 py-0.5 rounded bg-green-500/10 text-green-600 border border-green-500/20">
-                                  LLM:{m.metadata.llm_first_token_duration_ms}
-                                  ms
-                                </span>
+                                <span className="px-1 py-0.5 rounded bg-green-500/10 text-green-600 border border-green-500/20">{tUi("LLM:")}{m.metadata.llm_first_token_duration_ms}{tUi("ms")}</span>
                                 {m.metadata.audio_first_token_duration_ms && (
                                   <span className="text-muted-foreground">
                                     +
@@ -425,20 +423,13 @@ export default function AiConversationMessagesTab({
                             )}
                             {m.metadata.audio_first_token_duration_ms && (
                               <>
-                                <span className="px-1 py-0.5 rounded bg-orange-500/10 text-orange-600 border border-orange-500/20">
-                                  TTS:{m.metadata.audio_first_token_duration_ms}
-                                  ms
-                                </span>
+                                <span className="px-1 py-0.5 rounded bg-orange-500/10 text-orange-600 border border-orange-500/20">{tUi("TTS:")}{m.metadata.audio_first_token_duration_ms}{tUi("ms")}</span>
                               </>
                             )}
                             {m.metadata.end_user_perceived_latency_ms && (
                               <>
                                 <span className="text-muted-foreground">=</span>
-                                <span className="px-1 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/20 font-semibold">
-                                  TURN:
-                                  {m.metadata.end_user_perceived_latency_ms}
-                                  ms
-                                </span>
+                                <span className="px-1 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/20 font-semibold">{tUi("TURN:")}{m.metadata.end_user_perceived_latency_ms}{tUi("ms")}</span>
                               </>
                             )}
                           </div>

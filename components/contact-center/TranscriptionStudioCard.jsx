@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -157,6 +159,7 @@ export default function TranscriptionStudioCard({
   playbackPlaying = false,
   onSeekRecording = null,
 }) {
+  const tUi = useUiText();
   const [model, setModel] = useState(
     transcriptionDetails?.model && TRANSCRIPTION_MODELS.some((m) => m.value === transcriptionDetails.model)
       ? transcriptionDetails.model
@@ -238,11 +241,11 @@ export default function TranscriptionStudioCard({
               <IconWand className="h-5 w-5" />
             </span>
             <div>
-              <div className="text-sm font-semibold leading-tight">Transcription Studio</div>
+              <div className="text-sm font-semibold leading-tight">{tUi("Transcription Studio")}</div>
               <div className="text-xs text-muted-foreground">
                 {hasTranscript
-                  ? "Transcript ready — open the conversation view or re-run with different settings"
-                  : "AI transcription with speaker diarization and multilingual support"}
+                  ? tUi("Transcript ready — open the conversation view or re-run with different settings")
+                  : tUi("AI transcription with speaker diarization and multilingual support")}
               </div>
             </div>
           </div>
@@ -252,10 +255,10 @@ export default function TranscriptionStudioCard({
         <div className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <div className="space-y-3">
             <div>
-              <Label className="mb-1.5 text-xs uppercase tracking-wide text-muted-foreground">Model</Label>
+              <Label className="mb-1.5 text-xs uppercase tracking-wide text-muted-foreground">{tUi("Model")}</Label>
               <Select value={model} onValueChange={setModel}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select model" />
+                  <SelectValue placeholder={tUi("Select model")} />
                 </SelectTrigger>
                 <SelectContent>
                   {TRANSCRIPTION_MODELS.map((item) => (
@@ -263,33 +266,29 @@ export default function TranscriptionStudioCard({
                       <div className="flex items-center gap-2">
                         <span>{item.label}</span>
                         {item.recommended ? (
-                          <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 px-1.5 py-0 text-[10px] text-violet-700 dark:text-violet-300">
-                            Recommended
-                          </Badge>
+                          <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 px-1.5 py-0 text-[10px] text-violet-700 dark:text-violet-300">{tUi("Recommended")}</Badge>
                         ) : null}
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-xs text-muted-foreground">{modelMeta.description}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{tUi(modelMeta.description)}</p>
             </div>
             <div>
-              <Label className="mb-1.5 text-xs uppercase tracking-wide text-muted-foreground">Language</Label>
+              <Label className="mb-1.5 text-xs uppercase tracking-wide text-muted-foreground">{tUi("Language")}</Label>
               <Combobox
                 options={languageOptions}
                 value={effectiveLanguage}
                 onChange={(value) => setLanguage(value || "auto")}
-                placeholder="Select language"
+                placeholder={tUi("Select language")}
                 triggerClassName="w-full"
               />
             </div>
           </div>
 
           <div>
-            <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">
-              Nova 3 options
-            </Label>
+            <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">{tUi("Nova 3 options")}</Label>
             <div className="grid gap-2 sm:grid-cols-2">
               {NOVA3_OPTION_LABELS.map(([key, label, hint]) => (
                 <label
@@ -301,8 +300,8 @@ export default function TranscriptionStudioCard({
                   }`}
                 >
                   <span className="min-w-0">
-                    <span className="block text-xs font-medium">{label}</span>
-                    <span className="block truncate text-[10px] text-muted-foreground">{hint}</span>
+                    <span className="block text-xs font-medium">{tUi(label)}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">{tUi(hint)}</span>
                   </span>
                   <Switch
                     checked={isNova3 ? Boolean(options[key]) : false}
@@ -313,9 +312,7 @@ export default function TranscriptionStudioCard({
               ))}
             </div>
             {!isNova3 ? (
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                Speaker diarization and formatting options are available with Deepgram Nova 3.
-              </p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">{tUi("Speaker diarization and formatting options are available with Deepgram Nova 3.")}</p>
             ) : null}
           </div>
         </div>
@@ -331,13 +328,11 @@ export default function TranscriptionStudioCard({
             >
               {isTranscribing ? (
                 <>
-                  <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Transcribing…
-                </>
+                  <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />{tUi("Transcribing…")}</>
               ) : (
                 <>
                   <IconSparkles className="mr-2 h-4 w-4" />
-                  {hasTranscript ? "Re-transcribe" : "Transcribe Recording"}
+                  {hasTranscript ? tUi("Re-transcribe") : tUi("Transcribe Recording")}
                 </>
               )}
             </Button>
@@ -348,18 +343,16 @@ export default function TranscriptionStudioCard({
                 className="rounded-xl px-5"
                 data-testid="view-conversation-button"
               >
-                <IconMessages className="mr-2 h-4 w-4" />
-                View Conversation
-              </Button>
+                <IconMessages className="mr-2 h-4 w-4" />{tUi("View Conversation")}</Button>
             ) : null}
           </div>
 
           {hasTranscript ? (
             <div className="flex flex-wrap items-center gap-1.5" data-testid="transcription-stats">
-              <StatChip icon={IconFileText} label="Model" value={getTranscriptionModel(result.details?.model || model).label} />
+              <StatChip icon={IconFileText} label={tUi("Model")} value={getTranscriptionModel(result.details?.model || model).label} />
               <StatChip
                 icon={IconLanguage}
-                label="Language"
+                label={tUi("Language")}
                 value={
                   result.details?.detected_language
                     ? `${flagForLocale(result.details.detected_language)} ${prettyLanguageName(result.details.detected_language)}`
@@ -368,13 +361,12 @@ export default function TranscriptionStudioCard({
                       : null
                 }
               />
-              <StatChip icon={IconUsersGroup} label="Speakers" value={speakerCount > 0 ? speakerCount : null} />
-              <StatChip icon={IconSparkles} label="Confidence" value={confidenceLabel} />
-              <StatChip icon={IconClipboard} label="Audio" value={formatSeconds(result.details?.duration)} />
+              <StatChip icon={IconUsersGroup} label={tUi("Speakers")} value={speakerCount > 0 ? speakerCount : null} />
+              <StatChip icon={IconSparkles} label={tUi("Confidence")} value={confidenceLabel} />
+              <StatChip icon={IconClipboard} label={tUi("Audio")} value={formatSeconds(result.details?.duration)} />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              Runs on Telnyx AI · verbose JSON with timestamps{isNova3 && options.diarize ? " · speaker turns" : ""}
+            <p className="text-xs text-muted-foreground">{tUi("Runs on Telnyx AI · verbose JSON with timestamps")}{isNova3 && options.diarize ? tUi(" · speaker turns") : ""}
             </p>
           )}
         </div>
@@ -383,9 +375,7 @@ export default function TranscriptionStudioCard({
         {hasTranscript && result.summary ? (
           <div className="border-t border-border/60 px-5 py-4">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <IconClipboard className="h-3.5 w-3.5" />
-              Call Summary
-            </div>
+              <IconClipboard className="h-3.5 w-3.5" />{tUi("Call Summary")}</div>
             <p className="mt-1.5 line-clamp-3 text-sm text-muted-foreground">{result.summary}</p>
           </div>
         ) : null}

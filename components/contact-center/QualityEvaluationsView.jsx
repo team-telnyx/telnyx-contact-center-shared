@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { InteractionChannel } from "./InteractionChannel";
 import { channelDefinition } from "@/lib/acd/channel-registry.mjs";
@@ -73,15 +75,17 @@ const STATUS_BADGES = {
 };
 
 function EvaluationStatusBadge({ status }) {
+  const tUi = useUiText();
   const config = STATUS_BADGES[status || "not_evaluated"] || STATUS_BADGES.not_evaluated;
   return (
     <Badge variant="outline" className={config.className}>
-      {config.label}
+      {tUi(config.label)}
     </Badge>
   );
 }
 
 function MetricTile({ icon: Icon, label, value, detail, progress = 0, tone = "slate" }) {
+  const tUi = useUiText();
   const tones = {
     slate: "from-slate-500/15 to-zinc-500/5 text-slate-700 dark:text-slate-200",
     emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
@@ -95,9 +99,7 @@ function MetricTile({ icon: Icon, label, value, detail, progress = 0, tone = "sl
           <span className={`rounded-2xl bg-gradient-to-br p-3 ${tones[tone] || tones.slate}`}>
             <Icon className="h-5 w-5" />
           </span>
-          <Badge variant="outline" className="bg-background/70 text-[11px]">
-            Range
-          </Badge>
+          <Badge variant="outline" className="bg-background/70 text-[11px]">{tUi("Range")}</Badge>
         </div>
         <div className="mt-5 text-3xl font-semibold tracking-tight">{value}</div>
         <div className="text-sm font-medium text-muted-foreground">{label}</div>
@@ -114,6 +116,7 @@ function MetricTile({ icon: Icon, label, value, detail, progress = 0, tone = "sl
 }
 
 export default function QualityEvaluationsView({ from, to, refreshNonce = 0,channel="all" }) {
+  const tUi = useUiText();
   const router = useRouter();
   const [rows, setRows] = useState([]);
   const [metrics, setMetrics] = useState(null);
@@ -236,33 +239,33 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricTile
           icon={IconMicrophone}
-          label="Conversations"
+          label={tUi("Conversations")}
           value={metrics?.total ?? 0}
-          detail={`${metrics?.recorded ?? 0} with recording`}
+          detail={tUi("{value0} with recording", { value0: metrics?.recorded ?? 0 })}
           progress={metrics?.total > 0 ? Math.round(((metrics?.recorded || 0) / metrics.total) * 100) : 0}
           tone="sky"
         />
         <MetricTile
           icon={IconChecklist}
-          label="Evaluated"
+          label={tUi("Evaluated")}
           value={metrics?.evaluated ?? 0}
-          detail={`${metrics?.aiDrafts ?? 0} AI drafts to review`}
+          detail={tUi("{value0} AI drafts to review", { value0: metrics?.aiDrafts ?? 0 })}
           progress={metrics?.total > 0 ? Math.round(((metrics?.evaluated || 0) / metrics.total) * 100) : 0}
           tone="violet"
         />
         <MetricTile
           icon={IconCircleCheck}
-          label="Finalized"
+          label={tUi("Finalized")}
           value={metrics?.finalized ?? 0}
-          detail="Closed evaluations"
+          detail={tUi("Closed evaluations")}
           progress={metrics?.evaluated > 0 ? Math.round(((metrics?.finalized || 0) / metrics.evaluated) * 100) : 0}
           tone="slate"
         />
         <MetricTile
           icon={IconGauge}
-          label="Average score"
+          label={tUi("Average score")}
           value={metrics?.avgScorePercent != null ? `${metrics.avgScorePercent}%` : "-"}
-          detail="Reviewed and final"
+          detail={tUi("Reviewed and final")}
           progress={Math.round(Number(metrics?.avgScorePercent || 0))}
           tone="emerald"
         />
@@ -272,11 +275,11 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
         <CardContent className="space-y-4 p-5">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Queue</div>
+              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{tUi("Queue")}</div>
               <Select value={queueFilter} onValueChange={setQueueFilter}>
-                <SelectTrigger className="w-[170px]"><SelectValue placeholder="All queues" /></SelectTrigger>
+                <SelectTrigger className="w-[170px]"><SelectValue placeholder={tUi("All queues")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All queues</SelectItem>
+                  <SelectItem value="all">{tUi("All queues")}</SelectItem>
                   {filterOptions.queues.map((queue) => (
                     <SelectItem key={queue} value={queue}>{queue}</SelectItem>
                   ))}
@@ -284,11 +287,11 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
               </Select>
             </div>
             <div>
-              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Agent</div>
+              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{tUi("Agent")}</div>
               <Select value={agentFilter} onValueChange={setAgentFilter}>
-                <SelectTrigger className="w-[180px]"><SelectValue placeholder="All agents" /></SelectTrigger>
+                <SelectTrigger className="w-[180px]"><SelectValue placeholder={tUi("All agents")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All agents</SelectItem>
+                  <SelectItem value="all">{tUi("All agents")}</SelectItem>
                   {filterOptions.agents.map((agent) => (
                     <SelectItem key={agent.username} value={agent.username}>{agent.name}</SelectItem>
                   ))}
@@ -296,17 +299,17 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
               </Select>
             </div>
             <div>
-              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Status</div>
+              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{tUi("Status")}</div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[170px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                <SelectTrigger className="w-[170px]"><SelectValue placeholder={tUi("All statuses")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="not_evaluated">Not evaluated</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="ai_draft">AI draft</SelectItem>
-                  <SelectItem value="reviewed">Reviewed</SelectItem>
-                  <SelectItem value="final">Final</SelectItem>
-                  <SelectItem value="disputed">Disputed</SelectItem>
+                  <SelectItem value="all">{tUi("All statuses")}</SelectItem>
+                  <SelectItem value="not_evaluated">{tUi("Not evaluated")}</SelectItem>
+                  <SelectItem value="draft">{tUi("Draft")}</SelectItem>
+                  <SelectItem value="ai_draft">{tUi("AI draft")}</SelectItem>
+                  <SelectItem value="reviewed">{tUi("Reviewed")}</SelectItem>
+                  <SelectItem value="final">{tUi("Final")}</SelectItem>
+                  <SelectItem value="disputed">{tUi("Disputed")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -318,7 +321,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
               onClick={() => setRecordedOnly((value) => !value)}
             >
               <IconMicrophone className="mr-2 h-4 w-4" />
-              {recordedOnly ? "Recorded only" : "All interactions"}
+              {recordedOnly ? tUi("Recorded only") : tUi("All interactions")}
             </Button>
           </div>
 
@@ -329,22 +332,20 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
               <Skeleton className="h-8 w-2/3" />
             </div>
           ) : rows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No conversations match the current filters.
-            </p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{tUi("No conversations match the current filters.")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Channel</TableHead><TableHead>Closed</TableHead>
-                  <TableHead>Queue</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Voice talk</TableHead>
-                  <TableHead>Evidence</TableHead>
-                  <TableHead>Evaluation</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{tUi("Channel")}</TableHead><TableHead>{tUi("Closed")}</TableHead>
+                  <TableHead>{tUi("Queue")}</TableHead>
+                  <TableHead>{tUi("Agent")}</TableHead>
+                  <TableHead>{tUi("Customer")}</TableHead>
+                  <TableHead>{tUi("Voice talk")}</TableHead>
+                  <TableHead>{tUi("Evidence")}</TableHead>
+                  <TableHead>{tUi("Evaluation")}</TableHead>
+                  <TableHead>{tUi("Score")}</TableHead>
+                  <TableHead className="text-right">{tUi("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -362,13 +363,13 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
                       </TableCell>
                       <TableCell className="text-sm">{formatDuration(row.talk_time_seconds)}</TableCell>
                       <TableCell>
-                        {channelDefinition(row.interaction_type).capabilities.conversation ? <Badge variant="outline">Conversation</Badge> : hasRecording ? (
+                        {channelDefinition(row.interaction_type).capabilities.conversation ? <Badge variant="outline">{tUi("Conversation")}</Badge> : hasRecording ? (
                           <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
                             <IconMicrophone className="mr-1 h-3 w-3" />
-                            {row.has_transcript ? "Rec + transcript" : "Recorded"}
+                            {row.has_transcript ? tUi("Rec + transcript") : tUi("Recorded")}
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-muted-foreground">None</Badge>
+                          <Badge variant="outline" className="text-muted-foreground">{tUi("None")}</Badge>
                         )}
                       </TableCell>
                       <TableCell>
@@ -376,7 +377,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
                       </TableCell>
                       <TableCell className="text-sm">
                         {row.evaluation_score_percent != null
-                          ? `${Number(row.evaluation_score_percent)}%`
+                          ? tUi("{value0}%", { value0: Number(row.evaluation_score_percent) })
                           : "-"}
                       </TableCell>
                       <TableCell className="text-right">
@@ -387,9 +388,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
                             size="sm"
                             onClick={() => router.push(`/supervisor/quality/evaluations/${row.evaluation_id}`)}
                           >
-                            <IconClipboardCheck className="mr-2 h-4 w-4" />
-                            Open
-                          </Button>
+                            <IconClipboardCheck className="mr-2 h-4 w-4" />{tUi("Open", undefined, "action")}</Button>
                         ) : (
                           <Button
                             type="button"
@@ -397,9 +396,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
                             size="sm"
                             onClick={() => openFormPicker(row)}
                           >
-                            <IconRobot className="mr-2 h-4 w-4" />
-                            Evaluate
-                          </Button>
+                            <IconRobot className="mr-2 h-4 w-4" />{tUi("Evaluate")}</Button>
                         )}
                       </TableCell>
                     </TableRow>
@@ -410,20 +407,18 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-4" data-testid="quality-evaluations-pagination">
-            <div className="text-sm font-medium text-foreground">
-              Page {page} of {totalPages}
+            <div className="text-sm font-medium text-foreground">{tUi("Page ")}{page}{tUi(" of ")}{totalPages}
               <span className="ml-2 font-normal text-muted-foreground">
-                · {count.toLocaleString()} conversations
-              </span>
+                · {count.toLocaleString(tUi.locale)}{tUi(" conversations")}</span>
             </div>
             <div className="flex items-center gap-3">
               <Button size="icon" variant="outline" onClick={() => setPage(1)} disabled={page === 1} className="rounded-full"><IconChevronsLeft className="h-4 w-4" /></Button>
               <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-full"><IconChevronLeft className="h-4 w-4" /></Button>
               <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-full"><IconChevronRight className="h-4 w-4" /></Button>
               <Button size="icon" variant="outline" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded-full"><IconChevronsRight className="h-4 w-4" /></Button>
-              <span className="text-sm font-medium text-foreground ml-2">Rows per page</span>
+              <span className="text-sm font-medium text-foreground ml-2">{tUi("Rows per page")}</span>
               <Select value={String(pageSize)} onValueChange={(value) => { setPage(1); setPageSize(Number(value)); }}>
-                <SelectTrigger className="w-[110px] rounded-full px-4"><SelectValue placeholder="Rows" /></SelectTrigger>
+                <SelectTrigger className="w-[110px] rounded-full px-4"><SelectValue placeholder={tUi("Rows")} /></SelectTrigger>
                 <SelectContent>{[10, 25, 50, 100].map((size) => (<SelectItem key={size} value={String(size)}>{size}</SelectItem>))}</SelectContent>
               </Select>
             </div>
@@ -434,16 +429,13 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
       <Dialog open={Boolean(pickerInteraction)} onOpenChange={(open) => !open && setPickerInteraction(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Start evaluation</DialogTitle>
-            <DialogDescription>
-              Choose the quality form used to score this conversation. You can fill it manually or
-              let the AI assistant prepare a draft.
-            </DialogDescription>
+            <DialogTitle>{tUi("Start evaluation")}</DialogTitle>
+            <DialogDescription>{tUi("Choose the quality form used to score this conversation. You can fill it manually or let the AI assistant prepare a draft.")}</DialogDescription>
           </DialogHeader>
           <div>
-            <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Quality form</div>
+            <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{tUi("Quality form")}</div>
             <Select value={selectedFormId} onValueChange={setSelectedFormId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select a form" /></SelectTrigger>
+              <SelectTrigger className="w-full"><SelectValue placeholder={tUi("Select a form")} /></SelectTrigger>
               <SelectContent>
                 {forms.map((form) => (
                   <SelectItem key={form.id} value={form.id}>
@@ -454,11 +446,9 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0,chan
             </Select>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPickerInteraction(null)}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setPickerInteraction(null)}>{tUi("Cancel")}</Button>
             <Can permission="quality_evaluations:create"><Button type="button" disabled={!selectedFormId || creating} onClick={startEvaluation}>
-              {creating ? "Starting…" : "Start evaluation"}
+              {creating ? tUi("Starting…") : tUi("Start evaluation")}
             </Button></Can>
           </DialogFooter>
         </DialogContent>

@@ -47,19 +47,22 @@ test("re-running the upsert against an EXISTING workflow never touches llm_model
   assert.doesNotMatch(updateMatch[0], /llm_confidence_threshold/);
 });
 
-test("re-running the upsert narrowly migrates ONLY a known-legacy bare llm_model, never a different/deliberate value (Codex review)", async () => {
+test("re-running the upsert narrowly clears ONLY a known-legacy bare llm_model, never a different/deliberate value (Codex review)", async () => {
   // A workflow row created back when this seed's own default was still the
-  // bare (invalid, provider-unprefixed) "gpt-4o-mini" — before it was
-  // corrected to "openai/gpt-4o-mini" — would otherwise stay stuck passing
+  // bare (invalid, provider-unprefixed) "gpt-4o-mini" would otherwise stay
+  // stuck passing
   // that invalid id to Telnyx forever, since the test above confirms the
   // update branch never re-applies llm_model. Fix must be narrowly scoped:
   // only auto-correct the exact known-bad legacy value, never anything else
   // (an admin's deliberate model-dropdown override must survive re-runs).
   const source = await read("../scripts/upsert-medical-transport-intake-workflow.mjs");
 
-  assert.match(source, /const LEGACY_LLM_MODEL_MIGRATIONS = \{\s*\n\s*"gpt-4o-mini": "openai\/gpt-4o-mini",\s*\n\s*\};/);
-  assert.match(source, /const migratedModel = LEGACY_LLM_MODEL_MIGRATIONS\[workflow\.llm_model\];/);
-  assert.match(source, /if \(migratedModel\) \{/);
+  // The legacy value is cleared (inherit AI Copilot), never replaced by
+  // another model chosen in code.
+  assert.match(source, /const LEGACY_LLM_MODELS = new Set\(\["gpt-4o-mini"\]\);/);
+  assert.match(source, /if \(LEGACY_LLM_MODELS\.has\(workflow\.llm_model\)\) \{/);
+  assert.match(source, /UPDATE aa_workflows SET llm_model = NULL, updated_at = NOW\(\) WHERE id = \$1/);
+  assert.doesNotMatch(source, /"openai\/gpt-4o-mini"/);
   // The initial SELECTs must fetch llm_model so the migration has something
   // to check against.
   assert.match(source, /SELECT id, name, llm_model FROM aa_workflows WHERE id = \$1/);

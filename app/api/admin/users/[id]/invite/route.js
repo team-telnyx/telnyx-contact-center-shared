@@ -3,6 +3,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { randomBytes } from "crypto";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 import { withPermission } from "@/lib/authz/guard";
+import { resolveMobileAppBaseUrl } from "@/lib/mobile-app-setup.mjs";
 
 
 async function POST_handler(request, { params }, authz) {
@@ -44,7 +45,7 @@ async function POST_handler(request, { params }, authz) {
   );
 
   // Send invite email
-  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const baseUrl = resolveMobileAppBaseUrl(process.env);
   const inviteUrl = `${baseUrl}/set-password/${inviteToken}`;
 
   try {

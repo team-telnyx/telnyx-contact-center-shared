@@ -1,6 +1,10 @@
 // Central list of available Assistant tool types for the UI
 // This is intentionally simple; per-type field editors live in the UI.
 export const ASSISTANT_TOOL_TYPES = [
+  { type: "vision", label: "Vision", singleton: true, description: "Analyze recent camera and screen-share frames during a live conversation" },
+  { type: "function", label: "Function", singleton: false },
+  { type: "pay", label: "Payment", singleton: true },
+  { type: "update_dynamic_variables", label: "Update Dynamic Variables", singleton: true },
   { type: "webhook", label: "Webhook", singleton: false },
   { type: "retrieval", label: "Retrieval", singleton: true },
   { type: "handoff", label: "Handoff", singleton: true },

@@ -23,7 +23,7 @@ test("legacy revisions parse with the video channel disabled and the public proj
   assert.deepEqual(enabled.channels.video.waiting, { mode: "loop", sound: true, items: [{ source: "url", url: "https://cdn.example.com/ad.mp4", mediaId: "", label: "Promo" }] });
   assert.equal("defaultLayout" in enabled.channels.video, false);
   const pub = publicWidgetConfig(enabled).channels.video;
-  assert.deepEqual(pub, { enabled: true, camera: "on", scenes: { available: ["remote", "split", "pip", "spotlight"], default: "split", pipThumbnail: 30 }, modal: { enabled: true, size: "medium" },
+  assert.deepEqual(pub, { ai: { enabled: false, startsWithAi: false, avatar: enabled.channels.video.ai.avatar, vision: enabled.channels.video.ai.vision, afterAgentJoins: "muted" }, enabled: true, camera: "on", scenes: { available: ["remote", "split", "pip", "spotlight"], default: "split", pipThumbnail: 30 }, modal: { enabled: true, size: "medium" },
     sizing: { mode: "widget", width: 480, height: 640 }, controls: { position: "bottom", overlay: { opacity: 35, size: "regular" } }, notices: { enabled: true, seconds: 3 }, allowScreenShare: false, recording: true,
     waiting: { mode: "loop", sound: true, items: [{ url: "https://cdn.example.com/ad.mp4", label: "Promo" }] } });
   assert.equal("routing" in pub, false, "queue ids never reach the embedding page");

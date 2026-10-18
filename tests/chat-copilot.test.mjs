@@ -31,9 +31,11 @@ async function fixture(){
   return {work,offer,agentId,identity:{workItemId:work.id,agentId},input:{workItemId:work.id,agentId,question:"How can I help?",requestId:randomUUID()}};
 }
 
-test("settings require a model and reject more than five buckets instead of silently truncating",()=>{
+test("an empty channel model inherits the platform default; more than five buckets are rejected instead of silently truncated",()=>{
   assert.equal(parseChatCopilotSettings(DEFAULT_CHAT_COPILOT_SETTINGS).bucketIds.length,0);
-  assert.throws(()=>parseChatCopilotSettings({model:"",bucketIds:[]}),/model/);
+  assert.equal(DEFAULT_CHAT_COPILOT_SETTINGS.model,"","no model is defined in code");
+  assert.equal(parseChatCopilotSettings({model:"",bucketIds:[]}).model,"");
+  assert.equal(parseChatCopilotSettings({bucketIds:[]}).model,"");
   assert.throws(()=>parseChatCopilotSettings({model:"test",bucketIds:["1","2","3","4","5","6"]}),/5/);
   assert.deepEqual(parseChatCopilotSettings({model:"test",bucketIds:["one","one"]}).bucketIds,["one"]);
 });
@@ -54,10 +56,15 @@ test("a saved token budget is loaded and used by the next Copilot generation",as
     assert.equal(used,12000);
   }finally{await pool.query("UPDATE app_settings SET cc_settings=$1::jsonb WHERE id='default'",[JSON.stringify(previous)]);}
 });
-test("request uses server-selected model and retrieval sources and bounds conversation context",()=>{
+test("request uses server-selected model and retrieval sources and bounds conversation context",async()=>{
   const settings={model:"test",bucketIds:["one","two","three","four","five"]};
   const result=buildCopilotRequest({settings,question:"Help",handoff:{summary:"Summary"},messages:Array.from({length:60},()=>({sender_role:"customer",body:"x".repeat(20000)}))});
-  assert.equal(result.model,"test");assert.deepEqual(result.tools,[{type:"retrieval",retrieval:{bucket_ids:settings.bucketIds,max_num_results:5}}]);
+  assert.equal("model" in result,false,"the model is chosen by the AI operation runtime");
+  const { prepareAiOperation } = await import("../lib/ai-operations/runtime.mjs");
+  // Channel model (override) > AI Copilot card > platform default.
+  assert.equal((await prepareAiOperation("reply-suggestions",result,{preferredModel:"test",settings:{ai_default_model:"platform/model"}})).model,"test");
+  assert.equal((await prepareAiOperation("reply-suggestions",result,{settings:{ai_default_model:"platform/model",ai_operations:{"reply-suggestions":{model:"card/model",instructions:""}}}})).model,"card/model");
+  assert.equal((await prepareAiOperation("reply-suggestions",result,{settings:{ai_default_model:"platform/model"}})).model,"platform/model");assert.deepEqual(result.tools,[{type:"retrieval",retrieval:{bucket_ids:settings.bucketIds,max_num_results:5}}]);
   const context=JSON.parse(result.messages[1].content);assert.equal(context.question,"Help");assert(context.conversation.reduce((n,m)=>n+m.text.length,0)<=24000);
   assert.equal(buildCopilotRequest({settings:{...settings,bucketIds:[]},question:"Help",messages:[]}).tools,undefined);
 });

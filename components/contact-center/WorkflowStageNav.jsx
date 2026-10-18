@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +14,7 @@ import useWorkflowStore from "@/lib/stores/workflow-store";
  * Example: "Call Opening (1/3)" with navigation arrows.
  */
 export function WorkflowStageNav() {
+  const tUi = useUiText();
   const {
     workflowName,
     stages,
@@ -49,7 +52,7 @@ export function WorkflowStageNav() {
       {/* Workflow Name */}
       <div className="flex-shrink-0">
         <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/50">
-          {workflowName || "Workflow"}
+          {workflowName || tUi("Workflow")}
         </Badge>
       </div>
 
@@ -68,7 +71,7 @@ export function WorkflowStageNav() {
         {/* Stage Indicator */}
         <div className="flex-1 flex items-center justify-center gap-2">
           <span className="font-semibold text-foreground">
-            {currentStage?.name || "Loading..."}
+            {currentStage?.name || tUi("Loading...")}
           </span>
           <span className="text-muted-foreground">
             ({currentStageIndex + 1}/{totalStages})
@@ -116,7 +119,7 @@ export function WorkflowStageNav() {
                 ${isCurrent ? "ring-2 ring-purple-500 ring-offset-2 ring-offset-background" : ""}
                 ${isComplete ? "bg-green-500 text-white" : "bg-muted hover:bg-muted/80"}
               `}
-              title={`${stage.name} (${completion.completed}/${completion.total})`}
+              title={tUi("{value0} ({value1}/{value2})", { value0: stage.name, value1: completion.completed, value2: completion.total })}
             >
               {isComplete ? (
                 <CheckCircle className="h-3.5 w-3.5" />

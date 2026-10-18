@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo, useState } from "react";
 import { CheckCircle, Clock, DatabaseZap, Loader2, X } from "lucide-react";
@@ -66,6 +68,7 @@ function sourceLabel(status) {
  * normal automatic passes, so it is manual-only as well.
  */
 export default function TransportMcpSubmitControl() {
+  const tUi = useUiText();
   const session = useWorkflowStore((state) => state.session);
   const stages = useWorkflowStore((state) => state.stages);
   const itemStatuses = useWorkflowStore((state) => state.itemStatuses);
@@ -246,14 +249,14 @@ export default function TransportMcpSubmitControl() {
         onClick={() => setReviewOpen(true)}
         title={
           alreadySubmitted
-            ? "This new transport request has already been submitted"
+            ? tUi("This new transport request has already been submitted")
             : readiness.ready
-              ? "Review the gathered fields before creating the transport"
-              : `Waiting for: ${readiness.missing.join(", ")}`
+              ? tUi("Review the gathered fields before creating the transport")
+              : tUi("Waiting for: {value0}", { value0: readiness.missing.join(", ") })
         }
       >
         {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : alreadySubmitted ? <CheckCircle className="h-3.5 w-3.5" /> : <DatabaseZap className="h-3.5 w-3.5" />}
-        {alreadySubmitted ? "Transport submitted" : "Submit transport"}
+        {alreadySubmitted ? tUi("Transport submitted") : tUi("Submit transport")}
       </Button>
 
       {alreadySubmitted && (
@@ -264,11 +267,9 @@ export default function TransportMcpSubmitControl() {
           className="h-8 gap-1.5 ml-2"
           disabled={checkingStatus}
           onClick={checkStatus}
-          title="Check this transport's current status and ETA"
+          title={tUi("Check this transport's current status and ETA")}
         >
-          {checkingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
-          Check ETA
-        </Button>
+          {checkingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}{tUi("Check ETA")}</Button>
       )}
 
       {reviewOpen && (
@@ -284,12 +285,10 @@ export default function TransportMcpSubmitControl() {
           <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
               <div>
-                <h2 id="transport-submit-title" className="text-base font-semibold">Confirm new transport request</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Review the information gathered during this interaction. Confirming will call create_transport and create a new transport request.
-                </p>
+                <h2 id="transport-submit-title" className="text-base font-semibold">{tUi("Confirm new transport request")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{tUi("Review the information gathered during this interaction. Confirming will call create_transport and create a new transport request.")}</p>
               </div>
-              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={submitting} onClick={() => setReviewOpen(false)} aria-label="Close transport confirmation">
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={submitting} onClick={() => setReviewOpen(false)} aria-label={tUi("Close transport confirmation")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -303,7 +302,7 @@ export default function TransportMcpSubmitControl() {
                       <div className="truncate text-[11px] text-muted-foreground">{field.slotName}</div>
                     </div>
                     <div className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="break-words text-right font-medium">{formatSlotDisplay(field.value, field.slotType)}</span>
+                      <span className="break-words text-right font-medium">{formatSlotDisplay(field.value, field.slotType, tUi)}</span>
                       {field.source ? <Badge variant="outline" className="shrink-0 text-[10px]">{field.source}</Badge> : null}
                     </div>
                   </div>
@@ -312,11 +311,9 @@ export default function TransportMcpSubmitControl() {
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t px-5 py-4">
-              <Button type="button" variant="outline" disabled={submitting} onClick={() => setReviewOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" disabled={submitting} onClick={() => setReviewOpen(false)}>{tUi("Cancel")}</Button>
               <Button type="button" disabled={!readiness.ready || submitting} onClick={confirmSubmit} className="gap-1.5">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
-                Confirm & submit new transport
-              </Button>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}{tUi("Confirm & submit new transport")}</Button>
             </div>
           </div>
         </div>

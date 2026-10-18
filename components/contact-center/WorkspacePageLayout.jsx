@@ -2,6 +2,7 @@
 
 import { IconHeadset, IconShieldCheck, IconSparkles } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
 export const workspacePageShellClass =
   "h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 overflow-hidden bg-[radial-gradient(circle_at_top_left,var(--workspace-shell-glow-primary,rgba(14,165,233,0.14)),transparent_28%),radial-gradient(circle_at_85%_15%,var(--workspace-shell-glow-secondary,rgba(113,113,122,0.14)),transparent_26%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted))/0.55)]";
@@ -67,11 +68,13 @@ export function WorkspacePageHeader({
   title,
   badges,
   actions,
+  actionsClassName,
   variant = "supervisor",
   label,
   icon: IconOverride,
   iconClassName,
 }) {
+  const tUi = useUiText();
   const config = variantConfig(variant);
   const Icon = IconOverride || config.Icon;
   return (
@@ -80,14 +83,14 @@ export function WorkspacePageHeader({
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             <Icon className={cn("h-4 w-4", iconClassName || config.iconClassName)} />
-            {label || config.label}
+            {tUi(label || config.label)}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             {badges}
           </div>
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className={cn("flex flex-wrap items-center gap-2", actionsClassName)}>{actions}</div> : null}
       </div>
     </header>
   );

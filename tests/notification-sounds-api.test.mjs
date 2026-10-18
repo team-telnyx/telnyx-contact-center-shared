@@ -16,6 +16,10 @@ after(async () => { delete globalThis.__soundApiTest; await pool.end(); });
 async function route(file) {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const stubs = {
+    '@/lib/acd/voice-endpoints.mjs': 'export async function withVoiceControl(){throw new Error("Unexpected voice route in sound test");}',
+    '@/lib/authz/stream.mjs': 'export function guardEventStream(){throw new Error("Unexpected stream in sound test");}',
+    '@/lib/auth-refresh-sessions.mjs': 'export async function hasAuthSession(){throw new Error("Unexpected session stream in sound test");}',
+
     'next/server': 'export const NextResponse={json:(value,options)=>Response.json(value,options)};',
     'next-auth': 'export async function getServerSession(){return globalThis.__soundApiTest.user?{user:globalThis.__soundApiTest.user}:null;}',
     '@/app/api/auth/[...nextauth]/route': 'export const authOptions={};',

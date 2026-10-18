@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -48,6 +51,7 @@ import EditSheet from "@/components/queues/EditSheet";
 import { Can } from "@/components/auth-provider";
 
 export default function AdminQueuesPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -174,37 +178,33 @@ export default function AdminQueuesPage() {
     <Button
       variant="secondary"
       onClick={() => setFilters({ routingStrategy: "all", q: "" })}
-    >
-      Clear
-    </Button>
+    >{tUi("Clear")}</Button>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
-    <Can permission="queues:create"><Button onClick={handleNewQueue} variant="default">
-      New Queue
-    </Button></Can>
+    <Can permission="queues:create"><Button onClick={handleNewQueue} variant="default">{tUi("New Queue")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Queues" badges={<Badge variant="secondary">{total} queues</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Queues")} badges={<Badge variant="secondary">{total}{tUi(" queues")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="queues">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-7 gap-2 items-end">
             <div>
-              <label className="text-xs">Name</label>
+              <label className="text-xs">{tUi("Name")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="name, description…"
+                placeholder={tUi("name, description…")}
               />
             </div>
             <div>
-              <label className="text-xs">Routing</label>
+              <label className="text-xs">{tUi("Routing")}</label>
               <Select
                 value={filters.routingStrategy || "all"}
                 onValueChange={(value) =>
@@ -212,13 +212,13 @@ export default function AdminQueuesPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="FIFO">FIFO</SelectItem>
-                  <SelectItem value="Skill-based">Skill-based</SelectItem>
-                  <SelectItem value="Priority-based">Priority-based</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
+                  <SelectItem value="FIFO">{tUi("FIFO")}</SelectItem>
+                  <SelectItem value="Skill-based">{tUi("Skill-based")}</SelectItem>
+                  <SelectItem value="Priority-based">{tUi("Priority-based")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -241,15 +241,13 @@ export default function AdminQueuesPage() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">Routing</TableHead>
-                    <TableHead className="px-[10px]">Max Wait</TableHead>
-                    <TableHead className="px-[10px]">Max Size</TableHead>
-                    <TableHead className="px-[10px]">Priority</TableHead>
-                    <TableHead className="px-[10px]">Enabled</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Routing")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Max Wait")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Max Size")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Priority")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Enabled")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -270,12 +268,11 @@ export default function AdminQueuesPage() {
                               style={{ width: "120px" }}
                               variant="outline"
                             >
-                              {q.routing_strategy || "FIFO"}
+                              {operationalStatusLabel(tUi, String(q.routing_strategy || "fifo").toLowerCase().replaceAll("-", "_"))}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
-                            {q.max_wait_time_secs || 0}s
-                          </TableCell>
+                            {q.max_wait_time_secs || 0}{tUi("s")}</TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
                             {q.max_size || 0}
                           </TableCell>
@@ -290,7 +287,7 @@ export default function AdminQueuesPage() {
                                     type="button"
                                     onClick={() => onUpdatePriority(q.id, level)}
                                     className="focus:outline-none hover:opacity-80 transition-opacity"
-                                    title={`Set priority to ${level} star${level > 1 ? 's' : ''}`}
+                                    title={tUi("Set priority level: {value0}", { value0: level })}
                                   >
                                     {filled ? (
                                       <IconStarFilled className="w-4 h-4 text-yellow-400" />
@@ -303,7 +300,7 @@ export default function AdminQueuesPage() {
                             </div>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
-                            {q.enabled ? "YES" : "NO"}
+                            {q.enabled ? tUi("YES") : tUi("NO")}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap text-right">
                             <div className="inline-flex items-center gap-2 justify-end">
@@ -314,7 +311,7 @@ export default function AdminQueuesPage() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit queue"
+                                title={tUi("Edit queue")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -323,30 +320,26 @@ export default function AdminQueuesPage() {
                                   <Can permission="queues:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete queue"
+                                    title={tUi("Delete queue")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete queue?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the queue &quot;{q.name}&quot;.
+                                    <DialogTitle>{tUi("Delete queue?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the queue \"")}{q.name}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(q.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -362,9 +355,7 @@ export default function AdminQueuesPage() {
                       <TableCell
                         colSpan={7}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No queues
-                      </TableCell>
+                      >{tUi("No queues")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -374,12 +365,10 @@ export default function AdminQueuesPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -399,8 +388,7 @@ export default function AdminQueuesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium">
-                Page {page} of {pageCount}
+              <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
               </div>
               <div className="ml-auto flex items-center gap-2 lg:ml-0">
                 <Button
@@ -409,7 +397,7 @@ export default function AdminQueuesPage() {
                   onClick={() => setPage(1)}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to first page</span>
+                  <span className="sr-only">{tUi("Go to first page")}</span>
                   <IconChevronsLeft />
                 </Button>
                 <Button
@@ -419,7 +407,7 @@ export default function AdminQueuesPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to previous page</span>
+                  <span className="sr-only">{tUi("Go to previous page")}</span>
                   <IconChevronLeft />
                 </Button>
                 <Button
@@ -429,7 +417,7 @@ export default function AdminQueuesPage() {
                   onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to next page</span>
+                  <span className="sr-only">{tUi("Go to next page")}</span>
                   <IconChevronRight />
                 </Button>
                 <Button
@@ -439,7 +427,7 @@ export default function AdminQueuesPage() {
                   onClick={() => setPage(pageCount)}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to last page</span>
+                  <span className="sr-only">{tUi("Go to last page")}</span>
                   <IconChevronsRight />
                 </Button>
               </div>

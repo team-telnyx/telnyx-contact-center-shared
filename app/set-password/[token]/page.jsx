@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -20,6 +22,7 @@ function PasswordRequirement({ met, label }) {
 }
 
 export default function SetPasswordPage() {
+  const tUi = useUiText();
   const params = useParams();
   const router = useRouter();
   const token = params.token;
@@ -156,9 +159,7 @@ export default function SetPasswordPage() {
         <div className="flex justify-center w-full">
           <div className="flex flex-col items-center w-full justify-center">
             <AuthBrandLogo />
-            <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">
-              Contact Center
-            </span>
+            <span className="text-6xl font-bold mt-10 text-brand-primary dark:text-brand-primary">{tUi("Contact Center")}</span>
           </div>
         </div>
 
@@ -168,8 +169,8 @@ export default function SetPasswordPage() {
             {verifying && (
               <div className="text-center space-y-4">
                 <div className="text-5xl animate-pulse">⏳</div>
-                <h1 className="text-2xl font-bold">Verifying invitation...</h1>
-                <p className="text-sm text-muted-foreground">Please wait.</p>
+                <h1 className="text-2xl font-bold">{tUi("Verifying invitation...")}</h1>
+                <p className="text-sm text-muted-foreground">{tUi("Please wait.")}</p>
               </div>
             )}
 
@@ -177,14 +178,12 @@ export default function SetPasswordPage() {
             {!verifying && !valid && (
               <div className="text-center space-y-4">
                 <div className="text-5xl">{invalidInfo.icon}</div>
-                <h1 className="text-2xl font-bold">{invalidInfo.title}</h1>
-                <p className="text-sm text-muted-foreground">{invalidInfo.desc}</p>
+                <h1 className="text-2xl font-bold">{tUi(invalidInfo.title)}</h1>
+                <p className="text-sm text-muted-foreground">{tUi(invalidInfo.desc)}</p>
                 <Button
                   className="w-full mt-4"
                   onClick={() => router.push("/signin")}
-                >
-                  Go to Sign In
-                </Button>
+                >{tUi("Go to Sign In")}</Button>
               </div>
             )}
 
@@ -192,12 +191,8 @@ export default function SetPasswordPage() {
             {success && (
               <div className="text-center space-y-4">
                 <div className="text-5xl">🎉</div>
-                <h1 className="text-2xl font-bold">Password Set!</h1>
-                <p className="text-sm text-muted-foreground">
-                  Your password has been set successfully.
-                  <br />
-                  Redirecting you to sign in...
-                </p>
+                <h1 className="text-2xl font-bold">{tUi("Password Set!")}</h1>
+                <p className="text-sm text-muted-foreground">{tUi("Your password has been set successfully.")}<br />{tUi("Redirecting you to sign in...")}</p>
               </div>
             )}
 
@@ -205,16 +200,14 @@ export default function SetPasswordPage() {
             {!verifying && valid && !success && (
               <form onSubmit={onSubmit} className="space-y-5">
                 <div className="space-y-1">
-                  <h1 className="text-2xl font-bold">Welcome,{" "}
+                  <h1 className="text-2xl font-bold">{tUi("Welcome,")}{" "}
                     {inviteUser?.firstName || ""}!
                   </h1>
-                  <p className="text-sm text-muted-foreground">
-                    Set a password for <span className="font-medium text-foreground">{inviteUser?.email}</span> to get started.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{tUi("Set a password for ")}<span className="font-medium text-foreground">{inviteUser?.email}</span>{tUi(" to get started.")}</p>
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{tUi("Password")}</Label>
                   <Input
                     id="password"
                     type="password"
@@ -226,16 +219,16 @@ export default function SetPasswordPage() {
                   />
                   {/* Password requirements */}
                   <div className="space-y-1 mt-1">
-                    <PasswordRequirement met={checks.length} label="At least 8 characters" />
-                    <PasswordRequirement met={checks.upper} label="One uppercase letter (A-Z)" />
-                    <PasswordRequirement met={checks.lower} label="One lowercase letter (a-z)" />
-                    <PasswordRequirement met={checks.number} label="One number (0-9)" />
-                    <PasswordRequirement met={checks.special} label="One special character (!@#$...)" />
+                    <PasswordRequirement met={checks.length} label={tUi("At least 8 characters")} />
+                    <PasswordRequirement met={checks.upper} label={tUi("One uppercase letter (A-Z)")} />
+                    <PasswordRequirement met={checks.lower} label={tUi("One lowercase letter (a-z)")} />
+                    <PasswordRequirement met={checks.number} label={tUi("One number (0-9)")} />
+                    <PasswordRequirement met={checks.special} label={tUi("One special character (!@#$...)")} />
                   </div>
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Label htmlFor="confirmPassword">{tUi("Confirm Password")}</Label>
                   <Input
                     id="confirmPassword"
                     type="password"
@@ -246,10 +239,10 @@ export default function SetPasswordPage() {
                     autoComplete="new-password"
                   />
                   {confirmPassword && password !== confirmPassword && (
-                    <p className="text-xs text-red-500">Passwords do not match</p>
+                    <p className="text-xs text-red-500">{tUi("Passwords do not match")}</p>
                   )}
                   {confirmPassword && password === confirmPassword && confirmPassword.length > 0 && (
-                    <p className="text-xs text-green-500">✓ Passwords match</p>
+                    <p className="text-xs text-green-500">{tUi("✓ Passwords match")}</p>
                   )}
                 </div>
 
@@ -260,13 +253,11 @@ export default function SetPasswordPage() {
                   className="w-full"
                   disabled={loading || !allChecksPass || password !== confirmPassword}
                 >
-                  {loading ? "Setting password..." : "Set Password & Sign In"}
+                  {loading ? tUi("Setting password...") : tUi("Set Password & Sign In")}
                 </Button>
 
                 <p className="text-center text-sm">
-                  <a href="/signin" className="underline underline-offset-4 text-muted-foreground hover:text-foreground">
-                    Back to sign in
-                  </a>
+                  <a href="/signin" className="underline underline-offset-4 text-muted-foreground hover:text-foreground">{tUi("Back to sign in")}</a>
                 </p>
               </form>
             )}

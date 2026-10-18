@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -143,7 +143,8 @@ function LoadedPreview({ url, name, kind, copy }) {
   </div>;
 }
 
-export default function DocumentPreview({ url, name, mimeType, locale = "en-US" }) {
+export default function DocumentPreview({ url, name, mimeType, locale = "en-US", translate }) {
   const kind = documentPreviewKind(mimeType, name);
-  return <LoadedPreview key={`${url}:${kind}`} url={url} name={name} kind={kind} copy={documentPreviewCopy(locale)} />;
+  const copy = useMemo(() => documentPreviewCopy(locale, translate), [locale, translate]);
+  return <LoadedPreview key={`${url}:${kind}`} url={url} name={name} kind={kind} copy={copy} />;
 }

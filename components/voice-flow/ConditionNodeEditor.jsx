@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Label } from "@/components/ui/label";
 import {
@@ -19,6 +21,7 @@ export default function ConditionNodeEditor({
   onChange,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const handleChange = (field, value) => {
     onChange({
       ...config,
@@ -34,21 +37,19 @@ export default function ConditionNodeEditor({
   return (
     <div className="space-y-4">
       <div>
-        <Label className="text-xs">Left Operand</Label>
+        <Label className="text-xs">{tUi("Left Operand")}</Label>
         <VariableInput
           value={leftOperand}
           onChange={(value) => handleChange("leftOperand", value)}
           availableVariables={availableVariables}
-          placeholder="{{variable}} or value"
+          placeholder={tUi("{{variable}} or value")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Left side of the comparison
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Left side of the comparison")}</p>
       </div>
 
       <div>
-        <Label className="text-xs">Operator</Label>
+        <Label className="text-xs">{tUi("Operator")}</Label>
         <Select
           value={operator}
           onValueChange={(value) => handleChange("operator", value)}
@@ -57,35 +58,33 @@ export default function ConditionNodeEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="===">Equals (===)</SelectItem>
-            <SelectItem value="!==">Not Equals (!==)</SelectItem>
-            <SelectItem value=">">Greater Than (&gt;)</SelectItem>
-            <SelectItem value="<">Less Than (&lt;)</SelectItem>
-            <SelectItem value=">=">Greater or Equal (&gt;=)</SelectItem>
-            <SelectItem value="<=">Less or Equal (&lt;=)</SelectItem>
-            <SelectItem value="contains">Contains</SelectItem>
-            <SelectItem value="startsWith">Starts With</SelectItem>
-            <SelectItem value="endsWith">Ends With</SelectItem>
+            <SelectItem value="===">{tUi("Equals (===)")}</SelectItem>
+            <SelectItem value="!==">{tUi("Not Equals (!==)")}</SelectItem>
+            <SelectItem value=">">{tUi("Greater Than (>)")}</SelectItem>
+            <SelectItem value="<">{tUi("Less Than (<)")}</SelectItem>
+            <SelectItem value=">=">{tUi("Greater or Equal (>=)")}</SelectItem>
+            <SelectItem value="<=">{tUi("Less or Equal (<=)")}</SelectItem>
+            <SelectItem value="contains">{tUi("Contains")}</SelectItem>
+            <SelectItem value="startsWith">{tUi("Starts With")}</SelectItem>
+            <SelectItem value="endsWith">{tUi("Ends With")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div>
-        <Label className="text-xs">Right Operand</Label>
+        <Label className="text-xs">{tUi("Right Operand")}</Label>
         <VariableInput
           value={rightOperand}
           onChange={(value) => handleChange("rightOperand", value)}
           availableVariables={availableVariables}
-          placeholder="{{variable}} or value"
+          placeholder={tUi("{{variable}} or value")}
           className="mt-1"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Right side of the comparison
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Right side of the comparison")}</p>
       </div>
 
       <div>
-        <Label className="text-xs">Data Type</Label>
+        <Label className="text-xs">{tUi("Data Type")}</Label>
         <Select
           value={dataType}
           onValueChange={(value) => handleChange("dataType", value)}
@@ -94,27 +93,22 @@ export default function ConditionNodeEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="string">String</SelectItem>
-            <SelectItem value="number">Number</SelectItem>
-            <SelectItem value="boolean">Boolean</SelectItem>
+            <SelectItem value="string">{tUi("String")}</SelectItem>
+            <SelectItem value="number">{tUi("Number")}</SelectItem>
+            <SelectItem value="boolean">{tUi("Boolean")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          Type for comparison
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Type for comparison")}</p>
       </div>
 
       <div className="p-3 bg-muted rounded-md">
-        <p className="text-xs font-medium mb-1">Preview:</p>
-        <p className="text-sm font-mono">
-          If <span className="text-blue-600">{leftOperand || "?"}</span>{" "}
+        <p className="text-xs font-medium mb-1">{tUi("Preview:")}</p>
+        <p className="text-sm font-mono">{tUi("If ")}<span className="text-blue-600">{leftOperand || "?"}</span>{" "}
           <span className="text-orange-600">{operator}</span>{" "}
           <span className="text-blue-600">{rightOperand || "?"}</span>
         </p>
-        <p className="text-xs text-muted-foreground mt-2">
-          Then route to <strong>True</strong> output, else route to{" "}
-          <strong>False</strong> output
-        </p>
+        <p className="text-xs text-muted-foreground mt-2">{tUi("Then route to ")}<strong>{tUi("True")}</strong>{tUi(" output, else route to")}{" "}
+          <strong>{tUi("False")}</strong>{tUi(" output")}</p>
       </div>
     </div>
   );

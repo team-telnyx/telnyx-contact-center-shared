@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { TRANSCRIPTION_PROVIDERS } from "../config/voice.js";
+import { readFileSync } from "./helpers/ui-source.mjs";
 import {
   ASSISTANT_TRANSCRIPTION_MODELS,
   cloneAssistantTranscriptionOverride,
@@ -16,6 +17,11 @@ const workflowTab = readFileSync(
   new URL("../components/assistants/AssistantWorkflowTab.jsx", import.meta.url),
   "utf8"
 );
+
+test("Cohere starts with Arabic and exposes its two supported languages", () => {
+  assert.deepEqual(createTranscriptionOverride("cohere/ar-stt"), {model: "cohere/ar-stt", language: "ar"});
+  assert.deepEqual(TRANSCRIPTION_PROVIDERS.find(provider => provider.model_name === "cohere/ar-stt").languages, ["ar", "en"]);
+});
 const transcriptionPicker = readFileSync(
   new URL("../components/assistants/WorkflowTranscriptionPicker.jsx", import.meta.url),
   "utf8"
@@ -24,7 +30,7 @@ const transcriptionPicker = readFileSync(
 test("workflow exposes compact TTS and STT prompt-node tabs", () => {
   assert.match(workflowTab, /<TabsTrigger value="voice">TTS<\/TabsTrigger>/);
   assert.match(workflowTab, /<TabsTrigger value="transcription">STT<\/TabsTrigger>/);
-  assert.match(workflowTab, /<WorkflowTranscriptionPicker/);
+  assert.match(workflowTab, /<AssistantTranscriptionSettings/);
   assert.match(workflowTab, /transcription: cloneAssistantTranscriptionOverride/);
   assert.match(workflowTab, /transcription: undefined/);
   assert.doesNotMatch(workflowTab, /<TabsTrigger value="voice">Voice<\/TabsTrigger>/);
@@ -38,15 +44,15 @@ test("LLM, TTS, and STT use the Tools-style Override assistant defaults toggle",
   );
   assert.match(
     workflowTab,
-    /function NodeTtsOverride[\s\S]*<OverrideAssistantDefaultsToggle[\s\S]*<WorkflowVoicePicker/
+    /function NodeTtsOverride[\s\S]*<OverrideAssistantDefaultsToggle[\s\S]*<TtsVoicePicker/
   );
   assert.match(
     workflowTab,
-    /function NodeSttOverride[\s\S]*<OverrideAssistantDefaultsToggle[\s\S]*<WorkflowTranscriptionPicker/
+    /function NodeSttOverride[\s\S]*<OverrideAssistantDefaultsToggle[\s\S]*<AssistantTranscriptionSettings/
   );
   assert.match(
     workflowTab,
-    /function NodeLlmOverride[\s\S]*<OverrideAssistantDefaultsToggle[\s\S]*<AIModels/
+    /function NodeLlmOverride[\s\S]*<OverrideAssistantDefaultsToggle[\s\S]*<AssistantModelConfiguration/
   );
   assert.doesNotMatch(workflowTab, /<TabsTrigger value="default">/);
   assert.doesNotMatch(workflowTab, /<TabsTrigger value="override">/);
@@ -55,6 +61,12 @@ test("LLM, TTS, and STT use the Tools-style Override assistant defaults toggle",
 
 test("workflow transcription catalog matches current Telnyx assistant OpenAPI models", () => {
   assert.deepEqual(ASSISTANT_TRANSCRIPTION_MODELS, [
+    "assemblyai/universal-3-5-pro",
+    "soniox/stt-rt-v5",
+    "omi-health/omi-med-stt-v1",
+    "reson8/turns",
+    "cohere/ar-stt",
+    "telnyx/basira",
     "deepgram/flux",
     "deepgram/nova-3",
     "deepgram/nova-2",
@@ -106,6 +118,7 @@ test("provider changes apply Telnyx defaults and discard settings from the previ
   });
   assert.deepEqual(createTranscriptionOverride("azure/fast"), {
     model: "azure/fast",
+    language: "auto",
     region: "latency",
   });
   assert.deepEqual(createTranscriptionOverride("not-a-telnyx-model"), {

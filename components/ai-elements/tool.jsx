@@ -1,4 +1,6 @@
 "use client";
+import { UiText, useUiText } from "@/components/i18n/use-ui-text";
+
 import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
@@ -73,7 +75,7 @@ const getStatusBadge = (status) => {
   return (
     <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
       {icons[status]}
-      {labels[status]}
+      <UiText>{labels[status]}</UiText>
     </Badge>
   );
 };
@@ -105,20 +107,19 @@ export const ToolContent = ({ className, ...props }) => (
   />
 );
 
-export const ToolInput = ({ className, input, ...props }) => (
+export const ToolInput = ({ className, input, ...props }) => { const tUi = useUiText(); return  (
   <div className={cn("space-y-2 overflow-hidden p-4", className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Parameters
-    </h4>
+    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">{tUi("Parameters")}</h4>
     <div className="rounded-md bg-muted/50">
       <CodeBlock code={JSON.stringify(input, null, 2)} language="json">
         <CodeBlockCopyButton />
       </CodeBlock>
     </div>
   </div>
-);
+); };
 
 export const ToolOutput = ({ className, output, errorText, ...props }) => {
+  const tUi = useUiText();
   if (!(output || errorText)) {
     return null;
   }
@@ -145,7 +146,7 @@ export const ToolOutput = ({ className, output, errorText, ...props }) => {
   return (
     <div className={cn("space-y-2 p-4", className)} {...props}>
       <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-        {errorText ? "Error" : "Result"}
+        {errorText ? tUi("Error") : tUi("Result")}
       </h4>
       <div
         className={cn(

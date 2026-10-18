@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { ConfigurationSectionPage } from "@/components/admin/ConfigurationSectionNav";
@@ -51,6 +53,7 @@ import EditSheet from "@/components/wrapup-codes/EditSheet";
 import { Can } from "@/components/auth-provider";
 
 export default function AdminWrapupCodesPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -130,37 +133,33 @@ export default function AdminWrapupCodesPage() {
           q: "",
         })
       }
-    >
-      Clear
-    </Button>
+    >{tUi("Clear")}</Button>
     <Button onClick={() => load()} disabled={loading}>
-      {loading ? "Loading…" : "Refresh"}
+      {loading ? tUi("Loading…") : tUi("Refresh")}
     </Button>
-    <Can permission="wrapup_codes:create"><Button onClick={handleNewWrapupCode} variant="default">
-      New Wrapup Code
-    </Button></Can>
+    <Can permission="wrapup_codes:create"><Button onClick={handleNewWrapupCode} variant="default">{tUi("New Wrapup Code")}</Button></Can>
   </>;
 
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Wrapup Codes" badges={<Badge variant="secondary">{total} codes</Badge>} actions={headerActions} />
+      <AdminPageHeader title={tUi("Wrapup Codes")} badges={<Badge variant="secondary">{total}{tUi(" codes")}</Badge>} actions={headerActions} />
       <ConfigurationSectionPage activeId="wrapup-codes">
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
-              <label className="text-xs">Name</label>
+              <label className="text-xs">{tUi("Name")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="name, description…"
+                placeholder={tUi("name, description…")}
               />
             </div>
             <div>
-              <label className="text-xs">Active</label>
+              <label className="text-xs">{tUi("Active")}</label>
               <Select
                 value={filters.active || "all"}
                 onValueChange={(value) =>
@@ -168,12 +167,12 @@ export default function AdminWrapupCodesPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="true">Yes</SelectItem>
-                  <SelectItem value="false">No</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
+                  <SelectItem value="true">{tUi("Yes")}</SelectItem>
+                  <SelectItem value="false">{tUi("No")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -195,15 +194,13 @@ export default function AdminWrapupCodesPage() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">Icon</TableHead>
-                    <TableHead className="px-[10px]">Active</TableHead>
-                    <TableHead className="px-[10px]">Default</TableHead>
-                    <TableHead className="px-[10px]">Display Order</TableHead>
-                    <TableHead className="px-[10px]">Description</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Icon")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Active")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Default")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Display Order")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Description")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -247,7 +244,7 @@ export default function AdminWrapupCodesPage() {
                                   : "border-red-500 text-red-600 min-w-[56px] justify-center"
                               }
                             >
-                              {code.is_active ? "YES" : "NO"}
+                              {code.is_active ? tUi("YES") : tUi("NO")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
@@ -259,7 +256,7 @@ export default function AdminWrapupCodesPage() {
                                   : "border-slate-300 text-slate-600 min-w-[56px] justify-center"
                               }
                             >
-                              {code.is_default ? "YES" : "NO"}
+                              {code.is_default ? tUi("YES") : tUi("NO")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
@@ -277,7 +274,7 @@ export default function AdminWrapupCodesPage() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit wrapup code"
+                                title={tUi("Edit wrapup code")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -286,31 +283,26 @@ export default function AdminWrapupCodesPage() {
                                   <Can permission="wrapup_codes:delete"><button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete wrapup code"
+                                    title={tUi("Delete wrapup code")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete wrapup code?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the wrapup code "
-                                      {code.name}".
+                                    <DialogTitle>{tUi("Delete wrapup code?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the wrapup code \"")}{code.name}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(code.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -326,9 +318,7 @@ export default function AdminWrapupCodesPage() {
                       <TableCell
                         colSpan={7}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No wrapup codes
-                      </TableCell>
+                      >{tUi("No wrapup codes")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -338,12 +328,10 @@ export default function AdminWrapupCodesPage() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -379,8 +367,7 @@ export default function AdminWrapupCodesPage() {
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm">
-                  Page {page} of {pageCount}
+                <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
                 </span>
                 <Button
                   variant="outline"

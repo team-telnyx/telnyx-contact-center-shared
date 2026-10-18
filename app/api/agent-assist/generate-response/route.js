@@ -1,3 +1,6 @@
+import { kbUser } from '../../../../lib/ai-operations/prompts/core.mjs';
+import { kbSystem } from '../../../../lib/ai-operations/prompts/core.mjs';
+import { prepareAiOperation } from '@/lib/ai-operations/runtime.mjs';
 import { NextResponse } from "next/server";
 import { withPermission } from "@/lib/authz/guard";
 
@@ -31,26 +34,9 @@ async function POST_handler(request, _context, authz) {
     }
 
     // Build the prompt for GPT-4o to generate a response
-    const systemPrompt = `You are an expert contact center AI assistant. Your task is to generate a helpful, professional response for a customer service agent based on a customer's message and relevant knowledge base article.
+    const systemPrompt = kbSystem();
 
-Guidelines:
-- Generate a concise response (maximum 5 sentences)
-- Be professional, empathetic, and solution-oriented
-- Use the knowledge base article content to provide accurate information
-- Format your response using markdown (headings, lists, bold text where appropriate)
-- Focus on helping the customer resolve their issue
-- DO NOT include greetings like "Hello", "Hi", or "Dear"
-- DO NOT include closings like "Best regards", "Sincerely", "Thank you", or signatures
-- Start directly with the response content
-
-Respond in markdown format.`;
-
-    const userPrompt = `Customer message:
-"${transcript}"
-
-${articleContent ? `Relevant knowledge base article:\n${articleContent}` : ""}
-
-Generate a suggested response for the agent (max 5 sentences, use markdown formatting):`;
+    const userPrompt = kbUser(transcript, articleContent);
 
     // Call Telnyx AI chat completion with streaming
     const response = await fetch(`${TELNYX_API_BASE}/ai/chat/completions`, {
@@ -59,7 +45,7 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
         "Content-Type": "application/json",
         Authorization: `Bearer ${TELNYX_API_KEY}`,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(await prepareAiOperation('kb-response', {
         messages: [
           {
             role: "system",
@@ -70,11 +56,10 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
             content: userPrompt,
           },
         ],
-        model: "openai/gpt-4o",
         temperature: 0.7,
         enable_thinking: false,
         stream: true,
-      }),
+      })),
     });
 
     if (!response.ok) {

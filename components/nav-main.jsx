@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -53,6 +55,7 @@ const WORKSPACE_META = {
 };
 
 export function NavMain({ groups = [] }) {
+  const tUi = useUiText();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -150,7 +153,7 @@ export function NavMain({ groups = [] }) {
 
   if (!activeWorkspace) {
     return (
-      <nav aria-label="Workspaces" className="flex flex-col gap-3">
+      <nav aria-label={tUi("Workspaces")} className="flex flex-col gap-3">
         {visibleGroups.map((group) => {
           const meta = WORKSPACE_META[group.label] || {
             name: group.label,
@@ -169,7 +172,7 @@ export function NavMain({ groups = [] }) {
               key={group.label}
               type="button"
               onClick={() => openWorkspace(group)}
-              className={`group flex aspect-square w-full shrink-0 flex-col justify-between rounded-2xl border bg-card/70 p-5 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${meta.hoverBorder}`}
+              className={`group flex aspect-square w-full shrink-0 flex-col justify-between rounded-2xl border bg-card/70 p-5 text-start shadow-xs transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${meta.hoverBorder}`}
             >
               <span className="flex w-full items-center gap-4">
                 <span
@@ -179,11 +182,9 @@ export function NavMain({ groups = [] }) {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-lg font-semibold leading-tight">
-                    {meta.name}
+                    {tUi(meta.name)}
                   </span>
-                  <span className="block text-sm font-medium leading-tight text-muted-foreground">
-                    Workspace
-                  </span>
+                  <span className="block text-sm font-medium leading-tight text-muted-foreground">{tUi("Workspace")}</span>
                 </span>
               </span>
               <span
@@ -208,14 +209,14 @@ export function NavMain({ groups = [] }) {
                       />
                     </span>
                     <span className="max-w-full truncate text-[10px] font-medium tracking-wide text-muted-foreground">
-                      {stage}
+                      {tUi(stage)}
                     </span>
                   </span>
                 ))}
               </span>
               <span className="flex w-full items-center gap-3">
                 <span className="min-w-0 flex-1 text-sm leading-snug text-muted-foreground">
-                  {meta.description}
+                  {tUi(meta.description)}
                 </span>
                 <span
                   className={`flex size-9 shrink-0 items-center justify-center rounded-full border bg-background transition-transform group-hover:translate-x-0.5 ${meta.accent}`}
@@ -239,7 +240,7 @@ export function NavMain({ groups = [] }) {
 
   return (
     <nav
-      aria-label={`${workspaceMeta.title} navigation`}
+      aria-label={tUi("{value0} navigation", { value0: tUi(workspaceMeta.title) })}
       className="flex min-h-full flex-col"
     >
       <div className="flex flex-col gap-3">
@@ -256,7 +257,7 @@ export function NavMain({ groups = [] }) {
                 item.url && setWorkspaceLastMenu(activeWorkspace.label, itemUrl)
               }
               aria-current={active ? "page" : undefined}
-              className={`group flex h-28 w-full items-center gap-3 rounded-2xl border p-4 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`group flex h-28 w-full items-center gap-3 rounded-2xl border p-4 text-start shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${
                 active
                   ? "border-brand-primary bg-brand-primary/10"
                   : `bg-card/70 hover:bg-card ${workspaceMeta.hoverBorder}`
@@ -269,16 +270,16 @@ export function NavMain({ groups = [] }) {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold leading-tight">
-                  {item.title}
+                  {tUi(item.title)}
                 </span>
                 <span className="mt-1 block text-xs leading-snug text-muted-foreground">
-                  {item.description || "Open module"}
+                  {tUi(item.description || "Open module")}
                 </span>
               </span>
               <span
                 className={`flex size-8 shrink-0 items-center justify-center rounded-full border bg-background transition-transform group-hover:translate-x-0.5 ${workspaceMeta.accent}`}
               >
-                <IconChevronRight className="size-4" />
+                <IconChevronRight className="size-4 rtl:rotate-180" />
               </span>
             </Link>
           );
@@ -288,12 +289,12 @@ export function NavMain({ groups = [] }) {
       <button
         type="button"
         onClick={() => setWorkspaceChooserPath(pathname)}
-        className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-card/70 px-4 text-left text-sm font-semibold shadow-xs transition-all hover:border-brand-primary/55 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
+        className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-card/70 px-4 text-start text-sm font-semibold shadow-xs transition-all hover:border-brand-primary/55 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="flex size-9 items-center justify-center rounded-xl bg-muted text-foreground">
-          <IconArrowLeft className="size-5" />
+          <IconArrowLeft className="size-5 rtl:rotate-180" />
         </span>
-        <span>Back</span>
+        <span>{tUi("Back")}</span>
       </button>
     </nav>
   );

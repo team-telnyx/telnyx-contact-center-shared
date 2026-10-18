@@ -1,16 +1,25 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Input } from "@/components/ui/input";
-import { VariableInput } from "@/components/voice-flow/VariableInput";
+import AssistantConfigurationCard from "./AssistantConfigurationCard";
 import { VariableTextarea } from "@/components/voice-flow/VariableTextarea";
 import { Switch } from "@/components/ui/switch";
-import AIModels from "@/components/assistants/AIModels";
-import TagsSection from "@/components/assistants/TagsSection";
-import { Combobox } from "@/components/ui/combobox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import TagsSection from "./TagsSection";
+import AssistantModelConfiguration from "./AssistantModelConfiguration";
+import AssistantSectionTabs from "./AssistantSectionTabs";
+import AssistantDelegationSettings from "./AssistantDelegationSettings";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const MODEL_GENERATED_GREETING_VALUE = "<assistant-speaks-first-with-model-generated-message>";
+const MODEL_GENERATED_GREETING_VALUE =
+  "<assistant-speaks-first-with-model-generated-message>";
 
 function deriveGreetingMode(greeting, explicitMode) {
   if (explicitMode) return explicitMode;
@@ -19,15 +28,13 @@ function deriveGreetingMode(greeting, explicitMode) {
   return "custom";
 }
 
-export default function AgentSettingsPanel({ assistantId, values, setValues, models }) {
-  const recommendedModels = useMemo(
-    () => (Array.isArray(models) ? models : []).filter((model) => model.recommended_for_assistants),
-    [models]
-  );
-  const selectedModel = useMemo(
-    () => (models || []).find((model) => String(model.id) === String(values.model)) || null,
-    [models, values.model]
-  );
+export default function AgentSettingsPanel({
+  values,
+  setValues,
+  localTab,
+  onLocalTabChange,
+}) {
+  const tUi = useUiText();
   const assistantVariableNames = useMemo(() => {
     const systemVariables = [
       "telnyx_current_time",
@@ -37,140 +44,240 @@ export default function AgentSettingsPanel({ assistantId, values, setValues, mod
       "telnyx_shaken_stir_attestation",
       "call_control_id",
     ];
-    return [...new Set([...systemVariables, ...Object.keys(values.dynamic_variables || {}).filter(Boolean)])];
+    return [
+      ...new Set([
+        ...systemVariables,
+        ...Object.keys(values.dynamic_variables || {}).filter(Boolean),
+      ]),
+    ];
   }, [values.dynamic_variables]);
-  const ownedBy = selectedModel?.raw?.owned_by;
-  const requiresSecret = ownedBy ? String(ownedBy).toLowerCase() !== "telnyx" : false;
-  const greetingMode = deriveGreetingMode(values.greeting, values.greeting_mode);
+  const greetingMode = deriveGreetingMode(
+    values.greeting,
+    values.greeting_mode,
+  );
 
   function handleGreetingModeChange(mode) {
     setValues((current) => {
       const currentGreeting = current.greeting || "";
-      const customDraft = currentGreeting && currentGreeting !== MODEL_GENERATED_GREETING_VALUE
-        ? currentGreeting
-        : current.greeting_custom_draft || "";
-      if (mode === "model_generated") return { ...current, greeting_mode: mode, greeting_custom_draft: customDraft, greeting: MODEL_GENERATED_GREETING_VALUE };
-      if (mode === "wait_for_user") return { ...current, greeting_mode: mode, greeting_custom_draft: customDraft, greeting: "" };
+      const customDraft =
+        currentGreeting && currentGreeting !== MODEL_GENERATED_GREETING_VALUE
+          ? currentGreeting
+          : current.greeting_custom_draft || "";
+      if (mode === "model_generated")
+        return {
+          ...current,
+          greeting_mode: mode,
+          greeting_custom_draft: customDraft,
+          greeting: MODEL_GENERATED_GREETING_VALUE,
+        };
+      if (mode === "wait_for_user")
+        return {
+          ...current,
+          greeting_mode: mode,
+          greeting_custom_draft: customDraft,
+          greeting: "",
+        };
       return { ...current, greeting_mode: "custom", greeting: customDraft };
     });
   }
 
+  const tab = localTab || "identity";
+  function changeModel(next) {
+    setValues((current) => ({ ...current, ...next }));
+  }
+  function modelUi(key, next) {
+    setValues((current) => ({
+      ...current,
+      _modelUi: { ...current._modelUi, [key]: next },
+    }));
+  }
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden rounded-xl border bg-card p-5 shadow-sm">
-      <div className="shrink-0">
-        <label className="text-xs">Name <span className="text-red-500">*</span></label>
-        <Input value={values.name || ""} onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))} required />
-      </div>
-
-      <div className="grid shrink-0 grid-cols-1 items-end gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-        <div>
-          <label className="text-xs">Model <span className="text-red-500">*</span></label>
-          <AIModels
-            value={values.model || ""}
-            onValueChange={(value) => setValues((current) => ({ ...current, model: value }))}
-            models={recommendedModels}
-            triggerClassName="mt-1 border bg-background"
-          />
-        </div>
-        <div className="flex h-10 items-center gap-2 whitespace-nowrap">
-          <Switch
-            checked={values.fallback_enabled || false}
-            onCheckedChange={(checked) => setValues((current) => ({
-              ...current,
-              fallback_enabled: checked,
-              fallback_model: checked ? current.fallback_model : "",
-              fallback_llm_api_key_ref: checked ? current.fallback_llm_api_key_ref : "",
-            }))}
-          />
-          <label className="text-xs font-medium">Enable fallback model</label>
-        </div>
-        <div className={values.fallback_enabled ? "" : "pointer-events-none opacity-50"}>
-          <label className="text-xs">Fallback Model</label>
-          <AIModels
-            value={values.fallback_model || ""}
-            onValueChange={(value) => setValues((current) => ({ ...current, fallback_model: value }))}
-            models={recommendedModels}
-            placeholder="Select a fallback model"
-            triggerClassName="mt-1 border bg-background"
-          />
-        </div>
-      </div>
-
-      {requiresSecret || values.fallback_enabled ? (
-        <div className="grid shrink-0 grid-cols-1 gap-4 md:grid-cols-2">
-          {requiresSecret ? (
-            <div>
-              <label className="text-xs">LLM API Key Reference</label>
-              <SecretsCombobox value={values.llm_api_key_ref || ""} onChange={(value) => setValues((current) => ({ ...current, llm_api_key_ref: value }))} />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-card p-5 shadow-sm">
+      <div className="min-h-0 flex-1">
+      <AssistantSectionTabs
+        value={tab}
+        onValueChange={onLocalTabChange}
+        label="Agent settings"
+        tabs={[
+          { id: "identity", label: "Identity & instructions" },
+          { id: "model", label: "Model & fallback" },
+          { id: "greeting", label: "Greeting & behavior" },
+        ]}
+      >
+        {(active) =>
+          active === "identity" ? (
+            <div className="flex h-full min-h-56 flex-col gap-5">
+              <div className="grid shrink-0 gap-4 md:grid-cols-2">
+              <div className="space-y-2" data-setting-path="name">
+                <label htmlFor="assistant-name" className="text-sm font-medium">
+                  {tUi("Name")}
+                </label>
+                <Input
+                  id="assistant-name"
+                  value={values.name || ""}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, name: e.target.value }))
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2" data-setting-path="description">
+                <label
+                  htmlFor="assistant-description"
+                  className="text-sm font-medium"
+                >
+                  {tUi("Description")}
+                </label>
+                <Input
+                  id="assistant-description"
+                  value={values.description || ""}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, description: e.target.value }))
+                  }
+                />
+              </div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-2" data-setting-path="instructions">
+                <label htmlFor="assistant-instructions" className="shrink-0 text-sm font-medium">
+                  {tUi("Instructions")}
+                </label>
+                <VariableTextarea
+                  id="assistant-instructions"
+                  rows={14}
+                  wrapperClassName="min-h-0 flex-1"
+                  className="h-full min-h-0 resize-none leading-relaxed"
+                  pickerClassName="bottom-2 mt-0 max-h-full"
+                  value={values.instructions || ""}
+                  onChange={(next) =>
+                    setValues((v) => ({ ...v, instructions: next }))
+                  }
+                  availableVariables={assistantVariableNames}
+                />
+              </div>
             </div>
-          ) : <div />}
-          {values.fallback_enabled ? <FallbackSecretField values={values} models={models} setValues={setValues} /> : null}
+          ) : active === "model" ? (
+            <div className="grid w-full grid-cols-1 items-start gap-5 lg:grid-cols-2">
+              <div className="rounded-xl border bg-card p-4" data-setting-path="model">
+              <AssistantModelConfiguration
+                value={values}
+                onChange={changeModel}
+                ui={values._modelUi?.primary}
+                onUiChange={(next) => modelUi("primary", next)}
+              />
+              </div>
+              <div className="space-y-5 rounded-xl border bg-card p-4" data-setting-path="fallback_config">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <label
+                    htmlFor="assistant-fallback"
+                    className="text-sm font-medium"
+                  >
+                    {tUi("Fallback model")}
+                  </label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {tUi(
+                      "Used if the primary provider fails. This is separate from routing inside FastRouter.",
+                    )}
+                  </p>
+                </div>
+                <Switch
+                  id="assistant-fallback"
+                  checked={Boolean(
+                    values.fallback_config?.model ||
+                    values.fallback_config?.external_llm ||
+                    values._fallbackEnabled,
+                  )}
+                  onCheckedChange={(enabled) =>
+                    setValues((v) => ({
+                      ...v,
+                      _fallbackEnabled: enabled,
+                      _fallbackDraft: enabled
+                        ? v._fallbackDraft
+                        : v.fallback_config,
+                      fallback_config: enabled
+                        ? v._fallbackDraft || { model: "" }
+                        : null,
+                    }))
+                  }
+                />
+              </div>
+              {values.fallback_config?.model ||
+              values.fallback_config?.external_llm ||
+              values._fallbackEnabled ? (
+                <AssistantModelConfiguration
+                  label="Fallback model"
+                  hideLegend
+                  settingPath="fallback_config"
+                  value={values.fallback_config || {}}
+                  onChange={(next) =>
+                    setValues((v) => ({ ...v, fallback_config: next }))
+                  }
+                  ui={values._modelUi?.fallback}
+                  onUiChange={(next) => modelUi("fallback", next)}
+                />
+              ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="grid w-full items-start gap-5 lg:grid-cols-2">
+              <AssistantConfigurationCard title="Opening greeting" description="Choose how the assistant starts the conversation.">
+              <div className="space-y-2" data-setting-path="greeting">
+                <label className="text-sm font-medium">
+                  {tUi("Greeting mode")}
+                </label>
+                <Select
+                  value={greetingMode}
+                  onValueChange={handleGreetingModeChange}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="custom">
+                      {tUi("Assistant speaks first with custom greeting")}
+                    </SelectItem>
+                    <SelectItem value="wait_for_user">
+                      {tUi("Assistant waits for the user to speak first")}
+                    </SelectItem>
+                    <SelectItem value="model_generated">
+                      {tUi(
+                        "Assistant speaks first with model-generated message",
+                      )}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {greetingMode === "custom" ? (
+                <VariableTextarea
+                  rows={6}
+                  value={values.greeting || ""}
+                  onChange={(next) =>
+                    setValues((v) => ({
+                      ...v,
+                      greeting: next,
+                      greeting_custom_draft: next,
+                    }))
+                  }
+                  availableVariables={assistantVariableNames}
+                />
+              ) : null}
+              </AssistantConfigurationCard>
+              <div data-setting-path="delegation_settings">
+                <AssistantDelegationSettings
+                  values={values}
+                  setValues={setValues}
+                />
+              </div>
+            </div>
+          )
+        }
+      </AssistantSectionTabs>
+      </div>
+      {tab === "identity" ? (
+        <div className="shrink-0 pt-5" data-setting-path="tags">
+          <TagsSection value={values.tags || []} onChange={tags => setValues(v => ({...v,tags}))}/>
         </div>
       ) : null}
-
-      <div className="shrink-0 space-y-2">
-        <div>
-          <label className="text-xs">Greeting mode</label>
-          <Select value={greetingMode} onValueChange={handleGreetingModeChange}>
-            <SelectTrigger className="w-full"><SelectValue placeholder="Select how the assistant starts" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="custom">Assistant speaks first with custom greeting</SelectItem>
-              <SelectItem value="wait_for_user">Assistant waits for the user to speak first</SelectItem>
-              <SelectItem value="model_generated">Assistant speaks first with model-generated message</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="mt-1 text-[11px] text-muted-foreground">Telnyx maps these to greeting text, an empty greeting, or the special model-generated greeting value.</p>
-        </div>
-        {greetingMode === "custom" ? (
-          <div>
-            <label className="text-xs">Greeting <span className="text-red-500">*</span></label>
-            <VariableInput
-              value={values.greeting || ""}
-              onChange={(next) => setValues((current) => ({ ...current, greeting: next, greeting_custom_draft: next }))}
-              availableVariables={assistantVariableNames}
-              required
-            />
-          </div>
-        ) : null}
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        <label className="text-xs">Instructions <span className="text-red-500">*</span></label>
-        <VariableTextarea
-          rows={8}
-          wrapperClassName="min-h-0 flex-1"
-          className="h-full min-h-0 resize-none"
-          value={values.instructions || ""}
-          onChange={(next) => setValues((current) => ({ ...current, instructions: next }))}
-          availableVariables={assistantVariableNames}
-          required
-        />
-      </div>
-      <TagsSection assistantId={assistantId} initialTags={values.tags || []} />
     </div>
   );
-}
-
-function FallbackSecretField({ values, models, setValues }) {
-  const model = (models || []).find((item) => String(item.id) === String(values.fallback_model));
-  const requiresSecret = model?.raw?.owned_by
-    ? String(model.raw.owned_by).toLowerCase() !== "telnyx"
-    : false;
-  if (!requiresSecret) return null;
-  return <div><label className="text-xs">Fallback LLM API Key Reference</label><SecretsCombobox value={values.fallback_llm_api_key_ref || ""} onChange={(value) => setValues((current) => ({ ...current, fallback_llm_api_key_ref: value }))} /></div>;
-}
-
-function SecretsCombobox({ value, onChange }) {
-  const [options, setOptions] = useState([]);
-  useEffect(() => {
-    let mounted = true;
-    fetch("/api/integration-secrets", { cache: "no-store" })
-      .then((response) => response.json().then((data) => ({ response, data })))
-      .then(({ response, data }) => {
-        if (mounted && response.ok && data?.ok) setOptions((data.secrets || []).map((secret) => ({ value: secret.identifier, label: secret.identifier })));
-      })
-      .catch(() => {});
-    return () => { mounted = false; };
-  }, []);
-  return <Combobox value={value} onChange={onChange} options={options} placeholder="Select integration secret…" emptyLabel="No secrets found" triggerClassName="mt-1 w-full" searchable />;
 }

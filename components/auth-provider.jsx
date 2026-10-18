@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
@@ -7,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { subscribeStatusStream } from "@/lib/status-stream-client";
 import { matches, SCREEN_PREFIX, WILDCARD } from "@/lib/authz/permissions.mjs";
 import { decidePageAccess } from "@/lib/authz/page-access.mjs";
+import { useUiLocale } from "@/components/i18n/UiLocaleProvider";
 
 const AuthContext = createContext({
   isAuth: false,
@@ -22,6 +25,7 @@ const AuthContext = createContext({
 });
 
 export function AuthProvider({ children }) {
+  const { changeLocale } = useUiLocale() || {};
   // `loaded` turns true after the first profile answer, so gates can tell
   // "not signed in" from "not known yet".
   const [state, setState] = useState({ isAuth: false, user: null, loaded: false });
@@ -59,6 +63,7 @@ export function AuthProvider({ children }) {
 
       const data = await res.json();
       setState({ isAuth: !!data.isAuth, user: data.user || null, loaded: true });
+      if (changeLocale && data?.isAuth) void changeLocale(data.user?.uiLocale).catch(() => {});
       if (data?.isAuth && data?.user?.theme) {
         const val = String(data.user.theme);
         if (["light", "dark", "system"].includes(val)) setTheme(val);
@@ -66,7 +71,26 @@ export function AuthProvider({ children }) {
     } catch (_) {
       setState({ isAuth: false, user: null, loaded: true });
     }
-  }, [setTheme]);
+  }, [setTheme, changeLocale]);
+
+  useEffect(() => {
+    const onProfileUpdate = () => {
+      void refresh();
+      try { localStorage.setItem("cc:profile-revision", String(Date.now())); } catch {}
+    };
+    const onStorage = (event) => {
+      if (event.key === "cc:profile-revision") void refresh();
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    window.addEventListener("profile:updated", onProfileUpdate);
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("profile:updated", onProfileUpdate);
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     // Deferred so the profile fetch (and its setState) runs outside the effect body.
@@ -128,6 +152,7 @@ export function Can({ permission, screen, fallback = null, children }) {
  * notice instead of the page. Explicit `screen` overrides the path lookup.
  */
 export function ScreenGuard({ screen = null, children }) {
+  const tUi = useUiText();
   const { isAuth, loaded, screens, wildcard } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -140,10 +165,8 @@ export function ScreenGuard({ screen = null, children }) {
   return (
     <div className="flex flex-1 items-center justify-center p-6" data-testid="screen-guard-denied">
       <div className="max-w-md rounded-2xl border bg-card p-6 text-center shadow-sm">
-        <h2 className="text-lg font-semibold">Access denied</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Your roles do not include <span className="font-medium text-foreground">{decision.label || "this screen"}</span>. Ask an administrator to grant it in Permissions.
-        </p>
+        <h2 className="text-lg font-semibold">{tUi("Access denied")}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{tUi("Your roles do not include ")}<span className="font-medium text-foreground">{decision.label || tUi("this screen")}</span>{tUi(". Ask an administrator to grant it in Permissions.")}</p>
       </div>
     </div>
   );

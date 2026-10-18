@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -48,6 +50,7 @@ import ContactImportSheet from "@/components/contacts/ImportSheet";
 import ApiSchemaSheet from "./ApiSchemaSheet";
 
 export default function ContactsView() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -155,23 +158,18 @@ export default function ContactsView() {
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold flex items-center gap-2">
-              <IconAddressBook className="size-6 text-telnyx-green" /> Contacts
-            </div>
+              <IconAddressBook className="size-6 text-telnyx-green" />{tUi(" Contacts")}</div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setShowApiSchema(true)}>
-                <IconCode className="size-4 mr-2" />
-                API Schema
-              </Button>
+                <IconCode className="size-4 mr-2" />{tUi("API Schema")}</Button>
               <Button
                 variant="secondary"
                 onClick={() =>
                   setFilters({ q: "", phone: "", email: "", company: "" })
                 }
-              >
-                Clear
-              </Button>
+              >{tUi("Clear")}</Button>
               <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
+                {loading ? tUi("Loading…") : tUi("Refresh")}
               </Button>
               <Button
                 variant="outline"
@@ -179,62 +177,58 @@ export default function ContactsView() {
                   setShowImportSheet(true);
                 }}
               >
-                <IconUpload className="size-4 mr-2" />
-                Import
-              </Button>
+                <IconUpload className="size-4 mr-2" />{tUi("Import")}</Button>
               <Button
                 onClick={() => {
                   setEditContactId(null);
                   setShowEditSheet(true);
                 }}
               >
-                <IconPlus className="size-4 mr-2" />
-                New Contact
-              </Button>
+                <IconPlus className="size-4 mr-2" />{tUi("New Contact")}</Button>
             </div>
           </div>
           <div className="flex gap-2 items-end flex-wrap">
             <div style={{ width: "25%", minWidth: "200px" }}>
-              <label className="text-xs">Search</label>
+              <label className="text-xs">{tUi("Search")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="name, company, notes…"
+                placeholder={tUi("name, company, notes…")}
                 className="w-full"
               />
             </div>
             <div style={{ width: "20%", minWidth: "150px" }}>
-              <label className="text-xs">Phone</label>
+              <label className="text-xs">{tUi("Phone")}</label>
               <Input
                 value={filters.phone}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, phone: e.target.value }))
                 }
-                placeholder="phone number…"
+                placeholder={tUi("phone number…")}
                 className="w-full"
               />
             </div>
             <div style={{ width: "20%", minWidth: "150px" }}>
-              <label className="text-xs">Email</label>
+              <label className="text-xs">{tUi("Email")}</label>
               <Input
                 value={filters.email}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, email: e.target.value }))
                 }
-                placeholder="email address…"
+                placeholder={tUi("email address…")}
                 className="w-full"
               />
             </div>
             <div style={{ width: "20%", minWidth: "150px" }}>
-              <label className="text-xs">Company</label>
+              <label className="text-xs">{tUi("Company")}</label>
               <Input
                 value={filters.company}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, company: e.target.value }))
                 }
-                placeholder="company name…"
+                placeholder={tUi("company name…")}
                 className="w-full"
               />
             </div>
@@ -259,13 +253,11 @@ export default function ContactsView() {
                 </colgroup>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">Company</TableHead>
-                    <TableHead className="px-[10px]">Phone</TableHead>
-                    <TableHead className="px-[10px]">Email</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Company")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Phone")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Email")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -295,7 +287,7 @@ export default function ContactsView() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit contact"
+                                title={tUi("Edit contact")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -304,31 +296,26 @@ export default function ContactsView() {
                                   <button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete contact"
+                                    title={tUi("Delete contact")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete contact?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the contact "
-                                      {getDisplayName(contact)}".
+                                    <DialogTitle>{tUi("Delete contact?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the contact \"")}{getDisplayName(contact)}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(contact.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -344,9 +331,7 @@ export default function ContactsView() {
                       <TableCell
                         colSpan={5}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No contacts
-                      </TableCell>
+                      >{tUi("No contacts")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -356,12 +341,10 @@ export default function ContactsView() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -381,8 +364,7 @@ export default function ContactsView() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium">
-                Page {page} of {pageCount}
+              <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
               </div>
               <div className="ml-auto flex items-center gap-2 lg:ml-0">
                 <Button
@@ -391,7 +373,7 @@ export default function ContactsView() {
                   onClick={() => setPage(1)}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to first page</span>
+                  <span className="sr-only">{tUi("Go to first page")}</span>
                   <IconChevronsLeft />
                 </Button>
                 <Button
@@ -401,7 +383,7 @@ export default function ContactsView() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to previous page</span>
+                  <span className="sr-only">{tUi("Go to previous page")}</span>
                   <IconChevronLeft />
                 </Button>
                 <Button
@@ -411,7 +393,7 @@ export default function ContactsView() {
                   onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to next page</span>
+                  <span className="sr-only">{tUi("Go to next page")}</span>
                   <IconChevronRight />
                 </Button>
                 <Button
@@ -421,7 +403,7 @@ export default function ContactsView() {
                   onClick={() => setPage(pageCount)}
                   disabled={page >= pageCount}
                 >
-                  <span className="sr-only">Go to last page</span>
+                  <span className="sr-only">{tUi("Go to last page")}</span>
                   <IconChevronsRight />
                 </Button>
               </div>

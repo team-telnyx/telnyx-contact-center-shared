@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { InteractionChannel } from "./InteractionChannel";
 import AnalyticsReportFilters from "./AnalyticsReportFilters";
@@ -115,6 +117,7 @@ function HistoryMetricCard({ icon: Icon, label, value, detail, progress = 0, chi
 }
 
 export default function SupervisorCallHistoryView({ embedded = false }) {
+  const tUi = useUiText();
   const supervisorCallHistoryDateRange = useAppStateStore(
     (state) => state.supervisorCallHistoryDateRange,
   );
@@ -255,26 +258,26 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
         onRefresh={load}
         loading={loading}
         queueFilter={(
-          <select aria-label="Queue" value={filters.queue} onChange={(event) => { setPage(1); setFilters((previous) => ({ ...previous, queue: event.target.value })); }} className="h-10 max-w-48 rounded-lg border bg-background px-3 text-xs">
-            <option value="all">All queues</option>
+          <select aria-label={tUi("Queue")} value={filters.queue} onChange={(event) => { setPage(1); setFilters((previous) => ({ ...previous, queue: event.target.value })); }} className="h-10 max-w-48 rounded-lg border bg-background px-3 text-xs">
+            <option value="all">{tUi("All queues")}</option>
             {filterOptions.queues.map((queue) => <option key={queue} value={queue}>{queue}</option>)}
           </select>
         )}
       >
-        <select aria-label="Agent" value={filters.agent} onChange={(event) => { setPage(1); setFilters((previous) => ({ ...previous, agent: event.target.value })); }} className="h-9 max-w-full rounded-lg border bg-background px-3 text-xs">
-          <option value="all">All agents</option>
+        <select aria-label={tUi("Agent")} value={filters.agent} onChange={(event) => { setPage(1); setFilters((previous) => ({ ...previous, agent: event.target.value })); }} className="h-9 max-w-full rounded-lg border bg-background px-3 text-xs">
+          <option value="all">{tUi("All agents")}</option>
           {filterOptions.agents.map((agent) => <option key={agent.username} value={agent.username}>{agent.name}</option>)}
         </select>
-        <select aria-label="Outcome" value={outcome} onChange={(event) => { setOutcome(event.target.value); setPage(1); }} className="h-9 max-w-full rounded-lg border bg-background px-3 text-xs">
-          <option value="all">All outcomes</option><option value="completed">Completed</option><option value="abandoned">Abandoned</option><option value="failed">Failed</option>
+        <select aria-label={tUi("Outcome")} value={outcome} onChange={(event) => { setOutcome(event.target.value); setPage(1); }} className="h-9 max-w-full rounded-lg border bg-background px-3 text-xs">
+          <option value="all">{tUi("All outcomes")}</option><option value="completed">{tUi("Completed")}</option><option value="abandoned">{tUi("Abandoned")}</option><option value="failed">{tUi("Failed")}</option>
         </select>
-        <Input aria-label="Search interactions" placeholder="Customer, address or interaction ID" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} className="h-9 w-full sm:max-w-xs sm:flex-1" />
+        <Input aria-label={tUi("Search interactions")} placeholder={tUi("Customer, address or interaction ID")} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} className="h-9 w-full sm:max-w-xs sm:flex-1" />
       </AnalyticsReportFilters>
           {loading ? <Skeleton className="h-32 w-full"/> : loadError ? <p role="alert" className="mt-4 text-sm text-destructive">{loadError}</p> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <HistoryMetricCard icon={IconPhoneIncoming} label="Interactions" value={formatShortNumber(historyMetrics.total)} detail={`${formatShortNumber(historyMetrics.visible)} visible on current page`} progress={pct(historyMetrics.visible, Math.max(historyMetrics.total, 1))} chip="Range" tone="sky" />
-            <HistoryMetricCard icon={IconCheck} label="Completed" value={formatShortNumber(historyMetrics.completed)} detail={`${historyMetrics.completionRate}% of matching interactions`} progress={historyMetrics.completionRate} chip="Range" tone="emerald" />
-            <HistoryMetricCard icon={IconAlertCircle} label="Unserved" value={formatShortNumber(historyMetrics.missed)} detail={`${historyMetrics.missedRate}% abandoned / failed`} progress={historyMetrics.missedRate} chip="Range" tone="amber" />
-            <HistoryMetricCard icon={IconClock} label="Evidence" value={formatShortNumber(historyMetrics.evidence)} detail={`${historyMetrics.conversations} conversations · ${historyMetrics.recordings} recordings`} progress={pct(historyMetrics.evidence,total)} chip="Assets" tone="slate" />
+            <HistoryMetricCard icon={IconPhoneIncoming} label={tUi("Interactions")} value={formatShortNumber(historyMetrics.total)} detail={tUi("{value0} visible on current page", { value0: formatShortNumber(historyMetrics.visible) })} progress={pct(historyMetrics.visible, Math.max(historyMetrics.total, 1))} chip={tUi("Range")} tone="sky" />
+            <HistoryMetricCard icon={IconCheck} label={tUi("Completed")} value={formatShortNumber(historyMetrics.completed)} detail={tUi("{value0}% of matching interactions", { value0: historyMetrics.completionRate })} progress={historyMetrics.completionRate} chip={tUi("Range")} tone="emerald" />
+            <HistoryMetricCard icon={IconAlertCircle} label={tUi("Unserved")} value={formatShortNumber(historyMetrics.missed)} detail={tUi("{value0}% abandoned / failed", { value0: historyMetrics.missedRate })} progress={historyMetrics.missedRate} chip={tUi("Range")} tone="amber" />
+            <HistoryMetricCard icon={IconClock} label={tUi("Evidence")} value={formatShortNumber(historyMetrics.evidence)} detail={tUi("{value0} conversations · {value1} recordings", { value0: historyMetrics.conversations, value1: historyMetrics.recordings })} progress={pct(historyMetrics.evidence,total)} chip={tUi("Assets")} tone="slate" />
           </div>}
         <Card className="border-border/70 bg-card shadow-sm">
           <CardContent className="p-0">
@@ -282,16 +285,16 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Channel</TableHead><TableHead>Direction</TableHead>
-                    <TableHead>From</TableHead>
-                    <TableHead>To</TableHead>
-                    <TableHead>Queue</TableHead>
-                    <TableHead>Agent</TableHead>
-                    <TableHead>Started</TableHead>
-                    <TableHead>Duration</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Evidence</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{tUi("Channel")}</TableHead><TableHead>{tUi("Direction")}</TableHead>
+                    <TableHead>{tUi("From")}</TableHead>
+                    <TableHead>{tUi("To")}</TableHead>
+                    <TableHead>{tUi("Queue")}</TableHead>
+                    <TableHead>{tUi("Agent")}</TableHead>
+                    <TableHead>{tUi("Started")}</TableHead>
+                    <TableHead>{tUi("Duration")}</TableHead>
+                    <TableHead>{tUi("Status")}</TableHead>
+                    <TableHead>{tUi("Evidence")}</TableHead>
+                    <TableHead className="text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -302,7 +305,7 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
                       </TableRow>
                     ))
                   ) : loadError ? (<TableRow><TableCell colSpan={11} role="alert" className="p-6 text-destructive">{loadError}</TableCell></TableRow>) : items.length === 0 ? (
-                    <TableRow><TableCell colSpan={11} className="text-center text-sm">No matching interactions found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={11} className="text-center text-sm">{tUi("No matching interactions found.")}</TableCell></TableRow>
                   ) : (
                     items.map((item) => {
                       const startedAt = item.customer_started_at || (Number(item.transfer_count || 0) > 0 ? item.created_at : null) || item.answered_at || item.assigned_at || item.enqueued_at || item.created_at;
@@ -331,12 +334,12 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
                           <TableCell>{item.agent_name || item.agent_username || "-"}</TableCell>
                           <TableCell>{formatDateTime(startedAt)}</TableCell>
                           <TableCell>{formatDuration(durationSeconds)}</TableCell>
-                          <TableCell><Badge variant="outline" className={`uppercase bg-transparent ${statusClass}`}>{item.state || "unknown"}</Badge></TableCell>
-                          <TableCell>{channelDefinition(item.interaction_type).capabilities.conversation ? <Badge variant="outline">Conversation</Badge> : hasRecording ? <Badge className="bg-green-500/10 text-green-500 border border-green-500/40">Available</Badge> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                          <TableCell><Badge variant="outline" className={`uppercase bg-transparent ${statusClass}`}>{item.state || tUi("unknown")}</Badge></TableCell>
+                          <TableCell>{channelDefinition(item.interaction_type).capabilities.conversation ? <Badge variant="outline">{tUi("Conversation")}</Badge> : hasRecording ? <Badge className="bg-green-500/10 text-green-500 border border-green-500/40">{tUi("Available")}</Badge> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <Button size="icon" variant="ghost" aria-label={`Preview interaction ${item.id}`} onClick={() => openDetails(item)}><IconInfoCircle className="h-4 w-4" /></Button>
-                              <Button size="icon" variant="ghost" asChild><Link aria-label={`Open interaction ${item.id}`} href={`/supervisor/interactions-history/${item.id}`}><IconExternalLink className="h-4 w-4" /></Link></Button>
+                              <Button size="icon" variant="ghost" aria-label={tUi("Preview interaction {value0}", { value0: item.id })} onClick={() => openDetails(item)}><IconInfoCircle className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" asChild><Link aria-label={tUi("Open interaction {value0}", { value0: item.id })} href={`/supervisor/interactions-history/${item.id}`}><IconExternalLink className="h-4 w-4" /></Link></Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -351,15 +354,15 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
 
         <Card className="border-border/70 bg-card shadow-sm">
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
-            <div className="text-sm font-medium text-foreground">Page {page} of {totalPages}</div>
+            <div className="text-sm font-medium text-foreground">{tUi("Page ")}{page}{tUi(" of ")}{totalPages}</div>
             <div className="flex items-center gap-3">
               <Button size="icon" variant="outline" onClick={() => setPage(1)} disabled={page === 1} className="rounded-full"><IconChevronsLeft className="h-4 w-4" /></Button>
               <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-full"><IconChevronLeft className="h-4 w-4" /></Button>
               <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-full"><IconChevronRight className="h-4 w-4" /></Button>
               <Button size="icon" variant="outline" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded-full"><IconChevronsRight className="h-4 w-4" /></Button>
-              <span className="text-sm font-medium text-foreground ml-2">Rows per page</span>
+              <span className="text-sm font-medium text-foreground ml-2">{tUi("Rows per page")}</span>
               <Select value={String(pageSize)} onValueChange={(value) => { setPage(1); setPageSize(Number(value)); }}>
-                <SelectTrigger className="w-[110px] rounded-full px-4"><SelectValue placeholder="Rows" /></SelectTrigger>
+                <SelectTrigger className="w-[110px] rounded-full px-4"><SelectValue placeholder={tUi("Rows")} /></SelectTrigger>
                 <SelectContent>{[10, 25, 50, 100].map((size) => (<SelectItem key={size} value={String(size)}>{size}</SelectItem>))}</SelectContent>
               </Select>
             </div>

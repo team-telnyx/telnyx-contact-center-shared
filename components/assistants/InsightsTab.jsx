@@ -1,6 +1,10 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import Switch from "@/components/ui/switch";
@@ -12,8 +16,12 @@ import {
 } from "@/components/ui/hover-card";
 
 export default function InsightsTab({ values, setValues, isCreate = false }) {
+  const tUi = useUiText();
   const [groups, setGroups] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [search, setSearch] = useState("");
   const [insightsById, setInsightsById] = useState({});
 
   const selectedId = useMemo(
@@ -24,11 +32,13 @@ export default function InsightsTab({ values, setValues, isCreate = false }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setError(false);
       try {
         const res = await fetch("/api/ai/conversations/insight-groups", {
           cache: "no-store",
         });
         const data = await res.json();
+        if (!res.ok || !data?.ok) throw new Error("groups");
         if (res.ok && data?.ok) {
           const groupsList = Array.isArray(data.items) ? data.items : [];
           setGroups(groupsList);
@@ -54,11 +64,11 @@ export default function InsightsTab({ values, setValues, isCreate = false }) {
             }
           }
         }
-      } catch (_) {}
+      } catch (_) { setError(true); }
       setLoading(false);
     }
     load();
-  }, [isCreate, selectedId, setValues]);
+  }, [isCreate, selectedId, setValues, attempt]);
 
   // Load all insights once to show instructions in hover cards
   useEffect(() => {
@@ -98,11 +108,9 @@ export default function InsightsTab({ values, setValues, isCreate = false }) {
 
   return (
     <div className="space-y-3">
-      <div className="text-sm text-muted-foreground">
-        Select an Insight Group to run automatically for this assistant’s
-        conversations.
-      </div>
-      <Card className="p-3">
+      <div className="text-sm text-muted-foreground">{tUi("Select an Insight Group to run automatically for this assistant’s conversations.")}</div>
+      <Card className="gap-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3"><Input className="max-w-sm" aria-label={tUi("Search insight groups")} placeholder={tUi("Search insight groups…")} value={search} onChange={e => setSearch(e.target.value)} /><span className="text-xs text-muted-foreground">{loading ? <Skeleton className="h-4 w-32" /> : groups.find(group => String(group.id) === String(selectedId))?.name || tUi("No group selected")}</span></div>
         {loading ? (
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
@@ -112,19 +120,17 @@ export default function InsightsTab({ values, setValues, isCreate = false }) {
               </div>
             ))}
           </div>
-        ) : groups.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            No insight groups found. Create them in AI → Insights.
-          </div>
+        ) : error ? <div role="alert" className="space-y-3"><p className="text-sm">{tUi("Insight groups could not be loaded.")}</p><Button variant="outline" size="sm" onClick={() => setAttempt(v => v + 1)}>{tUi("Try again")}</Button></div> : groups.length === 0 ? (
+          <div className="text-sm text-muted-foreground">{tUi("No insight groups found. Create them in AI → Insights.")}</div>
         ) : (
           <div className="space-y-1">
-            {groups.map((g) => {
+            {groups.filter(g => `${g.name} ${(g.insights || []).map(i => i.name || insightsById[i.id]?.name || "").join(" ")}`.toLowerCase().includes(search.toLowerCase())).map((g) => {
               const checked = String(selectedId || "") === String(g.id);
               const insightItems = Array.isArray(g.insights) ? g.insights : [];
               return (
                 <div
                   key={g.id}
-                  className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center py-1 px-1 rounded hover:bg-muted"
+                  className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center py-4 px-3 rounded-lg border hover:bg-muted/30"
                 >
                   <div
                     className="md:col-span-4 text-sm truncate"
@@ -134,9 +140,7 @@ export default function InsightsTab({ values, setValues, isCreate = false }) {
                   </div>
                   <div className="md:col-span-7 flex flex-wrap gap-1">
                     {insightItems.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">
-                        No insights
-                      </span>
+                      <span className="text-xs text-muted-foreground">{tUi("No insights")}</span>
                     ) : (
                       insightItems.map((ins, i) => {
                         const id = ins?.id;
@@ -152,9 +156,9 @@ export default function InsightsTab({ values, setValues, isCreate = false }) {
                             <HoverCardContent className="w-80 text-xs whitespace-pre-wrap">
                               {info
                                 ? isStructured
-                                  ? "Structured insight (JSON Schema)"
-                                  : instructions || "No instructions defined"
-                                : "Loading…"}
+                                  ? tUi("Structured insight (JSON Schema)")
+                                  : instructions || tUi("No instructions defined")
+                                : tUi("Loading…")}
                             </HoverCardContent>
                           </HoverCard>
                         );
@@ -163,6 +167,7 @@ export default function InsightsTab({ values, setValues, isCreate = false }) {
                   </div>
                   <div className="md:col-span-1 flex justify-end">
                     <Switch
+                      aria-label={tUi("Select {value0}", { value0: g.name || "group" })}
                       checked={checked}
                       onCheckedChange={(v) => toggle(g.id, Boolean(v))}
                     />

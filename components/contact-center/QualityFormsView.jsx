@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +77,7 @@ const STATUS_BADGE = {
 };
 
 export default function QualityFormsView({ refreshNonce = 0 }) {
+  const tUi = useUiText();
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [localNonce, setLocalNonce] = useState(0);
@@ -275,14 +279,9 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
   return (
     <div className="space-y-5" data-testid="quality-forms-view">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Evaluation scorecards used by supervisors and the AI assistant. Separate from agent
-          scripting forms.
-        </p>
+        <p className="text-sm text-muted-foreground">{tUi("Evaluation scorecards used by supervisors and the AI assistant. Separate from agent scripting forms.")}</p>
         <Can permission="quality_forms:create"><Button type="button" size="sm" onClick={openCreate}>
-          <IconPlus className="mr-2 h-4 w-4" />
-          New form
-        </Button></Can>
+          <IconPlus className="mr-2 h-4 w-4" />{tUi("New form")}</Button></Can>
       </div>
 
       {loading ? (
@@ -307,33 +306,29 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                     </span>
                     <div className="flex items-center gap-1.5">
                       {form.is_template ? (
-                        <Badge variant="outline" className="text-[11px] text-muted-foreground">Template</Badge>
+                        <Badge variant="outline" className="text-[11px] text-muted-foreground">{tUi("Template")}</Badge>
                       ) : null}
                       <Badge variant="outline" className={STATUS_BADGE[form.status] || ""}>
-                        {form.status}
+                        {operationalStatusLabel(tUi, form.status)}
                       </Badge>
                     </div>
                   </div>
                   <h4 className="mt-4 text-base font-semibold leading-tight">{form.name}</h4>
                   <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">
-                    {form.description || "No description"}
+                    {form.description || tUi("No description")}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span>v{form.version}</span>
-                    <span>· {criteriaCount} criteria</span>
-                    <span>· {form.evaluation_count || 0} evaluations</span>
+                    <span>{tUi("v")}{form.version}</span>
+                    <span>· {criteriaCount}{tUi(" criteria")}</span>
+                    <span>· {form.evaluation_count || 0}{tUi(" evaluations")}</span>
                     {form.category ? <span>· {form.category}</span> : null}
                   </div>
                   <div className="mt-4 flex gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => openEdit(form)}>
-                      <IconPencil className="mr-1.5 h-4 w-4" />
-                      Edit
-                    </Button>
+                      <IconPencil className="mr-1.5 h-4 w-4" />{tUi("Edit")}</Button>
                     {form.status === "draft" ? (
                       <Button type="button" variant="outline" size="sm" onClick={() => setFormStatus(form, "published")}>
-                        <IconRosetteDiscountCheck className="mr-1.5 h-4 w-4" />
-                        Publish
-                      </Button>
+                        <IconRosetteDiscountCheck className="mr-1.5 h-4 w-4" />{tUi("Publish")}</Button>
                     ) : null}
                     {form.status !== "archived" ? (
                       <Button
@@ -343,9 +338,7 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                         className="text-muted-foreground"
                         onClick={() => setFormStatus(form, "archived")}
                       >
-                        <IconArchive className="mr-1.5 h-4 w-4" />
-                        Archive
-                      </Button>
+                        <IconArchive className="mr-1.5 h-4 w-4" />{tUi("Archive")}</Button>
                     ) : null}
                   </div>
                 </CardContent>
@@ -358,11 +351,8 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
       <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
         <SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-2xl">
           <SheetHeader className="border-b px-6 py-4">
-            <SheetTitle>{editingForm ? "Edit quality form" : "New quality form"}</SheetTitle>
-            <SheetDescription>
-              Define sections and criteria. The AI rubric guides the assistant when scoring calls
-              automatically.
-            </SheetDescription>
+            <SheetTitle>{editingForm ? tUi("Edit quality form") : tUi("New quality form")}</SheetTitle>
+            <SheetDescription>{tUi("Define sections and criteria. The AI rubric guides the assistant when scoring calls automatically.")}</SheetDescription>
           </SheetHeader>
 
           {/* Scrollable content: form metadata + sections/criteria */}
@@ -370,16 +360,16 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
             <div className="space-y-5 px-6 py-4">
             <div className="grid gap-3">
               <div>
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Name</Label>
-                <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Billing Support Scorecard" />
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">{tUi("Name")}</Label>
+                <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={tUi("e.g. Billing Support Scorecard")} />
               </div>
               <div>
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Description</Label>
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">{tUi("Description")}</Label>
                 <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} />
               </div>
               <div>
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Category</Label>
-                <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="e.g. customer-service" />
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">{tUi("Category")}</Label>
+                <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder={tUi("e.g. customer-service")} />
               </div>
             </div>
 
@@ -390,7 +380,7 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                     <Input
                       value={section.title}
                       onChange={(event) => updateSection(sectionIndex, { title: event.target.value })}
-                      placeholder="Section title (e.g. Opening)"
+                      placeholder={tUi("Section title (e.g. Opening)")}
                       className="font-medium"
                     />
                     <Button
@@ -415,7 +405,7 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                           onChange={(event) =>
                             updateCriterion(sectionIndex, criterionIndex, { label: event.target.value })
                           }
-                          placeholder="Criterion (e.g. Professional greeting)"
+                          placeholder={tUi("Criterion (e.g. Professional greeting)")}
                         />
                         <Button
                           type="button"
@@ -437,12 +427,12 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                         onChange={(event) =>
                           updateCriterion(sectionIndex, criterionIndex, { description: event.target.value })
                         }
-                        placeholder="What should the evaluator look for?"
+                        placeholder={tUi("What should the evaluator look for?")}
                         rows={2}
                       />
                       <div className="flex flex-wrap items-center gap-4">
                         <div>
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Type</Label>
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">{tUi("Type")}</Label>
                           <Select
                             value={criterion.type}
                             onValueChange={(value) =>
@@ -454,14 +444,14 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                           >
                             <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="score">Score</SelectItem>
-                              <SelectItem value="boolean">Pass / Fail</SelectItem>
+                              <SelectItem value="score">{tUi("Score")}</SelectItem>
+                              <SelectItem value="boolean">{tUi("Pass / Fail")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         {criterion.type === "score" ? (
                           <div>
-                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Max score</Label>
+                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">{tUi("Max score")}</Label>
                             <Input
                               type="number"
                               min={1}
@@ -477,7 +467,7 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                           </div>
                         ) : null}
                         <div>
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">Weight</Label>
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">{tUi("Weight")}</Label>
                           <Input
                             type="number"
                             min={1}
@@ -498,26 +488,26 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                               updateCriterion(sectionIndex, criterionIndex, { criticalFail: checked })
                             }
                           />
-                          <span className="text-xs text-muted-foreground">Critical fail</span>
+                          <span className="text-xs text-muted-foreground">{tUi("Critical fail")}</span>
                         </div>
                       </div>
                       <div className="grid gap-2 md:grid-cols-2">
                         <div>
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">AI rubric · excellent</Label>
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">{tUi("AI rubric · excellent")}</Label>
                           <Textarea
                             value={criterion.aiRubric?.excellent || ""}
                             onChange={(event) => updateRubric(sectionIndex, criterionIndex, { excellent: event.target.value })}
                             rows={2}
-                            placeholder="What does a top score look like?"
+                            placeholder={tUi("What does a top score look like?")}
                           />
                         </div>
                         <div>
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">AI rubric · poor</Label>
+                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">{tUi("AI rubric · poor")}</Label>
                           <Textarea
                             value={criterion.aiRubric?.poor || ""}
                             onChange={(event) => updateRubric(sectionIndex, criterionIndex, { poor: event.target.value })}
                             rows={2}
-                            placeholder="What does a failing score look like?"
+                            placeholder={tUi("What does a failing score look like?")}
                           />
                         </div>
                       </div>
@@ -534,37 +524,29 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
                       })
                     }
                   >
-                    <IconPlus className="mr-1.5 h-4 w-4" />
-                    Add criterion
-                  </Button>
+                    <IconPlus className="mr-1.5 h-4 w-4" />{tUi("Add criterion")}</Button>
                 </CardContent>
               </Card>
             ))}
 
             <Button type="button" variant="outline" onClick={() => setSections((previous) => [...previous, emptySection()])}>
-              <IconPlus className="mr-1.5 h-4 w-4" />
-              Add section
-            </Button>
+              <IconPlus className="mr-1.5 h-4 w-4" />{tUi("Add section")}</Button>
 
             <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 p-3 text-sm">
-              <span className="text-muted-foreground">Maximum score</span>
-              <span className="font-semibold">{formMaxScore(sections)} pts</span>
+              <span className="text-muted-foreground">{tUi("Maximum score")}</span>
+              <span className="font-semibold">{formMaxScore(sections)}{tUi(" pts")}</span>
             </div>
             </div>
           </div>
 
           {/* Fixed Footer */}
           <SheetFooter className="flex flex-row justify-end gap-2 border-t px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>{tUi("Cancel")}</Button>
             <Button type="button" variant="outline" onClick={() => saveForm(false)} disabled={saving}>
-              <IconDeviceFloppy className="mr-1.5 h-4 w-4" />
-              Save draft
-            </Button>
+              <IconDeviceFloppy className="mr-1.5 h-4 w-4" />{tUi("Save draft")}</Button>
             <Button type="button" onClick={() => saveForm(true)} disabled={saving}>
               <IconRosetteDiscountCheck className="mr-1.5 h-4 w-4" />
-              {saving ? "Saving…" : "Save & publish"}
+              {saving ? tUi("Saving…") : tUi("Save & publish")}
             </Button>
           </SheetFooter>
         </SheetContent>

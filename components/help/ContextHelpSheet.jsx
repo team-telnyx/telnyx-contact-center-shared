@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { IconExternalLink, IconHelpCircle } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
@@ -16,13 +18,14 @@ import { HelpTopicContent } from "@/components/help/HelpTopicContent";
 import { useHelp } from "@/components/help/HelpProvider";
 
 export function ContextHelpSheet() {
+  const tUi = useUiText();
   const { isOpen, portalContainer, setOpen, topic } = useHelp();
 
   return (
     <Sheet modal={false} open={isOpen} onOpenChange={setOpen}>
       <SheetContent
         id="context-help-sheet"
-        side="right"
+        side="end"
         showOverlay={false}
         portalContainer={portalContainer || undefined}
         data-context-help-sheet="true"
@@ -35,11 +38,11 @@ export function ContextHelpSheet() {
           <div className="mb-1 flex items-center gap-2">
             <IconHelpCircle className="size-4 text-telnyx-green" />
             <Badge variant="secondary">
-              {topic.scope === "field" ? "Field help" : "Screen help"}
+              {topic.scope === "field" ? tUi("Field help") : tUi("Screen help")}
             </Badge>
           </div>
           <div aria-live="polite">
-            <SheetTitle className="text-xl">{topic.title}</SheetTitle>
+            <SheetTitle className="text-xl">{tUi(topic.title)}</SheetTitle>
             <SheetDescription className="mt-1 leading-5">
               {topic.summary}
             </SheetDescription>
@@ -56,9 +59,7 @@ export function ContextHelpSheet() {
 
         <SheetFooter className="border-t bg-background/80 px-6 py-4">
           <Button asChild className="w-full">
-            <a href={topic.articleHref} target="contact-center-help">
-              Open full article
-              <IconExternalLink aria-hidden="true" />
+            <a href={topic.articleHref} target="contact-center-help">{tUi("Open full article")}<IconExternalLink aria-hidden="true" />
             </a>
           </Button>
         </SheetFooter>

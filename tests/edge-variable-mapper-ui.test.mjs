@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 
 const repoRoot = new URL("../", import.meta.url);
 
@@ -12,7 +12,7 @@ test("Configure Edge Variables sheet matches standard edit sheet shell", async (
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
   assert.match(source, /<Sheet open=\{open\} onOpenChange=\{handleOpenChange\}>/);
-  assert.match(source, /<SheetContent[\s\S]*side="right"[\s\S]*className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"/);
+  assert.match(source, /<SheetContent[\s\S]*side="end"[\s\S]*className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"/);
   assert.match(source, /<SheetHeader className="px-6 py-4 border-b"/);
   assert.match(source, /<SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2"/);
   assert.match(source, /Card className="mx-5 my-4"/);
@@ -98,7 +98,7 @@ test("Expected payload structure supports checkbox multi-select and batch Add Ma
   assert.match(source, /selectedSourcePaths/);
   assert.match(source, /Checkbox[\s\S]*checked=\{isAlreadyMapped \|\| selectedSourcePaths\.has\(field\.path\)\}/);
   assert.match(source, /addSelectedMappings/);
-  assert.match(source, /Add \{selectedSourcePaths\.size \|\| ""\} Mapping/);
+  assert.match(source, /Add mappings \(\$\{selectedSourcePaths\.size\}\)/);
   assert.doesNotMatch(source, /<Select[\s\S]*updateMapping\(index, "sourcePath"/);
 });
 

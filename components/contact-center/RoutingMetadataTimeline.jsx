@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import {
   IconPhoneCall,
@@ -386,11 +388,10 @@ function calculateTimeSincePrevious(event, previousEvent) {
 }
 
 export default function RoutingMetadataTimeline({ events = [], channel = "voice" }) {
+  const tUi = useUiText();
   if (!Array.isArray(events) || events.length === 0) {
     return (
-      <div className="text-sm text-muted-foreground py-4 text-center">
-        No routing events recorded for this interaction.
-      </div>
+      <div className="text-sm text-muted-foreground py-4 text-center">{tUi("No routing events recorded for this interaction.")}</div>
     );
   }
 
@@ -401,9 +402,7 @@ export default function RoutingMetadataTimeline({ events = [], channel = "voice"
 
   if (filteredEvents.length === 0) {
     return (
-      <div className="text-sm text-muted-foreground py-4 text-center">
-        No routing events recorded for this interaction.
-      </div>
+      <div className="text-sm text-muted-foreground py-4 text-center">{tUi("No routing events recorded for this interaction.")}</div>
     );
   }
 
@@ -463,7 +462,7 @@ export default function RoutingMetadataTimeline({ events = [], channel = "voice"
                 <div className="p-3 pl-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <div className="min-w-0">
-                      <span className="text-sm font-semibold">{title}</span>
+                      <span className="text-sm font-semibold">{tUi(title)}</span>
                       {detail ? (
                         <span className="ml-2 text-sm text-muted-foreground">{detail}</span>
                       ) : null}
@@ -487,13 +486,13 @@ export default function RoutingMetadataTimeline({ events = [], channel = "voice"
                       {event.routingAlgorithm && (
                         <RoutingTypeBadge routingAlgorithm={event.routingAlgorithm} />
                       )}
-                      <DetailChip icon={IconClockHour4} label="Wait" value={formatDuration(event.waitTimeSeconds)} />
-                      <DetailChip icon={IconAlertCircle} label="Alerting" value={formatDuration(event.alertingDurationSeconds)} />
-                      <DetailChip icon={IconPlayerPause} label="Hold" value={formatDuration(event.holdDuration)} />
-                      <DetailChip icon={IconFileText} label="Wrap-up" value={formatDuration(event.wrapupDurationSeconds)} />
-                      <DetailChip icon={IconUsers} label="Queue ID" value={event.queueId} mono />
-                      <DetailChip icon={IconCircleDot} label="Agent ID" value={event.agentId} mono />
-                      <DetailChip icon={IconPhoneCall} label="Call Control ID" value={event.callControlId} mono />
+                      <DetailChip icon={IconClockHour4} label={tUi("Wait")} value={formatDuration(event.waitTimeSeconds)} />
+                      <DetailChip icon={IconAlertCircle} label={tUi("Alerting")} value={formatDuration(event.alertingDurationSeconds)} />
+                      <DetailChip icon={IconPlayerPause} label={tUi("Hold")} value={formatDuration(event.holdDuration)} />
+                      <DetailChip icon={IconFileText} label={tUi("Wrap-up")} value={formatDuration(event.wrapupDurationSeconds)} />
+                      <DetailChip icon={IconUsers} label={tUi("Queue ID")} value={event.queueId} mono />
+                      <DetailChip icon={IconCircleDot} label={tUi("Agent ID")} value={event.agentId} mono />
+                      <DetailChip icon={IconPhoneCall} label={tUi("Call Control ID")} value={event.callControlId} mono />
                     </div>
                   )}
                 </div>

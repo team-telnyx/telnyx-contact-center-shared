@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { SecureIframe } from "./SecureIframe";
 
 export function AgentWebPagesView({ selectedInteraction, onBackToInteraction, webPageIds = [] }) {
+  const tUi = useUiText();
   const [webPages, setWebPages] = useState([]);
   const [selectedPageId, setSelectedPageId] = useState(null);
   const [selectedPage, setSelectedPage] = useState(null);
@@ -108,7 +111,7 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction, we
               size="sm"
               className="h-9 shrink-0 px-3 border-r border-border/50 rounded-none hover:bg-muted/50"
               onClick={() => setRefreshKey((prev) => prev + 1)}
-              title="Refresh page"
+              title={tUi("Refresh page")}
             >
               <IconRefresh className="h-4 w-4" />
             </Button>
@@ -120,9 +123,7 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction, we
               ))}
             </div>
           ) : webPages.length === 0 ? (
-            <div className="px-4 py-2 text-xs text-muted-foreground">
-              No web pages configured for this interaction
-            </div>
+            <div className="px-4 py-2 text-xs text-muted-foreground">{tUi("No web pages configured for this interaction")}</div>
           ) : (
             webPages.map((page, index) => (
               <div
@@ -159,9 +160,7 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction, we
             refreshKey={refreshKey}
           />
         ) : (
-          <div className="flex items-center justify-center flex-1 text-muted-foreground text-sm">
-            Select a web page to view
-          </div>
+          <div className="flex items-center justify-center flex-1 text-muted-foreground text-sm">{tUi("Select a web page to view")}</div>
         )}
       </div>
     </div>

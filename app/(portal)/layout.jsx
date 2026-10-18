@@ -8,6 +8,7 @@ import { useThemeColors } from "@/hooks/use-theme-colors";
 import { TelephonyProvider } from "@/components/telephony-provider";
 import { PhoneUiProvider } from "@/components/phone-ui-provider";
 import FloatingSoftphone from "@/components/floating-softphone";
+import DeviceHandoffHost from "@/components/contact-center/handoff/DeviceHandoffHost";
 import { ContactCenterStreamProvider } from "@/components/contact-center/ContactCenterStreamProvider";
 import { AgentInteractionsProvider } from "@/components/contact-center/AgentInteractionsProvider";
 import { GlobalWrapupSheet } from "@/components/contact-center/GlobalWrapupSheet";
@@ -56,6 +57,7 @@ export default function PortalLayout({ children }) {
                   </div>
                 </SidebarInset>
                 <FloatingSoftphone />
+                <DeviceHandoffHost />
                 <GlobalWrapupSheet />
               </AgentInteractionsProvider>
             </ContactCenterStreamProvider>

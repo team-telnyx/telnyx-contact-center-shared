@@ -1,4 +1,5 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 import { useEffect,useMemo,useRef,useState } from "react";
 import { MapPin } from "lucide-react";
 import { MAP_ATTRIBUTION,MAP_ATTRIBUTION_URL,MAP_TILE_SIZE,staticMapLayout } from "@/lib/contact-center/maps.mjs";
@@ -6,6 +7,7 @@ import { MAP_ATTRIBUTION,MAP_ATTRIBUTION_URL,MAP_TILE_SIZE,staticMapLayout } fro
 // Small static map centred on a point: a mosaic of tiles clipped to the card
 // with a pin in the middle. No map library and no API key are needed.
 export default function LocationMapPreview({latitude,longitude,zoom=15,width=280,height=150,className="",label="Map preview"}){
+  const tUi = useUiText();
   const [failed,setFailed]=useState({}),[scale,setScale]=useState(1);
   const frame=useRef(null);
   const layout=useMemo(()=>{try{return staticMapLayout({latitude,longitude,zoom,width,height});}catch{return null;}},[latitude,longitude,zoom,width,height]);
@@ -17,7 +19,7 @@ export default function LocationMapPreview({latitude,longitude,zoom=15,width=280
     return()=>observer.disconnect();
   },[width]);
   if(!layout)return null;
-  return <div ref={frame} className={`relative overflow-hidden rounded-lg border border-black/10 bg-slate-200 dark:border-white/10 dark:bg-slate-700 ${className}`} style={{width:"100%",maxWidth:layout.width,aspectRatio:`${layout.width} / ${layout.height}`}} role="img" aria-label={`${label}: ${layout.latitude}, ${layout.longitude}`} data-testid="location-map" data-zoom={layout.zoom}>
+  return <div ref={frame} className={`relative overflow-hidden rounded-lg border border-black/10 bg-slate-200 dark:border-white/10 dark:bg-slate-700 ${className}`} style={{width:"100%",maxWidth:layout.width,aspectRatio:`${layout.width} / ${layout.height}`}} role="img" aria-label={tUi("{value0}: {value1}, {value2}", { value0: label, value1: layout.latitude, value2: layout.longitude })} data-testid="location-map" data-zoom={layout.zoom}>
     <div className="absolute inset-0" style={{width:layout.width,height:layout.height,transform:`scale(${scale})`,transformOrigin:"top left"}}>
       {layout.tiles.map(tile=>failed[tile.key]?null:
         // eslint-disable-next-line @next/next/no-img-element

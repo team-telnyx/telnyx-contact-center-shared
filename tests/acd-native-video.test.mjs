@@ -91,7 +91,7 @@ test("video work is routed, accepted, joined by both sides, ended by the agent a
   await assert.rejects(customerJoinToken(pool, { workItemId: work.id, rooms }), (error) => error.status === 409);
   const provisioned = await provisionVideoRoom(pool, { workItemId: work.id, rooms });
   assert.equal(provisioned.room_id, rooms.roomId()); assert.equal(provisioned.state, "waiting");
-  assert.equal(rooms.calls[0][1].uniqueName, `cc-video-${work.id}`); assert.equal(rooms.calls[0][1].enableRecording, true);
+  assert.equal(rooms.calls[0][1].uniqueName, `cc-video-${session.id}`); assert.equal(rooms.calls[0][1].enableRecording, true);
   assert.equal((await provisionVideoRoom(pool, { workItemId: work.id, rooms })).room_id, rooms.roomId());
   const customer = await customerJoinToken(pool, { workItemId: work.id, rooms });
   assert.deepEqual(customer, { roomId: rooms.roomId(), token: `jwt-${rooms.roomId()}`, refreshToken: "refresh", expiresAt: null, refreshExpiresAt: null });

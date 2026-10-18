@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import {
   useState,
@@ -37,6 +39,7 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
   },
   ref
 ) {
+  const tUi = useUiText();
   const [pendingVariableName, setPendingVariableName] = useState("");
   const [pendingExpression, setPendingExpression] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -59,7 +62,7 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
   // Validate variable name
   const variableNameValidation = useMemo(() => {
     if (!pendingVariableName) {
-      return { valid: false, error: "Variable name is required" };
+      return { valid: false, error: tUi("Variable name is required") };
     }
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(pendingVariableName)) {
       return {
@@ -69,7 +72,7 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
       };
     }
     return { valid: true, error: null };
-  }, [pendingVariableName]);
+  }, [pendingVariableName, tUi]);
 
   // Check for duplicate variable name
   const duplicateCheck = useMemo(() => {
@@ -77,13 +80,13 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
       pendingVariableName,
       { nodes, edges, globalVariables },
       { type: "set_variable", id: selectedNodeId }
-    );
-  }, [pendingVariableName, nodes, edges, globalVariables, selectedNodeId]);
+    , tUi);
+  }, [pendingVariableName, nodes, edges, globalVariables, selectedNodeId, tUi]);
 
   // Validate expression
   const expressionValidation = useMemo(() => {
     if (!pendingExpression) {
-      return { valid: false, errors: ["Expression is required"] };
+      return { valid: false, errors: [tUi("Expression is required")] };
     }
 
     // Check for balanced brackets
@@ -118,7 +121,7 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
     // Use expression engine validation
     const result = validateExpression(pendingExpression, availableVariables);
     return result;
-  }, [pendingExpression, availableVariables]);
+  }, [pendingExpression, availableVariables, tUi]);
 
   // Overall validation
   const isValid =
@@ -308,11 +311,11 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
   return (
     <div className="space-y-4">
       <div>
-        <Label className="text-xs">Variable Name</Label>
+        <Label className="text-xs">{tUi("Variable Name")}</Label>
         <Input
           value={pendingVariableName}
           onChange={(e) => handlePendingChange("variableName", e.target.value)}
-          placeholder="my_variable"
+          placeholder={tUi("my_variable")}
           className={`mt-1 ${
             !variableNameValidation.valid && pendingVariableName
               ? "border-red-500"
@@ -324,7 +327,7 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
         {!variableNameValidation.valid && pendingVariableName && (
           <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
             <IconAlertCircle className="h-3 w-3" />
-            {variableNameValidation.error}
+            {tUi(variableNameValidation.error)}
           </p>
         )}
         {variableNameValidation.valid && duplicateCheck.isDuplicate && (
@@ -334,15 +337,13 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
           </p>
         )}
         {variableNameValidation.valid && !duplicateCheck.isDuplicate && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Name of the variable to create or update
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Name of the variable to create or update")}</p>
         )}
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <Label className="text-xs">Expression</Label>
+          <Label className="text-xs">{tUi("Expression")}</Label>
           <Button
             type="button"
             variant="ghost"
@@ -351,14 +352,14 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
             className="h-7 px-2 gap-1"
           >
             <IconCode className="h-4 w-4" />
-            <span className="text-xs">Expression Builder</span>
+            <span className="text-xs">{tUi("Expression Builder")}</span>
           </Button>
         </div>
         <VariableTextarea
           value={pendingExpression}
           onChange={(value) => handlePendingChange("expression", value)}
           availableVariables={availableVariables}
-          placeholder="{{first_name}} + ' ' + {{last_name}}"
+          placeholder={tUi("{{first_name}} + ' ' + {{last_name}}")}
           rows={4}
           className={`mt-1 ${
             !expressionValidation.valid && pendingExpression
@@ -381,10 +382,7 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
           </Alert>
         )}
         {expressionValidation.valid && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Expression to evaluate and store in the variable. Use Expression
-            Builder for advanced editing.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Expression to evaluate and store in the variable. Use Expression Builder for advanced editing.")}</p>
         )}
       </div>
 
@@ -398,16 +396,14 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
           }`}
         >
           <div className="flex items-center gap-2 mb-2">
-            <p className="text-xs font-medium">Preview:</p>
+            <p className="text-xs font-medium">{tUi("Preview:")}</p>
             {expressionValidation.valid && (
               <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                <IconCheck className="h-3 w-3" />
-                Valid
-              </span>
+                <IconCheck className="h-3 w-3" />{tUi("Valid")}</span>
             )}
           </div>
           <div className="text-sm font-mono bg-background rounded p-2 border">
-            <span className="text-muted-foreground">Set </span>
+            <span className="text-muted-foreground">{tUi("Set ")}</span>
             <span className="text-blue-600 dark:text-blue-400 font-semibold">
               {pendingVariableName}
             </span>
@@ -439,13 +435,11 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
             variant={isValid ? "default" : "secondary"}
           >
             <IconCheck className="h-4 w-4 mr-2" />
-            {hasUnsavedChanges ? "Save Expression" : "Saved"}
+            {hasUnsavedChanges ? tUi("Save Expression") : tUi("Saved")}
           </Button>
           {!expressionValidation.valid && pendingExpression && (
             <p className="text-xs text-red-500 flex items-center gap-1 mt-2">
-              <IconAlertCircle className="h-3 w-3" />
-              Fix errors to save
-            </p>
+              <IconAlertCircle className="h-3 w-3" />{tUi("Fix errors to save")}</p>
           )}
         </div>
       )}
@@ -463,6 +457,7 @@ export function SetVariableNodeEditorSaveButton({
   expressionValid,
   hasExpression,
 }) {
+  const tUi = useUiText();
   return (
     <div className="space-y-2">
       <Button
@@ -472,13 +467,11 @@ export function SetVariableNodeEditorSaveButton({
         variant={isValid ? "default" : "secondary"}
       >
         <IconCheck className="h-4 w-4 mr-2" />
-        {hasUnsavedChanges ? "Save Expression" : "Saved"}
+        {hasUnsavedChanges ? tUi("Save Expression") : tUi("Saved")}
       </Button>
       {!expressionValid && hasExpression && (
         <p className="text-xs text-red-500 flex items-center gap-1">
-          <IconAlertCircle className="h-3 w-3" />
-          Fix errors to save
-        </p>
+          <IconAlertCircle className="h-3 w-3" />{tUi("Fix errors to save")}</p>
       )}
     </div>
   );

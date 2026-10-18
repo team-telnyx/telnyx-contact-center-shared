@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { voiceFetch } from "@/lib/telephony/endpoint-client";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -30,13 +33,14 @@ import useActiveCallStore from "@/lib/stores/active-call-store";
 import {
   getIntentLabel,
   getSentimentColor,
-} from "@/lib/agent-assist/sentiment-analysis";
+} from "@/lib/agent-assist/sentiment-display";
 
 /**
  * AgentAssist Component
  * Displays real-time transcription, sentiment analysis, intent detection, and KB article suggestions
  */
 export function AgentAssist({ interactionId, interaction }) {
+  const tUi = useUiText();
   // Read transcriptions directly from active-call-store (same as demo portal)
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
   const originalCallControlId = useActiveCallStore(
@@ -198,7 +202,7 @@ export function AgentAssist({ interactionId, interaction }) {
       if (response.ok && data.ok) {
         notify({
           title: "SMS sent successfully",
-          description: `Message sent to ${callerNumber}`,
+          description: tUi("Message sent to {value0}", {value0: callerNumber}),
           variant: "success",
         });
       } else {
@@ -286,7 +290,7 @@ export function AgentAssist({ interactionId, interaction }) {
         notify({
           title: "Article is being played",
           description: isChunked
-            ? `Reading content in ${data.totalChunks} parts for faster playback`
+            ? tUi("Reading content in {value0} parts for faster playback", {value0: data.totalChunks})
             : "Reading article content to caller",
           variant: "success",
         });
@@ -314,7 +318,7 @@ export function AgentAssist({ interactionId, interaction }) {
         {/* Intent Card */}
         <Card className="border-2 border-border bg-card">
           <CardContent className="pl-5 pt-4 pb-4">
-            <h3 className="text-lg font-semibold mb-2">Detected Intent</h3>
+            <h3 className="text-lg font-semibold mb-2">{tUi("Detected Intent")}</h3>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-lg bg-purple-500/10">
                 <Target className="h-7 w-7 text-purple-500" />
@@ -323,16 +327,13 @@ export function AgentAssist({ interactionId, interaction }) {
                 {aggregateStats.topIntent ? (
                   <>
                     <Badge className="bg-purple-500 text-white hover:bg-purple-600 text-sm px-3 py-1">
-                      {getIntentLabel(aggregateStats.topIntent)}
+                      {getIntentLabel(aggregateStats.topIntent, tUi)}
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {aggregateStats.intentCount} detection(s)
-                    </p>
+                      {aggregateStats.intentCount}{tUi(" detection(s)")}</p>
                   </>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Waiting for transcription...
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tUi("Waiting for transcription...")}</p>
                 )}
               </div>
             </div>
@@ -355,7 +356,7 @@ export function AgentAssist({ interactionId, interaction }) {
         {/* Current Sentiment Card */}
         <Card className="border-2 border-border bg-card">
           <CardContent className="pl-5 pt-4 pb-4">
-            <h3 className="text-lg font-semibold mb-2">Current Sentiment</h3>
+            <h3 className="text-lg font-semibold mb-2">{tUi("Current Sentiment")}</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-blue-500/10">
                 <Activity className="h-7 w-7 text-blue-500" />
@@ -371,7 +372,7 @@ export function AgentAssist({ interactionId, interaction }) {
                     aggregateStats.currentSentiment,
                   )}`}
                 >
-                  {aggregateStats.currentSentiment}
+                  {operationalStatusLabel(tUi, aggregateStats.currentSentiment)}
                 </Badge>
               </div>
             </div>
@@ -381,7 +382,7 @@ export function AgentAssist({ interactionId, interaction }) {
         {/* Average Sentiment Card */}
         <Card className="border-2 border-border bg-card">
           <CardContent className="pl-5 pt-4 pb-4">
-            <h3 className="text-lg font-semibold mb-2">Average Sentiment</h3>
+            <h3 className="text-lg font-semibold mb-2">{tUi("Average Sentiment")}</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-green-500/10">
                 <TrendingUp className="h-7 w-7 text-green-500" />
@@ -397,7 +398,7 @@ export function AgentAssist({ interactionId, interaction }) {
                     aggregateStats.averageSentiment,
                   )}`}
                 >
-                  {aggregateStats.averageSentiment}
+                  {operationalStatusLabel(tUi, aggregateStats.averageSentiment)}
                 </Badge>
               </div>
             </div>
@@ -414,9 +415,7 @@ export function AgentAssist({ interactionId, interaction }) {
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
                   <MessageSquare className="h-5 w-5 text-sky-500" />
-                </span>
-                Live Transcription
-                <Badge className="ml-auto text-xs bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/50">
+                </span>{tUi("Live Transcription")}<Badge className="ml-auto text-xs bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/50">
                   {transcriptions.length}
                 </Badge>
               </h3>
@@ -426,7 +425,7 @@ export function AgentAssist({ interactionId, interaction }) {
                 <div className="flex items-center justify-center py-8 px-3">
                   <div className="text-center text-muted-foreground">
                     <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                    <p className="text-xs">Waiting for transcription...</p>
+                    <p className="text-xs">{tUi("Waiting for transcription...")}</p>
                   </div>
                 </div>
               ) : (
@@ -453,9 +452,7 @@ export function AgentAssist({ interactionId, interaction }) {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/10">
                     <BookOpen className="h-5 w-5 text-amber-500" />
-                  </span>
-                  Suggested Articles
-                  <Sparkles className="h-4 w-4 ml-auto text-amber-500" />
+                  </span>{tUi("Suggested Articles")}<Sparkles className="h-4 w-4 ml-auto text-amber-500" />
                 </h3>
               </div>
             </div>
@@ -465,16 +462,14 @@ export function AgentAssist({ interactionId, interaction }) {
                   <div className="flex items-center justify-center py-8">
                     <div className="text-center text-muted-foreground">
                       <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">
-                        Select a transcription to see articles
-                      </p>
+                      <p className="text-xs">{tUi("Select a transcription to see articles")}</p>
                     </div>
                   </div>
                 ) : isLoadingKb ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="text-center text-muted-foreground">
                       <div className="animate-spin h-8 w-8 border-4 border-amber-500 border-t-transparent rounded-full mx-auto mb-2" />
-                      <p className="text-xs">Searching...</p>
+                      <p className="text-xs">{tUi("Searching...")}</p>
                     </div>
                   </div>
                 ) : kbArticles.length > 0 ? (
@@ -492,7 +487,7 @@ export function AgentAssist({ interactionId, interaction }) {
                   <div className="flex items-center justify-center py-8">
                     <div className="text-center text-muted-foreground">
                       <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                      <p className="text-xs">No articles found</p>
+                      <p className="text-xs">{tUi("No articles found")}</p>
                     </div>
                   </div>
                 )}
@@ -523,6 +518,7 @@ export function AgentAssist({ interactionId, interaction }) {
  * Transcription Bubble Component
  */
 function TranscriptionBubble({ transcription, isSelected, onClick }) {
+  const tUi = useUiText();
   const isInbound = transcription.track === "inbound";
   const isInterim = !transcription.isFinal;
 
@@ -545,7 +541,7 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
             isInbound ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400"
           }`}>
             {isInbound ? <User className="h-3 w-3" /> : <Headphones className="h-3 w-3" />}
-            {isInbound ? "Customer" : "Agent"}
+            {isInbound ? tUi("Customer") : tUi("Agent")}
           </span>
           {transcription.sentiment && (
             <Badge
@@ -564,11 +560,11 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
               className="text-xs bg-purple-500/10 text-purple-500 border-purple-500/50"
             >
               <Target className="h-3 w-3 mr-1" />
-              {getIntentLabel(transcription.intent)}
+              {getIntentLabel(transcription.intent, tUi)}
             </Badge>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
-            {new Date(transcription.timestamp).toLocaleTimeString()}
+            {new Date(transcription.timestamp).toLocaleTimeString(tUi.locale)}
           </span>
         </div>
 
@@ -598,6 +594,7 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
  * KB Article Card Component
  */
 function KbArticleCard({ article, isSelected, onSelect }) {
+  const tUi = useUiText();
   const getPreviewText = () => {
     if (article.summary) return article.summary;
     if (article.content) {
@@ -609,7 +606,7 @@ function KbArticleCard({ article, isSelected, onSelect }) {
         plainText.substring(0, 150) + (plainText.length > 150 ? "..." : "")
       );
     }
-    return "No preview available";
+    return tUi("No preview available");
   };
 
   return (
@@ -656,6 +653,7 @@ function ArticleViewer({
   onSendSMS,
   onSpeak,
 }) {
+  const tUi = useUiText();
   const [useLLM, setUseLLM] = useState(false);
   const [llmResponse, setLlmResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -754,8 +752,8 @@ function ArticleViewer({
   const displayContent = useLLM
     ? llmResponse || ""
     : article
-      ? article.content || "No content available"
-      : "Select an article to view content";
+      ? article.content || tUi("No content available")
+      : tUi("Select an article to view content");
   const isContentLoading = useLLM && isGenerating;
 
   return (
@@ -768,15 +766,13 @@ function ArticleViewer({
               <FileText className="h-5 w-5 text-blue-500" />
             </span>
             {useLLM && llmResponse
-              ? "AI Generated Response"
+              ? tUi("AI Generated Response")
               : article
-                ? "Article Content"
-                : "Content"}
+                ? tUi("Article Content")
+                : tUi("Content")}
             {useLLM && llmResponse && (
               <Badge variant="outline" className="text-xs text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10">
-                <Sparkles className="h-3 w-3 mr-1" />
-                AI
-              </Badge>
+                <Sparkles className="h-3 w-3 mr-1" />{tUi("AI")}</Badge>
             )}
           </h3>
           <div className="flex items-center gap-2">
@@ -789,9 +785,7 @@ function ArticleViewer({
             <Label
               htmlFor="use-llm"
               className="text-xs cursor-pointer text-muted-foreground"
-            >
-              Use LLM
-            </Label>
+            >{tUi("Use LLM")}</Label>
           </div>
         </div>
       </div>
@@ -803,7 +797,7 @@ function ArticleViewer({
             <div className="flex items-center justify-center py-8">
               <div className="text-center text-muted-foreground">
                 <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
-                <p className="text-xs">Generating response...</p>
+                <p className="text-xs">{tUi("Generating response...")}</p>
               </div>
             </div>
           ) : (
@@ -930,7 +924,7 @@ function ArticleViewer({
                 </>
               ) : (
                 <div className="text-center text-muted-foreground py-8">
-                  <p className="text-sm">Select an article to view content</p>
+                  <p className="text-sm">{tUi("Select an article to view content")}</p>
                 </div>
               )}
             </div>
@@ -958,9 +952,7 @@ function ArticleViewer({
               (useLLM && !llmResponse)
             }
           >
-            <Send className="h-6 w-6 mr-2" />
-            Send SMS
-          </Button>
+            <Send className="h-6 w-6 mr-2" />{tUi("Send SMS")}</Button>
           <Button
             className="w-full h-10 bg-green-500 hover:bg-green-600 text-white border-0 rounded-lg"
             onClick={() => {
@@ -975,7 +967,7 @@ function ArticleViewer({
             disabled={!callControlId || (!useLLM && !article)}
           >
             <Volume2 className="h-6 w-6 mr-2" />
-            {useLLM ? "Speak Response" : "Speak Article"}
+            {useLLM ? tUi("Speak Response") : tUi("Speak Article")}
           </Button>
         </div>
       </div>

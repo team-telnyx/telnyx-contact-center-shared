@@ -1,4 +1,11 @@
 export const TRANSCRIPTION_PROVIDERS = [
+  { model_name: "azure/fast", label: "azure/fast", voiceApiSupported: false, languages: [] },
+  { model_name: "assemblyai/universal-3-5-pro", label: "assemblyai/universal-3-5-pro", voiceApiSupported: false, languages: [] },
+  { model_name: "soniox/stt-rt-v5", label: "soniox/stt-rt-v5", voiceApiSupported: false, languages: [] },
+  { model_name: "omi-health/omi-med-stt-v1", label: "omi-health/omi-med-stt-v1", voiceApiSupported: false, languages: [] },
+  { model_name: "reson8/turns", label: "reson8/turns", voiceApiSupported: false, languages: [] },
+  { model_name: "cohere/ar-stt", label: "cohere/ar-stt", voiceApiSupported: false, languages: ["ar", "en"] },
+  { model_name: "telnyx/basira", label: "telnyx/basira", voiceApiSupported: false, languages: [] },
   {
     model_name: "distil-whisper/distil-large-v2",
     voiceApiSupported: false,

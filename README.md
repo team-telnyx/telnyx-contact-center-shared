@@ -1,7 +1,7 @@
 # Telnyx Contact Center
 
 <!-- app-version:start -->
-[![Version 1.8.0](https://img.shields.io/badge/version-1.8.0-00C389)](https://github.com/team-telnyx/telnyx-contact-center-shared/releases)
+[![Version 1.9.0](https://img.shields.io/badge/version-1.9.0-00C389)](https://github.com/team-telnyx/telnyx-contact-center-shared/releases)
 <!-- app-version:end -->
 
 [Release history](https://github.com/team-telnyx/telnyx-contact-center-shared/releases) · [Changelog](CHANGELOG.md) · Versioning and release process
@@ -101,6 +101,29 @@ yarn dev
 ```
 
 The application will be available at `http://localhost:3000`.
+
+### Voice connection requirements
+
+The agents' **WebRTC credential connection** needs `outbound.call_parking_enabled`
+set to `true`. Contact Center owns the PSTN dial and bridge; without parking,
+a manually created connection can dial the destination a second time. Its
+`webhook_event_url` must be `https://YOUR-CC-HOST/api/voice/webhook`, with webhook
+API version `2`. Agent-leg events use this credential connection's webhook,
+not only the Call Control application's webhook. Configure both connections.
+The deployment wizard applies these settings on creation and repairs them on
+subsequent Telnyx configuration runs.
+
+Keep the main service number (`TELNYX_MAIN_FROM_NUMBER`) on its inbound
+application/flow. Assign a separate personal DID explicitly in a user's profile
+only when direct calls to that agent are intended. The owner seed no longer
+copies the main number into `users.voice_number`; older assignments of that
+same main number cannot override service-number routing.
+
+On first login, choose **Computer** or a reachable mobile device in the phone
+status menu. **Available** is the agent's requested status; incoming voice calls
+also require a selected, ready device. Until then, the phone badge says
+**Choose a device** and opens the device picker. The application does not
+silently change an agent's selected computer or mobile device.
 
 ## Deployment wizard (`./deploy/cc`)
 

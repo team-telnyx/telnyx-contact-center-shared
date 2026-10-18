@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -219,6 +221,7 @@ function NodeHandles() {
 }
 
 function AssistantStartNode({ data }) {
+  const tUi = useUiText();
   return (
     <div
       className={cn(
@@ -234,7 +237,7 @@ function AssistantStartNode({ data }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <IconRobot className="size-4 shrink-0 text-telnyx-green" />
-              <span className="truncate">{data.name || "Assistant"}</span>
+              <span className="truncate">{data.name || tUi("Assistant")}</span>
             </div>
             {data.model && (
               <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
@@ -245,8 +248,8 @@ function AssistantStartNode({ data }) {
           {data.depth > 0 && data.onOpenAssistant && (
             <button
               type="button"
-              aria-label="Edit linked assistant"
-              title="Edit linked assistant"
+              aria-label={tUi("Edit linked assistant")}
+              title={tUi("Edit linked assistant")}
               className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border text-telnyx-green transition hover:border-telnyx-green hover:bg-telnyx-green/10"
               onClick={(event) => {
                 event.stopPropagation();
@@ -260,8 +263,8 @@ function AssistantStartNode({ data }) {
       </div>
       <div className="px-4 py-2 text-xs text-muted-foreground">
         {data.depth > 0
-          ? "Handoff target assistant. Its tools expand from here."
-          : "Runtime decides when to invoke tools from conversation context."}
+          ? tUi("Handoff target assistant. Its tools expand from here.")
+          : tUi("Runtime decides when to invoke tools from conversation context.")}
       </div>
     </div>
   );
@@ -594,6 +597,7 @@ function buildWorkflowGraph({
 }
 
 export default function AssistantCapabilityGraph({ values, setValues, assistantId }) {
+  const tUi = useUiText();
   const router = useRouter();
   const [editingToolIndex, setEditingToolIndex] = useState(null);
   const [handoffAssistantsById, setHandoffAssistantsById] = useState({});
@@ -723,16 +727,12 @@ export default function AssistantCapabilityGraph({ values, setValues, assistantI
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium">
-            <IconGitBranch className="size-4 text-telnyx-green" />
-            Assistant Workflow
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Visual map of the tools available to this assistant. Select any tool node to edit its configuration.
-          </p>
+            <IconGitBranch className="size-4 text-telnyx-green" />{tUi("Assistant Workflow")}</div>
+          <p className="mt-1 text-xs text-muted-foreground">{tUi("Visual map of the tools available to this assistant. Select any tool node to edit its configuration.")}</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="rounded">
-            {tools.length} tool{tools.length === 1 ? "" : "s"}
+            {tUi("Tools: {value0}", {value0: tools.length})}
           </Badge>
         </div>
       </div>
@@ -756,9 +756,7 @@ export default function AssistantCapabilityGraph({ values, setValues, assistantI
           <Panel position="top-left" className="rounded-md border bg-background/95 p-3 shadow-sm">
             <div className="flex items-start gap-2 text-xs text-muted-foreground">
               <IconInfoCircle className="mt-0.5 size-4 shrink-0 text-telnyx-green" />
-              <span>
-                This is a capability graph: the assistant chooses tools dynamically during the conversation.
-              </span>
+              <span>{tUi("This is a capability graph: the assistant chooses tools dynamically during the conversation.")}</span>
             </div>
           </Panel>
           {tools.length === 0 && (
@@ -767,10 +765,8 @@ export default function AssistantCapabilityGraph({ values, setValues, assistantI
                 <div className="mb-3 flex size-10 items-center justify-center rounded-md border bg-muted">
                   <IconTool className="size-5 text-muted-foreground" />
                 </div>
-                <div className="text-sm font-medium">No tools configured</div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Add tools in the Integrations tab and they will appear in this workflow view.
-                </p>
+                <div className="text-sm font-medium">{tUi("No tools configured")}</div>
+                <p className="mt-1 text-xs text-muted-foreground">{tUi("Add tools in the Integrations tab and they will appear in this workflow view.")}</p>
               </div>
             </Panel>
           )}

@@ -4,7 +4,7 @@ description: Configure native website chat, routing, publication, and agent capa
 audiences: [admin, owner]
 keywords: [chat, messaging, widget, utilization, capacity, publication]
 owner: contact-center
-lastReviewed: 2026-09-12
+lastReviewed: 2026-10-14
 ---
 
 # Web Widgets
@@ -60,7 +60,17 @@ This delivery supports native human chat, AI assistant messaging, AI-to-queue ch
 
 ## AI channels
 
-In **Channels → Available channels**, the Messaging and Voice switches share one **Widget AI assistant** picker. Search by name or ID. The selection belongs to the widget revision, is saved for both channels, and remains assigned when either channel is disabled and re-enabled. Draft saving and publication reject conflicting assistant IDs. Voice uses the AI Agent Library and the selected assistant must have unauthenticated web calls enabled in its Widget settings. **Voice → Web Calls** contains the media region setting.
+In **Channels → Available channels**, the Messaging and Voice switches share one **Widget AI assistant** picker. Search by name or ID. The selection belongs to the widget revision, is saved for both channels, and remains assigned when either channel is disabled and re-enabled. Draft saving and publication reject conflicting assistant IDs. Voice without a native Telnyx avatar uses the AI Agent Library and requires unauthenticated web calls in the assistant's Widget settings. **Voice → Web Calls** contains the media region setting for those calls.
+
+### Video avatars
+
+Enable the avatar under **Voice** and choose a provider. **Telnyx** is the preferred default for new widget configurations. Existing explicit HeyGen and Anam selections remain unchanged. Selecting Telnyx offers six avatars and three backgrounds; the catalog displays official Telnyx portrait previews, which remain visible in the voice panel until the first video frame appears.
+
+Telnyx avatars require a Telnyx TTS voice and the assistant's main version. Publishing saves the avatar and background on that assistant. Widgets sharing an assistant must agree on both settings; publication rejects conflicting choices. Use a separate assistant for a different avatar. Publication does not change the assistant's voice. Changes made directly to its avatar settings require republishing the widget.
+
+Native Telnyx avatar calls use the authenticated AI Assistant WebSocket API through the Contact Center relay and receive synchronized audio and video over WebRTC. They do not require unauthenticated web calls. The existing microphone, speaker, text input, transcript, expansion and end-call controls remain available. Telephone transfers, DTMF, **Keep assistant on call**, and the Web Calls media-region selector do not apply to these conversations. A nonfatal avatar failure after the call starts continues with audio only; a setup failure ends the attempt and allows a fresh call.
+
+The server requires `TELNYX_API_KEY` and a browser-reachable streaming relay. The avatar route shares the existing relay listener: `/widget-avatar`, normally exposed as `/ws/widget-avatar`. `WS_BASE_URL` or `STREAMING_WS_URL` can specify its public base; HTTPS pages require WSS. The API key remains on the server. Widget session tokens authenticate the socket's first frame and never appear in its URL.
 
 The preview device selector fills the right panel width. Its orientation control is on the following row.
 

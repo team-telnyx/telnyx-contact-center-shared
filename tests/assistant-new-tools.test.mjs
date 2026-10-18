@@ -215,7 +215,7 @@ test("WhatsApp Template validation requires approved template metadata", () => {
         },
       ]
     ),
-    "Template 1: enter exactly 2 variable names for the selected template."
+    "Template 1: required number of variable names for the selected template: 2."
   );
 });
 

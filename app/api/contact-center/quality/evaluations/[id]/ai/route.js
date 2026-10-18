@@ -1,8 +1,10 @@
+import { operationModel } from '@/lib/ai-operations/runtime.mjs';
 import { channelDefinition } from "@/lib/acd/channel-registry.mjs";
 import { readMessageTranscript } from "@/lib/acd/message-transcript.mjs";
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { createDiagnosticLogger } from "@/lib/diagnostic-logger.mjs";
+import { resolveEvaluationModel } from "@/lib/quality/models.mjs";
 import { evaluateTranscriptWithAi } from "@/lib/quality/ai-evaluator.mjs";
 import {
   getExistingTranscript,
@@ -104,9 +106,11 @@ async function POST_handler(request, { params }, authz) {
       return NextResponse.json({ ok: false, error: "Interaction not found" }, { status: 404 });
     }
 
-    const recordingId = resolveRecordingId(interaction);
-    let transcript = channelDefinition(interaction.channel||interaction.interaction_type).capabilities.conversation
-      ? await readMessageTranscript(pool,interaction.work_item_id||interaction.id) : getExistingTranscript(interaction);
+    const messaging = channelDefinition(interaction.channel || interaction.interaction_type).capabilities.conversation;
+    const recordingId = messaging ? null : resolveRecordingId(interaction);
+    let transcript = messaging
+      ? await readMessageTranscript(pool, interaction.work_item_id || interaction.id)
+      : getExistingTranscript(interaction);
     if (!transcript && !recordingId) {
       return NextResponse.json(
         { ok: false, error: "Interaction has no transcript and no recording to transcribe" },
@@ -114,12 +118,13 @@ async function POST_handler(request, { params }, authz) {
       );
     }
 
-    const transcriptionModel = body.transcription_model || DEFAULT_TRANSCRIPTION_MODEL;
+    const transcriptionModel = messaging ? null : body.transcription_model || DEFAULT_TRANSCRIPTION_MODEL;
+    const evaluationModel = await operationModel("quality-evaluation", resolveEvaluationModel(body.model, evaluation.form_ai_prompt_config));
     const jobRes = await pool.query(
-      `INSERT INTO quality_ai_jobs (evaluation_id, work_item_id, recording_id, status, transcription_model)
-       VALUES ($1, $2, $3, 'queued', $4)
+      `INSERT INTO quality_ai_jobs (evaluation_id, work_item_id, recording_id, status, transcription_model, model)
+       VALUES ($1, $2, $3, 'queued', $4, $5)
        RETURNING id`,
-      [id, evaluation.work_item_id, recordingId, transcriptionModel],
+      [id, evaluation.work_item_id, recordingId, transcriptionModel, evaluationModel],
     );
     jobId = jobRes.rows[0].id;
 
@@ -151,7 +156,7 @@ async function POST_handler(request, { params }, authz) {
         direction: interaction.direction,
         channel: interaction.channel||interaction.interaction_type,
       },
-      model: body.model,
+      model: evaluationModel,
     });
 
     const aiResult = {
@@ -160,7 +165,9 @@ async function POST_handler(request, { params }, authz) {
       coachingTips: aiOutcome.coachingTips,
       risks: aiOutcome.risks,
       model: aiOutcome.model,
-      transcription_model: transcript.details?.model || transcriptionModel,
+      transcription_model: messaging ? null : transcript.details?.model || transcriptionModel,
+      evidence_source: messaging ? "messaging" : "transcript",
+      ...(messaging ? { message_count: transcript.details.messageCount } : {}),
       score: aiOutcome.score,
       generated_at: new Date().toISOString(),
     };

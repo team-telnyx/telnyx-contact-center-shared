@@ -5,6 +5,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { isUiLocale, normalizeUiLocale, UI_LOCALE_COOKIE, uiLocaleCookieOptions } from "@/lib/i18n/locales.mjs";
 import {
   readEffectiveAgentStatus,
   setManualAgentStatus,
@@ -43,6 +45,7 @@ export async function getProfileAction() {
       lastName: user.last_name || user.lastName || "",
       nick: user.nick || "",
       language: user.language || "en-US",
+      uiLocale: normalizeUiLocale(user.ui_locale),
       status,
       mobile: user.mobile || "",
       smsNumber: user.sms_number || user.smsNumber || "",
@@ -83,6 +86,11 @@ export async function updateProfileAction(formData) {
 async function updateProfileWithId(idForQuery, formData, current) {
   try {
     const update = {};
+    if (formData.has("uiLocale")) {
+      const locale = formData.get("uiLocale");
+      if (!isUiLocale(locale)) return { ok: false, error: "Unsupported interface language", code: "INVALID_UI_LOCALE" };
+      update.ui_locale = locale;
+    }
     
     // Only update fields that are provided in formData
     if (formData.has("firstName")) {
@@ -131,6 +139,9 @@ async function updateProfileWithId(idForQuery, formData, current) {
     const userId = String(idForQuery);
     if (Object.keys(update).length > 0) {
       await PgDb.updateUserById(userId, update);
+      if (update.ui_locale) {
+        (await cookies()).set(UI_LOCALE_COOKIE, update.ui_locale, uiLocaleCookieOptions());
+      }
     }
     if (requestedStatus) {
       const pool = getPostgresPool();

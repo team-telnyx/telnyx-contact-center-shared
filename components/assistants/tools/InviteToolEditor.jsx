@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,6 +20,7 @@ export default function InviteToolEditor({
   onChange,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const inv = value?.invite || {};
   const targets = Array.isArray(inv.targets) ? inv.targets : [];
   const customHeaders = Array.isArray(inv.custom_headers)
@@ -44,26 +47,22 @@ export default function InviteToolEditor({
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-xs">From Number/SIP URI</label>
+        <label className="text-xs">{tUi("From Number/SIP URI")}</label>
         <VariableInput
           value={inv.from || ""}
           onChange={(next) => update({ from: next })}
           availableVariables={availableVariables}
           secrets={[]}
-          placeholder="+13125551234, sip:user@domain.com, or {{telnyx_agent_target}}"
+          placeholder={tUi("+13125551234, sip:user@domain.com, or {{telnyx_agent_target}}")}
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Required. Number or SIP URI placing the invite call. Type {"{{"} to insert a system or custom dynamic variable.
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Required. Number or SIP URI placing the invite call. Type ")}{"{{"}{tUi(" to insert a system or custom dynamic variable.")}</p>
       </div>
 
       <div className="space-y-3 border rounded-md p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-medium">Targets</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Define the participants the assistant can invite. Each target has a name and a destination number/SIP URI, same shape as Transfer targets.
-            </p>
+            <div className="text-xs font-medium">{tUi("Targets")}</div>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Define the participants the assistant can invite. Each target has a name and a destination number/SIP URI, same shape as Transfer targets.")}</p>
           </div>
           <Button
             type="button"
@@ -72,9 +71,7 @@ export default function InviteToolEditor({
             onClick={() =>
               update({ targets: [...targets, { name: "", to: "" }] })
             }
-          >
-            Add Target
-          </Button>
+          >{tUi("Add Target")}</Button>
         </div>
 
         <div className="space-y-2">
@@ -82,9 +79,9 @@ export default function InviteToolEditor({
             <div key={i} className="space-y-1 rounded-md border p-3">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                 <div className="md:col-span-5">
-                  <label className="text-xs">Name</label>
+                  <label className="text-xs">{tUi("Name")}</label>
                   <Input
-                    placeholder="Support, Sales"
+                    placeholder={tUi("Support, Sales")}
                     value={t?.name || ""}
                     onChange={(e) => {
                       const next = targets.map((x, idx) =>
@@ -95,9 +92,9 @@ export default function InviteToolEditor({
                   />
                 </div>
                 <div className="md:col-span-6">
-                  <label className="text-xs">To Number/SIP URI</label>
+                  <label className="text-xs">{tUi("To Number/SIP URI")}</label>
                   <VariableInput
-                    placeholder="+13129457420, sip:user@example.com, or {{participant_target}}"
+                    placeholder={tUi("+13129457420, sip:user@example.com, or {{participant_target}}")}
                     value={t?.to || ""}
                     availableVariables={availableVariables}
                     secrets={[]}
@@ -119,7 +116,7 @@ export default function InviteToolEditor({
                         targets: targets.filter((_, idx) => idx !== i),
                       })
                     }
-                    aria-label="Remove target"
+                    aria-label={tUi("Remove target")}
                   >
                     <IconTrash />
                   </Button>
@@ -128,15 +125,13 @@ export default function InviteToolEditor({
             </div>
           ))}
           {targets.length === 0 && (
-            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-              No invite targets yet. Add a target, or leave empty if targets are supplied dynamically at runtime by Telnyx/tool context.
-            </div>
+            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">{tUi("No invite targets yet. Add a target, or leave empty if targets are supplied dynamically at runtime by Telnyx/tool context.")}</div>
           )}
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs">Custom Headers</div>
+        <div className="text-xs">{tUi("Custom Headers")}</div>
         {customHeaders.map((h, i) => (
           <div
             key={i}
@@ -144,7 +139,7 @@ export default function InviteToolEditor({
           >
             <div className="md:col-span-4">
               <Input
-                placeholder="Header name"
+                placeholder={tUi("Header name")}
                 value={h?.name || ""}
                 onChange={(e) => {
                   const next = customHeaders.map((x, idx) =>
@@ -156,7 +151,7 @@ export default function InviteToolEditor({
             </div>
             <div className="md:col-span-6">
               <VariableInput
-                placeholder="Header value"
+                placeholder={tUi("Header value")}
                 value={h?.value || ""}
                 availableVariables={availableVariables}
                 secrets={[]}
@@ -188,7 +183,7 @@ export default function InviteToolEditor({
                     custom_headers: customHeaders.filter((_, idx) => idx !== i),
                   })
                 }
-                aria-label="Remove"
+                aria-label={tUi("Remove")}
               >
                 <IconTrash />
               </Button>
@@ -202,18 +197,14 @@ export default function InviteToolEditor({
               custom_headers: [...customHeaders, { name: "", value: "" }],
             })
           }
-        >
-          Add Custom Header
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          Custom headers added to the SIP INVITE. Header values support {"{{"} dynamic variables and integration secrets.
-        </p>
+        >{tUi("Add Custom Header")}</Button>
+        <p className="text-xs text-muted-foreground">{tUi("Custom headers added to the SIP INVITE. Header values support ")}{"{{"}{tUi(" dynamic variables and integration secrets.")}</p>
       </div>
 
       <div className="space-y-3 border rounded-md p-3">
-        <div className="text-xs font-medium">Voicemail Detection (AMD)</div>
+        <div className="text-xs font-medium">{tUi("Voicemail Detection (AMD)")}</div>
         <div>
-          <label className="text-xs">Detection Mode</label>
+          <label className="text-xs">{tUi("Detection Mode")}</label>
           <Select
             value={voicemailDetection.detection_mode || "disabled"}
             onValueChange={(val) =>
@@ -224,17 +215,15 @@ export default function InviteToolEditor({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="disabled">Disabled</SelectItem>
-              <SelectItem value="premium">Premium</SelectItem>
+              <SelectItem value="disabled">{tUi("Disabled")}</SelectItem>
+              <SelectItem value="premium">{tUi("Premium")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            &ldquo;premium&rdquo; enables answering machine detection on the invited call.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("“premium” enables answering machine detection on the invited call.")}</p>
         </div>
         {voicemailDetection.detection_mode === "premium" && (
           <div>
-            <label className="text-xs">On Voicemail Detected — Action</label>
+            <label className="text-xs">{tUi("On Voicemail Detected — Action")}</label>
             <Select
               value={
                 voicemailDetection.on_voicemail_detected?.action ||
@@ -250,12 +239,10 @@ export default function InviteToolEditor({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="stop_invite">Stop Invite</SelectItem>
+                <SelectItem value="stop_invite">{tUi("Stop Invite")}</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Action to take when voicemail is detected on the invited call.
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{tUi("Action to take when voicemail is detected on the invited call.")}</p>
           </div>
         )}
       </div>

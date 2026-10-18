@@ -86,7 +86,7 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
 
   // `media: false` joins receive-only without touching devices (a monitoring
   // supervisor); the microphone and camera toggles publish on first use.
-  const join = useCallback(async ({ roomId, token, context = {}, media = true }) => {
+  const join = useCallback(async ({ roomId, token, context = {}, media = true, onJoined }) => {
     if (controllerRef.current) return controllerRef.current;
     setStatus("joining");
     setError("");
@@ -132,6 +132,7 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
         shouldSubscribe: policy,
       });
       controllerRef.current = controller;
+      if (onJoined) await onJoined(controller.room.getState().localParticipantId);
       void controller.applySubscriptions();
       setStatus("connected");
       void mediaReady.then(async () => {
@@ -144,6 +145,8 @@ export function useVideoRoom({ role, name, initialCamera = true, initialLayout =
       });
       return controller;
     } catch (joinError) {
+      const failedController = controllerRef.current; controllerRef.current = null;
+      await failedController?.leave().catch(() => undefined);
       setError(joinError?.message || "Unable to join the video call");
       setStatus("error");
       throw joinError;

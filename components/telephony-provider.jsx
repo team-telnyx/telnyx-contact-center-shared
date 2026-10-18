@@ -1,6 +1,6 @@
 "use client";
 
-import { ensureVoiceEndpoint, voiceFetch, refreshVoiceEndpoints, voiceEndpointRegistration } from "@/lib/telephony/endpoint-client";
+import { ensureVoiceEndpoint, voiceFetch, refreshVoiceEndpoints, voiceEndpointRegistration, requestVoiceToken } from "@/lib/telephony/endpoint-client";
 import {
   createContext,
   useCallback,
@@ -10,8 +10,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { useVoiceQuality } from "@/hooks/use-voice-quality";
 import { TelnyxRTC, TELNYX_ERROR_CODES } from "@telnyx/webrtc";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import { hasLiveVoiceCall } from "@/lib/telephony/phone-indicator.mjs";
 import { createCallRecovery } from "@/lib/telephony/call-recovery.mjs";
 import { notify } from "@/components/ToastNotify";
 import { useAuth } from "@/components/auth-provider";
@@ -82,6 +84,7 @@ export function useTelnyx() {
 }
 
 export function TelephonyProvider({ children }) {
+  const quality = useVoiceQuality();
   const { loaded: authLoaded, can } = useAuth();
   const voiceAllowed = authLoaded && can(VOICE_PERMISSIONS);
   const agentHeartbeat = authLoaded && can("agent:self");
@@ -284,11 +287,7 @@ export function TelephonyProvider({ children }) {
 
       if (!token) {
         // Try to refresh access token if we get a 401/403
-        let resp = await voiceFetch("/api/voice/token", {
-          method: "POST",
-          credentials: "include",
-          cache: "no-store",
-        });
+        let resp = await requestVoiceToken();
 
         // 403 means the roles do not include voice: stop here, never sign out.
         if (resp.status === 403) {
@@ -306,11 +305,7 @@ export function TelephonyProvider({ children }) {
             });
             if (refreshResp.ok) {
               // Retry voice token request after refresh
-              resp = await voiceFetch("/api/voice/token", {
-                method: "POST",
-                credentials: "include",
-                cache: "no-store",
-              });
+              resp = await requestVoiceToken();
             } else {
               // Refresh failed, user needs to re-authenticate
               const error = new Error("Session expired. Please sign in again.");
@@ -504,6 +499,7 @@ export function TelephonyProvider({ children }) {
 
   const setRegion = useCallback(
     (nextRegion) => {
+      if (!voiceAllowedRef.current || connectingRef.current || hasLiveVoiceCall(useActiveCallStore.getState(), clientRef.current)) return;
       const normalized = normalizeWebrtcRegion(nextRegion);
       if (regionRef.current === normalized) return;
 
@@ -573,7 +569,16 @@ export function TelephonyProvider({ children }) {
       status,
       error,
       recovery,
-      reconnect: () => scheduleReconnect(true),
+      quality,
+      reconnect: () => {
+        if (!voiceAllowedRef.current || connectingRef.current || hasLiveVoiceCall(useActiveCallStore.getState(), clientRef.current)) return;
+        cleanupClient();
+        statusRef.current = "disconnected";
+        setStatus("disconnected");
+        setError("");
+        retryAttemptRef.current = 0;
+        scheduleReconnect(true);
+      },
       clearCache: () => {
         clearTokenCache();
         scheduleReconnect(true);
@@ -582,7 +587,7 @@ export function TelephonyProvider({ children }) {
       setRegion,
       regions: WEBRTC_REGIONS,
     }),
-    [client, status, error, recovery, region, setRegion, scheduleReconnect]
+    [client, status, error, recovery, quality, region, setRegion, scheduleReconnect, cleanupClient]
   );
 
   return (

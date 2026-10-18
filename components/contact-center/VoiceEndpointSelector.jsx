@@ -1,9 +1,13 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
 
-import { DeviceHandoff } from './DeviceHandoff';
+
+import { hasLiveVoiceCall } from '@/lib/telephony/phone-indicator.mjs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { HandoffEntryCard } from './handoff/HandoffEntry';
 import useActiveCallStore from '@/lib/stores/active-call-store';
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeftRight, CheckCircle2, Loader2, Monitor, Smartphone } from 'lucide-react';
+import { Activity, Globe, RefreshCw, AlertCircle, ArrowLeftRight, CheckCircle2, Loader2, Monitor, Smartphone, Tablet } from 'lucide-react';
 import { selectVoiceEndpoint, refreshVoiceEndpoints, subscribeVoiceEndpoints, voiceEndpointRegistration } from '@/lib/telephony/endpoint-client';
 import { voiceEndpointOptions } from '@/lib/telephony/endpoint-options.mjs';
 import { useTelnyx } from '@/components/telephony-provider';
@@ -11,14 +15,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export function VoiceEndpointSelector() {
+export function VoiceEndpointSelector({ onOpenQuality }) {
+  const tUi = useUiText();
   const activeInteractionId=useActiveCallStore(s=>s.contactCenter?.interactionId);
   const callStatus=useActiveCallStore(s=>s.status);
+  const currentCall=useActiveCallStore(s=>s.call);
   const [state, setState] = useState(null);
   const [switchingId, setSwitchingId] = useState(null);
   const selecting = useRef(false);
   const [selectionError, setSelectionError] = useState('');
-  const { status, error: connectionError, reconnect } = useTelnyx();
+  const { status, error: connectionError, reconnect, region, setRegion, regions, client } = useTelnyx();
+  const onCall = hasLiveVoiceCall({status: callStatus, call: currentCall}, client);
+  const configureDisabled = onCall || status === 'connecting' || Boolean(switchingId);
   useEffect(() => subscribeVoiceEndpoints(setState), []);
 
   const error = selectionError || connectionError;
@@ -28,7 +36,7 @@ export function VoiceEndpointSelector() {
   const options = voiceEndpointOptions(state, own);
 
   async function choose(device) {
-    if (selecting.current || !device.reachable || device.id === state?.endpointId) return;
+    if (onCall || selecting.current || !device.reachable || device.id === state?.endpointId) return;
     selecting.current = true;
     setSwitchingId(device.id);
     setSelectionError('');
@@ -44,20 +52,21 @@ export function VoiceEndpointSelector() {
 
   return <div className="space-y-3" data-testid="voice-endpoint-selector">
     <div className="flex items-center justify-between gap-3">
-      <h3 className="text-sm font-semibold">Calls on</h3>
-      <span className="truncate text-xs text-muted-foreground">{selected?.label || (state ? 'Choose a device' : '')}</span>
+      <h3 className="text-sm font-semibold">{tUi("Calls on")}</h3>
+      <span className="truncate text-xs text-muted-foreground">{selected?.label || (state ? tUi("Choose a device") : '')}</span>
     </div>
-    {loading ? <div className="grid grid-cols-2 gap-2" aria-label="Loading voice devices">
+    {state && !state.endpointId && <p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">{tUi("Choose a call device before receiving voice calls.")}</p>}
+    {loading ? <div className="grid grid-cols-2 gap-2" aria-label={tUi("Loading voice devices")}>
       <Skeleton className="h-32 rounded-2xl" /><Skeleton className="h-32 rounded-2xl" />
-    </div> : options.length ? <div className="grid grid-cols-2 gap-2" role="group" aria-label="Call devices" aria-busy={Boolean(switchingId)}>
+    </div> : options.length ? <div className="grid grid-cols-2 gap-2" role="group" aria-label={tUi("Call devices")} aria-busy={Boolean(switchingId)}>
       {options.map(option => {
         const {target: device, active, needsReconnect, canChoose, detail} = option;
         const tone = needsReconnect ? 'text-amber-700 dark:text-amber-300'
           : active ? 'text-emerald-700 dark:text-telnyx-green' : 'text-muted-foreground';
         const switching = device.id === switchingId;
-        const Icon = device.kind === 'ios' ? Smartphone : Monitor;
-        return <button key={option.kind} type="button" aria-pressed={active}
-          data-endpoint-id={device.id} disabled={Boolean(switchingId) || !canChoose}
+        const Icon = option.kind === 'web' ? Monitor : option.formFactor === 'tablet' ? Tablet : Smartphone;
+        return <button key={option.key} type="button" aria-pressed={active}
+          data-endpoint-id={device.id} disabled={onCall || Boolean(switchingId) || !canChoose}
           onClick={() => choose(device)}
           className={cn('flex min-h-32 min-w-0 flex-col gap-2 rounded-2xl border p-3 text-left shadow-sm backdrop-blur-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telnyx-green disabled:cursor-default',
             needsReconnect ? 'border-amber-500/50 bg-amber-500/10' : active ? 'border-telnyx-green/70 bg-telnyx-green/10' : 'border-border bg-muted/40 enabled:hover:border-telnyx-green/50 enabled:hover:bg-telnyx-green/5',
@@ -71,20 +80,33 @@ export function VoiceEndpointSelector() {
           </span>
           <span className="w-full break-words text-sm font-semibold">{option.label}</span>
           <span className={cn('mt-auto text-xs', tone)}>
-            {switching ? 'Switching…' : detail}
-            {device.id === own && <span className="mt-0.5 block text-muted-foreground">This browser</span>}
+            {switching ? tUi("Switching…") : detail}
+            {device.id === own && <span className="mt-0.5 block text-muted-foreground">{tUi("This browser")}</span>}
           </span>
         </button>;
       })}
-    </div> : <p className="text-sm text-muted-foreground">{state ? 'No call devices available.' : 'Voice device unavailable.'}</p>}
-    {state?.handoffs?.some(h=>h.target_id===own)&&<p role="status" className="rounded-xl border border-telnyx-green/40 p-3 text-sm">A video call is ready to move here. Open it in Inbox and select Accept video here.</p>}
-    {activeInteractionId&&['active','connected','answered','held'].includes(callStatus)&&<DeviceHandoff interactionId={activeInteractionId}/>}
-    <p className="text-xs leading-relaxed text-muted-foreground">Switch phones when no voice or video interaction is in progress. Both apps stay synchronized.</p>
-    <span className="sr-only" role="status">{switchingId ? 'Switching call device…' : selected ? `Calls on ${selected.label}` : ''}</span>
+    </div> : <p className="text-sm text-muted-foreground">{state ? tUi("No call devices available.") : tUi("Voice device unavailable.")}</p>}
+    <div className="space-y-2">
+      <Select value={region} disabled={configureDisabled} onValueChange={setRegion}>
+        <SelectTrigger aria-label={tUi("Connection region")} className="h-11 w-full rounded-2xl bg-muted/40 shadow-sm backdrop-blur-xl">
+          <Globe className="h-4 w-4 text-emerald-500" aria-hidden="true" /><SelectValue />
+        </SelectTrigger>
+        <SelectContent className="z-[1200]">
+          {(regions || []).map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+    <div className="grid grid-cols-2 gap-2">
+      <Button type="button" variant="outline" className="h-11 rounded-full bg-muted/40 text-xs shadow-sm backdrop-blur-xl"
+        disabled={configureDisabled} onClick={() => { setSelectionError(''); reconnect(); }}>
+        <RefreshCw className="h-4 w-4" aria-hidden="true" />{tUi(" Reconnect")}</Button>
+      <Button type="button" variant="outline" className="h-11 rounded-full bg-muted/40 text-xs shadow-sm backdrop-blur-xl" onClick={onOpenQuality}>
+        <Activity className="h-4 w-4" aria-hidden="true" />{tUi(" Statistics")}</Button>
+    </div>
+    {state?.handoffs?.some(h=>h.target_id===own)&&<p role="status" className="rounded-xl border border-telnyx-green/40 p-3 text-sm">{tUi("A video call is ready to move here. Open it in Inbox and select Accept video here.")}</p>}
+    <HandoffEntryCard callInteractionId={activeInteractionId}/>
+    <span className="sr-only" role="status">{switchingId ? tUi("Switching call device…") : selected ? tUi("Calls on {value0}", { value0: selected.label }) : ''}</span>
     {error && <p role="alert" className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">{error}</p>}
-    {!loading && (!state || connectionError) && <Button type="button" variant="outline" size="sm" className="w-full text-xs"
-      disabled={status === 'connecting'} onClick={() => { setSelectionError(''); reconnect(); }}>
-      Retry voice connection
-    </Button>}
+
   </div>;
 }

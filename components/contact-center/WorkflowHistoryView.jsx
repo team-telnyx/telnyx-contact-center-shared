@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +47,7 @@ import {
  * Same 3-card layout as AgentAssistWorkflow but without edit capabilities.
  */
 export default function WorkflowHistoryView({ interactionId }) {
+  const tUi = useUiText();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -136,7 +139,7 @@ export default function WorkflowHistoryView({ interactionId }) {
       <div className="flex items-center justify-center h-64">
         <div className="text-center text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-violet-500" />
-          <p className="text-sm">Loading workflow...</p>
+          <p className="text-sm">{tUi("Loading workflow...")}</p>
         </div>
       </div>
     );
@@ -157,8 +160,8 @@ export default function WorkflowHistoryView({ interactionId }) {
       <div className="flex items-center justify-center h-64">
         <div className="text-center text-muted-foreground">
           <ClipboardList className="h-10 w-10 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No workflow data available</p>
-          <p className="text-xs mt-1">This interaction did not use workflow mode</p>
+          <p className="text-sm">{tUi("No workflow data available")}</p>
+          <p className="text-xs mt-1">{tUi("This interaction did not use workflow mode")}</p>
         </div>
       </div>
     );
@@ -199,6 +202,7 @@ export default function WorkflowHistoryView({ interactionId }) {
  * Read-only Workflow Stages Card
  */
 function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
+  const tUi = useUiText();
   const [expandedStage, setExpandedStage] = useState(stages[0]?.id || null);
 
   return (
@@ -207,9 +211,7 @@ function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-500/10">
             <ClipboardList className="h-3.5 w-3.5 text-indigo-500" />
-          </span>
-          Workflow Checklist
-          {workflowName && (
+          </span>{tUi("Workflow Checklist")}{workflowName && (
             <Badge variant="outline" className="ml-auto text-xs text-indigo-600 dark:text-indigo-400 border-indigo-500/40">
               {workflowName}
             </Badge>
@@ -319,23 +321,17 @@ function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
                                     {slotValue ? (
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <span className="text-sm font-medium text-foreground">
-                                          {formatSlotDisplay(slotValue, item.slot_type)}
+                                          {formatSlotDisplay(slotValue, item.slot_type, tUi)}
                                         </span>
                                         {isInferred ? (
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-600 dark:text-slate-300 border-slate-500/40 bg-slate-500/10" title="Inferred from an earlier answer">
-                                            <Sparkles className="h-3 w-3 mr-0.5" />
-                                            Inferred
-                                          </Badge>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-600 dark:text-slate-300 border-slate-500/40 bg-slate-500/10" title={tUi("Inferred from an earlier answer")}>
+                                            <Sparkles className="h-3 w-3 mr-0.5" />{tUi("Inferred")}</Badge>
                                         ) : isAiFilled ? (
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Filled by AI Assistant">
-                                            <Bot className="h-3 w-3 mr-0.5" />
-                                            AI
-                                          </Badge>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title={tUi("Filled by AI Assistant")}>
+                                            <Bot className="h-3 w-3 mr-0.5" />{tUi("AI")}</Badge>
                                         ) : isAgentFilled ? (
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title="Filled by Agent">
-                                            <User className="h-3 w-3 mr-0.5" />
-                                            Agent
-                                          </Badge>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title={tUi("Filled by Agent")}>
+                                            <User className="h-3 w-3 mr-0.5" />{tUi("Agent")}</Badge>
                                         ) : null}
                                         {isAiFilled && confidenceScore != null && (
                                           <Badge
@@ -345,17 +341,14 @@ function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
                                                 ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
                                                 : "text-amber-600 dark:text-amber-400 border-amber-500/40"
                                             }`}
-                                            title={`LLM confidence: ${Math.round(confidenceScore * 100)}%`}
-                                          >
-                                            LLM {Math.round(confidenceScore * 100)}%
+                                            title={tUi("LLM confidence: {value0}%", { value0: Math.round(confidenceScore * 100) })}
+                                          >{tUi("LLM ")}{Math.round(confidenceScore * 100)}%
                                           </Badge>
                                         )}
                                       </div>
                                     ) : (
                                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                        <Pencil className="h-3 w-3" />
-                                        No value captured
-                                      </span>
+                                        <Pencil className="h-3 w-3" />{tUi("No value captured")}</span>
                                     )}
                                   </div>
                                 )}
@@ -364,15 +357,11 @@ function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
                                 {item.type !== "slot" && isCompleted && (isAiFilled || isAgentFilled || confidenceScore != null) && (
                                   <div className="flex items-center gap-1.5 mt-1">
                                     {isAiFilled ? (
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Completed by AI Assistant">
-                                        <Bot className="h-3 w-3 mr-0.5" />
-                                        AI
-                                      </Badge>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title={tUi("Completed by AI Assistant")}>
+                                        <Bot className="h-3 w-3 mr-0.5" />{tUi("AI")}</Badge>
                                     ) : isAgentFilled ? (
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title="Completed by Agent">
-                                        <User className="h-3 w-3 mr-0.5" />
-                                        Agent
-                                      </Badge>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title={tUi("Completed by Agent")}>
+                                        <User className="h-3 w-3 mr-0.5" />{tUi("Agent")}</Badge>
                                     ) : null}
                                     {isAiFilled && confidenceScore != null && (
                                       <Badge
@@ -409,6 +398,7 @@ function WorkflowStagesCardReadOnly({ stages, itemStatuses, workflowName }) {
  * Item type badge
  */
 function ItemTypeBadge({ type }) {
+  const tUi = useUiText();
   const config = {
     action: { color: "text-muted-foreground border-border", label: "Action" },
     question: { color: "text-muted-foreground border-border", label: "Question" },
@@ -419,7 +409,7 @@ function ItemTypeBadge({ type }) {
 
   return (
     <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${color}`}>
-      {label}
+      {tUi(label)}
     </Badge>
   );
 }
@@ -428,18 +418,16 @@ function ItemTypeBadge({ type }) {
  * Read-only Transcription Card
  */
 function TranscriptionCardReadOnly({ transcriptions }) {
+  const tUi = useUiText();
   return (
     <Card className="flex flex-col overflow-hidden border border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
             <MessageSquare className="h-3.5 w-3.5 text-sky-500" />
-          </span>
-          Live Transcription
-          {transcriptions.length > 0 && (
+          </span>{tUi("Live Transcription")}{transcriptions.length > 0 && (
             <Badge variant="outline" className="ml-auto text-xs text-sky-600 dark:text-sky-400 border-sky-500/40">
-              {transcriptions.length} messages
-            </Badge>
+              {transcriptions.length}{tUi(" messages")}</Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -449,7 +437,7 @@ function TranscriptionCardReadOnly({ transcriptions }) {
             {transcriptions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No transcription data</p>
+                <p className="text-sm">{tUi("No transcription data")}</p>
               </div>
             ) : (
               transcriptions.map((t, idx) => (
@@ -474,6 +462,7 @@ function formatSttConfidencePercent(confidence) {
 }
 
 function TranscriptionBubbleReadOnly({ transcription }) {
+  const tUi = useUiText();
   const isCustomer = transcription.track === "inbound";
   const sentiment = transcription.sentiment;
   const sentimentScore = transcription.sentimentScore;
@@ -496,7 +485,7 @@ function TranscriptionBubbleReadOnly({ transcription }) {
         isCustomer ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400 flex-row-reverse"
       }`}>
         {isCustomer ? <User className="h-3 w-3" /> : <Headphones className="h-3 w-3" />}
-        <span className="font-medium">{isCustomer ? "Customer" : "Agent"}</span>
+        <span className="font-medium">{isCustomer ? tUi("Customer") : tUi("Agent")}</span>
       </div>
 
       {/* Message bubble */}
@@ -517,10 +506,9 @@ function TranscriptionBubbleReadOnly({ transcription }) {
             <Badge
               variant="outline"
               className="text-[10px] text-muted-foreground"
-              title="Speech-to-text recognition confidence from Telnyx Standalone STT"
+              title={tUi("Speech-to-text recognition confidence from Telnyx Standalone STT")}
             >
-              <Activity className="h-3 w-3 mr-1" />
-              STT {sttConfidencePercent}%
+              <Activity className="h-3 w-3 mr-1" />{tUi("STT ")}{sttConfidencePercent}%
             </Badge>
           )}
           {intent && (
@@ -548,6 +536,7 @@ function TranscriptionBubbleReadOnly({ transcription }) {
  * Suggestions History Card
  */
 function SuggestionsHistoryCard({ suggestions }) {
+  const tUi = useUiText();
   const [copiedId, setCopiedId] = useState(null);
 
   const handleCopy = (suggestion, idx) => {
@@ -565,12 +554,9 @@ function SuggestionsHistoryCard({ suggestions }) {
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500/10">
             <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-          </span>
-          Suggested Responses
-          {suggestions.length > 0 && (
+          </span>{tUi("Suggested Responses")}{suggestions.length > 0 && (
             <Badge variant="outline" className="ml-auto text-xs text-violet-600 dark:text-violet-400 border-violet-500/40">
-              {suggestions.length} suggestions
-            </Badge>
+              {suggestions.length}{tUi(" suggestions")}</Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -580,8 +566,8 @@ function SuggestionsHistoryCard({ suggestions }) {
             {suggestions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No suggestions recorded</p>
-                <p className="text-xs mt-1">Suggestions will appear when workflow data is saved</p>
+                <p className="text-sm">{tUi("No suggestions recorded")}</p>
+                <p className="text-xs mt-1">{tUi("Suggestions will appear when workflow data is saved")}</p>
               </div>
             ) : (
               suggestions.map((suggestion, idx) => {
@@ -619,9 +605,7 @@ function SuggestionsHistoryCard({ suggestions }) {
                         <span className="truncate">{suggestion.itemLabel}</span>
                       </Badge>
                       {isLatest && (
-                        <Badge variant="outline" className="text-[10px] text-violet-600 dark:text-violet-400 border-violet-500/50 bg-violet-500/10 shrink-0">
-                          Current
-                        </Badge>
+                        <Badge variant="outline" className="text-[10px] text-violet-600 dark:text-violet-400 border-violet-500/50 bg-violet-500/10 shrink-0">{tUi("Current")}</Badge>
                       )}
                     </div>
 
@@ -662,14 +646,10 @@ function SuggestionsHistoryCard({ suggestions }) {
                           }`}>
                             {isCopied ? (
                               <>
-                                <CheckCheck className="h-3 w-3" />
-                                Copied!
-                              </>
+                                <CheckCheck className="h-3 w-3" />{tUi("Copied!")}</>
                             ) : (
                               <>
-                                <Copy className="h-3 w-3" />
-                                Click to copy
-                              </>
+                                <Copy className="h-3 w-3" />{tUi("Click to copy")}</>
                             )}
                           </span>
                         </div>
@@ -697,6 +677,7 @@ function WorkflowProgressBarReadOnly({
   totalItems,
   isComplete,
 }) {
+  const tUi = useUiText();
   const skippedItems = Object.values(itemStatuses).filter(s => s.status === "skipped").length;
 
   return (
@@ -710,7 +691,7 @@ function WorkflowProgressBarReadOnly({
               <div
                 key={stage.id}
                 className={`flex items-center ${index < stages.length - 1 ? "gap-1" : ""}`}
-                title={`${stage.name}: ${completion.completed}/${completion.total}`}
+                title={tUi("{value0}: {value1}/{value2}", { value0: stage.name, value1: completion.completed, value2: completion.total })}
               >
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${

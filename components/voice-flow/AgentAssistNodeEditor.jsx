@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import { Label } from "@/components/ui/label";
@@ -32,6 +34,7 @@ function dateInputType(mode) {
 }
 
 function DateTimeStaticValueInput({ field, value, onChange }) {
+  const tUi = useUiText();
   const inputRef = useRef(null);
   const inputType = dateInputType(field.props?.mode);
   const PickerIcon = inputType === "time" ? IconClock : inputType === "date" ? IconCalendar : IconCalendarTime;
@@ -57,13 +60,13 @@ function DateTimeStaticValueInput({ field, value, onChange }) {
         type={inputType}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={field.placeholder || "Value to prefill"}
+        placeholder={field.placeholder || tUi("Value to prefill")}
         className="h-9 pr-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 dark:[&::-webkit-calendar-picker-indicator]:invert"
       />
       <button
         type="button"
-        aria-label={label}
-        title={label}
+        aria-label={tUi(label)}
+        title={tUi(label)}
         onClick={openPicker}
         className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -79,6 +82,7 @@ export default function AgentAssistNodeEditor({
   experimentalFeaturesEnabled = false,
   availableVariables = [],
 }) {
+  const tUi = useUiText();
   const [workflows, setWorkflows] = useState([]);
   const [kbCategories, setKbCategories] = useState([]);
   const [forms, setForms] = useState([]);
@@ -295,16 +299,14 @@ export default function AgentAssistNodeEditor({
       {/* Header */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <IconRobot className="h-4 w-4" />
-        <span>Configure Agent Assist settings for this call flow</span>
+        <span>{tUi("Configure Agent Assist settings for this call flow")}</span>
       </div>
 
       {/* Enable/Disable */}
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label>Enable Agent Assist</Label>
-          <p className="text-xs text-muted-foreground">
-            Turn on AI-powered agent assistance for calls in this flow
-          </p>
+          <Label>{tUi("Enable Agent Assist")}</Label>
+          <p className="text-xs text-muted-foreground">{tUi("Turn on AI-powered agent assistance for calls in this flow")}</p>
         </div>
         <Switch
           checked={enabled}
@@ -316,10 +318,8 @@ export default function AgentAssistNodeEditor({
 
       {/* Assist Type Selection */}
       <div className="space-y-3">
-        <Label>Assist Type</Label>
-        <p className="text-xs text-muted-foreground">
-          Choose how Agent Assist should help agents during calls
-        </p>
+        <Label>{tUi("Assist Type")}</Label>
+        <p className="text-xs text-muted-foreground">{tUi("Choose how Agent Assist should help agents during calls")}</p>
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
@@ -332,11 +332,9 @@ export default function AgentAssistNodeEditor({
           >
             <div className="flex items-center gap-2 mb-2">
               <IconBook className={`h-5 w-5 ${assistType === "kb_articles" ? "text-violet-500" : "text-muted-foreground"}`} />
-              <span className="font-medium">KB Articles</span>
+              <span className="font-medium">{tUi("KB Articles")}</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Suggest relevant knowledge base articles based on conversation context
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Suggest relevant knowledge base articles based on conversation context")}</p>
           </button>
           <button
             type="button"
@@ -349,11 +347,9 @@ export default function AgentAssistNodeEditor({
           >
             <div className="flex items-center gap-2 mb-2">
               <IconGitBranch className={`h-5 w-5 ${assistType === "workflows" ? "text-violet-500" : "text-muted-foreground"}`} />
-              <span className="font-medium">Workflows</span>
+              <span className="font-medium">{tUi("Workflows")}</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Guide agents through structured call workflows with stages and items
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Guide agents through structured call workflows with stages and items")}</p>
           </button>
           <button
             type="button"
@@ -366,11 +362,9 @@ export default function AgentAssistNodeEditor({
           >
             <div className="flex items-center gap-2 mb-2">
               <IconFileText className={`h-5 w-5 ${assistType === "forms" ? "text-violet-500" : "text-muted-foreground"}`} />
-              <span className="font-medium">Forms</span>
+              <span className="font-medium">{tUi("Forms")}</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Auto-open custom queue forms in the agent desktop
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Auto-open custom queue forms in the agent desktop")}</p>
           </button>
           <button
             type="button"
@@ -383,11 +377,9 @@ export default function AgentAssistNodeEditor({
           >
             <div className="flex items-center gap-2 mb-2">
               <IconWorld className={`h-5 w-5 ${assistType === "web_pages" ? "text-violet-500" : "text-muted-foreground"}`} />
-              <span className="font-medium">Web Pages</span>
+              <span className="font-medium">{tUi("Web Pages")}</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Open selected admin web pages in the agent desktop
-            </p>
+            <p className="text-xs text-muted-foreground">{tUi("Open selected admin web pages in the agent desktop")}</p>
           </button>
         </div>
       </div>
@@ -398,16 +390,12 @@ export default function AgentAssistNodeEditor({
       {assistType === "kb_articles" && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <IconBook className="h-4 w-4 text-violet-500" />
-            KB Articles Settings
-          </div>
+            <IconBook className="h-4 w-4 text-violet-500" />{tUi("KB Articles Settings")}</div>
 
           {/* KB Category */}
           <div className="space-y-2">
-            <Label>KB Category (Optional)</Label>
-            <p className="text-xs text-muted-foreground mb-2">
-              Filter suggestions to a specific category
-            </p>
+            <Label>{tUi("KB Category (Optional)")}</Label>
+            <p className="text-xs text-muted-foreground mb-2">{tUi("Filter suggestions to a specific category")}</p>
             {loadingCategories ? (
               <Skeleton className="h-10 w-full" />
             ) : (
@@ -416,10 +404,10 @@ export default function AgentAssistNodeEditor({
                 onValueChange={(value) => handleChange("kb_category", value === "all" ? "" : value)}
               >
                 <SelectTrigger className={selectTriggerClassName}>
-                  <SelectValue placeholder="All categories" />
+                  <SelectValue placeholder={tUi("All categories")} />
                 </SelectTrigger>
                 <SelectContent className={selectContentClassName}>
-                  <SelectItem value="all" className={selectItemClassName}>All categories</SelectItem>
+                  <SelectItem value="all" className={selectItemClassName}>{tUi("All categories")}</SelectItem>
                   {kbCategories.map((cat) => (
                     <SelectItem key={cat.id || cat.name || cat} value={cat.id || cat.name || cat} className={selectItemClassName}>
                       {cat.name || cat}
@@ -433,10 +421,8 @@ export default function AgentAssistNodeEditor({
           {/* Auto-suggest */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Auto-suggest Articles</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically suggest relevant articles based on conversation
-              </p>
+              <Label>{tUi("Auto-suggest Articles")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Automatically suggest relevant articles based on conversation")}</p>
             </div>
             <Switch
               checked={config.kb_auto_suggest !== false}
@@ -446,10 +432,8 @@ export default function AgentAssistNodeEditor({
 
           {/* Max Suggestions */}
           <div className="space-y-2">
-            <Label>Max Suggestions</Label>
-            <p className="text-xs text-muted-foreground">
-              Maximum number of articles to suggest at once
-            </p>
+            <Label>{tUi("Max Suggestions")}</Label>
+            <p className="text-xs text-muted-foreground">{tUi("Maximum number of articles to suggest at once")}</p>
             <Input
               type="number"
               min={1}
@@ -468,14 +452,10 @@ export default function AgentAssistNodeEditor({
       {assistType === "forms" && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <IconFileText className="h-4 w-4 text-violet-500" />
-            Forms Settings
-          </div>
+            <IconFileText className="h-4 w-4 text-violet-500" />{tUi("Forms Settings")}</div>
           <div className="space-y-2">
-            <Label>Primary form</Label>
-            <p className="text-xs text-muted-foreground mb-2">
-              Select one published form; queue-assigned auto-open forms can also appear.
-            </p>
+            <Label>{tUi("Primary form")}</Label>
+            <p className="text-xs text-muted-foreground mb-2">{tUi("Select one published form; queue-assigned auto-open forms can also appear.")}</p>
             {loadingForms ? (
               <Skeleton className="h-10 w-full" />
             ) : (
@@ -484,10 +464,10 @@ export default function AgentAssistNodeEditor({
                 onValueChange={handleFormSelect}
               >
                 <SelectTrigger className={selectTriggerClassName}>
-                  <SelectValue placeholder="Use queue-assigned forms" />
+                  <SelectValue placeholder={tUi("Use queue-assigned forms")} />
                 </SelectTrigger>
                 <SelectContent className={selectContentClassName}>
-                  <SelectItem value="queue" className={selectItemClassName}>Use queue-assigned forms</SelectItem>
+                  <SelectItem value="queue" className={selectItemClassName}>{tUi("Use queue-assigned forms")}</SelectItem>
                   {forms.map((form) => (
                     <SelectItem key={form.id} value={form.id} className={selectItemClassName}>{form.name}</SelectItem>
                   ))}
@@ -498,10 +478,8 @@ export default function AgentAssistNodeEditor({
           {selectedForm ? (
             <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
               <div>
-                <Label>Form data prefill</Label>
-                <p className="text-xs text-muted-foreground">
-                  Optional values to pass into the selected Agent Assist form. Values are keyed by each field variable name.
-                </p>
+                <Label>{tUi("Form data prefill")}</Label>
+                <p className="text-xs text-muted-foreground">{tUi("Optional values to pass into the selected Agent Assist form. Values are keyed by each field variable name.")}</p>
               </div>
               {selectedFormFields.length ? (
                 <div className="space-y-3">
@@ -519,9 +497,9 @@ export default function AgentAssistNodeEditor({
                           <Select value={source} onValueChange={(value) => updateFormDataField(field.variableName, { source: value, value: value === "none" ? "" : entry.value || "" })}>
                             <SelectTrigger className="h-9 w-full md:w-[108px] md:shrink-0"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              <SelectItem value="static">Static</SelectItem>
-                              <SelectItem value="variable">Variable</SelectItem>
+                              <SelectItem value="none">{tUi("None")}</SelectItem>
+                              <SelectItem value="static">{tUi("Static")}</SelectItem>
+                              <SelectItem value="variable">{tUi("Variable")}</SelectItem>
                             </SelectContent>
                           </Select>
                           <div className="min-w-0 flex-1">
@@ -530,14 +508,14 @@ export default function AgentAssistNodeEditor({
                                 value={entry.value || ""}
                                 onChange={(value) => updateFormDataField(field.variableName, { source: "variable", value })}
                                 availableVariables={availableVariables}
-                                placeholder="{{customer_name}} or {{client_state.customer.name}}"
+                                placeholder={tUi("{{customer_name}} or {{client_state.customer.name}}")}
                                 className="h-9"
                               />
                             ) : source === "static" ? (
                               field.type === "switch" ? (
                                 <div className="flex h-9 items-center gap-2">
                                   <Switch checked={entry.value === true || entry.value === "true"} onCheckedChange={(checked) => updateFormDataField(field.variableName, { source: "static", value: checked })} />
-                                  <span className="text-xs text-muted-foreground">{entry.value === true || entry.value === "true" ? "true" : "false"}</span>
+                                  <span className="text-xs text-muted-foreground">{entry.value === true || entry.value === "true" ? tUi("true") : tUi("false")}</span>
                                 </div>
                               ) : (
                                 field.type === "datetime" ? (
@@ -551,13 +529,13 @@ export default function AgentAssistNodeEditor({
                                     type={field.type === "slider" ? "number" : "text"}
                                     value={entry.value ?? ""}
                                     onChange={(e) => updateFormDataField(field.variableName, { source: "static", value: e.target.value })}
-                                    placeholder="Value to prefill"
+                                    placeholder={tUi("Value to prefill")}
                                     className="h-9"
                                   />
                                 )
                               )
                             ) : (
-                              <div className="flex h-9 items-center text-xs text-muted-foreground">Leave blank</div>
+                              <div className="flex h-9 items-center text-xs text-muted-foreground">{tUi("Leave blank")}</div>
                             )}
                           </div>
                         </div>
@@ -566,18 +544,14 @@ export default function AgentAssistNodeEditor({
                   })}
                 </div>
               ) : (
-                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                  This form has no data fields with variable names.
-                </div>
+                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">{tUi("This form has no data fields with variable names.")}</div>
               )}
             </div>
           ) : null}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Auto-open forms</Label>
-              <p className="text-xs text-muted-foreground">
-                Open selected and queue-assigned forms when the interaction appears.
-              </p>
+              <Label>{tUi("Auto-open forms")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Open selected and queue-assigned forms when the interaction appears.")}</p>
             </div>
             <Switch
               checked={config.auto_open_forms !== false}
@@ -591,20 +565,14 @@ export default function AgentAssistNodeEditor({
       {assistType === "web_pages" && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <IconWorld className="h-4 w-4 text-violet-500" />
-            Web Pages Settings
-          </div>
+            <IconWorld className="h-4 w-4 text-violet-500" />{tUi("Web Pages Settings")}</div>
           <div className="space-y-2">
-            <Label>Web page</Label>
-            <p className="text-xs text-muted-foreground mb-2">
-              Select one active web page to show for this interaction. Leave empty to show all active web pages.
-            </p>
+            <Label>{tUi("Web page")}</Label>
+            <p className="text-xs text-muted-foreground mb-2">{tUi("Select one active web page to show for this interaction. Leave empty to show all active web pages.")}</p>
             {loadingWebPages ? (
               <Skeleton className="h-10 w-full" />
             ) : webPages.length === 0 ? (
-              <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                No active web pages configured in Admin → Web Pages.
-              </div>
+              <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">{tUi("No active web pages configured in Admin → Web Pages.")}</div>
             ) : (
               <>
                 <Select
@@ -612,11 +580,11 @@ export default function AgentAssistNodeEditor({
                   onValueChange={handleWebPageSelect}
                 >
                   <SelectTrigger className={selectTriggerClassName}>
-                    <SelectValue placeholder="All active web pages" />
+                    <SelectValue placeholder={tUi("All active web pages")} />
                   </SelectTrigger>
                   <SelectContent className={selectContentClassName}>
                     <SelectItem value="all" className={selectItemClassName}>
-                      <span className="text-muted-foreground">All active web pages</span>
+                      <span className="text-muted-foreground">{tUi("All active web pages")}</span>
                     </SelectItem>
                     {webPages.map((page) => (
                       <SelectItem key={page.id} value={page.id} className={selectItemClassName}>
@@ -650,16 +618,12 @@ export default function AgentAssistNodeEditor({
       {assistType === "workflows" && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <IconGitBranch className="h-4 w-4 text-violet-500" />
-            Workflow Settings
-          </div>
+            <IconGitBranch className="h-4 w-4 text-violet-500" />{tUi("Workflow Settings")}</div>
 
           {/* Workflow Selection */}
           <div className="space-y-2">
-            <Label>Workflow</Label>
-            <p className="text-xs text-muted-foreground mb-2">
-              Select a workflow to guide agents through this call
-            </p>
+            <Label>{tUi("Workflow")}</Label>
+            <p className="text-xs text-muted-foreground mb-2">{tUi("Select a workflow to guide agents through this call")}</p>
             {loadingWorkflows ? (
               <Skeleton className="h-10 w-full" />
             ) : (
@@ -668,11 +632,11 @@ export default function AgentAssistNodeEditor({
                 onValueChange={handleWorkflowSelect}
               >
                 <SelectTrigger className={selectTriggerClassName}>
-                  <SelectValue placeholder="Select a workflow..." />
+                  <SelectValue placeholder={tUi("Select a workflow...")} />
                 </SelectTrigger>
                 <SelectContent className={selectContentClassName}>
                   <SelectItem value="none" className={selectItemClassName}>
-                    <span className="text-muted-foreground">No workflow</span>
+                    <span className="text-muted-foreground">{tUi("No workflow")}</span>
                   </SelectItem>
                   {workflows.map((workflow) => (
                     <SelectItem key={workflow.id} value={workflow.id} className={selectItemClassName}>
@@ -695,8 +659,8 @@ export default function AgentAssistNodeEditor({
                 <div className="flex min-w-0 items-center justify-between gap-2">
                   <span className="min-w-0 truncate text-sm font-medium">{selectedWorkflow.name}</span>
                   <div className="flex shrink-0 gap-2">
-                    <Badge variant="outline">{selectedWorkflow.stages_count || 0} stages</Badge>
-                    <Badge variant="outline">{selectedWorkflow.items_count || 0} items</Badge>
+                    <Badge variant="outline">{selectedWorkflow.stages_count || 0}{tUi(" stages")}</Badge>
+                    <Badge variant="outline">{selectedWorkflow.items_count || 0}{tUi(" items")}</Badge>
                   </div>
                 </div>
                 {selectedWorkflow.description && (
@@ -711,10 +675,8 @@ export default function AgentAssistNodeEditor({
           {selectedWorkflow && (
             <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
               <div>
-                <Label>Workflow data prefill</Label>
-                <p className="text-xs text-muted-foreground">
-                  Optional values to pass from call flow client state into matching workflow slot names. Values are stored under <span className="font-mono">workflow_data</span> and only slots defined by this workflow are applied.
-                </p>
+                <Label>{tUi("Workflow data prefill")}</Label>
+                <p className="text-xs text-muted-foreground">{tUi("Optional values to pass from call flow client state into matching workflow slot names. Values are stored under ")}<span className="font-mono">{tUi("workflow_data")}</span>{tUi(" and only slots defined by this workflow are applied.")}</p>
               </div>
               {loadingWorkflowDetails ? (
                 <Skeleton className="h-20 w-full" />
@@ -728,16 +690,16 @@ export default function AgentAssistNodeEditor({
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <span className="min-w-0 truncate text-sm font-medium">{slot.label || slot.slot_name}</span>
                           <Badge variant="outline" className="font-mono text-[10px]">{slot.slot_name}</Badge>
-                          <Badge variant="secondary" className="text-[10px]">{slot.slot_type || "text"}</Badge>
+                          <Badge variant="secondary" className="text-[10px]">{slot.slot_type || tUi("text")}</Badge>
                           {slot.stageName && <Badge variant="outline" className="text-[10px]">{slot.stageName}</Badge>}
                         </div>
                         <div className="flex min-w-0 flex-col gap-1.5 md:flex-row md:items-start">
                           <Select value={source} onValueChange={(value) => updateWorkflowDataField(slot.slot_name, { source: value, value: value === "none" ? "" : entry.value || "" })}>
                             <SelectTrigger className="h-9 w-full md:w-[108px] md:shrink-0"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              <SelectItem value="static">Static</SelectItem>
-                              <SelectItem value="variable">Variable</SelectItem>
+                              <SelectItem value="none">{tUi("None")}</SelectItem>
+                              <SelectItem value="static">{tUi("Static")}</SelectItem>
+                              <SelectItem value="variable">{tUi("Variable")}</SelectItem>
                             </SelectContent>
                           </Select>
                           <div className="min-w-0 flex-1">
@@ -746,7 +708,7 @@ export default function AgentAssistNodeEditor({
                                 value={entry.value || ""}
                                 onChange={(value) => updateWorkflowDataField(slot.slot_name, { source: "variable", value })}
                                 availableVariables={availableVariables}
-                                placeholder="{{customer_name}} or {{client_state.customer.name}}"
+                                placeholder={tUi("{{customer_name}} or {{client_state.customer.name}}")}
                                 className="h-9"
                               />
                             ) : source === "static" ? (
@@ -754,11 +716,11 @@ export default function AgentAssistNodeEditor({
                                 type={slot.slot_type === "number" ? "number" : "text"}
                                 value={entry.value ?? ""}
                                 onChange={(e) => updateWorkflowDataField(slot.slot_name, { source: "static", value: e.target.value })}
-                                placeholder="Value to prefill"
+                                placeholder={tUi("Value to prefill")}
                                 className="h-9"
                               />
                             ) : (
-                              <div className="flex h-9 items-center text-xs text-muted-foreground">Leave blank</div>
+                              <div className="flex h-9 items-center text-xs text-muted-foreground">{tUi("Leave blank")}</div>
                             )}
                           </div>
                         </div>
@@ -767,9 +729,7 @@ export default function AgentAssistNodeEditor({
                   })}
                 </div>
               ) : (
-                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                  This workflow has no slot items with slot names.
-                </div>
+                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">{tUi("This workflow has no slot items with slot names.")}</div>
               )}
             </div>
           )}
@@ -777,10 +737,8 @@ export default function AgentAssistNodeEditor({
           {/* Auto-start */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Auto-start on Answer</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically start workflow tracking when call is answered
-              </p>
+              <Label>{tUi("Auto-start on Answer")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Automatically start workflow tracking when call is answered")}</p>
             </div>
             <Switch
               checked={config.auto_start !== false}
@@ -791,10 +749,8 @@ export default function AgentAssistNodeEditor({
           {/* Show Suggestions */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Show AI Suggestions</Label>
-              <p className="text-xs text-muted-foreground">
-                Display AI-powered suggestions to agents during the call
-              </p>
+              <Label>{tUi("Show AI Suggestions")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Display AI-powered suggestions to agents during the call")}</p>
             </div>
             <Switch
               checked={config.show_suggestions !== false}
@@ -805,10 +761,8 @@ export default function AgentAssistNodeEditor({
           {/* Show expanded stages */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Show expanded stages</Label>
-              <p className="text-xs text-muted-foreground">
-                Open all workflow stages in Agent Assist and scroll to items as they update
-              </p>
+              <Label>{tUi("Show expanded stages")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Open all workflow stages in Agent Assist and scroll to items as they update")}</p>
             </div>
             <Switch
               checked={config.show_expanded_stages === true}
@@ -819,10 +773,8 @@ export default function AgentAssistNodeEditor({
           {/* Auto-detect Completion */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Auto-detect Item Completion</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically mark workflow items as complete based on conversation
-              </p>
+              <Label>{tUi("Auto-detect Item Completion")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Automatically mark workflow items as complete based on conversation")}</p>
             </div>
             <Switch
               checked={config.auto_detect_completion !== false}
@@ -833,10 +785,8 @@ export default function AgentAssistNodeEditor({
           {/* Intent Recognition */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Enable Intent Recognition</Label>
-              <p className="text-xs text-muted-foreground">
-                Detect intent for finalized transcription messages
-              </p>
+              <Label>{tUi("Enable Intent Recognition")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Detect intent for finalized transcription messages")}</p>
             </div>
             <Switch
               checked={config.enable_intent_recognition === true}
@@ -847,10 +797,8 @@ export default function AgentAssistNodeEditor({
           {/* Sentiment Analysis */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Enable Sentiment Analysis</Label>
-              <p className="text-xs text-muted-foreground">
-                Analyze sentiment for finalized transcription messages
-              </p>
+              <Label>{tUi("Enable Sentiment Analysis")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Analyze sentiment for finalized transcription messages")}</p>
             </div>
             <Switch
               checked={config.enable_sentiment_analysis === true}
@@ -861,10 +809,8 @@ export default function AgentAssistNodeEditor({
           {/* STT Confidence display */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Enable STT Confidence</Label>
-              <p className="text-xs text-muted-foreground">
-                Show speech-to-text confidence badges in the agent UI
-              </p>
+              <Label>{tUi("Enable STT Confidence")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Show speech-to-text confidence badges in the agent UI")}</p>
             </div>
             <Switch
               checked={config.enable_stt_confidence !== false}
@@ -875,10 +821,8 @@ export default function AgentAssistNodeEditor({
           {/* LLM Confidence display */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Enable LLM Confidence</Label>
-              <p className="text-xs text-muted-foreground">
-                Show LLM extraction confidence badges in the agent UI
-              </p>
+              <Label>{tUi("Enable LLM Confidence")}</Label>
+              <p className="text-xs text-muted-foreground">{tUi("Show LLM extraction confidence badges in the agent UI")}</p>
             </div>
             <Switch
               checked={config.enable_llm_confidence !== false}
@@ -890,10 +834,8 @@ export default function AgentAssistNodeEditor({
           {experimentalFeaturesEnabled && (
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Enable online translation</Label>
-                <p className="text-xs text-muted-foreground">
-                  Translate live transcriptions between caller and agent
-                </p>
+                <Label>{tUi("Enable online translation")}</Label>
+                <p className="text-xs text-muted-foreground">{tUi("Translate live transcriptions between caller and agent")}</p>
               </div>
               <Switch
                 checked={config.enable_translation === true}
@@ -906,10 +848,8 @@ export default function AgentAssistNodeEditor({
           {experimentalFeaturesEnabled && (
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Auto send response</Label>
-                <p className="text-xs text-muted-foreground">
-                  Automatically speak translated text in the opposite call leg
-                </p>
+                <Label>{tUi("Auto send response")}</Label>
+                <p className="text-xs text-muted-foreground">{tUi("Automatically speak translated text in the opposite call leg")}</p>
               </div>
               <Switch
                 checked={config.auto_send_response === true}

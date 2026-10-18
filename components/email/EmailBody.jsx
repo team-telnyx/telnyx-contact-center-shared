@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 import { useEffect,useMemo,useState } from 'react';
 import { emailPreviewSettings } from '@/lib/email/preview-settings.mjs';
 import { emailHtmlText } from '@/lib/email/content.mjs';
@@ -6,6 +8,7 @@ import { emailHtmlText } from '@/lib/email/content.mjs';
 export const textToEmailHtml = text => String(text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 
 export default function EmailBody({message,settings,fill=false}) {
+  const tUi = useUiText();
   const policy=emailPreviewSettings(settings);
   const showHtml=policy.format==='html'&&Boolean(message.html_body),remote=policy.loadRemoteImages;
   const showInlineImages=policy.showInlineImages;
@@ -45,6 +48,6 @@ export default function EmailBody({message,settings,fill=false}) {
     return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src ${imageSources}; base-uri 'none'; form-action 'none'"><style>body{font:14px/1.65 Arial,sans-serif;color:#182323;background:white;overflow-wrap:anywhere;margin:16px}img,table{max-width:100%}pre{white-space:pre-wrap}</style></head><body>${doc.body.innerHTML}</body></html>`;
   },[message.html_body,remote,showHtml,showInlineImages,retainedImages,files]);
   return <div className={fill?"flex min-h-0 flex-1 flex-col overflow-hidden":undefined}>
-    {showHtml?<iframe title={`Email body ${message.id}`} sandbox="" referrerPolicy="no-referrer" srcDoc={source} className={fill?"min-h-64 w-full flex-1 rounded-lg border bg-white":"h-64 w-full rounded-lg border bg-white"}/>:<p className={`${fill?"min-h-0 flex-1 overflow-y-auto ":""}whitespace-pre-wrap break-words text-[13px] leading-relaxed`}>{message.body||emailHtmlText(message.html_body)||'This email has no text content.'}</p>}
+    {showHtml?<iframe title={tUi("Email body {value0}", { value0: message.id })} sandbox="" referrerPolicy="no-referrer" srcDoc={source} className={fill?"min-h-64 w-full flex-1 rounded-lg border bg-white":"h-64 w-full rounded-lg border bg-white"}/>:<p className={`${fill?"min-h-0 flex-1 overflow-y-auto ":""}whitespace-pre-wrap break-words text-[13px] leading-relaxed`}>{message.body||emailHtmlText(message.html_body)||tUi("This email has no text content.")}</p>}
   </div>;
 }

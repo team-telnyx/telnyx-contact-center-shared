@@ -1,258 +1,160 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  BarChart3 as IconBarChart,
-  Mic as IconMic,
-  MicOff as IconMicOff,
-  Phone as IconPhone,
-  PhoneOff as IconPhoneOff,
-  Volume2 as IconVolume2,
-  VolumeX as IconVolumeX,
-  X as IconClose,
-} from "lucide-react";
-import {
-  TelnyxAIAgentProvider,
-  useClient,
-  useConversation,
-  useSetTranscript,
-} from "@telnyx/ai-agent-lib";
-import { AudioVisualizer } from "@/components/audio-visualizer";
-import { AIWidgetMessages } from "@/components/ai-widget-messages";
-import { AIWidgetConnectionAlert, AIWidgetStatus } from "@/components/ai-widget-status";
-import { AIWidgetUIProvider, useAIWidgetUI } from "@/components/ai-widget-ui-provider";
+import { Bot, Loader2, Mic, MicOff, Phone, PhoneOff, RotateCcw, SendHorizontal, ShieldCheck, Volume2, VolumeX, X } from "lucide-react";
+import { useUiText } from "@/components/i18n/use-ui-text";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AudioVisualizer } from "@/components/audio-visualizer";
+import { AvatarBridgeProvider } from "@/components/avatar/avatar-bridge";
+import { AvatarMediaPanel, latestTranscriptLine } from "@/components/avatar/avatar-media-panel";
+import { TelnyxAvatarClient } from "@/lib/ai/telnyx-avatar-client.mjs";
+import { mergeTranscript } from "@/lib/widgets/voice-transcript";
+import AssistantCallTranscript from "./AssistantCallTranscript";
+import { stripTtsExpressionTags } from "@/lib/ai/tts-expression-text.mjs";
 
-const PAD = 12;
-const PANEL_WIDTH = 320;
-const PANEL_HEIGHT = 690;
-
-function AIPhoneControls({ assistantId, assistantName, user, customHeaders = [] }) {
-  const client = useClient();
-  const conversation = useConversation();
-  const setTranscript = useSetTranscript();
-  const {
-    canStartConversation,
-    endConversation,
-    hasActiveConversation,
-    isReconnecting,
-    isStartingConversation,
-    reportError,
-    startConversation,
-  } = useAIWidgetUI();
-  const [isMuted, setIsMuted] = useState(false);
-  const [isHeld, setIsHeld] = useState(false);
-  const audioRef = useRef(null);
-
-  useEffect(() => {
-    if (conversation?.call?.remoteStream && audioRef.current) {
-      audioRef.current.srcObject = conversation.call.remoteStream;
-    }
-  }, [conversation]);
-
-  async function handleCall() {
-    if (!client) return;
-    try {
-      if (hasActiveConversation) {
-        setTranscript([]);
-        await endConversation();
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        stream.getTracks().forEach((track) => track.stop());
-      } catch {
-        reportError(
-          "Microphone access is required. Allow microphone access in your browser and try again."
-        );
-        return;
-      }
-
-      const callOptions = { customHeaders: [] };
-      const callerNumber = user?.mobile || user?.voiceNumber || user?.voice_number;
-      const firstName = user?.firstName || user?.first_name || "";
-      const lastName = user?.lastName || user?.last_name || "";
-      const callerName = `${firstName} ${lastName}`.trim() || user?.name || "";
-      if (callerNumber) callOptions.callerNumber = callerNumber;
-      if (callerName) callOptions.callerName = callerName;
-      if (assistantId) callOptions.customHeaders.push({ name: "X-Assistant-Id", value: assistantId });
-      if (assistantName) callOptions.customHeaders.push({ name: "X-Assistant-Name", value: assistantName });
-      if (Array.isArray(customHeaders)) callOptions.customHeaders.push(...customHeaders);
-      await startConversation(callOptions);
-    } catch (error) {
-      reportError(error);
-    }
-  }
-
-  const isConnecting =
-    isStartingConversation ||
-    isReconnecting ||
-    (!canStartConversation && !hasActiveConversation);
-
-  function handleMute() {
-    if (!hasActiveConversation) return;
-    const nextMuted = !isMuted;
-    conversation?.call?.localStream?.getAudioTracks().forEach((track) => {
-      track.enabled = !nextMuted;
-    });
-    setIsMuted(nextMuted);
-  }
-
-  function handleHold() {
-    if (!hasActiveConversation) return;
-    const nextHeld = !isHeld;
-    if (audioRef.current) audioRef.current.muted = nextHeld;
-    setIsHeld(nextHeld);
-  }
-
-  return (
-    <div className="space-y-3 p-4">
-      <AIWidgetConnectionAlert />
-      <div className="flex items-center justify-center gap-4">
-        <Button type="button" onClick={handleMute} variant="outline" size="sm" className={`h-12 w-12 rounded-full ${isMuted ? "border-red-500 bg-red-500 text-white" : ""}`} disabled={!hasActiveConversation} aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}>
-          {isMuted ? <IconMicOff className="h-5 w-5" /> : <IconMic className="h-5 w-5" />}
-        </Button>
-        <Button type="button" onClick={handleCall} disabled={isConnecting} className={`h-16 w-16 rounded-full ${hasActiveConversation ? "bg-red-500 hover:bg-red-600" : isConnecting ? "bg-yellow-500 hover:bg-yellow-600" : "bg-green-500 hover:bg-green-600"}`} aria-label={hasActiveConversation ? "End call" : "Start call"}>
-          {isConnecting ? <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" /> : hasActiveConversation ? <IconPhoneOff className="h-6 w-6" /> : <IconPhone className="h-6 w-6" />}
-        </Button>
-        <Button type="button" onClick={handleHold} variant="outline" size="sm" className={`h-12 w-12 rounded-full ${isHeld ? "border-yellow-500 bg-yellow-500 text-white" : ""}`} disabled={!hasActiveConversation} aria-label={isHeld ? "Resume speaker" : "Mute speaker"}>
-          {isHeld ? <IconVolumeX className="h-5 w-5" /> : <IconVolume2 className="h-5 w-5" />}
-        </Button>
-      </div>
-      <audio ref={audioRef} autoPlay playsInline className="hidden" />
-    </div>
-  );
+const PAD = 12, WIDTH = 360, HEIGHT = 720;
+const noop = () => {};
+async function callRequest(assistantId, body, signal) {
+  const response = await fetch(`/api/ai/assistants/${encodeURIComponent(assistantId)}/call-session`, {
+    method: body ? "POST" : "GET", credentials: "same-origin", cache: "no-store", signal,
+    ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(response.status === 401 ? "Your Contact Center session has ended. Sign in again." : response.status === 403 ? "You do not have permission to call assistants." : data.error || "Could not prepare the call. Try again.");
+  return data;
+}
+function callError(error) {
+  if (error?.name === "NotAllowedError") return "Allow microphone access in your browser, then try again.";
+  if (error?.name === "NotFoundError") return "No microphone was found. Connect a microphone, then try again.";
+  if (error?.message === "Avatar media connection failed") return "Could not connect the avatar video. Check your network and try again.";
+  if (error?.message === "Avatar preparation timed out") return "The assistant took too long to connect. Try again.";
+  if (error?.message === "Avatar service unavailable") return "The assistant disconnected. You can start a new call.";
+  return error?.message || "Could not connect to the assistant. Try again.";
 }
 
-function AudioVisualizerSection() {
-  const conversation = useConversation();
-  const hasActiveConversation = conversation?.call?.state === "active";
-  return (
-    <div className="p-4">
-      <div className="flex min-h-[60px] items-center justify-center">
-        {hasActiveConversation && conversation?.call?.remoteStream ? (
-          <AudioVisualizer stream={conversation.call.remoteStream} className="h-[72px] w-full" backgroundColor="transparent" />
-        ) : (
-          <div className="text-center text-muted-foreground">
-            <IconBarChart className="mx-auto mb-2 h-8 w-8 opacity-50" />
-            <p className="text-xs">Audio visualizer will appear during calls</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+function FloatingPhone({ assistantId, assistantName, onClose }) {
+  const tUi = useUiText();
+  const [client] = useState(() => new TelnyxAvatarClient());
+  const [configuration, setConfiguration] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [starting, setStarting] = useState(false);
+  const [active, setActive] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [held, setHeld] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [transcript, setTranscript] = useState([]);
+  const [input, setInput] = useState("");
+  const [position, setPosition] = useState(null);
+  const [agentState, setAgentState] = useState("listening");
+  const [speakingItemId, setSpeakingItemId] = useState(null);
+  const [userState, setUserState] = useState("idle");
+  const [audioOnly, setAudioOnly] = useState(false);
+  const boxRef = useRef(null), transcriptEnd = useRef(null), busy = useRef(false), disposed = useRef(false);
+  const requestRef = useRef(null);
 
-function AIFloatingSoftphone({ assistantId, assistantName, onClose, user, customHeaders }) {
-  const client = useClient();
-  const { hasActiveConversation } = useAIWidgetUI();
-  const boxRef = useRef(null);
-  const [viewport, setViewport] = useState({ width: 0, height: 0 });
-  const dragRef = useRef({ dragging: false, dx: 0, dy: 0 });
-  const defaultPosition = useMemo(() => {
-    const width = viewport.width || (typeof window !== "undefined" ? window.innerWidth : 1280);
-    const height = viewport.height || (typeof window !== "undefined" ? window.innerHeight : 800);
-    return { x: Math.max(PAD, width - PANEL_WIDTH - PAD), y: Math.max(PAD, height - PANEL_HEIGHT - PAD) };
-  }, [viewport]);
-  const [position, setPosition] = useState(defaultPosition);
-
-  const clampPosition = useCallback((x, y) => {
-    const width = viewport.width || window.innerWidth;
-    const height = viewport.height || window.innerHeight;
-    const rect = boxRef.current?.getBoundingClientRect();
-    const panelWidth = rect?.width || PANEL_WIDTH;
-    const panelHeight = rect?.height || PANEL_HEIGHT;
-    return {
-      x: Math.min(Math.max(x, PAD), Math.max(PAD, width - panelWidth - PAD)),
-      y: Math.min(Math.max(y, PAD), Math.max(PAD, height - panelHeight - PAD)),
-    };
-  }, [viewport]);
-
+  const load = useCallback(async (signal) => {
+    setLoading(true); setError(null);
+    try { const data = await callRequest(assistantId, undefined, signal); if (!signal?.aborted && !disposed.current) setConfiguration(data); }
+    catch (error) { if (!signal?.aborted && !disposed.current) setError(callError(error)); }
+    finally { if (!signal?.aborted && !disposed.current) setLoading(false); }
+  }, [assistantId]);
   useEffect(() => {
-    const updateViewport = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      setViewport({ width, height });
-      setPosition({ x: Math.max(PAD, width - PANEL_WIDTH - PAD), y: Math.max(PAD, height - PANEL_HEIGHT - PAD) });
-    };
-    updateViewport();
-    window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
-  }, []);
-
-  useEffect(() => {
-    const box = boxRef.current;
-    if (!box) return;
-    function onMouseDown(event) {
-      if (!event.target.closest("[data-drag-handle]")) return;
-      dragRef.current = { dragging: true, dx: event.clientX - position.x, dy: event.clientY - position.y };
-      event.preventDefault();
-    }
-    function onMouseMove(event) {
-      if (!dragRef.current.dragging) return;
-      setPosition(clampPosition(event.clientX - dragRef.current.dx, event.clientY - dragRef.current.dy));
-    }
-    function onMouseUp() { dragRef.current.dragging = false; }
-    box.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    disposed.current = false;
+    const controller = new AbortController();
+    queueMicrotask(() => { if (!controller.signal.aborted) void load(controller.signal); });
+    const onConversation = ({ call }) => { setActive(call?.state === "active"); if (call?.state !== "active") setStarting(false); };
+    const onTranscript = item => setTranscript(current => mergeTranscript(current, item));
+    const onError = error => { setError(callError(error)); setStarting(false); };
+    const onAgent = ({ state, itemId }) => { setAgentState(state); setSpeakingItemId(state === "speaking" ? itemId : null); };
+    const onUser = ({ state }) => setUserState(state);
+    const onFallback = () => setAudioOnly(true);
+    client.on("conversation.user.state", onUser);
+    client.on("conversation.update", onConversation); client.on("transcript.item", onTranscript);
+    client.on("agent.error", onError); client.on("conversation.agent.state", onAgent); client.on("avatar.unavailable", onFallback);
     return () => {
-      box.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      disposed.current = true; controller.abort(); requestRef.current?.abort();
+      client.off("conversation.user.state", onUser);
+      client.off("conversation.update", onConversation); client.off("transcript.item", onTranscript);
+      client.off("agent.error", onError); client.off("conversation.agent.state", onAgent); client.off("avatar.unavailable", onFallback);
+      void client.disconnect();
     };
-  }, [clampPosition, position.x, position.y]);
+  }, [client, load]);
+  useEffect(() => {
+    const resize = () => setPosition(current => ({ x: Math.min(current?.x ?? Infinity, Math.max(PAD, window.innerWidth - WIDTH - PAD)), y: Math.min(current?.y ?? Infinity, Math.max(PAD, window.innerHeight - HEIGHT - PAD)) }));
+    resize(); window.addEventListener("resize", resize); return () => window.removeEventListener("resize", resize);
+  }, []);
+  useEffect(() => { transcriptEnd.current?.scrollIntoView({ block: "nearest" }); }, [transcript, userState]);
 
-  async function handleClose() {
+  const toggleConversation = async () => {
+    if (busy.current || loading) return;
+    busy.current = true;
     try {
-      if (hasActiveConversation) await client?.endConversation();
-      await client?.disconnect();
-    } catch (error) {
-      console.error("Error closing AI assistant:", error);
-    }
-    onClose();
-  }
+      if (active || starting) { requestRef.current?.abort(); await client.endConversation(); setStarting(false); return; }
+      if (!configuration) { await load(); return; }
+      setError(null); setStarting(true); setTranscript([]); setMuted(false); setHeld(false); setAudioOnly(false); client.setPlaybackHeld(false);
+      requestRef.current = new AbortController();
+      await client.startConversation({ avatarSession: () => callRequest(assistantId, { avatar: configuration.avatar }, requestRef.current.signal) });
+    } catch (error) { if (!disposed.current) setError(callError(error)); }
+    finally { busy.current = false; if (!disposed.current) setStarting(false); }
+  };
+  const toggleMic = () => {
+    if (!active) return;
+    if (muted) client.call?.unmuteAudio(); else client.call?.muteAudio();
+    setMuted(!muted);
+    if (!muted) setUserState("idle");
+  };
+  const toggleSpeaker = () => { client.setPlaybackHeld(!held); setHeld(!held); };
+  const close = async () => { requestRef.current?.abort(); await client.disconnect(); onClose(); };
+  const send = event => {
+    event.preventDefault();
+    if (!active || !input.trim()) return;
+    try {
+      client.sendConversationMessage(input.trim());
+      setInput("");
+    } catch (error) { setError(callError(error)); }
+  };
+  const bridge = useMemo(() => ({ client, isPlaybackHeld: held, hasActiveConversation: active, prepareAvatar: async () => {}, setAvatarPlaybackActive: noop }), [client, held, active]);
+  const subtitle = useMemo(() => latestTranscriptLine(transcript, { clean: stripTtsExpressionTags }), [transcript]);
+  const controls = { hasActiveConversation: active, isCallControlDisabled: starting || loading, isMicrophoneMuted: muted, isPlaybackHeld: held, toggleConversation, toggleMicrophoneMuted: toggleMic, togglePlaybackHeld: toggleSpeaker };
+  const status = error ? tUi("Connection error") : loading ? tUi("Loading assistant…") : starting ? tUi("Connecting…") : active ? tUi(agentState === "speaking" ? "Speaking" : agentState === "thinking" ? "Thinking…" : "Listening") : tUi("Ready to call");
+  const statusBadge = <span role="status" className={`inline-flex min-w-0 items-center gap-2 rounded-full border px-2.5 py-1 text-xs ${error ? "border-red-500/40 text-red-500" : active ? "border-emerald-500/40 text-emerald-500" : "border-border text-muted-foreground"}`}><span className={`size-1.5 shrink-0 rounded-full ${active ? "bg-emerald-500" : error ? "bg-red-500" : "bg-current"}`} />{status}</span>;
+  const waveform = <div className="flex min-h-24 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">{active && (client.stream || client.playbackStream) ? <AudioVisualizer stream={client.stream || client.playbackStream} className="h-16 w-full" backgroundColor="transparent" /> : <Bot className="size-8 text-primary" />}<p className="text-center text-xs">{audioOnly ? tUi("Video is unavailable. Your voice conversation continues.") : active ? status : tUi("Start a call to talk with the assistant")}</p></div>;
+  const avatarFallback = <div className="rounded-xl border border-border bg-muted/30 p-3">{waveform}{subtitle && <div className="rounded-lg border border-white/20 bg-black/65 px-3 py-2 text-center text-sm text-white" aria-live="polite"><p className="text-[10px] font-semibold uppercase tracking-wide text-primary">{tUi(subtitle.role === "user" ? "You" : "Assistant")}</p>{subtitle.content}</div>}</div>;
 
-  return (
-    <div ref={boxRef} className="fixed z-50 select-none" style={{ left: position.x, top: position.y, width: PANEL_WIDTH, height: PANEL_HEIGHT }}>
-      <div className="flex h-full flex-col">
-        <div className="relative cursor-move" data-drag-handle>
-          <div className="flex items-center justify-between rounded-t-xl border border-b-0 border-border bg-zinc-700 px-3 py-2 text-xs text-background/80 dark:text-foreground/80">
-            <div className="flex items-center gap-2"><IconPhone className="h-4 w-4" /><AIWidgetStatus compact /></div>
-            <button type="button" aria-label="Close AI Assistant" className="rounded p-1 text-background/80 transition-colors hover:text-foreground" onClick={handleClose}><IconClose className="h-4 w-4" /></button>
-          </div>
+  return <div ref={boxRef} data-assistant-call className="fixed z-50 flex flex-col rounded-2xl border border-border bg-background shadow-2xl" style={{ left: position?.x, top: position?.y, right: position ? undefined : PAD, bottom: position ? undefined : PAD, width: `min(${WIDTH}px, calc(100vw - 24px))`, height: `min(${HEIGHT}px, calc(100dvh - 24px))` }}>
+    <header className="flex touch-none items-center justify-between gap-2 rounded-t-2xl border-b bg-muted px-3 py-3" onPointerDown={event => {
+      if (event.target.closest("button") || event.button !== 0) return;
+      const rect = boxRef.current.getBoundingClientRect(), dx = event.clientX - rect.left, dy = event.clientY - rect.top;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.currentTarget.dataset.dx = dx; event.currentTarget.dataset.dy = dy;
+    }} onPointerMove={event => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+      const rect = boxRef.current.getBoundingClientRect();
+      setPosition({ x: Math.max(PAD, Math.min(event.clientX - Number(event.currentTarget.dataset.dx), window.innerWidth - rect.width - PAD)), y: Math.max(PAD, Math.min(event.clientY - Number(event.currentTarget.dataset.dy), window.innerHeight - rect.height - PAD)) });
+    }} onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}>
+      <Phone className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{configuration?.name || assistantName || tUi("AI assistant")}</p>{statusBadge}</div>
+      <Button variant="ghost" size="icon" aria-label={tUi("Close call window")} onClick={close}><X className="size-4" /></Button>
+    </header>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {error && <div role="alert" className="m-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><p className="break-words">{tUi(error)}</p><Button variant="outline" size="sm" className="mt-2 gap-2" onClick={() => configuration ? toggleConversation() : load()} disabled={starting}><RotateCcw className="size-3.5" />{tUi("Retry")}</Button></div>}
+      {loading ? <div aria-label={tUi("Loading assistant")} className="space-y-3 p-3"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-80 w-full rounded-xl" /><Skeleton className="h-12 w-full" /></div> : <>
+        <div className="flex shrink-0 items-center justify-center gap-4 p-3">
+          <Button variant="outline" size="icon" className="size-11 rounded-full" disabled={!active} onClick={toggleMic} aria-label={tUi(muted ? "Unmute microphone" : "Mute microphone")}>{muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</Button>
+          <Button className={`size-14 rounded-full ${active ? "bg-red-500 text-white hover:bg-red-600" : "bg-emerald-500 text-black hover:bg-emerald-400"}`} disabled={starting || !configuration} onClick={toggleConversation} aria-label={tUi(active ? "End call" : "Start call")}>{starting ? <Loader2 className="size-6 animate-spin" /> : active ? <PhoneOff className="size-5" /> : <Phone className="size-5" />}</Button>
+          <Button variant="outline" size="icon" className="size-11 rounded-full" disabled={!active} onClick={toggleSpeaker} aria-label={tUi(held ? "Resume speaker" : "Mute speaker")}>{held ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}</Button>
         </div>
-        <div className="flex-1 overflow-hidden rounded-b-xl border border-t-0 border-border bg-muted text-foreground">
-          <div className="flex h-full flex-col">
-            <div className="shrink-0"><AIPhoneControls assistantId={assistantId} assistantName={assistantName} user={user} customHeaders={customHeaders} /></div>
-            <div className="shrink-0 border-t border-border bg-muted"><AudioVisualizerSection /></div>
-            <div className="min-h-0 flex-1 border-t border-border bg-muted"><AIWidgetMessages compact /></div>
-          </div>
-        </div>
-      </div>
+        {configuration?.avatar ? <div className="flex min-h-0 flex-1 flex-col px-3 pb-3"><AvatarBridgeProvider value={bridge}><AvatarMediaPanel settings={configuration.avatar} assistantId={assistantId} expanded={expanded} onExpandedChange={setExpanded} controls={controls} statusSlot={statusBadge} latestSubtitle={subtitle} stretch appearance={{ maxHeight: "none", radius: 12, showSubtitles: true }} labels={{ title: configuration.name, connect: tUi("Start call"), disconnect: tUi("End call"), you: tUi("You"), assistant: tUi("Assistant"), expand: tUi("Expand avatar"), collapse: tUi("Exit expanded avatar"), hold: tUi("Mute speaker"), resume: tUi("Resume speaker") }} fallback={avatarFallback} /></AvatarBridgeProvider></div> : waveform}
+        {!configuration?.avatar && <AssistantCallTranscript transcript={transcript} active={active} userState={muted ? "idle" : userState} speakingItemId={agentState === "speaking" ? speakingItemId : null} endRef={transcriptEnd} />}
+      </>}
     </div>
-  );
+    <footer className="shrink-0 rounded-b-2xl border-t p-3"><form className="flex gap-2" onSubmit={send}><Input value={input} maxLength={8000} onChange={event => setInput(event.target.value)} disabled={!active} aria-label={tUi("Message to assistant")} placeholder={tUi(active ? "Type a message…" : "Start a call to send a message")} /><Button type="submit" size="icon" disabled={!active || !input.trim()} aria-label={tUi("Send message")}><SendHorizontal className="size-4" /></Button></form><p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground"><ShieldCheck className="size-3" />{tUi("Secure calls with your Contact Center account")}</p></footer>
+  </div>;
 }
 
-export default function AssistantPhoneWidget({ assistantId, assistantName, open, onClose, customHeaders }) {
-  const [user, setUser] = useState(null);
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => { if (!cancelled && data?.isAuth && data?.user) setUser(data.user); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [open]);
-
+export default function AssistantPhoneWidget({ assistantId, assistantName, open, onClose }) {
   if (!open || !assistantId) return null;
-  return (
-    <TelnyxAIAgentProvider agentId={assistantId} widgetVersion="contact-center-ai-widget/1.0">
-      <AIWidgetUIProvider>
-        <AIFloatingSoftphone assistantId={assistantId} assistantName={assistantName} onClose={onClose} user={user} customHeaders={customHeaders} />
-      </AIWidgetUIProvider>
-    </TelnyxAIAgentProvider>
-  );
+  return <FloatingPhone key={assistantId} assistantId={assistantId} assistantName={assistantName} onClose={onClose} />;
 }

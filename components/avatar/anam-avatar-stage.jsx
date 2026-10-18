@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAvatarBridge } from "@/components/avatar/avatar-bridge";
@@ -32,6 +34,7 @@ export function AnamAvatarStage({
   fit = "cover",
   focusY = 25,
 }) {
+  const tUi = useUiText();
   const videoId = `anam-avatar-${useId().replace(/:/g, "")}`;
   const {
     client,
@@ -413,7 +416,7 @@ export function AnamAvatarStage({
       : avatarConfig.portraitPreviewUrl) ||
     avatarConfig.previewUrl ||
     avatarConfig.preview_url;
-  const avatarName = avatarConfig.name || "Anam avatar";
+  const avatarName = avatarConfig.name || tUi("Anam avatar");
 
   const mediaStyle = {
     objectFit: fit === "contain" ? "contain" : "cover",
@@ -439,7 +442,7 @@ export function AnamAvatarStage({
         autoPlay
         playsInline
         muted={phase !== "ready" || !hasActiveConversation || isPlaybackHeld}
-        aria-label={`${avatarName} live video`}
+        aria-label={tUi("{value0} live video", { value0: avatarName })}
       />
       {(phase !== "ready" || !hasActiveConversation) && previewUrl && (
         // The URL is normalized by the server before it is persisted.

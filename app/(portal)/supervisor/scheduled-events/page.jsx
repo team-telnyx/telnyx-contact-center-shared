@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -63,6 +66,7 @@ const neutralActionClass =
   "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 
 export default function SupervisorScheduledEventsPage() {
+  const tUi = useUiText();
   const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -246,7 +250,7 @@ export default function SupervisorScheduledEventsPage() {
 
       // Format in user's local timezone with YYYY-MM-DD HH:MM format
       return date
-        .toLocaleString("en-US", {
+        .toLocaleString(tUi.locale, {
           year: "numeric",
           month: "2-digit",
           day: "2-digit",
@@ -277,12 +281,12 @@ export default function SupervisorScheduledEventsPage() {
   function formatChannelName(channel) {
     switch (channel) {
       case "phone_call":
-        return "PHONE CALL";
+        return tUi("Phone call");
       case "sms_chat":
       case "sms":
-        return "SMS";
+        return tUi("SMS");
       default:
-        return String(channel || "—").toUpperCase();
+        return operationalStatusLabel(tUi, channel) || "—";
     }
   }
 
@@ -299,26 +303,22 @@ export default function SupervisorScheduledEventsPage() {
       case "completed":
         return (
           <Badge className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-300 text-xs">
-            <IconCheck className="size-3 mr-1" /> Completed
-          </Badge>
+            <IconCheck className="size-3 mr-1" />{tUi(" Completed")}</Badge>
         );
       case "pending":
         return (
           <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-300 text-xs">
-            <IconClock className="size-3 mr-1" /> Pending
-          </Badge>
+            <IconClock className="size-3 mr-1" />{tUi(" Pending")}</Badge>
         );
       case "in_progress":
         return (
           <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-300 text-xs">
-            <IconClock className="size-3 mr-1" /> In Progress
-          </Badge>
+            <IconClock className="size-3 mr-1" />{tUi(" In Progress")}</Badge>
         );
       case "failed":
         return (
           <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-300 text-xs">
-            <IconX className="size-3 mr-1" /> Failed
-          </Badge>
+            <IconX className="size-3 mr-1" />{tUi(" Failed")}</Badge>
         );
       default:
         return (
@@ -449,11 +449,11 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
 
       const { results } = data;
       if (results.success > 0) {
-        notify({ title: `Successfully imported ${results.success} events`, variant: "success" });
+        notify({ title: tUi("Successfully imported {value0} events", {value0: results.success}), variant: "success" });
       }
       if (results.failed > 0) {
-        notify({ title: `Failed to import ${results.failed} events`, description: results.errors.length > 0
-              ? `Row ${results.errors[0].row}: ${results.errors[0].error}`
+        notify({ title: tUi("Failed to import {value0} events", {value0: results.failed}), description: results.errors.length > 0
+              ? tUi("Row {value0}: {value1}", {value0: results.errors[0].row, value1: results.errors[0].error})
               : "", variant: "error" });
       }
 
@@ -478,7 +478,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
   return (
     <SupervisorPageShell>
       <SupervisorPageHeader
-        title="Scheduled Events"
+        title={tUi("Scheduled Events")}
         actions={(
           <>
             <Button
@@ -487,26 +487,20 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
               onClick={downloadTemplate}
               className="gap-2"
             >
-              <IconDownload className="size-4" />
-              Template
-            </Button>
+              <IconDownload className="size-4" />{tUi("Template")}</Button>
             <Button
               size="sm"
               variant="outline"
               onClick={() => setShowImportDialog(true)}
               className="gap-2"
             >
-              <IconUpload className="size-4" />
-              Import CSV
-            </Button>
+              <IconUpload className="size-4" />{tUi("Import CSV")}</Button>
             <Can permission="scheduled_events:create"><Button
               size="sm"
               onClick={() => setShowCreateSheet(true)}
               className={`gap-2 ${neutralActionClass}`}
             >
-              <IconPlus className="size-4" />
-              Add Event
-            </Button></Can>
+              <IconPlus className="size-4" />{tUi("Add Event")}</Button></Can>
           </>
         )}
       />
@@ -517,7 +511,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
           {/* Filters */}
           <div className="flex items-end gap-4 mb-4">
             <div className="w-[160px]">
-              <Label className="text-xs mb-1 block">Channel</Label>
+              <Label className="text-xs mb-1 block">{tUi("Channel")}</Label>
               {mounted ? (
                 <Combobox
                   value={filters.channel}
@@ -525,11 +519,11 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                     setFilters((prev) => ({ ...prev, channel: v }))
                   }
                   options={[
-                    { value: "all", label: "All Channels" },
-                    { value: "phone_call", label: "Voice (provider)" },
-                    { value: "sms_chat", label: "SMS (provider)" },
+                    { value: "all", label: tUi("All Channels") },
+                    { value: "phone_call", label: tUi("Voice (provider)") },
+                    { value: "sms_chat", label: tUi("SMS (provider)") },
                   ]}
-                  placeholder="All Channels"
+                  placeholder={tUi("All Channels")}
                   searchable={true}
                   triggerClassName="w-full"
                 />
@@ -538,7 +532,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
               )}
             </div>
             <div className="w-[160px]">
-              <Label className="text-xs mb-1 block">Assistant</Label>
+              <Label className="text-xs mb-1 block">{tUi("Assistant")}</Label>
               {mounted ? (
                 <Combobox
                   value={filters.assistantId}
@@ -546,13 +540,13 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                     setFilters((prev) => ({ ...prev, assistantId: v }))
                   }
                   options={[
-                    { value: "", label: "Select Assistant" },
+                    { value: "", label: tUi("Select Assistant") },
                     ...assistants.map((a) => ({
                       value: a.id,
                       label: a.name || a.id,
                     })),
                   ]}
-                  placeholder="Select Assistant"
+                  placeholder={tUi("Select Assistant")}
                   searchable={true}
                   triggerClassName="w-full"
                 />
@@ -561,9 +555,9 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
               )}
             </div>
             <div className="w-[160px]">
-              <Label className="text-xs mb-1">From Number</Label>
+              <Label className="text-xs mb-1">{tUi("From Number")}</Label>
               <Input
-                placeholder="Filter by from..."
+                placeholder={tUi("Filter by from...")}
                 value={filters.fromNumber}
                 onChange={(e) =>
                   setFilters((prev) => ({
@@ -574,9 +568,9 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
               />
             </div>
             <div className="w-[160px]">
-              <Label className="text-xs mb-1">To Number</Label>
+              <Label className="text-xs mb-1">{tUi("To Number")}</Label>
               <Input
-                placeholder="Filter by to..."
+                placeholder={tUi("Filter by to...")}
                 value={filters.toNumber}
                 onChange={(e) =>
                   setFilters((prev) => ({
@@ -586,10 +580,8 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                 }
               />
             </div>
-            <Button variant="outline" onClick={clearFilters}>
-              Clear
-            </Button>
-            <Button onClick={load}>Refresh</Button>
+            <Button variant="outline" onClick={clearFilters}>{tUi("Clear")}</Button>
+            <Button onClick={load}>{tUi("Refresh")}</Button>
           </div>
 
           {loading ? (
@@ -604,26 +596,14 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px] w-[160px]">
-                      Scheduled At
-                    </TableHead>
-                    <TableHead className="px-[10px] w-[100px]">
-                      Channel
-                    </TableHead>
-                    <TableHead className="px-[10px] w-[240px]">
-                      Assistant
-                    </TableHead>
-                    <TableHead className="px-[10px] w-[130px]">From</TableHead>
-                    <TableHead className="px-[10px] w-[130px]">To</TableHead>
-                    <TableHead className="px-[10px] w-[100px]">
-                      Status
-                    </TableHead>
-                    <TableHead className="px-[10px] w-[100px]">
-                      Duration
-                    </TableHead>
-                    <TableHead className="px-[10px] w-[80px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px] w-[160px]">{tUi("Scheduled At")}</TableHead>
+                    <TableHead className="px-[10px] w-[100px]">{tUi("Channel")}</TableHead>
+                    <TableHead className="px-[10px] w-[240px]">{tUi("Assistant")}</TableHead>
+                    <TableHead className="px-[10px] w-[130px]">{tUi("From")}</TableHead>
+                    <TableHead className="px-[10px] w-[130px]">{tUi("To")}</TableHead>
+                    <TableHead className="px-[10px] w-[100px]">{tUi("Status")}</TableHead>
+                    <TableHead className="px-[10px] w-[100px]">{tUi("Duration")}</TableHead>
+                    <TableHead className="px-[10px] w-[80px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -686,7 +666,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                                     )
                                   }
                                   className="inline-flex items-center text-blue-500 hover:text-blue-600"
-                                  title="View conversation history"
+                                  title={tUi("View conversation history")}
                                 >
                                   <IconRobot className="size-4" />
                                 </button>
@@ -698,7 +678,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                                   setShowPreviewSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="View event"
+                                title={tUi("View event")}
                               >
                                 <IconEye className="size-4" />
                               </button>
@@ -711,23 +691,19 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                                       setDeleteAssistantId(event.assistant_id);
                                     }}
                                     className="inline-flex items-center text-red-500 hover:text-red-700"
-                                    title="Delete event"
+                                    title={tUi("Delete event")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button></Can>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Confirm Delete</DialogTitle>
-                                    <DialogDescription>
-                                      Are you sure you want to delete this
-                                      scheduled event? This action cannot be
-                                      undone.
-                                    </DialogDescription>
+                                    <DialogTitle>{tUi("Confirm Delete")}</DialogTitle>
+                                    <DialogDescription>{tUi("Are you sure you want to delete this scheduled event? This action cannot be undone.")}</DialogDescription>
                                   </DialogHeader>
                                   <DialogFooter>
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
@@ -735,9 +711,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                                         onClick={() =>
                                           onDelete(deleteId, deleteAssistantId)
                                         }
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </DialogFooter>
                                 </DialogContent>
@@ -755,8 +729,8 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                         className="text-center text-sm text-muted-foreground py-8"
                       >
                         {!filters.assistantId
-                          ? "Please select an assistant to view scheduled events"
-                          : "No scheduled events found"}
+                          ? tUi("Please select an assistant to view scheduled events")
+                          : tUi("No scheduled events found")}
                       </TableCell>
                     </TableRow>
                   )}
@@ -768,14 +742,10 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
           {/* Pagination */}
           <div className="flex items-center justify-between mt-4">
             <div className="flex items-center gap-4">
-              <div className="text-sm text-muted-foreground">
-                Showing {items.length > 0 ? (page - 1) * pageSize + 1 : 0} to{" "}
-                {Math.min(page * pageSize, total)} of {total} events
-              </div>
+              <div className="text-sm text-muted-foreground">{tUi("Showing ")}{items.length > 0 ? (page - 1) * pageSize + 1 : 0}{tUi(" to")}{" "}
+                {Math.min(page * pageSize, total)}{tUi(" of ")}{total}{tUi(" events")}</div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground">
-                  Records per page:
-                </Label>
+                <Label className="text-xs text-muted-foreground">{tUi("Records per page:")}</Label>
                 <Select
                   value={String(pageSize)}
                   onValueChange={(v) => {
@@ -812,8 +782,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
               >
                 <IconChevronLeft className="size-4" />
               </Button>
-              <div className="text-sm">
-                Page {page} of {totalPages}
+              <div className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{totalPages}
               </div>
               <Button
                 variant="outline"
@@ -841,43 +810,25 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import Scheduled Events</DialogTitle>
-            <DialogDescription>
-              Upload a CSV file to import scheduled events. The CSV must have
-              the following columns:
-            </DialogDescription>
+            <DialogTitle>{tUi("Import Scheduled Events")}</DialogTitle>
+            <DialogDescription>{tUi("Upload a CSV file to import scheduled events. The CSV must have the following columns:")}</DialogDescription>
             <ul className="mt-2 space-y-1 text-xs list-disc list-inside text-muted-foreground">
               <li>
-                <strong>assistant_id</strong>: The assistant ID (required)
-              </li>
+                <strong>{tUi("assistant_id")}</strong>{tUi(": The assistant ID (required)")}</li>
               <li>
-                <strong>telnyx_conversation_channel</strong>: phone_call or
-                sms_chat (required)
-              </li>
+                <strong>{tUi("telnyx_conversation_channel")}</strong>{tUi(": phone_call or sms_chat (required)")}</li>
               <li>
-                <strong>telnyx_end_user_target</strong>: Phone number to call or
-                text (required)
-              </li>
+                <strong>{tUi("telnyx_end_user_target")}</strong>{tUi(": Phone number to call or text (required)")}</li>
               <li>
-                <strong>telnyx_agent_target</strong>: Phone number to call or
-                text from (required)
-              </li>
+                <strong>{tUi("telnyx_agent_target")}</strong>{tUi(": Phone number to call or text from (required)")}</li>
               <li>
-                <strong>scheduled_at_fixed_datetime</strong>: ISO 8601 datetime
-                (required)
-              </li>
+                <strong>{tUi("scheduled_at_fixed_datetime")}</strong>{tUi(": ISO 8601 datetime (required)")}</li>
               <li>
-                <strong>max_retries_client_errors</strong>: Retries on busy,
-                no-answer, failed, or canceled calls; 0-10 (optional, default 0)
-              </li>
+                <strong>{tUi("max_retries_client_errors")}</strong>{tUi(": Retries on busy, no-answer, failed, or canceled calls; 0-10 (optional, default 0)")}</li>
               <li>
-                <strong>retry_interval_secs</strong>: Delay between retries in
-                seconds; 60-86400 (required when retries are greater than 0)
-              </li>
+                <strong>{tUi("retry_interval_secs")}</strong>{tUi(": Delay between retries in seconds; 60-86400 (required when retries are greater than 0)")}</li>
               <li>
-                <strong>text</strong>: SMS text (optional, required for sms_chat
-                channel)
-              </li>
+                <strong>{tUi("text")}</strong>{tUi(": SMS text (optional, required for sms_chat channel)")}</li>
             </ul>
           </DialogHeader>
           <div className="space-y-4">
@@ -894,17 +845,13 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                 onDrop={handleDrop}
               >
                 <IconUpload className="size-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-sm font-medium mb-2">
-                  Drag & drop your CSV file here
-                </p>
-                <p className="text-xs text-muted-foreground mb-4">or</p>
+                <p className="text-sm font-medium mb-2">{tUi("Drag & drop your CSV file here")}</p>
+                <p className="text-xs text-muted-foreground mb-4">{tUi("or")}</p>
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={importing}
-                >
-                  Select File
-                </Button>
+                >{tUi("Select File")}</Button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -957,11 +904,9 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
                 }
               }}
               disabled={importing}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button onClick={handleImport} disabled={!importFile || importing}>
-              {importing ? "Importing..." : "Import"}
+              {importing ? tUi("Importing...") : tUi("Import")}
             </Button>
           </DialogFooter>
         </DialogContent>

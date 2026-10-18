@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,7 @@ export default function HttpRequestTestModal({
   availableVariables = [],
   onTestSuccess,
 }) {
+  const tUi = useUiText();
   const [testVariables, setTestVariables] = useState({});
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -226,8 +229,7 @@ export default function HttpRequestTestModal({
           className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
         >
           <IconCheck className="h-3 w-3 mr-1" />
-          {status} OK
-        </Badge>
+          {status}{tUi(" OK")}</Badge>
       );
     } else if (status >= 400) {
       return (
@@ -236,8 +238,7 @@ export default function HttpRequestTestModal({
           className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
         >
           <IconAlertCircle className="h-3 w-3 mr-1" />
-          {status} Error
-        </Badge>
+          {status}{tUi(" Error")}</Badge>
       );
     } else {
       return (
@@ -245,8 +246,7 @@ export default function HttpRequestTestModal({
           variant="secondary"
           className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
         >
-          {status} Info
-        </Badge>
+          {status}{tUi(" Info")}</Badge>
       );
     }
   };
@@ -256,12 +256,8 @@ export default function HttpRequestTestModal({
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="pb-4">
           <SheetTitle className="flex items-center gap-2 text-lg">
-            <IconFlask className="h-4 w-4 text-telnyx-green" />
-            Test HTTP Request
-          </SheetTitle>
-          <SheetDescription className="text-sm">
-            Test your HTTP request configuration with variable substitution
-          </SheetDescription>
+            <IconFlask className="h-4 w-4 text-telnyx-green" />{tUi("Test HTTP Request")}</SheetTitle>
+          <SheetDescription className="text-sm">{tUi("Test your HTTP request configuration with variable substitution")}</SheetDescription>
         </SheetHeader>
 
         <div className="px-4 space-y-4">
@@ -276,9 +272,7 @@ export default function HttpRequestTestModal({
                   <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-3">
                     <div className="flex items-center gap-2">
                       <IconVariable className="h-3 w-3 text-blue-600" />
-                      <CardTitle className="text-sm font-semibold">
-                        Variable Values
-                      </CardTitle>
+                      <CardTitle className="text-sm font-semibold">{tUi("Variable Values")}</CardTitle>
                       <Badge variant="secondary" className="ml-auto text-xs">
                         {usedVariables.length}
                       </Badge>
@@ -288,9 +282,7 @@ export default function HttpRequestTestModal({
                         }`}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Provide values for variables used in your request
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{tUi("Provide values for variables used in your request")}</p>
                   </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -306,7 +298,7 @@ export default function HttpRequestTestModal({
                           onChange={(e) =>
                             handleVariableChange(varName, e.target.value)
                           }
-                          placeholder={`Enter value for ${varName}`}
+                          placeholder={tUi("Enter value for {value0}", { value0: varName })}
                           className="text-xs h-8"
                         />
                       </div>
@@ -327,18 +319,14 @@ export default function HttpRequestTestModal({
                 <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-3">
                   <div className="flex items-center gap-2">
                     <IconEye className="h-3 w-3 text-green-600" />
-                    <CardTitle className="text-sm font-semibold">
-                      Request Preview
-                    </CardTitle>
+                    <CardTitle className="text-sm font-semibold">{tUi("Request Preview")}</CardTitle>
                     <IconChevronRight
                       className={`h-3 w-3 transition-transform ${
                         requestExpanded ? "rotate-90" : ""
                       }`}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    How your request will look with variable substitution
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{tUi("How your request will look with variable substitution")}</p>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
@@ -347,7 +335,7 @@ export default function HttpRequestTestModal({
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <IconWorld className="h-3 w-3 text-blue-600" />
-                      <Label className="text-xs font-medium">URL</Label>
+                      <Label className="text-xs font-medium">{tUi("URL")}</Label>
                     </div>
                     <div className="p-3 bg-muted/50 rounded border">
                       <code className="text-xs font-mono break-all text-foreground">
@@ -360,11 +348,11 @@ export default function HttpRequestTestModal({
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <IconSettings className="h-3 w-3 text-purple-600" />
-                      <Label className="text-xs font-medium">Method</Label>
+                      <Label className="text-xs font-medium">{tUi("Method")}</Label>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="text-xs px-2 py-1">
-                        {config.method || "GET"}
+                        {config.method || tUi("GET")}
                       </Badge>
                     </div>
                   </div>
@@ -374,7 +362,7 @@ export default function HttpRequestTestModal({
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <IconSettings className="h-3 w-3 text-orange-600" />
-                        <Label className="text-xs font-medium">Headers</Label>
+                        <Label className="text-xs font-medium">{tUi("Headers")}</Label>
                         <Badge variant="secondary" className="text-xs">
                           {Object.keys(config.headers || {}).length}
                         </Badge>
@@ -409,9 +397,7 @@ export default function HttpRequestTestModal({
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <IconVariable className="h-3 w-3 text-cyan-600" />
-                        <Label className="text-xs font-medium">
-                          Path Parameters
-                        </Label>
+                        <Label className="text-xs font-medium">{tUi("Path Parameters")}</Label>
                         <Badge variant="secondary" className="text-xs">
                           {Object.keys(config.pathParams || {}).length}
                         </Badge>
@@ -446,9 +432,7 @@ export default function HttpRequestTestModal({
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <IconSettings className="h-3 w-3 text-indigo-600" />
-                        <Label className="text-xs font-medium">
-                          Query Parameters
-                        </Label>
+                        <Label className="text-xs font-medium">{tUi("Query Parameters")}</Label>
                         <Badge variant="secondary" className="text-xs">
                           {Object.keys(config.queryParams || {}).length}
                         </Badge>
@@ -491,14 +475,10 @@ export default function HttpRequestTestModal({
           >
             {isTesting ? (
               <>
-                <IconLoader2 className="h-3 w-3 mr-2 animate-spin" />
-                Testing Request...
-              </>
+                <IconLoader2 className="h-3 w-3 mr-2 animate-spin" />{tUi("Testing Request...")}</>
             ) : (
               <>
-                <IconFlask className="h-3 w-3 mr-2" />
-                Test Request
-              </>
+                <IconFlask className="h-3 w-3 mr-2" />{tUi("Test Request")}</>
             )}
           </Button>
 
@@ -508,7 +488,7 @@ export default function HttpRequestTestModal({
               <CardContent className="p-3">
                 <div className="flex items-center gap-2 text-red-800 dark:text-red-200">
                   <IconAlertCircle className="h-3 w-3" />
-                  <span className="text-xs font-medium">Test Failed</span>
+                  <span className="text-xs font-medium">{tUi("Test Failed")}</span>
                 </div>
                 <p className="text-xs text-red-700 dark:text-red-300 mt-1">
                   {testError}
@@ -523,19 +503,15 @@ export default function HttpRequestTestModal({
               <CardHeader className="p-3">
                 <div className="flex items-center gap-2">
                   <IconCode className="h-3 w-3 text-green-600" />
-                  <CardTitle className="text-sm font-semibold">Response</CardTitle>
+                  <CardTitle className="text-sm font-semibold">{tUi("Response")}</CardTitle>
                   <div className="ml-auto">{getStatusBadge(testResult.status)}</div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Response data from the test request
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Response data from the test request")}</p>
               </CardHeader>
               <CardContent className="px-3 pb-3 space-y-4">
                 <div>
                   <Label className="text-xs font-medium flex items-center gap-2 mb-2">
-                    <IconCode className="h-3 w-3" />
-                    Response Body
-                  </Label>
+                    <IconCode className="h-3 w-3" />{tUi("Response Body")}</Label>
                   <CodeBlock
                     code={JSON.stringify(testResult.body, null, 2)}
                     language="json"

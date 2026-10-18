@@ -1,9 +1,12 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Columns2, LayoutPanelLeft, MonitorUp, PictureInPicture2, User, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { useTrackElement } from "@/hooks/use-video-room";
 import { VIDEO_SCENES, planScene } from "@/lib/video/scenes.mjs";
+import { VideoToolbarButton, videoToolbarClass, videoToolbarPalette } from "./VideoToolbar";
 
 // Shared video scene for the visitor widget, the agent desktop and the
 // supervisor panel. The arrangement comes from lib/video/scenes.mjs: the
@@ -26,13 +29,34 @@ function useBoxSize(ref) {
   return size;
 }
 
-function Tile({ track, label, cameraOff, cameraOffLabel, mirror = false, muted = false, fit = "cover", style, className = "" }) {
+function Tile({ track, label, cameraOff, cameraOffLabel, poster, mirror = false, muted = false, fit = "cover", style, className = "" }) {
   const ref = useRef(null);
+  const [playedTrack, setPlayedTrack] = useState(null);
   useTrackElement(ref, cameraOff ? null : track, { muted });
+  useEffect(() => {
+    const element = ref.current;
+    if (!track || cameraOff || !element) return;
+    let frame;
+    const ready = () => {
+      if (element.requestVideoFrameCallback) frame = element.requestVideoFrameCallback(() => {
+        if (element.srcObject?.getVideoTracks()[0] === track && track.readyState === "live" && !track.muted) setPlayedTrack(track);
+      });
+    };
+    const unavailable = () => setPlayedTrack(null);
+    ready(); track.addEventListener("ended", unavailable); track.addEventListener("mute", unavailable); track.addEventListener("unmute", ready);
+    return () => { if (frame) element.cancelVideoFrameCallback?.(frame); track.removeEventListener("ended", unavailable); track.removeEventListener("mute", unavailable); track.removeEventListener("unmute", ready); };
+  }, [track, cameraOff]);
   return (
     <div className={`overflow-hidden bg-black ${className}`} style={style}>
-      <video ref={ref} autoPlay playsInline muted={muted} className={`h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"}`} style={mirror ? { transform: "scaleX(-1)" } : undefined} />
-      {(cameraOff || !track) && (
+      <video ref={ref} autoPlay playsInline muted={muted} onPlaying={() => {
+        const element = ref.current;
+        if (!element?.requestVideoFrameCallback && element?.readyState >= 2) setPlayedTrack(track);
+      }} className={`h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"}`} style={mirror ? { transform: "scaleX(-1)" } : undefined} />
+      {poster && (cameraOff || !track || playedTrack !== track) && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={poster} alt={label || ""} className="absolute inset-0 h-full w-full object-cover" />
+      )}
+      {!poster && (cameraOff || !track) && (
         <div className="absolute inset-0 grid place-items-center text-white/80" aria-label={cameraOffLabel}>
           <div className="grid place-items-center gap-2">
             <span className="grid size-14 place-items-center rounded-full bg-white/10">{cameraOff ? <VideoOff className="size-6" /> : <User className="size-6" />}</span>
@@ -93,7 +117,7 @@ export function VideoStage({
           if (!tile) return null;
           const thumb = rect.kind === "thumb";
           return (
-            <Tile key={rect.id} track={tile.track} label={tile.label} cameraOff={tile.cameraOff} cameraOffLabel={tile.cameraOffLabel}
+            <Tile key={rect.id} track={tile.track} label={tile.label} cameraOff={tile.cameraOff} cameraOffLabel={tile.cameraOffLabel} poster={tile.poster}
               mirror={tile.mirror ?? (tile.self && tile.kind === "camera")} muted={tile.muted ?? tile.self} fit={tile.kind === "screen" ? "contain" : "cover"}
               className={`absolute ${thumb ? "z-10 border border-white/30 shadow-lg" : ""}`}
               style={{ ...frame, left: rect.x, top: rect.y, width: rect.w, height: rect.h }} />
@@ -128,11 +152,15 @@ const SCENE_OPTIONS = {
   spotlight: { Icon: LayoutPanelLeft, key: "layoutSpotlight", fallback: "Spotlight" },
 };
 
-export function VideoLayoutSwitch({ layout, onChange, scenes = VIDEO_SCENES, labels = {}, buttonStyle, activeStyle, size = 34, iconSize = 16, className = "" }) {
+export function VideoLayoutSwitch({ layout, onChange, scenes = VIDEO_SCENES, labels = {}, toolbar = false, palette, buttonStyle, activeStyle, size = 34, iconSize = 16, className = "" }) {
+  const tUi = useUiText();
   const options = VIDEO_SCENES.filter((id) => scenes.includes(id)).map((id) => ({ id, Icon: SCENE_OPTIONS[id].Icon, label: labels[SCENE_OPTIONS[id].key] || SCENE_OPTIONS[id].fallback }));
   if (options.length < 2) return null;
+  if (toolbar) return <div role="group" aria-label={labels.layout || tUi("Layout")} className={`${videoToolbarClass} ${className}`} style={videoToolbarPalette(palette)}>
+    {options.map(({ id, Icon, label }) => <VideoToolbarButton key={id} label={label} pressed={layout === id} palette={palette} onClick={() => onChange(id)}><Icon style={{ width: iconSize, height: iconSize }} /></VideoToolbarButton>)}
+  </div>;
   return (
-    <div role="group" aria-label={labels.layout || "Layout"} className={`inline-flex items-center gap-1 ${className}`}>
+    <div role="group" aria-label={labels.layout || tUi("Layout")} className={`inline-flex items-center gap-1 ${className}`}>
       {options.map(({ id, Icon, label }) => (
         <button key={id} type="button" title={label} aria-label={label} aria-pressed={layout === id} onClick={() => onChange(id)}
           className="grid place-items-center border transition hover:opacity-90"
@@ -153,6 +181,7 @@ export { MonitorUp as ScreenShareIcon };
 // back to muted playback and offers a speaker button, whose click is a
 // fresh gesture. Previews stay muted.
 export function WaitingPlaylist({ items = [], mode = "rotate", muted = true, labels = {}, className = "", onEmpty = null }) {
+  const tUi = useUiText();
   const ref = useRef(null);
   const indexRef = useRef(0);
   const [mutedNow, setMutedNow] = useState(muted);
@@ -196,7 +225,7 @@ export function WaitingPlaylist({ items = [], mode = "rotate", muted = true, lab
       <video ref={ref} className={className} src={first} autoPlay muted={mutedNow} playsInline loop={loopOne} preload="auto"
         onEnded={loopOne ? undefined : next} onError={playable.length > 1 ? next : undefined} aria-label={playable[0].label || undefined} />
       {!muted && (
-        <button type="button" onClick={toggleSound} aria-label={mutedNow ? (labels.unmute || "Turn sound on") : (labels.mute || "Turn sound off")} title={mutedNow ? (labels.unmute || "Turn sound on") : (labels.mute || "Turn sound off")}
+        <button type="button" onClick={toggleSound} aria-label={mutedNow ? (labels.unmute || tUi("Turn sound on")) : (labels.mute || tUi("Turn sound off"))} title={mutedNow ? (labels.unmute || tUi("Turn sound on")) : (labels.mute || tUi("Turn sound off"))}
           className={`absolute left-3 top-3 z-10 grid size-8 place-items-center rounded-lg border border-white/25 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60 ${blocked ? "bg-black/60 ring-2 ring-white/60" : "bg-black/35"}`}>
           {mutedNow ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
         </button>

@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +29,7 @@ import { resolveFastSuggestionTemplate } from "@/lib/agent-assist/suggestion-tem
  * Shows completion status, allows manual completion/skip.
  */
 export function WorkflowChecklist() {
+  const tUi = useUiText();
   const {
     stages,
     currentStageIndex,
@@ -45,12 +48,10 @@ export function WorkflowChecklist() {
       <CardHeader className="pb-3 flex-shrink-0">
         <CardTitle className="text-base flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-purple-500" />
-          {currentStage?.name || "Checklist"}
+          {currentStage?.name || tUi("Checklist")}
           {isAnalyzing && (
             <Badge variant="outline" className="ml-auto animate-pulse bg-purple-500/10 text-purple-500 border-purple-500/50">
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Analyzing...
-            </Badge>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />{tUi("Analyzing...")}</Badge>
           )}
         </CardTitle>
         {currentStage?.description && (
@@ -64,7 +65,7 @@ export function WorkflowChecklist() {
             {items.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Circle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No items in this stage</p>
+                <p className="text-sm">{tUi("No items in this stage")}</p>
               </div>
             ) : (
               items.map((item) => (
@@ -89,6 +90,7 @@ export function WorkflowChecklist() {
  * Individual checklist item
  */
 function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) {
+  const tUi = useUiText();
   const [inputValue, setInputValue] = useState(slotValue || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -243,7 +245,7 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder={`Enter ${item.slot_name || "value"}...`}
+                placeholder={tUi("Enter {value0}...", { value0: item.slot_name || tUi("value") })}
                 className="h-8 text-sm"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && inputValue.trim()) {
@@ -257,9 +259,7 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
                 onClick={() => handleComplete(inputValue.trim())}
                 disabled={!inputValue.trim() || isSubmitting}
                 className="h-8"
-              >
-                Save
-              </Button>
+              >{tUi("Save")}</Button>
             </div>
           )}
 
@@ -275,7 +275,7 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
           {/* Show source transcript if available */}
           {status.source_transcript && (
             <p className="mt-1 text-xs text-muted-foreground italic truncate">
-              "{status.source_transcript}"
+              &quot;{status.source_transcript}&quot;
             </p>
           )}
         </div>
@@ -288,7 +288,7 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
             onClick={handleSkip}
             disabled={isSubmitting}
             className="h-8 px-2 text-muted-foreground hover:text-amber-500"
-            title="Skip this item"
+            title={tUi("Skip this item")}
           >
             <SkipForward className="h-4 w-4" />
           </Button>

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile } from "./helpers/ui-source.mjs";
 import test from "node:test";
 
 test("dashboard exhausted campaign card does not render a duplicate exhausted badge in controls area", async () => {
@@ -10,7 +10,7 @@ test("dashboard exhausted campaign card does not render a duplicate exhausted ba
   assert.ok(cardEnd > cardStart, "DashboardCampaignCard should end before CampaignsView");
 
   const cardSource = source.slice(cardStart, cardEnd);
-  assert.match(cardSource, /<Badge variant="outline" className=\{statusClass\(state\)\}>\{title\(state\)\}<\/Badge>/, "header should keep the campaign state badge");
+  assert.match(cardSource, /<Badge variant="outline" className=\{statusClass\(state\)\}>\{operationalStatusLabel\(tUi, state\)\}<\/Badge>/, "header should keep the campaign state badge");
   assert.doesNotMatch(cardSource, /controls\.controlsDisabled[\s\S]*?<Badge variant="outline" className=\{statusClass\("exhausted"\)\}>Exhausted<\/Badge>/, "disabled controls area should not render a second Exhausted badge");
 });
 

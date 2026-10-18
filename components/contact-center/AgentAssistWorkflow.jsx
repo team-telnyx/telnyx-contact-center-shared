@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -82,6 +84,7 @@ import { resolveFastSuggestionTemplate } from "@/lib/agent-assist/suggestion-tem
  * 4. Progress Bar (bottom) - Overall completion
  */
 export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) {
+  const tUi = useUiText();
   const {
     session,
     stages,
@@ -219,7 +222,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       };
       setDataActionStatuses((current) => ({ ...current, [button.id]: nextStatus }));
       notify({
-        title: `Form Submit Status: ${nextStatus.status}`,
+        title: tUi("Form Submit Status: {value0}", {value0: nextStatus.status}),
         description: nextStatus.message,
         variant: nextStatus.success ? "success" : "error",
       });
@@ -255,7 +258,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       notify({
         title: "🤖 AI data received",
         description: slotCount > 0
-          ? `${slotCount} slot${slotCount !== 1 ? "s" : ""} pre-filled`
+          ? tUi("Pre-filled slots: {value0}", {value0: slotCount})
           : "Call summary and sentiment available",
         variant: "success",
       });
@@ -297,7 +300,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           notify({
             title: "🤖 AI data received",
             description: slotCount > 0 
-              ? `${slotCount} slot${slotCount !== 1 ? 's' : ''} pre-filled`
+              ? tUi("Pre-filled slots: {value0}", {value0: slotCount})
               : "Call summary and sentiment available",
             variant: "success",
           });
@@ -627,7 +630,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       <div className="flex items-center justify-center h-full">
         <div className="text-center text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
-          <p className="text-sm">Loading workflow...</p>
+          <p className="text-sm">{tUi("Loading workflow...")}</p>
         </div>
       </div>
     );
@@ -650,8 +653,8 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       <div className="flex items-center justify-center h-full">
         <div className="text-center text-muted-foreground">
           <ClipboardList className="h-10 w-10 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No workflow active</p>
-          <p className="text-xs mt-1">Start a call to begin workflow</p>
+          <p className="text-sm">{tUi("No workflow active")}</p>
+          <p className="text-xs mt-1">{tUi("Start a call to begin workflow")}</p>
         </div>
       </div>
     );
@@ -842,21 +845,20 @@ function formatLanguageLabel(language) {
 }
 
 function WorkflowDataActionsDropdown({ buttons = [], statuses = {}, disabledButtonIds = new Set(), onRun }) {
+  const tUi = useUiText();
   if (buttons.length === 0) return null;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5">
-          <DatabaseZap className="h-3.5 w-3.5" />
-          Data Actions
-          <ChevronDown className="h-3.5 w-3.5" />
+          <DatabaseZap className="h-3.5 w-3.5" />{tUi("Data Actions")}<ChevronDown className="h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel className="flex items-center justify-between gap-2 text-xs">
-          <span>Data Actions</span>
-          <Badge variant="outline" className="text-[10px]">Form Submit Status</Badge>
+          <span>{tUi("Data Actions")}</span>
+          <Badge variant="outline" className="text-[10px]">{tUi("Form Submit Status")}</Badge>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {buttons.map((button) => {
@@ -877,8 +879,8 @@ function WorkflowDataActionsDropdown({ buttons = [], statuses = {}, disabledButt
             >
               <span className="flex w-full items-center gap-2">
                 {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DatabaseZap className="h-3.5 w-3.5" />}
-                <span className="min-w-0 flex-1 truncate">{button.label || "Data action"}</span>
-                {button.one_click ? <Badge variant="outline" className="text-[10px]">one-click</Badge> : null}
+                <span className="min-w-0 flex-1 truncate">{button.label || tUi("Data action")}</span>
+                {button.one_click ? <Badge variant="outline" className="text-[10px]">{tUi("one-click")}</Badge> : null}
               </span>
               {status ? (
                 <span className={`max-w-full truncate pl-5 text-[10px] ${success ? "text-emerald-600 dark:text-emerald-400" : failed ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
@@ -894,6 +896,7 @@ function WorkflowDataActionsDropdown({ buttons = [], statuses = {}, disabledButt
 }
 
 function TranslationIndicator({ sourceLanguage, targetLanguage }) {
+  const tUi = useUiText();
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border border-sky-500/30 bg-sky-500/5">
       <div className="p-2 rounded-lg bg-sky-500/10">
@@ -901,20 +904,18 @@ function TranslationIndicator({ sourceLanguage, targetLanguage }) {
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Live Translation</span>
-          <Badge variant="outline" className="text-xs text-muted-foreground">
-            Transcription + TTS
-          </Badge>
+          <span className="text-sm font-medium">{tUi("Live Translation")}</span>
+          <Badge variant="outline" className="text-xs text-muted-foreground">{tUi("Transcription + TTS")}</Badge>
         </div>
         <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 min-w-0">
           <span className="flex items-center gap-1 min-w-0">
             {getLanguageFlag(sourceLanguage)}
-            <span className="truncate">{formatLanguageLabel(sourceLanguage)}</span>
+            <span className="truncate">{tUi(formatLanguageLabel(sourceLanguage))}</span>
           </span>
           <span className="shrink-0">→</span>
           <span className="flex items-center gap-1 min-w-0">
             {getLanguageFlag(targetLanguage)}
-            <span className="truncate">{formatLanguageLabel(targetLanguage)}</span>
+            <span className="truncate">{tUi(formatLanguageLabel(targetLanguage))}</span>
           </span>
         </div>
       </div>
@@ -927,6 +928,7 @@ function TranslationIndicator({ sourceLanguage, targetLanguage }) {
  * Shows when call was AI-assisted and data loading/received status
  */
 function AiHandoffIndicator({ isLoading, isReceived, receivedAt }) {
+  const tUi = useUiText();
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border border-violet-500/30 bg-violet-500/5">
       <div className="p-2 rounded-lg bg-violet-500/10">
@@ -934,22 +936,17 @@ function AiHandoffIndicator({ isLoading, isReceived, receivedAt }) {
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">AI Assisted Call</span>
+          <span className="text-sm font-medium">{tUi("AI Assisted Call")}</span>
           {isReceived ? (
             <Badge variant="outline" className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/40">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Data Received
-            </Badge>
+              <CheckCircle className="h-3 w-3 mr-1" />{tUi("Data Received")}</Badge>
           ) : isLoading ? (
             <Badge variant="outline" className="text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Loading AI data...
-            </Badge>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />{tUi("Loading AI data...")}</Badge>
           ) : null}
         </div>
         {isReceived && receivedAt && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Received at {new Date(receivedAt).toLocaleTimeString()}
+          <p className="text-xs text-muted-foreground mt-0.5">{tUi("Received at ")}{new Date(receivedAt).toLocaleTimeString(tUi.locale)}
           </p>
         )}
       </div>
@@ -962,6 +959,7 @@ function AiHandoffIndicator({ isLoading, isReceived, receivedAt }) {
  * Collapsible panel showing AI-generated summary and sentiment analysis
  */
 function AiSummaryPanel({ summary, sentiment }) {
+  const tUi = useUiText();
   const [isOpen, setIsOpen] = useState(true);
 
   // Extract sentiment emoji from text if available
@@ -982,18 +980,13 @@ function AiSummaryPanel({ summary, sentiment }) {
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500/10">
                 <Brain className="h-3.5 w-3.5 text-violet-500" />
-              </span>
-              AI Call Analysis
-              <div className="flex items-center gap-2 ml-auto">
+              </span>{tUi("AI Call Analysis")}<div className="flex items-center gap-2 ml-auto">
                 {sentiment && (
                   <Badge variant="outline" className="text-xs text-muted-foreground">
-                    {getSentimentEmoji()} Sentiment
-                  </Badge>
+                    {getSentimentEmoji()}{tUi(" Sentiment")}</Badge>
                 )}
                 {summary && (
-                  <Badge variant="outline" className="text-xs text-muted-foreground">
-                    Summary
-                  </Badge>
+                  <Badge variant="outline" className="text-xs text-muted-foreground">{tUi("Summary")}</Badge>
                 )}
                 {isOpen ? (
                   <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -1012,7 +1005,7 @@ function AiSummaryPanel({ summary, sentiment }) {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="h-4 w-4 text-sky-500" />
-                    <span className="text-sm font-medium">Call Summary</span>
+                    <span className="text-sm font-medium">{tUi("Call Summary")}</span>
                   </div>
                   <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
                     <ReactMarkdown
@@ -1036,7 +1029,7 @@ function AiSummaryPanel({ summary, sentiment }) {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Heart className="h-4 w-4 text-rose-500" />
-                    <span className="text-sm font-medium">Sentiment Analysis</span>
+                    <span className="text-sm font-medium">{tUi("Sentiment Analysis")}</span>
                   </div>
                   <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
                     <ReactMarkdown
@@ -1122,6 +1115,7 @@ function getStageVerificationAlert(stage, itemStatuses, completedBlinkStageIds =
  * Workflow Stages Card with Accordions
  */
 function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {}, showLlmConfidence = true, showExpandedStages = false, onJumpToUtterance }) {
+  const tUi = useUiText();
   // Track which stage is expanded (user can manually toggle)
   const [expandedStage, setExpandedStage] = useState(null);
   const [expandedStages, setExpandedStages] = useState([]);
@@ -1265,13 +1259,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-500/10">
             <ClipboardList className="h-3.5 w-3.5 text-indigo-500" />
-          </span>
-          Workflow Checklist
-          {isAnalyzing && (
+          </span>{tUi("Workflow Checklist")}{isAnalyzing && (
             <Badge variant="outline" className="ml-auto text-xs text-indigo-600 dark:text-indigo-400 border-indigo-500/40">
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Analyzing
-            </Badge>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />{tUi("Analyzing")}</Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -1331,7 +1321,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                 : "bg-muted"
                             }`}
                           >
-                            {stageAlert.label}
+                            {tUi(stageAlert.label)}
                           </Badge>
                         )}
                         <Badge
@@ -1486,7 +1476,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           value={editValue}
                                           onChange={(e) => setEditValue(e.target.value)}
                                           className="h-7 text-sm"
-                                          placeholder={`Enter ${item.label.toLowerCase()}`}
+                                          placeholder={tUi("Enter {value0}", { value0: item.label.toLowerCase() })}
                                           autoFocus
                                           onKeyDown={(e) => {
                                             if (e.key === "Enter") handleSaveEdit(item.id);
@@ -1516,46 +1506,38 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           <>
                                             <button
                                               type="button"
-                                              title="Jump to transcript"
+                                              title={tUi("Jump to transcript")}
                                               className="text-sm font-medium truncate hover:underline cursor-pointer text-left"
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 onJumpToUtterance?.(sourceUtteranceForJump);
                                               }}
                                             >
-                                              {formatSlotDisplay(slotValue, item.slot_type)}
+                                              {formatSlotDisplay(slotValue, item.slot_type, tUi)}
                                             </button>
                                             <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden="true" />
                                           </>
                                         ) : (
                                           <span className="text-sm font-medium text-foreground">
-                                            {formatSlotDisplay(slotValue, item.slot_type)}
+                                            {formatSlotDisplay(slotValue, item.slot_type, tUi)}
                                           </span>
                                         )}
                                         {/* Pending correction: the analyzer heard a replacement
                                             for an already-captured value. The old value stays
                                             authoritative until the agent confirms (an earlier fix). */}
                                         {isSuggested && status.is_correction === true && (
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-700 dark:text-amber-300 border-amber-500/60 bg-amber-500/10" title="Heard as a correction — confirm to replace the captured value">
-                                            Correction
-                                          </Badge>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-700 dark:text-amber-300 border-amber-500/60 bg-amber-500/10" title={tUi("Heard as a correction — confirm to replace the captured value")}>{tUi("Correction")}</Badge>
                                         )}
                                         {/* Source indicator: Inferred, AI or Agent */}
                                         {isInferred ? (
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-600 dark:text-slate-300 border-slate-500/40 bg-slate-500/10" title="Inferred from an earlier answer — edit to override">
-                                            <Sparkles className="h-3 w-3 mr-0.5" />
-                                            Inferred
-                                          </Badge>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-600 dark:text-slate-300 border-slate-500/40 bg-slate-500/10" title={tUi("Inferred from an earlier answer — edit to override")}>
+                                            <Sparkles className="h-3 w-3 mr-0.5" />{tUi("Inferred")}</Badge>
                                         ) : isAiFilled ? (
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Filled by AI Assistant">
-                                            <Bot className="h-3 w-3 mr-0.5" />
-                                            AI
-                                          </Badge>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title={tUi("Filled by AI Assistant")}>
+                                            <Bot className="h-3 w-3 mr-0.5" />{tUi("AI")}</Badge>
                                         ) : isAgentFilled ? (
-                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title="Filled by Agent">
-                                            <User className="h-3 w-3 mr-0.5" />
-                                            Agent
-                                          </Badge>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title={tUi("Filled by Agent")}>
+                                            <User className="h-3 w-3 mr-0.5" />{tUi("Agent")}</Badge>
                                         ) : null}
                                         {/* Confidence indicator for AI-filled slots */}
                                         {showLlmConfidence && isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
@@ -1568,9 +1550,8 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                                 ? "text-amber-600 dark:text-amber-400 border-amber-500/40"
                                                 : "text-amber-700 dark:text-amber-300 border-amber-500/60"
                                             }`}
-                                            title={`LLM confidence: ${Math.round(confidenceScore * 100)}% (threshold ${Math.round(confidenceThreshold * 100)}%)`}
-                                          >
-                                            LLM {Math.round(confidenceScore * 100)}%
+                                            title={tUi("LLM confidence: {value0}% (threshold {value1}%)", { value0: Math.round(confidenceScore * 100), value1: Math.round(confidenceThreshold * 100) })}
+                                          >{tUi("LLM ")}{Math.round(confidenceScore * 100)}%
                                           </Badge>
                                         )}
                                         {hasAlternatives && (
@@ -1588,9 +1569,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                                   e.stopPropagation();
                                                   handleConfirmSuggestedSlot(item.id, alt.value);
                                                 }}
-                                                title={`Use this alternative (${Math.round((alt.confidence ?? 0) * 100)}% confidence)`}
+                                                title={tUi("Use this alternative ({value0}% confidence)", { value0: Math.round((alt.confidence ?? 0) * 100) })}
                                               >
-                                                {alt.label ?? formatSlotDisplay(alt.value, item.slot_type)}
+                                                {alt.label ?? formatSlotDisplay(alt.value, item.slot_type, tUi)}
                                                 {alt.confidence != null && (
                                                   <span className="ml-1 text-amber-500/80">{Math.round(alt.confidence * 100)}%</span>
                                                 )}
@@ -1607,11 +1588,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                               e.stopPropagation();
                                               handleConfirmSuggestedSlot(item.id, slotValue);
                                             }}
-                                            title="Confirm this low-confidence LLM value"
+                                            title={tUi("Confirm this low-confidence LLM value")}
                                           >
-                                            <Check className="h-3 w-3 mr-1" />
-                                            Confirm
-                                          </Button>
+                                            <Check className="h-3 w-3 mr-1" />{tUi("Confirm")}</Button>
                                         )}
                                         <Button
                                           size="icon"
@@ -1621,7 +1600,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             e.stopPropagation();
                                             handleStartEdit(item, slotValue);
                                           }}
-                                          title="Edit value"
+                                          title={tUi("Edit value")}
                                         >
                                           <Pencil className="h-3 w-3" />
                                         </Button>
@@ -1636,9 +1615,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           handleStartEdit(item, "");
                                         }}
                                       >
-                                        <Pencil className="h-3 w-3 mr-1" />
-                                        Enter value
-                                      </Button>
+                                        <Pencil className="h-3 w-3 mr-1" />{tUi("Enter value")}</Button>
                                     )}
                                   </div>
                                 )}
@@ -1647,15 +1624,11 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                 {item.type !== "slot" && isCompleted && (
                                   <div className="flex items-center gap-1.5 mt-1">
                                     {isAiFilled ? (
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Completed by AI Assistant">
-                                        <Bot className="h-3 w-3 mr-0.5" />
-                                        AI
-                                      </Badge>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title={tUi("Completed by AI Assistant")}>
+                                        <Bot className="h-3 w-3 mr-0.5" />{tUi("AI")}</Badge>
                                     ) : isAgentFilled ? (
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title="Completed by Agent">
-                                        <User className="h-3 w-3 mr-0.5" />
-                                        Agent
-                                      </Badge>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title={tUi("Completed by Agent")}>
+                                        <User className="h-3 w-3 mr-0.5" />{tUi("Agent")}</Badge>
                                     ) : null}
                                     {showLlmConfidence && isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
                                       <Badge
@@ -1694,6 +1667,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
  * Item type badge
  */
 function ItemTypeBadge({ type }) {
+  const tUi = useUiText();
   const config = {
     action: { color: "text-muted-foreground border-border", label: "Action" },
     question: { color: "text-muted-foreground border-border", label: "Question" },
@@ -1704,7 +1678,7 @@ function ItemTypeBadge({ type }) {
 
   return (
     <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${color}`}>
-      {label}
+      {tUi(label)}
     </Badge>
   );
 }
@@ -1724,6 +1698,7 @@ const NEAR_BOTTOM_PX = 48;
  * Live Transcription Card with chat bubbles
  */
 function LiveTranscriptionCard({ transcriptions, translationConfig, interactionId, showSttConfidence = true, jumpTarget }) {
+  const tUi = useUiText();
   const endRef = useRef(null);
   const bubbleRefs = useRef({});
   const [highlightedId, setHighlightedId] = useState(null);
@@ -1895,12 +1870,9 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
             <MessageSquare className="h-3.5 w-3.5 text-sky-500" />
-          </span>
-          Live Transcription
-          {transcriptions.length > 0 && (
+          </span>{tUi("Live Transcription")}{transcriptions.length > 0 && (
             <Badge variant="outline" className="ml-auto text-xs text-sky-600 dark:text-sky-400 border-sky-500/40">
-              {transcriptions.length} messages
-            </Badge>
+              {transcriptions.length}{tUi(" messages")}</Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -1910,7 +1882,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
             {transcriptions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Waiting for conversation...</p>
+                <p className="text-sm">{tUi("Waiting for conversation...")}</p>
               </div>
             ) : (
               transcriptions.map((t) => (
@@ -1945,7 +1917,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
             className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-lg transition-colors hover:bg-sky-500"
           >
             <ArrowDown className="h-3.5 w-3.5" />
-            {unseenCount > 0 ? `${unseenCount} new message${unseenCount === 1 ? "" : "s"}` : "Back to live"}
+            {unseenCount > 0 ? `${unseenCount} new message${unseenCount === 1 ? "" : "s"}` : tUi("Back to live")}
           </button>
         )}
       </CardContent>
@@ -1957,6 +1929,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
  * Single transcription bubble
  */
 function TranscriptionBubble({ transcription, translationConfig, interactionId, showSttConfidence = true, isHighlighted = false }) {
+  const tUi = useUiText();
   const isCustomer = transcription.track === "inbound";
   const sentiment = transcription.sentiment;
   const sentimentScore = transcription.sentimentScore;
@@ -2028,7 +2001,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
         ) : (
           <Headphones className="h-3 w-3" />
         )}
-        <span className="font-medium">{isCustomer ? "Customer" : "Agent"}</span>
+        <span className="font-medium">{isCustomer ? tUi("Customer") : tUi("Agent")}</span>
       </div>
 
       {/* Message bubble */}
@@ -2057,7 +2030,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
                 className="h-6 w-6"
                 onClick={handleSpeakTranslation}
                 disabled={isSpeaking}
-                title="Play translation"
+                title={tUi("Play translation")}
               >
                 <Volume2 className="h-3.5 w-3.5" />
               </Button>
@@ -2075,10 +2048,9 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
             <Badge
               variant="outline"
               className="text-[10px] text-muted-foreground"
-              title="Speech-to-text recognition confidence from Telnyx Standalone STT"
+              title={tUi("Speech-to-text recognition confidence from Telnyx Standalone STT")}
             >
-              <Activity className="h-3 w-3 mr-1" />
-              STT {sttConfidencePercent}%
+              <Activity className="h-3 w-3 mr-1" />{tUi("STT ")}{sttConfidencePercent}%
             </Badge>
           )}
           {intent && (
@@ -2339,6 +2311,7 @@ function findStageAndItemById(stages, itemId) {
  * Suggested Response Card - Accumulating list of suggestions
  */
 function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted, aiDataReceived, aiDataLoading }) {
+  const tUi = useUiText();
   const [suggestions, setSuggestions] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
   const [generatingSuggestion, setGeneratingSuggestion] = useState(false);
@@ -2685,18 +2658,13 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500/10">
             <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-          </span>
-          Suggested Responses
-          {generatingSuggestion && (
+          </span>{tUi("Suggested Responses")}{generatingSuggestion && (
             <Badge variant="outline" className="ml-auto text-xs text-violet-600 dark:text-violet-400 border-violet-500/40">
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Generating...
-            </Badge>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />{tUi("Generating...")}</Badge>
           )}
           {!generatingSuggestion && suggestions.length > 0 && (
             <Badge variant="outline" className="ml-auto text-xs text-violet-600 dark:text-violet-400 border-violet-500/40">
-              {suggestions.length} suggestions
-            </Badge>
+              {suggestions.length}{tUi(" suggestions")}</Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -2707,20 +2675,20 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
             {suggestions.length === 0 && isAiAssisted && aiDataLoading ? (
               <div className="text-center text-muted-foreground py-8">
                 <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-40 animate-spin" />
-                <p className="text-sm font-medium">Waiting for AI context...</p>
-                <p className="text-xs mt-1">Suggestions will appear after AI data is received</p>
+                <p className="text-sm font-medium">{tUi("Waiting for AI context...")}</p>
+                <p className="text-xs mt-1">{tUi("Suggestions will appear after AI data is received")}</p>
               </div>
             ) : suggestions.length === 0 && !isComplete && currentSlot && generatingSuggestion ? (
               <div className="text-center text-muted-foreground py-8">
                 <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-40 animate-spin" />
-                <p className="text-sm font-medium">Generating suggestion...</p>
-                <p className="text-xs mt-1">One moment</p>
+                <p className="text-sm font-medium">{tUi("Generating suggestion...")}</p>
+                <p className="text-xs mt-1">{tUi("One moment")}</p>
               </div>
             ) : suggestions.length === 0 && !isComplete ? (
               <div className="text-center text-muted-foreground py-8">
                 <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Waiting for workflow...</p>
-                <p className="text-xs mt-1">Suggestions will appear here</p>
+                <p className="text-sm">{tUi("Waiting for workflow...")}</p>
+                <p className="text-xs mt-1">{tUi("Suggestions will appear here")}</p>
               </div>
             ) : (
               <>
@@ -2762,9 +2730,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           <span className="truncate">{suggestion.itemLabel}</span>
                         </Badge>
                         {isLatest && (
-                          <Badge variant="outline" className="text-[10px] text-violet-600 dark:text-violet-400 border-violet-500/50 bg-violet-500/10 shrink-0">
-                            Current
-                          </Badge>
+                          <Badge variant="outline" className="text-[10px] text-violet-600 dark:text-violet-400 border-violet-500/50 bg-violet-500/10 shrink-0">{tUi("Current")}</Badge>
                         )}
                       </div>
 
@@ -2783,7 +2749,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                                 clean left/right alignment on every line — a
                                 literal quote mark on the first and last line
                                 only would throw that off. */}
-                            {suggestion.text?.includes("\n") ? suggestion.text : `"${suggestion.text}"`}
+                            {suggestion.text?.includes("\n") ? suggestion.text : tUi("\"{value0}\"", { value0: suggestion.text })}
                           </p>
                           
                           {/* Slot options badges */}
@@ -2811,14 +2777,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                             }`}>
                               {isCopied ? (
                                 <>
-                                  <CheckCheck className="h-3 w-3" />
-                                  Copied!
-                                </>
+                                  <CheckCheck className="h-3 w-3" />{tUi("Copied!")}</>
                               ) : (
                                 <>
-                                  <Copy className="h-3 w-3" />
-                                  Click to copy
-                                </>
+                                  <Copy className="h-3 w-3" />{tUi("Click to copy")}</>
                               )}
                             </span>
                           </div>
@@ -2832,8 +2794,8 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                 {isComplete && (
                   <div className="text-center text-muted-foreground py-4 border-t">
                     <CheckCircle className="h-6 w-6 mx-auto mb-2 text-emerald-600 dark:text-emerald-400" />
-                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">All items completed!</p>
-                    <p className="text-xs mt-1">Great job finishing the workflow</p>
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{tUi("All items completed!")}</p>
+                    <p className="text-xs mt-1">{tUi("Great job finishing the workflow")}</p>
                   </div>
                 )}
 
@@ -2859,6 +2821,7 @@ function WorkflowProgressBar({
   isComplete,
   slotsFilled = {},
 }) {
+  const tUi = useUiText();
   // Calculate percentage from items if not provided
   const displayPercentage = completionPercentage ?? 
     (totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0);
@@ -2874,7 +2837,7 @@ function WorkflowProgressBar({
               <div
                 key={stage.id}
                 className={`flex items-center ${index < stages.length - 1 ? "gap-1" : ""}`}
-                title={`${stage.name}: ${completion.completed}/${completion.total}`}
+                title={tUi("{value0}: {value1}/{value2}", { value0: stage.name, value1: completion.completed, value2: completion.total })}
               >
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-all ${

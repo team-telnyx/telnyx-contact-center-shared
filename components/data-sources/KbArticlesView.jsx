@@ -1,4 +1,7 @@
 "use client";
+import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -47,6 +50,7 @@ import EditSheet from "@/components/kb-articles/EditSheet";
 import ApiSchemaSheet from "./ApiSchemaSheet";
 
 export default function KbArticlesView() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -150,13 +154,10 @@ export default function KbArticlesView() {
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold flex items-center gap-2">
-              <IconBook className="size-6 text-telnyx-green" /> KB Articles
-            </div>
+              <IconBook className="size-6 text-telnyx-green" />{tUi(" KB Articles")}</div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setShowApiSchema(true)}>
-                <IconCode className="size-4 mr-2" />
-                API Schema
-              </Button>
+                <IconCode className="size-4 mr-2" />{tUi("API Schema")}</Button>
               <Button
                 variant="secondary"
                 onClick={() =>
@@ -166,30 +167,26 @@ export default function KbArticlesView() {
                     q: "",
                   })
                 }
-              >
-                Clear
-              </Button>
+              >{tUi("Clear")}</Button>
               <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
+                {loading ? tUi("Loading…") : tUi("Refresh")}
               </Button>
-              <Button onClick={handleNewArticle} variant="default">
-                New Article
-              </Button>
+              <Button onClick={handleNewArticle} variant="default">{tUi("New Article")}</Button>
             </div>
           </div>
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
-              <label className="text-xs">Search</label>
+              <label className="text-xs">{tUi("Search")}</label>
               <Input
                 value={filters.q}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, q: e.target.value }))
                 }
-                placeholder="title, content, tags…"
+                placeholder={tUi("title, content, tags…")}
               />
             </div>
             <div>
-              <label className="text-xs">Status</label>
+              <label className="text-xs">{tUi("Status")}</label>
               <Select
                 value={filters.status || "all"}
                 onValueChange={(value) =>
@@ -197,18 +194,18 @@ export default function KbArticlesView() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="Draft">Draft</SelectItem>
-                  <SelectItem value="Published">Published</SelectItem>
-                  <SelectItem value="Archived">Archived</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
+                  <SelectItem value="Draft">{tUi("Draft")}</SelectItem>
+                  <SelectItem value="Published">{tUi("Published")}</SelectItem>
+                  <SelectItem value="Archived">{tUi("Archived")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-xs">Category</label>
+              <label className="text-xs">{tUi("Category")}</label>
               <Select
                 value={filters.category || "all"}
                 onValueChange={(value) =>
@@ -216,10 +213,10 @@ export default function KbArticlesView() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder={tUi("All")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">{tUi("All")}</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -245,13 +242,11 @@ export default function KbArticlesView() {
               <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-[10px] w-[40%]">Title</TableHead>
-                    <TableHead className="px-[10px]">Category</TableHead>
-                    <TableHead className="px-[10px]">Status</TableHead>
-                    <TableHead className="px-[10px]">Author</TableHead>
-                    <TableHead className="px-[10px] text-right">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px] w-[40%]">{tUi("Title")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Category")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Status")}</TableHead>
+                    <TableHead className="px-[10px]">{tUi("Author")}</TableHead>
+                    <TableHead className="px-[10px] text-right">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -289,7 +284,7 @@ export default function KbArticlesView() {
                               }
                               variant="outline"
                             >
-                              {article.status || "Draft"}
+                              {operationalStatusLabel(tUi, article.status) || tUi("Draft")}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
@@ -304,7 +299,7 @@ export default function KbArticlesView() {
                                   setShowEditSheet(true);
                                 }}
                                 className="inline-flex items-center text-telnyx-green"
-                                title="Edit article"
+                                title={tUi("Edit article")}
                               >
                                 <IconEdit className="size-4" />
                               </button>
@@ -313,31 +308,26 @@ export default function KbArticlesView() {
                                   <button
                                     type="button"
                                     className="inline-flex items-center text-red-500"
-                                    title="Delete article"
+                                    title={tUi("Delete article")}
                                   >
                                     <IconTrash className="size-4" />
                                   </button>
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Delete article?</DialogTitle>
-                                    <DialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the article "
-                                      {article.title}".
+                                    <DialogTitle>{tUi("Delete article?")}</DialogTitle>
+                                    <DialogDescription>{tUi("This action cannot be undone. This will permanently delete the article \"")}{article.title}&quot;.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
                                     <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
+                                      <Button variant="outline">{tUi("Cancel")}</Button>
                                     </DialogClose>
                                     <DialogClose asChild>
                                       <Button
                                         variant="destructive"
                                         onClick={() => onDelete(article.id)}
-                                      >
-                                        Delete
-                                      </Button>
+                                      >{tUi("Delete")}</Button>
                                     </DialogClose>
                                   </div>
                                 </DialogContent>
@@ -353,9 +343,7 @@ export default function KbArticlesView() {
                       <TableCell
                         colSpan={5}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No KB articles
-                      </TableCell>
+                      >{tUi("No KB articles")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -365,12 +353,10 @@ export default function KbArticlesView() {
         </CardContent>
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -406,8 +392,7 @@ export default function KbArticlesView() {
                 >
                   <IconChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm">
-                  Page {page} of {pageCount}
+                <span className="text-sm">{tUi("Page ")}{page}{tUi(" of ")}{pageCount}
                 </span>
                 <Button
                   variant="outline"

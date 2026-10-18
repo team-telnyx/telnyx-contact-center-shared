@@ -1,4 +1,7 @@
 "use client";
+import { statusLabel } from "@/lib/i18n/status-labels.mjs";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect } from "react";
 import {
@@ -16,16 +19,17 @@ import {
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
 
-function formatPendingSince(value) {
+function formatPendingSince(value, tUi) {
   const time = value ? new Date(value) : null;
   if (!time || Number.isNaN(time.getTime())) return "";
-  return ` (chosen at ${time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
+  return tUi(" (chosen at {value0})", {value0: time.toLocaleTimeString(tUi.locale, { hour: "2-digit", minute: "2-digit" })});
 }
 
 // `value` is the effective status (Busy while interactions are open).
 // `pendingStatus` is the manual status the agent already chose; it applies once
 // the current interactions end and keeps new interactions from being offered.
 export function StatusSelector({ value, onChange, pendingStatus = null, pendingSince = null }) {
+  const tUi = useUiText();
   const [selectableStatuses, setSelectableStatuses] = useState([]);
   const [allStatuses, setAllStatuses] = useState([]); // All statuses for display metadata
   const [loading, setLoading] = useState(true);
@@ -105,13 +109,11 @@ export function StatusSelector({ value, onChange, pendingStatus = null, pendingS
         disabled={loading}
       >
         <SelectTrigger data-testid="agent-status" data-status={value || ""} className="w-[280px]">
-          <SelectValue placeholder={loading ? "Loading..." : "Select status"} />
+          <SelectValue placeholder={loading ? tUi("Loading...") : tUi("Select status")} />
         </SelectTrigger>
         <SelectContent>
           {optionsForDisplay.length === 0 ? (
-            <div className="px-2 py-1.5 text-sm text-muted-foreground">
-              No statuses available
-            </div>
+            <div className="px-2 py-1.5 text-sm text-muted-foreground">{tUi("No statuses available")}</div>
           ) : (
             optionsForDisplay.map((status) => {
               const Icon =
@@ -131,15 +133,13 @@ export function StatusSelector({ value, onChange, pendingStatus = null, pendingS
                       className="h-4 w-4"
                       style={status.color ? { color: status.color } : undefined}
                     />
-                    <span>{status.name}</span>
+                    <span>{statusLabel(tUi, status.name)}</span>
                     {pendingStatus && status.name === pendingStatus && (
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                        <IconClock className="h-3.5 w-3.5" aria-hidden="true" />
-                        pending
-                      </span>
+                        <IconClock className="h-3.5 w-3.5" aria-hidden="true" />{tUi("pending")}</span>
                     )}
                     {pendingStatus && status.name === "Available" && (
-                      <span className="text-xs text-muted-foreground">cancels {pendingStatus}</span>
+                      <span className="text-xs text-muted-foreground">{tUi("cancels ")}{statusLabel(tUi, pendingStatus)}</span>
                     )}
                   </div>
                 </SelectItem>
@@ -154,27 +154,25 @@ export function StatusSelector({ value, onChange, pendingStatus = null, pendingS
             <span
               data-testid="agent-status-pending"
               data-status={pendingStatus}
-              className="inline-flex h-8 cursor-default items-center gap-1 rounded-md border border-dashed border-amber-500/70 pl-2 pr-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+              className="inline-flex h-8 cursor-default items-center gap-1 rounded-md border border-dashed border-amber-500/70 ps-2 pe-1 text-xs font-medium text-amber-700 dark:text-amber-300"
             >
               <IconClock className="h-3.5 w-3.5" aria-hidden="true" />
-              {pendingStatus}
+              {statusLabel(tUi, pendingStatus)}
               {/* Available is always accepted while busy; it simply clears the waiting status. */}
               <button
                 type="button"
                 data-testid="agent-status-pending-cancel"
-                aria-label={`Cancel pending ${pendingStatus} and stay Available`}
-                title="Cancel and stay Available"
+                aria-label={tUi("Cancel pending {value0} and stay Available", { value0: statusLabel(tUi, pendingStatus) })}
+                title={tUi("Cancel and stay Available")}
                 onClick={() => onChange?.("Available")}
-                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-sm hover:bg-amber-500/20"
+                className="ms-0.5 inline-flex h-5 w-5 items-center justify-center rounded-sm hover:bg-amber-500/20"
               >
                 <IconX className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs">
-            {pendingStatus} applies once your current interactions end{formatPendingSince(pendingSince)}.
-            No new interactions are offered meanwhile. Click the cross to cancel and stay Available.
-          </TooltipContent>
+            {tUi("{value0} applies once your current interactions end{value1}. No new interactions are offered meanwhile. Click the cross to cancel and stay Available.", {value0: statusLabel(tUi, pendingStatus), value1: formatPendingSince(pendingSince, tUi)})}</TooltipContent>
         </Tooltip>
       )}
     </div>

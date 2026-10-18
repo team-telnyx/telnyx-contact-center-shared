@@ -1,4 +1,8 @@
 "use client";
+import { sourceText } from "@/lib/i18n/source-text.mjs";
+
+import { useUiText, UiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
@@ -196,16 +200,16 @@ function normalizeMediaList(rows = []) {
 }
 function mediaTitle(item = {}) { const normalized = normalizeMediaItem(item) || item; return normalized.title || normalized.display_name || normalized.displayName || String(normalized.name || normalized.filename || mediaUrl(normalized) || "Image").replace(/\.[^.]+$/, ""); }
 function mediaFilename(item = {}) { const normalized = normalizeMediaItem(item) || item; return String(normalized.filename || normalized.name || mediaUrl(normalized) || "").split("?")[0].split("/").pop(); }
-function mediaSizeLabel(item = {}) {
+function mediaSizeLabel(item = {}, tUi = sourceText) {
   const size = Number(item.size_bytes || item.size || item.metadata?.size_bytes || item.metadata?.size || 0);
-  if (!Number.isFinite(size) || size <= 0) return "Size unknown";
+  if (!Number.isFinite(size) || size <= 0) return tUi("Size unknown");
   if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(size >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
   return `${Math.max(1, Math.round(size / 1024))} KB`;
 }
-function mediaDimensionsLabel(item = {}, fallback = null) {
+function mediaDimensionsLabel(item = {}, fallback = null, tUi = sourceText) {
   const width = Number(item.width || item.metadata?.width || item.metadata?.original_width || fallback?.width || 0);
   const height = Number(item.height || item.metadata?.height || item.metadata?.original_height || fallback?.height || 0);
-  return width > 0 && height > 0 ? `${Math.round(width)} × ${Math.round(height)} px` : "Dimensions unknown";
+  return width > 0 && height > 0 ? `${Math.round(width)} × ${Math.round(height)} px` : tUi("Dimensions unknown");
 }
 function flowNodes(flow = {}) {
   const nodes = flow.nodes || flow.metadata?.nodes || [];
@@ -221,15 +225,15 @@ function isFormSubmitFlow(flow = {}) {
     .map((value) => String(value).toLowerCase().replace(/[\s-]+/g, "_"));
   return textFields.includes("form_submit") || flowNodes(flow).some((node) => node?.data?.nodeType === "form_submit" || node?.type === "form_submit");
 }
-function dataActionTitle(flow = {}) { return flow.name || flow.display_name || flow.displayName || "Untitled data action"; }
-function dataActionDescription(flow = {}) {
+function dataActionTitle(flow = {}, tUi = sourceText) { return flow.name || flow.display_name || flow.displayName || tUi("Untitled data action"); }
+function dataActionDescription(flow = {}, tUi = sourceText) {
   const node = flowNodes(flow).find((item) => item?.data?.nodeType === "form_submit");
-  return node?.data?.config?.description || flow.description || flow.metadata?.description || "Form Submit call flow";
+  return node?.data?.config?.description || flow.description || flow.metadata?.description || tUi("Form Submit call flow");
 }
 function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : field?.type === "card" ? "imageUrl" : field?.type === "avatar" ? "src" : null; }
 function isImageCapable(field) { return Boolean(imagePropKey(field)); }
 function heroContent(field, props = {}) {
-  return <div className="relative z-10 min-w-0"><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div>;
+  return <div className="relative z-10 min-w-0"><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || <UiText>Action</UiText>}</Button></div> : null}</div>;
 }
 function heroShell(field, props = {}, toolbar = null) {
   const mode = props.imageMode === "background" ? "background" : "inline";
@@ -346,14 +350,14 @@ function defaultVariableNameForField(field, existingFields = []) {
   const used = new Set(dataFieldsOf({ schema: { fields: existingFields } }).map((item) => item.variableName).filter(Boolean));
   return makeUniqueVariableName(field.label || field.id || field.type, used);
 }
-function variableNameError(form = {}, field = {}) {
+function variableNameError(form = {}, field = {}, tUi = sourceText) {
   if (!FORM_COMPONENT_REGISTRY[field.type]?.data) return "";
   const rawValue = String(field.variableName ?? "");
   const value = rawValue.trim();
-  if (!value) return "Variable name is required.";
-  if (!isValidFieldVariableName(rawValue)) return "Use letters, numbers, and underscores; start with a letter or underscore.";
+  if (!value) return tUi("Variable name is required.");
+  if (!isValidFieldVariableName(rawValue)) return tUi("Use letters, numbers, and underscores; start with a letter or underscore.");
   const duplicate = dataFieldsOf(form).find((item) => item.id !== field.id && String(item.variableName || "").trim() === value);
-  return duplicate ? `Duplicate variable name; already used by ${duplicate.label || duplicate.id}.` : "";
+  return duplicate ? tUi("Duplicate variable name; already used by {value0}.", {value0: duplicate.label || duplicate.id}) : "";
 }
 function formVariableNameErrors(form = {}) { return dataFieldsOf(form).map((field) => variableNameError(form, field)).filter(Boolean); }
 
@@ -404,6 +408,7 @@ function newField(type) {
 }
 
 export function FormEditor({ initialForm, isNew = false }) {
+  const tUi = useUiText();
   const router = useRouter();
   const [form, setForm] = useState(() => normalizeFormDefinition(initialForm || createDefaultForm({ name: "New agent form" })));
   const [selectedId, setSelectedId] = useState(() => form.schema.fields[0]?.id || "form");
@@ -636,7 +641,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      notify({ title: "Form exported", description: `Downloaded ${filename}.`, variant: "success" });
+      notify({ title: "Form exported", description: tUi("Downloaded {value0}.", {value0: filename}), variant: "success" });
     } catch (err) {
       notify({ title: "Export failed", description: err.message || "Please try again.", variant: "error" });
     }
@@ -719,7 +724,7 @@ export function FormEditor({ initialForm, isNew = false }) {
   function assignDataActionToButton(fieldId, flow) {
     const field = fieldsById.get(fieldId);
     if (!field || field.type !== "button" || !flow) return false;
-    updateField(fieldId, { props: { ...(field.props || {}), dataActionFlowId: flow.id, dataActionLabel: dataActionTitle(flow) } });
+    updateField(fieldId, { props: { ...(field.props || {}), dataActionFlowId: flow.id, dataActionLabel: dataActionTitle(flow, tUi) } });
     setSelectedId(fieldId);
     return true;
   }
@@ -728,11 +733,11 @@ export function FormEditor({ initialForm, isNew = false }) {
     const button = meta.button || null;
     const flowId = meta.dataActionFlowId || button?.props?.dataActionFlowId || button?.props?.dataActionId || "";
     const action = dataActions.find((item) => String(item.id) === String(flowId));
-    const actionLabel = button?.props?.dataActionLabel || (action ? dataActionTitle(action) : "");
+    const actionLabel = button?.props?.dataActionLabel || (action ? dataActionTitle(action, tUi) : "");
     if (flowId) {
       notify({
         title: "Preview data action simulated",
-        description: `Clicking “${button?.label || "Submit"}” would submit this form and run data action “${actionLabel || flowId}”. Open the form in Agent Desktop with an interaction to execute it with live context.`,
+        description: tUi("Clicking “{value0}” would submit this form and run data action “{value1}”. Open the form in Agent Desktop with an interaction to execute it with live context.", {value0: button?.label || "Submit", value1: actionLabel || flowId}),
         variant: "info",
       });
       return;
@@ -740,7 +745,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     const fieldCount = Object.keys(values || {}).length;
     notify({
       title: "Preview submit simulated",
-      description: `Clicking “${button?.label || "Submit"}” captured ${fieldCount} field${fieldCount === 1 ? "" : "s"}. No submission was saved from Form Builder View.`,
+      description: tUi("Clicking “{value0}” captured fields: {value1}. No submission was saved from Form Builder View.", {value0: button?.label || tUi("Submit"), value1: fieldCount}),
       variant: "info",
     });
   }
@@ -882,16 +887,16 @@ export function FormEditor({ initialForm, isNew = false }) {
 
   return <AdminPageShell>
     <AdminPageHeader
-      title={form.name || "Untitled form"}
-      badges={<><Badge variant="outline" className={STATUS_BADGE_CLASS[form.status || "draft"] || STATUS_BADGE_CLASS.draft}>{form.status || "draft"}</Badge>{hasUnsavedChanges ? <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge> : <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>}</>}
-      actions={<><Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button><Button variant="outline" size="sm" onClick={() => setFormSettingsOpen(true)}><IconSettings className="h-4 w-4 mr-1" />Form settings</Button><Button variant="outline" size="sm" onClick={exportJson} disabled={saving}><IconDownload className="h-4 w-4 mr-1" />Export JSON</Button><Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button><Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button></>}
+      title={form.name || tUi("Untitled form")}
+      badges={<><Badge variant="outline" className={STATUS_BADGE_CLASS[form.status || "draft"] || STATUS_BADGE_CLASS.draft}>{form.status || tUi("draft")}</Badge>{hasUnsavedChanges ? <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">{tUi("Unsaved")}</Badge> : <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">{tUi("Saved")}</Badge>}</>}
+      actions={<><Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? tUi("Edit") : tUi("View")}</Button><Button variant="outline" size="sm" onClick={() => setFormSettingsOpen(true)}><IconSettings className="h-4 w-4 mr-1" />{tUi("Form settings")}</Button><Button variant="outline" size="sm" onClick={exportJson} disabled={saving}><IconDownload className="h-4 w-4 mr-1" />{tUi("Export JSON")}</Button><Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? tUi("Saving...") : tUi("Save")}</Button><Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />{tUi("Publish")}</Button></>}
     />
 
     <Dialog open={formSettingsOpen} onOpenChange={setFormSettingsOpen}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Form settings</DialogTitle>
-          <DialogDescription>Edit global settings for this form. Component-level settings stay in the right Properties panel.</DialogDescription>
+          <DialogTitle>{tUi("Form settings")}</DialogTitle>
+          <DialogDescription>{tUi("Edit global settings for this form. Component-level settings stay in the right Properties panel.")}</DialogDescription>
         </DialogHeader>
         <FormSettingsFields form={form} patchForm={patchForm} queues={queues} />
       </DialogContent>
@@ -900,19 +905,19 @@ export function FormEditor({ initialForm, isNew = false }) {
     <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-          <AlertDialogDescription>You have unsaved changes. Are you sure you want to leave? All unsaved changes will be lost.</AlertDialogDescription>
+          <AlertDialogTitle>{tUi("Unsaved Changes")}</AlertDialogTitle>
+          <AlertDialogDescription>{tUi("You have unsaved changes. Are you sure you want to leave? All unsaved changes will be lost.")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={cancelExit}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={confirmExit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Leave without saving</AlertDialogAction>
+          <AlertDialogCancel onClick={cancelExit}>{tUi("Cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmExit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{tUi("Leave without saving")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
 
     <DndContext onDragStart={handleDragStart} onDragCancel={() => setActiveDragType(null)} onDragEnd={handleDragEnd}>
     <div className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0,1fr) 360px` }}>
-      <SectionRail fixedItems={[EXIT_RAIL_ITEM]} items={RAIL} activeId={activeTab} onSelect={selectRailItem} ariaLabel="Form builder sections" />
+      <SectionRail fixedItems={[EXIT_RAIL_ITEM]} items={RAIL} activeId={activeTab} onSelect={selectRailItem} ariaLabel={tUi("Form builder sections")} />
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} selectedId={selectedId} setSelectedId={selectField} addField={addField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} dataActions={dataActions} dataActionsLoading={dataActionsLoading} selectedField={selectedField} assignDataActionToButton={assignDataActionToButton} />
@@ -920,25 +925,25 @@ export function FormEditor({ initialForm, isNew = false }) {
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <div className="h-14 shrink-0 border-b px-4 flex items-center justify-between bg-card">
-          <div><div className="text-sm font-semibold">Visual canvas</div><div className="text-[11px] text-muted-foreground">Form preview and component selection</div></div>
+          <div><div className="text-sm font-semibold">{tUi("Visual canvas")}</div><div className="text-[11px] text-muted-foreground">{tUi("Form preview and component selection")}</div></div>
           <div className="flex items-center gap-2">
-            <div className="flex rounded-md border bg-background p-0.5" aria-label="Preview theme">
-              <Button type="button" variant={previewTheme === "light" ? "secondary" : "ghost"} size="sm" className="h-7 px-2" onClick={() => setPreviewTheme("light")} title="Preview light theme"><IconSun className="h-4 w-4" /></Button>
-              <Button type="button" variant={previewTheme === "system" ? "secondary" : "ghost"} size="sm" className="h-7 px-2 text-[11px]" onClick={() => setPreviewTheme("system")} title="Follow app theme">Auto</Button>
-              <Button type="button" variant={previewTheme === "dark" ? "secondary" : "ghost"} size="sm" className="h-7 px-2" onClick={() => setPreviewTheme("dark")} title="Preview dark theme"><IconMoon className="h-4 w-4" /></Button>
+            <div className="flex rounded-md border bg-background p-0.5" aria-label={tUi("Preview theme")}>
+              <Button type="button" variant={previewTheme === "light" ? "secondary" : "ghost"} size="sm" className="h-7 px-2" onClick={() => setPreviewTheme("light")} title={tUi("Preview light theme")}><IconSun className="h-4 w-4" /></Button>
+              <Button type="button" variant={previewTheme === "system" ? "secondary" : "ghost"} size="sm" className="h-7 px-2 text-[11px]" onClick={() => setPreviewTheme("system")} title={tUi("Follow app theme")}>{tUi("Auto")}</Button>
+              <Button type="button" variant={previewTheme === "dark" ? "secondary" : "ghost"} size="sm" className="h-7 px-2" onClick={() => setPreviewTheme("dark")} title={tUi("Preview dark theme")}><IconMoon className="h-4 w-4" /></Button>
             </div>
-            <div className="text-xs text-muted-foreground">100% · Desktop</div>
+            <div className="text-xs text-muted-foreground">{tUi("100% · Desktop")}</div>
           </div>
         </div>
         <CanvasDropZone previewTheme={previewTheme} disabled={previewMode}>
           <div className="mx-auto w-full rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-5 md:p-8">
             {previewMode ? <div className="w-full space-y-4">
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">View mode runs the same interactive renderer as Agent Desktop. Inputs, choices, and buttons are clickable here; data actions are simulated unless the form is opened from an Agent Desktop interaction.</div>
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">{tUi("View mode runs the same interactive renderer as Agent Desktop. Inputs, choices, and buttons are clickable here; data actions are simulated unless the form is opened from an Agent Desktop interaction.")}</div>
               <FormRenderer key={`preview-${form.id || form.slug || form.name || "draft"}`} form={form} onSubmit={handlePreviewSubmit} />
             </div> : <div className="w-full space-y-6">
               {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} activeBorderColor={form.theme?.pageTabActiveBorderColor} /> : null}
               {activePageFields.map((field) => <CanvasField key={field.id} field={field} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === field.id} readOnly={false} onSelect={(id) => selectField(id || field.id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} />)}
-              {!activePageFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building this page.</div> : null}
+              {!activePageFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{tUi("Add blocks from the left palette to start building this page.")}</div> : null}
             </div>}
           </div>
         </CanvasDropZone>
@@ -987,6 +992,7 @@ function isHexColor(value) { return /^#[0-9A-Fa-f]{6}$/.test(String(value || "")
 function colorPickerValue(value) { return isHexColor(value) ? value : "#000000"; }
 
 function ColorInput({ label, value = "", onChange, placeholder = "#ccbbaa" }) {
+  const tUi = useUiText();
   const [draft, setDraft] = useState(value || "");
   useEffect(() => { setDraft(value || ""); }, [value]);
   function commit(nextValue) {
@@ -997,7 +1003,7 @@ function ColorInput({ label, value = "", onChange, placeholder = "#ccbbaa" }) {
     {label ? <Label>{label}</Label> : null}
     <div className="grid grid-cols-[1fr_auto] items-center gap-2">
       <Input className="font-mono" value={draft} placeholder={placeholder} onChange={(e) => commit(e.target.value)} onBlur={() => { if (draft && !isHexColor(draft) && value !== draft) setDraft(value || ""); }} />
-      <label className="relative block h-10 w-12 shrink-0 cursor-pointer overflow-hidden rounded-md border border-input shadow-xs" title="Pick color">
+      <label className="relative block h-10 w-12 shrink-0 cursor-pointer overflow-hidden rounded-md border border-input shadow-xs" title={tUi("Pick color")}>
         <span className="block h-full w-full" style={{ backgroundColor: colorPickerValue(value || draft) }} />
         <input type="color" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" value={colorPickerValue(value || draft)} onChange={(e) => commit(e.target.value)} />
       </label>
@@ -1013,6 +1019,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
+  const tUi = useUiText();
   const { activeTab, form, patchForm, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, addField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle, dataActions = [], dataActionsLoading = false, selectedField, assignDataActionToButton } = props;
   const mediaInputRef = useRef(null);
   const [pexelsOpen, setPexelsOpen] = useState(false);
@@ -1062,7 +1069,7 @@ function LeftPanel(props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || "Media delete failed");
       setMedia?.(normalizeMediaList(data.mediaList || []));
-      notify({ title: "Media deleted", description: `Removed “${mediaTitle(deleteMediaTarget)}”.`, variant: "success" });
+      notify({ title: "Media deleted", description: tUi("Removed “{value0}”.", {value0: mediaTitle(deleteMediaTarget)}), variant: "success" });
       setDeleteMediaTarget(null);
     } catch (err) {
       notify({ title: "Delete failed", description: err?.message || "Please try again.", variant: "error" });
@@ -1072,18 +1079,18 @@ function LeftPanel(props) {
   if (activeTab === "ai") {
     return <div className="h-full min-h-0 flex flex-col">
       <div className="h-14 shrink-0 border-b px-4 flex items-center justify-between gap-2">
-        <div className="min-w-0"><h2 className="font-semibold text-sm">AI form agent</h2><p className="text-xs text-muted-foreground">Describe changes, then refine visually.</p></div>
+        <div className="min-w-0"><h2 className="font-semibold text-sm">{tUi("AI form agent")}</h2><p className="text-xs text-muted-foreground">{tUi("Describe changes, then refine visually.")}</p></div>
       </div>
       <div className="flex-1 min-h-0 space-y-3 overflow-y-auto p-4">
         {aiMessages.map((msg, i) => <div key={i} className={`rounded-xl p-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground ml-6" : "bg-muted mr-6"}`}>{msg.text}</div>)}
-        {aiLoading ? <div className="mr-6 flex items-center gap-2 rounded-xl bg-muted p-3 text-sm text-muted-foreground"><IconLoader2 className="h-4 w-4 animate-spin" />Waiting for a response...</div> : null}
+        {aiLoading ? <div className="mr-6 flex items-center gap-2 rounded-xl bg-muted p-3 text-sm text-muted-foreground"><IconLoader2 className="h-4 w-4 animate-spin" />{tUi("Waiting for a response...")}</div> : null}
         <div ref={aiMessagesEndRef} />
       </div>
       <form className="shrink-0 border-t p-4 space-y-2" onSubmit={(e) => { e.preventDefault(); sendAi(); }}>
-        <Textarea rows={4} placeholder="Add a customer verification section..." value={aiPrompt} disabled={aiLoading} onChange={(e) => setAiPrompt(e.target.value)} onKeyDownCapture={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} />
+        <Textarea rows={4} placeholder={tUi("Add a customer verification section...")} value={aiPrompt} disabled={aiLoading} onChange={(e) => setAiPrompt(e.target.value)} onKeyDownCapture={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} />
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <Button type="submit" className="w-full" disabled={aiLoading || !aiPrompt.trim()}>{aiLoading ? <><IconLoader2 className="mr-2 h-4 w-4 animate-spin" />Waiting...</> : "Send to AI"}</Button>
-          <Button type="button" variant="outline" onClick={clearAiChat} disabled={aiLoading}>Clear</Button>
+          <Button type="submit" className="w-full" disabled={aiLoading || !aiPrompt.trim()}>{aiLoading ? <><IconLoader2 className="mr-2 h-4 w-4 animate-spin" />{tUi("Waiting...")}</> : tUi("Send to AI")}</Button>
+          <Button type="button" variant="outline" onClick={clearAiChat} disabled={aiLoading}>{tUi("Clear")}</Button>
         </div>
       </form>
     </div>;
@@ -1091,29 +1098,29 @@ function LeftPanel(props) {
 
   if (activeTab === "pages") {
     return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="Pages" description="Add, rename, reorder, and select form pages." />
+      <PanelHeader title={tUi("Pages")} description={tUi("Add, rename, reorder, and select form pages.")} />
       <div className="shrink-0 space-y-3 border-b p-4">
         <div className="flex items-center justify-between rounded-md border p-3">
           <div>
-            <Label>Show navigation buttons</Label>
-            <p className="text-xs text-muted-foreground">Show automatic Prev/Next buttons at the bottom of multi-page forms.</p>
+            <Label>{tUi("Show navigation buttons")}</Label>
+            <p className="text-xs text-muted-foreground">{tUi("Show automatic Prev/Next buttons at the bottom of multi-page forms.")}</p>
           </div>
           <Switch checked={form.schema?.showNavigationButtons !== false} onCheckedChange={(checked) => patchForm({ schema: { ...(form.schema || {}), showNavigationButtons: checked } })} />
         </div>
-        <ColorInput label="Active tab underline color" value={form.theme?.pageTabActiveBorderColor || ""} onChange={(color) => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: color } })} />
-        <Button type="button" size="sm" variant="ghost" onClick={() => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: "" } })}>Use theme default</Button>
-        <Button type="button" className="w-full" onClick={addPage}><IconPlus className="mr-2 h-4 w-4" />Add page</Button>
+        <ColorInput label={tUi("Active tab underline color")} value={form.theme?.pageTabActiveBorderColor || ""} onChange={(color) => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: color } })} />
+        <Button type="button" size="sm" variant="ghost" onClick={() => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: "" } })}>{tUi("Use theme default")}</Button>
+        <Button type="button" className="w-full" onClick={addPage}><IconPlus className="mr-2 h-4 w-4" />{tUi("Add page")}</Button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         {pages.map((page, index) => <div key={page.id} className={`rounded-xl border p-3 ${activePageId === page.id ? "border-primary bg-primary/5" : "bg-background"}`}>
           <button type="button" className="mb-3 w-full text-left" onClick={() => setActivePageId(page.id)}>
-            <div className="flex items-center gap-2 text-sm font-semibold"><PageIcon value={page.icon} />{page.title || `Page ${index + 1}`}</div>
-            <div className="text-xs text-muted-foreground">{(page.fields || []).length} blocks · {page.id}</div>
+            <div className="flex items-center gap-2 text-sm font-semibold"><PageIcon value={page.icon} />{page.title || tUi("Page {value0}", { value0: index + 1 })}</div>
+            <div className="text-xs text-muted-foreground">{(page.fields || []).length}{tUi(" blocks · ")}{page.id}</div>
           </button>
           <div className="space-y-2">
-            <RevertibleTextInput value={page.title ?? ""} restoreOnEmpty fallbackValue={`Page ${index + 1}`} onCommit={(value) => updatePage(page.id, { title: value })} placeholder="Page title" />
+            <RevertibleTextInput value={page.title ?? ""} restoreOnEmpty fallbackValue={`Page ${index + 1}`} onCommit={(value) => updatePage(page.id, { title: value })} placeholder={tUi("Page title")} />
             <PageIconPicker value={page.icon || ""} onChange={(icon) => updatePage(page.id, { icon })} />
-            <Input value={page.description ?? ""} onChange={(e) => updatePage(page.id, { description: e.target.value })} placeholder="Optional description" />
+            <Input value={page.description ?? ""} onChange={(e) => updatePage(page.id, { description: e.target.value })} placeholder={tUi("Optional description")} />
           </div>
           <div className="mt-3 flex flex-wrap gap-1">
             <Button type="button" size="sm" variant="ghost" onClick={() => movePage(page.id, -1)}>↑</Button>
@@ -1128,24 +1135,24 @@ function LeftPanel(props) {
   if (activeTab === "data-actions") {
     const selectedButton = selectedField?.type === "button" ? selectedField : null;
     return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="Data Actions" description="Form Submit call flows for button actions." />
+      <PanelHeader title={tUi("Data Actions")} description={tUi("Form Submit call flows for button actions.")} />
       <div className="shrink-0 border-b p-4 text-xs text-muted-foreground">
-        {selectedButton ? <>Click or drag a card onto the selected button <span className="font-medium text-foreground">{selectedButton.label || selectedButton.id}</span>.</> : "Select a button first, or drag a card onto a button on the canvas."}
+        {selectedButton ? <>{tUi("Click or drag a card onto the selected button ")}<span className="font-medium text-foreground">{selectedButton.label || selectedButton.id}</span>.</> : tUi("Select a button first, or drag a card onto a button on the canvas.")}
       </div>
       <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-4 space-y-3">
-        {dataActionsLoading ? <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Loading data actions...</div> : null}
+        {dataActionsLoading ? <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">{tUi("Loading data actions...")}</div> : null}
         {dataActions.map((flow) => <DraggableDataActionCard key={flow.id} flow={flow} onApply={() => selectedButton ? assignDataActionToButton?.(selectedButton.id, flow) : null} disabled={!selectedButton} />)}
-        {!dataActionsLoading && !dataActions.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No Form Submit call flows found yet. Create one in Call Flows with the Form Submit initiator.</div> : null}
+        {!dataActionsLoading && !dataActions.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{tUi("No Form Submit call flows found yet. Create one in Call Flows with the Form Submit initiator.")}</div> : null}
       </div>
     </div>;
   }
 
   if (activeTab === "blocks") {
     return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="Blocks" description="Add custom schema components." />
+      <PanelHeader title={tUi("Blocks")} description={tUi("Add custom schema components.")} />
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
         {BLOCK_GROUPS.map((group) => <div key={group.title} className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground">{group.title}</h3>
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground">{tUi(group.title)}</h3>
           <div className="grid gap-2">
             {group.items.map((type) => <DraggableBlock key={type} type={type} addField={addField} colorClass={group.color} iconClass={group.iconClass} />)}
           </div>
@@ -1156,10 +1163,10 @@ function LeftPanel(props) {
 
   if (activeTab === "templates") {
     return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="Templates" description="Start from one of 9 seeded examples." />
+      <PanelHeader title={tUi("Templates")} description={tUi("Start from one of 9 seeded examples.")} />
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         {templates.map((template) => <button key={template.slug || template.id} type="button" onClick={() => createFromTemplate?.(template)} className="w-full rounded-xl border bg-background p-3 text-left transition hover:border-primary hover:bg-primary/5">
-          <div className="flex items-start justify-between gap-2"><div><div className="text-sm font-semibold">{template.name}</div><div className="text-xs text-muted-foreground">{template.category}</div></div><Badge variant="outline">Use</Badge></div>
+          <div className="flex items-start justify-between gap-2"><div><div className="text-sm font-semibold">{template.name}</div><div className="text-xs text-muted-foreground">{template.category}</div></div><Badge variant="outline">{tUi("Use")}</Badge></div>
           <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{template.description}</p>
           <div className="mt-3 h-28 overflow-hidden rounded-lg border bg-slate-50 p-2"><div className="origin-top-left scale-[0.48] w-[200%] pointer-events-none rounded bg-white p-3"><MiniTemplatePreview form={template} /></div></div>
         </button>)}
@@ -1170,65 +1177,61 @@ function LeftPanel(props) {
   if (activeTab === "media") {
     return <>
       <div className="h-full min-h-0 flex flex-col">
-        <PanelHeader title="Media" description="Drag image cards onto the canvas or image blocks." />
+        <PanelHeader title={tUi("Media")} description={tUi("Drag image cards onto the canvas or image blocks.")} />
         <div className="shrink-0 border-b p-4 space-y-3">
-          <div className="rounded-xl border border-dashed bg-muted/25 p-3 text-center text-xs text-muted-foreground" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); uploadMediaFile?.(e.dataTransfer.files?.[0]); }}>
-            Drop an image here to upload
-          </div>
+          <div className="rounded-xl border border-dashed bg-muted/25 p-3 text-center text-xs text-muted-foreground" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); uploadMediaFile?.(e.dataTransfer.files?.[0]); }}>{tUi("Drop an image here to upload")}</div>
           <input ref={mediaInputRef} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" disabled={uploadingMedia} onChange={(e) => { uploadMediaFile?.(e.target.files?.[0]); e.target.value = ""; }} />
-          <Button type="button" variant="outline" className="w-full" disabled={uploadingMedia} onClick={() => mediaInputRef.current?.click()}><IconUpload className="mr-2 h-4 w-4" />{uploadingMedia ? "Uploading..." : "Upload image"}</Button>
-          <Button type="button" variant="outline" className="w-full" onClick={() => setPexelsOpen(true)}><IconWorldUpload className="mr-2 h-4 w-4" />Search in Pexels</Button>
-          <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically. Pexels photos are free to use; attribution is appreciated but not required.</p>
+          <Button type="button" variant="outline" className="w-full" disabled={uploadingMedia} onClick={() => mediaInputRef.current?.click()}><IconUpload className="mr-2 h-4 w-4" />{uploadingMedia ? tUi("Uploading...") : tUi("Upload image")}</Button>
+          <Button type="button" variant="outline" className="w-full" onClick={() => setPexelsOpen(true)}><IconWorldUpload className="mr-2 h-4 w-4" />{tUi("Search in Pexels")}</Button>
+          <p className="text-xs text-muted-foreground">{tUi("Max 5MB. Safe filenames are generated automatically. Pexels photos are free to use; attribution is appreciated but not required.")}</p>
         </div>
         <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-4 space-y-3">
           {normalizeMediaList(media).map((item) => <DraggableMediaCard key={item.url} item={item} onTitleCommit={(title) => saveMediaTitle?.(item, title)} onDelete={() => setDeleteMediaTarget(item)} />)}
-          {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
+          {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{tUi("No media uploaded yet.")}</div> : null}
         </div>
       </div>
       <AlertDialog open={Boolean(deleteMediaTarget)} onOpenChange={(open) => { if (!open && !deletingMedia) setDeleteMediaTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete media?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete “{deleteMediaTarget ? mediaTitle(deleteMediaTarget) : "this image"}”? This removes it from the media library and deletes the stored file for local uploads. Existing forms using this image may show a broken preview until you choose another image.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Delete media?")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("Delete “")}{deleteMediaTarget ? mediaTitle(deleteMediaTarget) : tUi("this image")}{tUi("”? This removes it from the media library and deletes the stored file for local uploads. Existing forms using this image may show a broken preview until you choose another image.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingMedia}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteMediaItem} disabled={deletingMedia} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete media</AlertDialogAction>
+            <AlertDialogCancel disabled={deletingMedia}>{tUi("Cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteMediaItem} disabled={deletingMedia} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{tUi("Delete media")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <Dialog open={pexelsOpen} onOpenChange={setPexelsOpen}>
         <DialogContent className="!flex h-[88vh] w-[50vw] min-w-[720px] !max-w-[50vw] flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Search in Pexels</DialogTitle>
-            <DialogDescription>Search royalty-free Pexels photos and download one into this form media library.</DialogDescription>
+            <DialogTitle>{tUi("Search in Pexels")}</DialogTitle>
+            <DialogDescription>{tUi("Search royalty-free Pexels photos and download one into this form media library.")}</DialogDescription>
           </DialogHeader>
           <form className="grid grid-cols-[1fr_auto] gap-2" onSubmit={searchPexels}>
-            <Input value={pexelsQuery} onChange={(e) => setPexelsQuery(e.target.value)} placeholder="e.g. customer support, city, nature" />
-            <Button type="submit" disabled={pexelsLoading}>{pexelsLoading ? "Searching..." : "Search"}</Button>
+            <Input value={pexelsQuery} onChange={(e) => setPexelsQuery(e.target.value)} placeholder={tUi("e.g. customer support, city, nature")} />
+            <Button type="submit" disabled={pexelsLoading}>{pexelsLoading ? tUi("Searching...") : tUi("Search")}</Button>
           </form>
           {pexelsError ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{pexelsError}</div> : null}
           <div className="grid min-h-0 flex-1 auto-rows-max gap-5 overflow-y-auto overflow-x-hidden pr-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {pexelsResults.map((photo) => <div key={photo.id} className="relative overflow-hidden rounded-xl border bg-background">
               <div className="aspect-video bg-muted"><img src={photo.src?.large || photo.src?.medium || photo.src?.small || photo.src?.tiny} alt={photo.alt || photo.title} className="h-full w-full object-cover" /></div>
-              <Button type="button" size="icon" className="absolute right-2 top-2 h-8 w-8 rounded-full bg-background/90 text-foreground shadow backdrop-blur hover:bg-background" disabled={pexelsDownloadingId === photo.id} onClick={() => downloadPexelsPhoto(photo)} title={pexelsDownloadingId === photo.id ? "Downloading..." : "Download to media"} aria-label={pexelsDownloadingId === photo.id ? "Downloading Pexels photo" : "Download Pexels photo to media"}>{pexelsDownloadingId === photo.id ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <IconDownload className="h-4 w-4" />}</Button>
+              <Button type="button" size="icon" className="absolute right-2 top-2 h-8 w-8 rounded-full bg-background/90 text-foreground shadow backdrop-blur hover:bg-background" disabled={pexelsDownloadingId === photo.id} onClick={() => downloadPexelsPhoto(photo)} title={pexelsDownloadingId === photo.id ? tUi("Downloading...") : tUi("Download to media")} aria-label={pexelsDownloadingId === photo.id ? tUi("Downloading Pexels photo") : tUi("Download Pexels photo to media")}>{pexelsDownloadingId === photo.id ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <IconDownload className="h-4 w-4" />}</Button>
               <div className="space-y-1 p-3">
                 <div className="line-clamp-1 text-sm font-medium">{photo.title}</div>
-                <div className="line-clamp-1 text-xs text-muted-foreground">Photo by {photo.photographer}</div>
+                <div className="line-clamp-1 text-xs text-muted-foreground">{tUi("Photo by ")}{photo.photographer}</div>
               </div>
             </div>)}
           </div>
-          {!pexelsResults.length && !pexelsLoading ? <p className="text-sm text-muted-foreground">No Pexels results yet. Try a search term above.</p> : null}
-          <p className="text-xs text-muted-foreground">Pexels license: free to use and attribution is not required; do not imply endorsement, sell unaltered copies, redistribute as stock photos, or use imagery as a trademark/service mark.</p>
+          {!pexelsResults.length && !pexelsLoading ? <p className="text-sm text-muted-foreground">{tUi("No Pexels results yet. Try a search term above.")}</p> : null}
+          <p className="text-xs text-muted-foreground">{tUi("Pexels license: free to use and attribution is not required; do not imply endorsement, sell unaltered copies, redistribute as stock photos, or use imagery as a trademark/service mark.")}</p>
         </DialogContent>
       </Dialog>
     </>;
   }
 
   return <div className="h-full min-h-0 flex flex-col">
-    <PanelHeader title="Blocks" description="Choose a panel from the rail." />
+    <PanelHeader title={tUi("Blocks")} description={tUi("Choose a panel from the rail.")} />
   </div>;
 
 }
@@ -1253,6 +1256,7 @@ function PageTabs({ pages = [], activePageId, setActivePageId, activeBorderColor
 }
 
 function PageIconPicker({ value = "", onChange, label = "Page icon" }) {
+  const tUi = useUiText();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const normalizedValue = pageIconValue(value);
@@ -1266,20 +1270,20 @@ function PageIconPicker({ value = "", onChange, label = "Page icon" }) {
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
           <PageIcon value={normalizedValue} />
-          <span className={selected ? "" : "text-muted-foreground"}>{selected?.label || "No icon"}</span>
+          <span className={selected ? "" : "text-muted-foreground"}>{selected?.label || tUi("No icon")}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[300px] p-3">
         <div className="space-y-3">
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search icons..." autoFocus />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tUi("Search icons...")} autoFocus />
           <div className="grid max-h-72 grid-cols-4 gap-2 overflow-y-auto pr-1">
-            <button type="button" onClick={() => { onChange?.(""); setOpen(false); }} className={`flex h-16 flex-col items-center justify-center gap-1 rounded-md border text-[10px] transition hover:border-primary ${!normalizedValue ? "border-primary bg-primary/10" : "bg-background"}`}>None</button>
+            <button type="button" onClick={() => { onChange?.(""); setOpen(false); }} className={`flex h-16 flex-col items-center justify-center gap-1 rounded-md border text-[10px] transition hover:border-primary ${!normalizedValue ? "border-primary bg-primary/10" : "bg-background"}`}>{tUi("None")}</button>
             {visibleOptions.map((option) => <button key={option.value} type="button" title={option.label} onClick={() => { onChange?.(option.value); setOpen(false); }} className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-md border p-1 text-[10px] transition hover:border-primary ${normalizedValue === option.value ? "border-primary bg-primary/10" : "bg-background"}`}>
               <PageIcon value={option.value} className="h-5 w-5" />
               <span className="w-full truncate text-center">{option.label}</span>
             </button>)}
           </div>
-          {filtered.length > visibleOptions.length ? <p className="text-[11px] text-muted-foreground">Showing {visibleOptions.length} of {filtered.length} icons. Type to narrow the search.</p> : null}
+          {filtered.length > visibleOptions.length ? <p className="text-[11px] text-muted-foreground">{tUi("Showing ")}{visibleOptions.length}{tUi(" of ")}{filtered.length}{tUi(" icons. Type to narrow the search.")}</p> : null}
         </div>
       </PopoverContent>
     </Popover>
@@ -1324,6 +1328,7 @@ function StatIcon({ item = {}, className = "", style = {} }) {
 
 
 function RichTextHtmlEditor({ value = "", onChange }) {
+  const tUi = useUiText();
   const editorRef = useRef(null);
 
   useEffect(() => {
@@ -1348,11 +1353,11 @@ function RichTextHtmlEditor({ value = "", onChange }) {
   return <div className="overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring">
     <div className="flex flex-wrap items-center gap-1 border-b bg-muted/30 p-1">
       <select className="h-8 rounded border bg-background px-2 text-sm" defaultValue="P" onMouseDown={(event) => event.stopPropagation()} onChange={(event) => command("formatBlock", event.target.value)}>
-        <option value="P">Body</option>
-        <option value="H1">H1</option>
-        <option value="H2">H2</option>
-        <option value="H3">H3</option>
-        <option value="BLOCKQUOTE">Quote</option>
+        <option value="P">{tUi("Body")}</option>
+        <option value="H1">{tUi("H1")}</option>
+        <option value="H2">{tUi("H2")}</option>
+        <option value="H3">{tUi("H3")}</option>
+        <option value="BLOCKQUOTE">{tUi("Quote")}</option>
       </select>
       {toolbarButton("• List", "Bullet list", () => command("insertUnorderedList"))}
       {toolbarButton("1. List", "Numbered list", () => command("insertOrderedList"))}
@@ -1380,18 +1385,19 @@ function RichTextHtmlEditor({ value = "", onChange }) {
         sync();
       }}
     />
-    <Textarea className="min-h-28 rounded-none border-0 border-t font-mono text-xs focus-visible:ring-0" value={value || ""} onChange={(event) => onChange?.(event.target.value)} placeholder="HTML source, e.g. <h2>Heading</h2><ul><li>Item</li></ul>" />
+    <Textarea className="min-h-28 rounded-none border-0 border-t font-mono text-xs focus-visible:ring-0" value={value || ""} onChange={(event) => onChange?.(event.target.value)} placeholder={tUi("HTML source, e.g. <h2>Heading</h2><ul><li>Item</li></ul>")} />
   </div>;
 }
 
 function BlockCardContent({ type, iconClass = "text-primary" }) {
+  const tUi = useUiText();
   const Icon = blockIcon(type);
   return <div className="flex items-start gap-3">
     <IconGripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
     <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconClass}`} />
     <div className="min-w-0 flex-1">
-      <div className="text-sm font-semibold text-foreground">{FORM_COMPONENT_REGISTRY[type]?.label || type}</div>
-      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{blockDescription(type)}</p>
+      <div className="text-sm font-semibold text-foreground">{FORM_COMPONENT_REGISTRY[type]?.label ? tUi(FORM_COMPONENT_REGISTRY[type].label) : type}</div>
+      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{tUi(blockDescription(type))}</p>
     </div>
   </div>;
 }
@@ -1420,6 +1426,7 @@ function DraggableDataActionCard({ flow, onApply, disabled = false }) {
 }
 
 function DraggableMediaCard({ item, onTitleCommit, onDelete }) {
+  const tUi = useUiText();
   const title = mediaTitle(item);
   const [draftTitle, setDraftTitle] = useState(title);
   const [editingOpen, setEditingOpen] = useState(false);
@@ -1440,8 +1447,8 @@ function DraggableMediaCard({ item, onTitleCommit, onDelete }) {
   }
   return <div ref={setNodeRef} className={`touch-none w-full max-w-full overflow-hidden rounded-xl border border-l-4 border-l-amber-500 bg-background p-2.5 shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""}`} {...attributes}>
     <div className="flex w-full min-w-0 items-center gap-3">
-      <button type="button" className="shrink-0 cursor-grab text-muted-foreground" {...listeners} aria-label="Drag media"><IconGripVertical className="h-4 w-4" /></button>
-      <div className="h-16 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted" title="Drag image to canvas">
+      <button type="button" className="shrink-0 cursor-grab text-muted-foreground" {...listeners} aria-label={tUi("Drag media")}><IconGripVertical className="h-4 w-4" /></button>
+      <div className="h-16 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted" title={tUi("Drag image to canvas")}>
         <img src={item.url} alt={title} className="h-full w-full object-cover" onLoad={(e) => setLoadedDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
       </div>
       <div className="min-w-0 flex-1 overflow-hidden">
@@ -1454,25 +1461,27 @@ function DraggableMediaCard({ item, onTitleCommit, onDelete }) {
           <PopoverContent align="start" side="right" className="w-72 p-2" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-1.5">
               <Input autoFocus className="h-8 min-w-0 flex-1 text-sm" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") confirmTitle(e); if (e.key === "Escape") cancelTitle(e); }} />
-              <Button type="button" size="icon" className="h-8 w-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={confirmTitle} title="Save name"><IconCheck className="h-4 w-4" /></Button>
-              <Button type="button" size="icon" variant="outline" className="h-8 w-8 border-red-500 text-red-600 hover:bg-red-500/10 hover:text-red-700" onClick={cancelTitle} title="Cancel"><IconX className="h-4 w-4" /></Button>
+              <Button type="button" size="icon" className="h-8 w-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={confirmTitle} title={tUi("Save name")}><IconCheck className="h-4 w-4" /></Button>
+              <Button type="button" size="icon" variant="outline" className="h-8 w-8 border-red-500 text-red-600 hover:bg-red-500/10 hover:text-red-700" onClick={cancelTitle} title={tUi("Cancel")}><IconX className="h-4 w-4" /></Button>
             </div>
           </PopoverContent>
         </Popover>
-        <div className="mt-1 truncate text-[11px] leading-tight text-muted-foreground">{mediaDimensionsLabel(item, loadedDimensions)}</div>
-        <div className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{mediaSizeLabel(item)}</div>
+        <div className="mt-1 truncate text-[11px] leading-tight text-muted-foreground">{mediaDimensionsLabel(item, loadedDimensions, tUi)}</div>
+        <div className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{mediaSizeLabel(item, tUi)}</div>
       </div>
-      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive" title="Delete media" aria-label={`Delete ${title}`} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onDelete?.(); }}><IconTrash className="h-4 w-4" /></Button>
+      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive" title={tUi("Delete media")} aria-label={tUi("Delete {value0}", { value0: title })} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onDelete?.(); }}><IconTrash className="h-4 w-4" /></Button>
     </div>
   </div>;
 }
 
 function MediaDragPreview() {
-  return <div className="w-64 rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 text-sm font-medium shadow-2xl ring-1 ring-black/5"><div className="flex items-center gap-2"><IconPhoto className="h-5 w-5 text-amber-500" />Media image</div></div>;
+  const tUi = useUiText();
+  return <div className="w-64 rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 text-sm font-medium shadow-2xl ring-1 ring-black/5"><div className="flex items-center gap-2"><IconPhoto className="h-5 w-5 text-amber-500" />{tUi("Media image")}</div></div>;
 }
 
 function DataActionDragPreview() {
-  return <div className="w-72 rounded-xl border border-l-4 border-l-teal-500 bg-background p-3 text-sm font-medium shadow-2xl ring-1 ring-black/5"><div className="flex items-center gap-2"><IconBolt className="h-5 w-5 text-teal-500" />Data action</div></div>;
+  const tUi = useUiText();
+  return <div className="w-72 rounded-xl border border-l-4 border-l-teal-500 bg-background p-3 text-sm font-medium shadow-2xl ring-1 ring-black/5"><div className="flex items-center gap-2"><IconBolt className="h-5 w-5 text-teal-500" />{tUi("Data action")}</div></div>;
 }
 
 function BlockDragPreview({ type }) {
@@ -1485,28 +1494,31 @@ function MiniTemplatePreview({ form }) {
 }
 
 function FieldToolbar({ field, removeField, duplicateField, moveField, updateField }) {
+  const tUi = useUiText();
   const supportsBold = ["label", "text", "textarea", "richtext", "section"].includes(field.type);
   const supportsAlign = ["label", "text", "richtext", "hero"].includes(field.type);
   const props = field.props || {};
   return <div className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur">
-    {supportsBold ? <Button type="button" size="sm" variant={props.bold ? "secondary" : "ghost"} className="h-7 px-2 font-bold" onClick={(e) => { e.stopPropagation(); updateField(field.id, { props: { ...props, bold: !props.bold } }); }}>B</Button> : null}
+    {supportsBold ? <Button type="button" size="sm" variant={props.bold ? "secondary" : "ghost"} className="h-7 px-2 font-bold" onClick={(e) => { e.stopPropagation(); updateField(field.id, { props: { ...props, bold: !props.bold } }); }}>{tUi("B")}</Button> : null}
     {supportsAlign ? <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={(e) => { e.stopPropagation(); const order = ["left", "center", "right"]; const next = order[(order.indexOf(props.align || "left") + 1) % order.length]; updateField(field.id, { props: { ...props, align: next } }); }}>{(props.align || "left").slice(0, 1).toUpperCase()}</Button> : null}
-    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title="Move up" onClick={(e) => { e.stopPropagation(); moveField(field.id, -1); }}>↑</Button>
-    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title="Move down" onClick={(e) => { e.stopPropagation(); moveField(field.id, 1); }}>↓</Button>
-    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title="Duplicate" onClick={(e) => { e.stopPropagation(); duplicateField(field); }}>⧉</Button>
-    <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-destructive" title="Delete" onClick={(e) => { e.stopPropagation(); removeField(field.id); }}><IconTrash className="h-4 w-4" /></Button>
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title={tUi("Move up")} onClick={(e) => { e.stopPropagation(); moveField(field.id, -1); }}>↑</Button>
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title={tUi("Move down")} onClick={(e) => { e.stopPropagation(); moveField(field.id, 1); }}>↓</Button>
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title={tUi("Duplicate")} onClick={(e) => { e.stopPropagation(); duplicateField(field); }}>⧉</Button>
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-destructive" title={tUi("Delete")} onClick={(e) => { e.stopPropagation(); removeField(field.id); }}><IconTrash className="h-4 w-4" /></Button>
   </div>;
 }
 
 function ContainerDropZone({ id, children, label, empty = false, style }) {
+  const tUi = useUiText();
   const { isOver, setNodeRef } = useDroppable({ id });
   return <div ref={setNodeRef} style={style} className={`min-h-16 min-w-0 rounded-lg border border-dashed p-3 transition ${isOver ? "border-primary bg-primary/10" : empty ? "border-muted-foreground/30 bg-muted/30" : "border-border/60 bg-muted/20"}`}>
     {children}
-    {empty ? <div className="text-center text-xs text-muted-foreground">Drop blocks into {label}</div> : null}
+    {empty ? <div className="text-center text-xs text-muted-foreground">{tUi("Drop blocks into ")}{label}</div> : null}
   </div>;
 }
 
 function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOnly, addField, removeField, duplicateField, moveField, updateField }) {
+  const tUi = useUiText();
   const props = field.props || {};
   const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: `field:${field.id}`, disabled: readOnly });
   const { attributes, listeners, setNodeRef: setDraggableRef, isDragging } = useDraggable({ id: `canvas-field:${field.id}`, data: { dragKind: "field", fieldId: field.id }, disabled: readOnly });
@@ -1514,7 +1526,7 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   const isSelected = selectedId === field.id && !readOnly;
   const shell = `group relative rounded-xl border transition ${paddingClass(props.padding)} ${isDragging ? "opacity-50" : ""} ${isOver ? "border-primary bg-primary/10" : isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
   const toolbar = isSelected ? <FieldToolbar field={field} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null;
-  const dragHandle = !readOnly ? <button type="button" className={`absolute left-2 top-2 z-20 rounded-md border bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition hover:text-foreground group-hover:opacity-100 ${isSelected ? "opacity-100" : ""}`} onClick={(e) => { e.stopPropagation(); onSelect?.(field.id); }} {...listeners} {...attributes} aria-label={`Drag ${field.label || field.type}`} title="Drag element"><IconGripVertical className="h-4 w-4" /></button> : null;
+  const dragHandle = !readOnly ? <button type="button" className={`absolute left-2 top-2 z-20 rounded-md border bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition hover:text-foreground group-hover:opacity-100 ${isSelected ? "opacity-100" : ""}`} onClick={(e) => { e.stopPropagation(); onSelect?.(field.id); }} {...listeners} {...attributes} aria-label={tUi("Drag {value0}", { value0: field.label || field.type })} title={tUi("Drag element")}><IconGripVertical className="h-4 w-4" /></button> : null;
   const renderChild = (id) => { const child = fieldsById.get(id); return child ? <CanvasField key={id} field={child} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === id} readOnly={readOnly} onSelect={() => !readOnly && onSelect?.(id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null; };
   const renderChildren = (ids = [], parent = field, options = {}) => {
     const runs = [];
@@ -1545,29 +1557,30 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   const sliderValue = useMemo(() => [sliderCurrent], [sliderCurrent]);
   const baseProps = { ref: setNodeRef, "data-form-field-id": field.id, onClick: (e) => { e.stopPropagation(); onSelect?.(field.id); }, className: shell, style: paddingStyle(props.padding) };
 
-  if (field.type === "section") return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border bg-muted/25 p-4" style={containerStyle(field)}><div className={`text-sm font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-3"><ContainerDropZone id={`container:${field.id}:children`} label="section" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div>;
+  if (field.type === "section") return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border bg-muted/25 p-4" style={containerStyle(field)}><div className={`text-sm font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-3"><ContainerDropZone id={`container:${field.id}:children`} label={tUi("section")} empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div>;
   if (field.type === "row" || field.type === "flex") return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><ContainerDropZone id={`container:${field.id}:children`} label={field.type} empty={!props.children?.length}><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapPx(props.gap), justifyContent: props.justify || "flex-start" }}>{renderChildren(props.children || [], field)}</div></ContainerDropZone></div></div>;
-  if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={`column ${i + 1}`} empty={!props.slots?.[i]?.length}>{renderChildren(props.slots?.[i] || [], field)}</ContainerDropZone>)}</div></div></div>; }
-  if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, auto))`, gap: gapPx(props.gap) }}>{visibleGridCells(field, rows, columns).map((cell) => <ContainerDropZone key={cell.key} id={`container:${field.id}:cell:${cell.row}:${cell.column}`} label={`cell ${cell.row + 1}.${cell.column + 1}`} empty={!cell.ids.length} style={gridCellStyle(cell)}>{renderChildren(cell.ids, field)}</ContainerDropZone>)}</div></div></div>; }
+  if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={tUi("column {value0}", { value0: i + 1 })} empty={!props.slots?.[i]?.length}>{renderChildren(props.slots?.[i] || [], field)}</ContainerDropZone>)}</div></div></div>; }
+  if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, auto))`, gap: gapPx(props.gap) }}>{visibleGridCells(field, rows, columns).map((cell) => <ContainerDropZone key={cell.key} id={`container:${field.id}:cell:${cell.row}:${cell.column}`} label={tUi("cell {value0}.{value1}", { value0: cell.row + 1, value1: cell.column + 1 })} empty={!cell.ids.length} style={gridCellStyle(cell)}>{renderChildren(cell.ids, field)}</ContainerDropZone>)}</div></div></div>; }
   if (field.type === "spacer") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
   if (field.type === "divider") return <div {...baseProps}>{toolbar}{dragHandle}<div className="py-2"><hr className="w-full rounded-full" style={{ borderWidth: `${Math.max(0, Number(props.borderWidth ?? 1))}px 0 0 0`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" }} /></div></div>;
   if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{dragHandle}{heroShell(field, props, toolbar)}</div>;
   if (field.type === "stats") return <div {...baseProps}>{toolbar}{dragHandle}<div className="grid gap-3 md:grid-cols-3">{normalizeStatItems(props.items || []).map((item, index) => <div key={index} className="relative overflow-hidden rounded-xl border bg-card p-4 pr-12 text-card-foreground"><StatIcon item={item} className="absolute right-4 top-4 opacity-80" /><div className="text-2xl font-bold" style={{ ...fieldStyle(field), color: item.titleColor || fieldStyle(field)?.color }}>{item.title}</div><div className="text-xs text-muted-foreground" style={item.descriptionColor ? { color: item.descriptionColor } : undefined}>{item.description}</div></div>)}</div></div>;
-  if (field.type === "card") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <div className="h-36 w-full overflow-hidden bg-muted"><img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-full w-full object-cover" style={imageScaleStyle(props)} /></div> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div></div>;
+  if (field.type === "card") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <div className="h-36 w-full overflow-hidden bg-muted"><img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-full w-full object-cover" style={imageScaleStyle(props)} /></div> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label={tUi("card")} empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div></div>;
   if (field.type === "richtext") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)} dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(props.richtext || field.label) }} /></div>;
-  if (field.type === "accordion") { const items = normalizeAccordionItems(props.items || [], field.id); const defaultOpen = items.filter((item) => item.defaultOpen).map((item) => item._id); const valueProps = props.type === "multiple" ? { defaultValue: defaultOpen } : { defaultValue: defaultOpen[0] }; return <div {...baseProps}>{toolbar}{dragHandle}<Accordion type={props.type === "multiple" ? "multiple" : "single"} collapsible={props.type === "multiple" ? undefined : props.collapsible !== false} className={`rounded-lg ${props.variant === "card" ? "space-y-2" : "border"}`} {...valueProps}>{items.map((item, index) => <AccordionItem key={item._id} value={item._id} className={props.variant === "card" ? "rounded-lg border bg-background px-3 last:border-b" : "px-3"}><AccordionTrigger className="py-3 hover:no-underline"><span className="text-left">{item.title || `Item ${index + 1}`}</span></AccordionTrigger><AccordionContent className="whitespace-pre-wrap text-muted-foreground">{item.content || "Item content"}</AccordionContent></AccordionItem>)}</Accordion>{!items.length ? <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No accordion items</div> : null}</div>; }
-  if (field.type === "avatar") { const shape = avatarShapeClass(props.shape); return <div {...baseProps}>{toolbar}{dragHandle}<Avatar className={`${avatarSizeClass(props.size)} ${shape}`} style={props.borderColor ? { borderColor: props.borderColor, borderWidth: 1, borderStyle: "solid" } : undefined}>{props.src ? <AvatarImage src={props.src} alt={props.alt || field.label || "Avatar"} className={`${shape} object-cover`} style={imageScaleStyle(props)} /> : null}<AvatarFallback className={`${shape} font-semibold`} style={props.fallbackColor ? { color: props.fallbackColor } : undefined}>{props.fallback || field.label?.slice(0, 2)?.toUpperCase() || "AV"}</AvatarFallback></Avatar></div>; }
+  if (field.type === "accordion") { const items = normalizeAccordionItems(props.items || [], field.id); const defaultOpen = items.filter((item) => item.defaultOpen).map((item) => item._id); const valueProps = props.type === "multiple" ? { defaultValue: defaultOpen } : { defaultValue: defaultOpen[0] }; return <div {...baseProps}>{toolbar}{dragHandle}<Accordion type={props.type === "multiple" ? "multiple" : "single"} collapsible={props.type === "multiple" ? undefined : props.collapsible !== false} className={`rounded-lg ${props.variant === "card" ? "space-y-2" : "border"}`} {...valueProps}>{items.map((item, index) => <AccordionItem key={item._id} value={item._id} className={props.variant === "card" ? "rounded-lg border bg-background px-3 last:border-b" : "px-3"}><AccordionTrigger className="py-3 hover:no-underline"><span className="text-left">{item.title || tUi("Item {value0}", { value0: index + 1 })}</span></AccordionTrigger><AccordionContent className="whitespace-pre-wrap text-muted-foreground">{item.content || tUi("Item content")}</AccordionContent></AccordionItem>)}</Accordion>{!items.length ? <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">{tUi("No accordion items")}</div> : null}</div>; }
+  if (field.type === "avatar") { const shape = avatarShapeClass(props.shape); return <div {...baseProps}>{toolbar}{dragHandle}<Avatar className={`${avatarSizeClass(props.size)} ${shape}`} style={props.borderColor ? { borderColor: props.borderColor, borderWidth: 1, borderStyle: "solid" } : undefined}>{props.src ? <AvatarImage src={props.src} alt={props.alt || field.label || tUi("Avatar")} className={`${shape} object-cover`} style={imageScaleStyle(props)} /> : null}<AvatarFallback className={`${shape} font-semibold`} style={props.fallbackColor ? { color: props.fallbackColor } : undefined}>{props.fallback || field.label?.slice(0, 2)?.toUpperCase() || tUi("AV")}</AvatarFallback></Avatar></div>; }
   if (field.type === "codeblock") return <div {...baseProps}>{toolbar}{dragHandle}<CodeBlock code={props.code || ""} language={props.language || "javascript"} showLineNumbers={Boolean(props.showLineNumbers)} maxHeight={props.maxHeight || 360}><CodeBlockCopyButton type="button" /></CodeBlock></div>;
-  if (field.type === "hidden") return <div {...baseProps}>{toolbar}{dragHandle}<Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
+  if (field.type === "hidden") return <div {...baseProps}>{toolbar}{dragHandle}<Badge variant="outline">{tUi("Hidden")}</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
   if (field.type === "label") return <div {...baseProps} className={`${shell} ${textSizeClass(props.size)} ${alignClass(props.align)}`} style={paddingStyle(props.padding, fieldStyle(field) || {})}>{toolbar}{dragHandle}<div className={`font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
-  if (field.type === "badge") return <div {...baseProps}>{toolbar}{dragHandle}<Badge variant={props.variant || "secondary"} className={badgeSizeClass(props.size)} style={badgeStyle(field)}>{props.text || field.label || "Badge"}</Badge>{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
-  if (field.type === "context_value") return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
-  if (field.type === "image") return <div {...baseProps}>{toolbar}{dragHandle}{field.props?.src ? <div className="inline-block max-w-full overflow-hidden rounded-md border bg-muted"><img src={field.props.src} alt={field.label || "Form image"} className="block max-h-48 max-w-full object-contain" style={imageScaleStyle(props)} /></div> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Image block</div>}</div>;
-  if (field.type === "button") return <div {...baseProps}>{toolbar}{dragHandle}<Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button></div>;
-  return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)} className={props.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || [], field.id).map((o, index) => <SelectItem key={optionKey(o, field.id, index)} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" && normalizeOptions(field.options || [], field.id).length ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><Checkbox disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : field.type === "switch" ? <div className="mt-2 flex items-center gap-2" {...interactiveControlProps}><Switch checked={Boolean(field.defaultValue)} disabled={readOnly} {...switchColorProps(field)} onCheckedChange={(checked) => updateField(field.id, { defaultValue: Boolean(checked) })} /><span className="text-sm text-muted-foreground">{Boolean(field.defaultValue) ? (props.onText || "On") : (props.offText || "Off")}</span></div> : field.type === "slider" ? <div className="mt-3 space-y-2" {...interactiveControlProps}><Slider value={sliderValue} min={sliderMin} max={sliderMax} step={sliderStep} disabled={readOnly} {...sliderColorProps(field)} onValueChange={(next) => updateField(field.id, { defaultValue: Math.min(Math.max(sliderNumber(next?.[0], sliderMin), sliderMin), sliderMax) })} /><div className="flex justify-between text-xs text-muted-foreground"><span>{sliderMin}</span><span className="font-medium text-foreground">{sliderCurrent}</span><span>{sliderMax}</span></div></div> : field.type === "datetime" ? <Input className="mt-2" type={dateInputType(props.mode)} value={field.defaultValue || ""} placeholder={field.placeholder} disabled={readOnly} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} onChange={(e) => updateField(field.id, { defaultValue: e.target.value })} /> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  if (field.type === "badge") return <div {...baseProps}>{toolbar}{dragHandle}<Badge variant={props.variant || "secondary"} className={badgeSizeClass(props.size)} style={badgeStyle(field)}>{props.text || field.label || tUi("Badge")}</Badge>{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  if (field.type === "context_value") return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || tUi("caller.from_number")}</div></div>;
+  if (field.type === "image") return <div {...baseProps}>{toolbar}{dragHandle}{field.props?.src ? <div className="inline-block max-w-full overflow-hidden rounded-md border bg-muted"><img src={field.props.src} alt={field.label || tUi("Form image")} className="block max-h-48 max-w-full object-contain" style={imageScaleStyle(props)} /></div> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">{tUi("Image block")}</div>}</div>;
+  if (field.type === "button") return <div {...baseProps}>{toolbar}{dragHandle}<Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || tUi("Submit")}</Button></div>;
+  return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)} className={props.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || tUi("Select...")} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || [], field.id).map((o, index) => <SelectItem key={optionKey(o, field.id, index)} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" && normalizeOptions(field.options || [], field.id).length ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><Checkbox disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || tUi("Yes")}</span></div> : field.type === "switch" ? <div className="mt-2 flex items-center gap-2" {...interactiveControlProps}><Switch checked={Boolean(field.defaultValue)} disabled={readOnly} {...switchColorProps(field)} onCheckedChange={(checked) => updateField(field.id, { defaultValue: Boolean(checked) })} /><span className="text-sm text-muted-foreground">{Boolean(field.defaultValue) ? (props.onText || tUi("On")) : (props.offText || tUi("Off"))}</span></div> : field.type === "slider" ? <div className="mt-3 space-y-2" {...interactiveControlProps}><Slider value={sliderValue} min={sliderMin} max={sliderMax} step={sliderStep} disabled={readOnly} {...sliderColorProps(field)} onValueChange={(next) => updateField(field.id, { defaultValue: Math.min(Math.max(sliderNumber(next?.[0], sliderMin), sliderMin), sliderMax) })} /><div className="flex justify-between text-xs text-muted-foreground"><span>{sliderMin}</span><span className="font-medium text-foreground">{sliderCurrent}</span><span>{sliderMax}</span></div></div> : field.type === "datetime" ? <Input className="mt-2" type={dateInputType(props.mode)} value={field.defaultValue || ""} placeholder={field.placeholder} disabled={readOnly} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} onChange={(e) => updateField(field.id, { defaultValue: e.target.value })} /> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
 }
 
 function FormSettingsFields({ form, patchForm, queues = [] }) {
+  const tUi = useUiText();
   const selectedNames = form.queue_names || [];
   const categoryOptions = FORM_CATEGORIES.includes(form.category) || !form.category ? FORM_CATEGORIES : [form.category, ...FORM_CATEGORIES];
   const selectedMissingQueues = selectedNames.filter((name) => !queues.some((q) => q.name === name || queueLabel(q) === name));
@@ -1576,12 +1589,12 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
     patchForm({ queue_names: next });
   }
   return <div className="grid gap-4 py-2">
-    <div className="grid gap-2"><Label>Name</Label><RevertibleTextInput value={form.name ?? ""} restoreOnEmpty fallbackValue="New agent form" onCommit={(value) => patchForm({ name: value, slug: form.slug || slugifyFormName(value) })} /></div>
-    <div className="grid gap-2"><Label>Slug</Label><RevertibleTextInput value={form.slug ?? ""} restoreOnEmpty fallbackValue={slugifyFormName(form.name)} onCommit={(value) => patchForm({ slug: value })} /></div>
-    <div className="grid gap-2"><Label>Category</Label><Select value={form.category || "General"} onValueChange={(value) => patchForm({ category: value })}><SelectTrigger><SelectValue placeholder="Choose a category" /></SelectTrigger><SelectContent>{categoryOptions.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
-    <div className="grid gap-2"><Label>Description</Label><Textarea rows={3} value={form.description ?? ""} onChange={(e) => patchForm({ description: e.target.value })} /></div>
+    <div className="grid gap-2"><Label>{tUi("Name")}</Label><RevertibleTextInput value={form.name ?? ""} restoreOnEmpty fallbackValue="New agent form" onCommit={(value) => patchForm({ name: value, slug: form.slug || slugifyFormName(value) })} /></div>
+    <div className="grid gap-2"><Label>{tUi("Slug")}</Label><RevertibleTextInput value={form.slug ?? ""} restoreOnEmpty fallbackValue={slugifyFormName(form.name)} onCommit={(value) => patchForm({ slug: value })} /></div>
+    <div className="grid gap-2"><Label>{tUi("Category")}</Label><Select value={form.category || "General"} onValueChange={(value) => patchForm({ category: value })}><SelectTrigger><SelectValue placeholder={tUi("Choose a category")} /></SelectTrigger><SelectContent>{categoryOptions.map((category) => <SelectItem key={category} value={category}>{FORM_CATEGORIES.includes(category) ? tUi(category) : category}</SelectItem>)}</SelectContent></Select></div>
+    <div className="grid gap-2"><Label>{tUi("Description")}</Label><Textarea rows={3} value={form.description ?? ""} onChange={(e) => patchForm({ description: e.target.value })} /></div>
     <div className="grid gap-2">
-      <Label>Queue names</Label>
+      <Label>{tUi("Queue names")}</Label>
       <Popover>
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" className="min-h-10 h-auto justify-between whitespace-normal text-left font-normal">
@@ -1589,8 +1602,8 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
               {selectedNames.length ? selectedNames.map((name) => {
                 const queue = queues.find((q) => q.name === name || queueLabel(q) === name);
                 const routing = queue ? queueRouting(queue) : "Existing";
-                return <Badge key={name} variant="secondary" className="gap-1"><span>{name}</span><span className={`rounded px-1 py-0.5 text-[9px] font-semibold text-white ${QUEUE_BADGE_CLASS[routing] || "bg-gray-500"}`}>{routing === "Existing" ? "SAVED" : routing}</span></Badge>;
-              }) : <span className="text-muted-foreground">Select queues...</span>}
+                return <Badge key={name} variant="secondary" className="gap-1"><span>{name}</span><span className={`rounded px-1 py-0.5 text-[9px] font-semibold text-white ${QUEUE_BADGE_CLASS[routing] || "bg-gray-500"}`}>{routing === "Existing" ? tUi("SAVED") : routing}</span></Badge>;
+              }) : <span className="text-muted-foreground">{tUi("Select queues...")}</span>}
             </span>
             <IconChevronDown className="h-4 w-4 shrink-0 opacity-60" />
           </Button>
@@ -1599,8 +1612,8 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
           <div className="max-h-72 overflow-y-auto space-y-1">
             {selectedMissingQueues.map((name) => <button key={`saved-${name}`} type="button" onClick={() => toggleQueue(name)} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-muted">
               <Checkbox checked />
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{name}</span><span className="block truncate text-xs text-muted-foreground">Saved queue name</span></span>
-              <span className="rounded bg-gray-500 px-2 py-1 text-[10px] font-semibold text-white">SAVED</span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{name}</span><span className="block truncate text-xs text-muted-foreground">{tUi("Saved queue name")}</span></span>
+              <span className="rounded bg-gray-500 px-2 py-1 text-[10px] font-semibold text-white">{tUi("SAVED")}</span>
             </button>)}
             {queues.map((queue) => {
               const name = queue.name;
@@ -1612,17 +1625,18 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
                 <span className={`rounded px-2 py-1 text-[10px] font-semibold text-white ${QUEUE_BADGE_CLASS[routing] || "bg-gray-500"}`}>{routing}</span>
               </button>;
             })}
-            {!queues.length ? <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No queues loaded. Existing saved queue names are preserved above.</div> : null}
+            {!queues.length ? <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">{tUi("No queues loaded. Existing saved queue names are preserved above.")}</div> : null}
           </div>
         </PopoverContent>
       </Popover>
-      <p className="text-xs text-muted-foreground">Saved queue names are preserved even if a matching queue is not currently returned by the API.</p>
+      <p className="text-xs text-muted-foreground">{tUi("Saved queue names are preserved even if a matching queue is not currently returned by the API.")}</p>
     </div>
-    <div className="flex items-center justify-between rounded-md border p-3"><div><Label>Auto-open</Label><p className="text-xs text-muted-foreground">Open this form automatically for matching queues.</p></div><Switch checked={Boolean(form.auto_open)} onCheckedChange={(checked) => patchForm({ auto_open: checked })} /></div>
+    <div className="flex items-center justify-between rounded-md border p-3"><div><Label>{tUi("Auto-open")}</Label><p className="text-xs text-muted-foreground">{tUi("Open this form automatically for matching queues.")}</p></div><Switch checked={Boolean(form.auto_open)} onCheckedChange={(checked) => patchForm({ auto_open: checked })} /></div>
   </div>;
 }
 
 function PropertiesPanel({ form, patchForm, selectedField, updateField, media = [], dataActions = [] }) {
+  const tUi = useUiText();
   function setProps(field, patch) { updateField(field.id, mergeProps(field, patch).props ? { props: mergeProps(field, patch).props } : {}); }
   function findSelectedLocation(id) {
     for (const field of form.schema.fields || []) for (const slot of nestedSlotEntries(field)) { const index = (slot.ids || []).indexOf(id); if (index >= 0) return { ...slot, container: field, index }; }
@@ -1648,117 +1662,126 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
   return <div className="h-full min-h-0 flex flex-col">
     <div className="h-14 shrink-0 border-b px-4 flex items-center gap-3">
       <IconSettings className="h-5 w-5 shrink-0" />
-      <div className="min-w-0 flex-1"><h2 className="font-semibold text-sm">Properties</h2><p className="truncate text-xs text-muted-foreground">Selected canvas element settings.</p></div>
-      {selectedField ? <Badge variant="outline" className={`shrink-0 gap-1.5 ${blockBadgeClass(selectedField.type)}`}>{SelectedIcon ? <SelectedIcon className="h-3.5 w-3.5" /> : null}{blockLabel(selectedField.type)}</Badge> : null}
+      <div className="min-w-0 flex-1"><h2 className="font-semibold text-sm">{tUi("Properties")}</h2><p className="truncate text-xs text-muted-foreground">{tUi("Selected canvas element settings.")}</p></div>
+      {selectedField ? <Badge variant="outline" className={`shrink-0 gap-1.5 ${blockBadgeClass(selectedField.type)}`}>{SelectedIcon ? <SelectedIcon className="h-3.5 w-3.5" /> : null}{tUi(blockLabel(selectedField.type))}</Badge> : null}
     </div>
     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
       {selectedField ? <div className="space-y-4">
-        <div><Label>Label</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
-        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
-        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? (() => { const error = variableNameError(form, selectedField); return <div><Label>Variable name</Label><Input value={selectedField.variableName ?? ""} placeholder={slugifyVariableName(selectedField.label || selectedField.id)} className={error ? "border-destructive focus-visible:ring-destructive" : ""} onChange={(e) => updateField(selectedField.id, { variableName: e.target.value })} /><p className={`mt-1 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{error || "Used in Form Submit payload variables for call flow data actions."}</p></div>; })() : null}
-        {!["hero", "stats", "card", "richtext", "accordion", "avatar", "spacer", "divider", "codeblock"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
-        {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath ?? ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
+        <div><Label>{tUi("Label")}</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>{tUi("Required")}</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? (() => { const error = variableNameError(form, selectedField, tUi); return <div><Label>{tUi("Variable name")}</Label><Input value={selectedField.variableName ?? ""} placeholder={slugifyVariableName(selectedField.label || selectedField.id)} className={error ? "border-destructive focus-visible:ring-destructive" : ""} onChange={(e) => updateField(selectedField.id, { variableName: e.target.value })} /><p className={`mt-1 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{error || tUi("Used in Form Submit payload variables for call flow data actions.")}</p></div>; })() : null}
+        {!["hero", "stats", "card", "richtext", "accordion", "avatar", "spacer", "divider", "codeblock"].includes(selectedField.type) ? <><div><Label>{tUi("Placeholder")}</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>{tUi("Help text")}</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
+        {selectedField.type === "context_value" ? <div><Label>{tUi("Context path")}</Label><Input value={selectedField.contextPath ?? ""} placeholder={tUi("caller.from_number")} onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
         {selectedLocation?.container ? <ChildLayoutControls field={selectedField} location={selectedLocation} layout={childLayoutFor(selectedLocation.container, selectedField.id)} updateLayout={updateChildLayout} /> : null}
         <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} media={media} dataActions={dataActions} />
-      </div> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
+      </div> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">{tUi("Select an element on the canvas to edit its properties.")}</div>}
     </div>
   </div>;
 }
 
 function ChildLayoutControls({ field, location, layout, updateLayout }) {
+  const tUi = useUiText();
   const parent = location?.container;
   const isGrid = parent?.type === "grid";
   const maxColumnSpan = isGrid ? Math.max(1, Math.min(Number(parent.props?.columns || 2) - Number(location.column || 0), 6)) : 1;
   const maxRowSpan = isGrid ? Math.max(1, Math.min(Number(parent.props?.rows || 2) - Number(location.row || 0), 12)) : 1;
   return <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
-    <div className="text-xs font-semibold uppercase text-muted-foreground">Layout in parent</div>
+    <div className="text-xs font-semibold uppercase text-muted-foreground">{tUi("Layout in parent")}</div>
     <div className="grid grid-cols-2 gap-3">
-      <div><Label>Horizontal</Label><Select value={layout.align || "stretch"} onValueChange={(value) => updateLayout({ align: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{H_ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Vertical</Label><Select value={layout.verticalAlign || "stretch"} onValueChange={(value) => updateLayout({ verticalAlign: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{V_ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>{tUi("Horizontal")}</Label><Select value={layout.align || "stretch"} onValueChange={(value) => updateLayout({ align: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{H_ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{tUi(option)}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>{tUi("Vertical")}</Label><Select value={layout.verticalAlign || "stretch"} onValueChange={(value) => updateLayout({ verticalAlign: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{V_ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{tUi(option)}</SelectItem>)}</SelectContent></Select></div>
     </div>
     {isGrid ? <div className="grid grid-cols-2 gap-3">
-      <div><Label>Column span</Label><Input type="number" min="1" max={maxColumnSpan} value={layout.columnSpan || 1} onChange={(e) => updateLayout({ columnSpan: Math.max(1, Math.min(Number(e.target.value || 1), maxColumnSpan)) })} /></div>
-      <div><Label>Row span</Label><Input type="number" min="1" max={maxRowSpan} value={layout.rowSpan || 1} onChange={(e) => updateLayout({ rowSpan: Math.max(1, Math.min(Number(e.target.value || 1), maxRowSpan)) })} /></div>
+      <div><Label>{tUi("Column span")}</Label><Input type="number" min="1" max={maxColumnSpan} value={layout.columnSpan || 1} onChange={(e) => updateLayout({ columnSpan: Math.max(1, Math.min(Number(e.target.value || 1), maxColumnSpan)) })} /></div>
+      <div><Label>{tUi("Row span")}</Label><Input type="number" min="1" max={maxRowSpan} value={layout.rowSpan || 1} onChange={(e) => updateLayout({ rowSpan: Math.max(1, Math.min(Number(e.target.value || 1), maxRowSpan)) })} /></div>
     </div> : null}
-    <p className="text-[11px] text-muted-foreground">Applies to {field.label || field.id} inside {parent?.label || parent?.type}. Grid spans can merge adjacent cells from the child’s current cell.</p>
+    <p className="text-[11px] text-muted-foreground">{tUi("Applies to ")}{field.label || field.id}{tUi(" inside ")}{parent?.label || parent?.type}{tUi(". Grid spans can merge adjacent cells from the child’s current cell.")}</p>
   </div>;
 }
 
 function BlockPropertyControls({ field, setProps, updateField, media = [], dataActions = [] }) {
+  const tUi = useUiText();
   const props = field.props || {};
   const supportsPadding = !["hidden"].includes(field.type);
   const supportsColor = ["hero", "stats", "card", "richtext", "accordion", "avatar", "label", "badge", "section", "text", "textarea", "select", "radio", "checkbox", "switch", "slider", "datetime", "context_value"].includes(field.type);
   const supportsBorders = ["section", "row", "columns", "grid", "flex"].includes(field.type);
   return <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
-    <div className="text-xs font-semibold uppercase text-muted-foreground">Design</div>
+    <div className="text-xs font-semibold uppercase text-muted-foreground">{tUi("Design")}</div>
     {supportsPadding ? <PaddingNumberControl value={props.padding} onChange={(padding) => setProps({ padding })} /> : null}
-    {supportsColor ? <div className="space-y-2"><ColorInput label={field.type === "badge" ? "Badge color" : "Text color"} value={props.color || ""} onChange={(color) => setProps({ color })} /><Button type="button" size="sm" variant="ghost" onClick={() => setProps({ color: "" })}>Use theme default</Button></div> : null}
+    {supportsColor ? <div className="space-y-2"><ColorInput label={field.type === "badge" ? tUi("Badge color") : tUi("Text color")} value={props.color || ""} onChange={(color) => setProps({ color })} /><Button type="button" size="sm" variant="ghost" onClick={() => setProps({ color: "" })}>{tUi("Use theme default")}</Button></div> : null}
     {supportsBorders ? <BorderControls props={props} setProps={setProps} /> : null}
-    {["label", "hero", "text", "richtext"].includes(field.type) ? <TabsSelector label="Align" value={props.align || "left"} options={ALIGN_OPTIONS.map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} onChange={(align) => setProps({ align })} /> : null}
-    {["label", "text", "richtext"].includes(field.type) ? <div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
+    {["label", "hero", "text", "richtext"].includes(field.type) ? <TabsSelector label={tUi("Align")} value={props.align || "left"} options={ALIGN_OPTIONS.map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} onChange={(align) => setProps({ align })} /> : null}
+    {["label", "text", "richtext"].includes(field.type) ? <div><Label>{tUi("Size")}</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
     <SpecificBlockControls field={field} props={props} setProps={setProps} updateField={updateField} media={media} dataActions={dataActions} />
   </div>;
 }
 
 function BorderControls({ props = {}, setProps }) {
+  const tUi = useUiText();
   return <div className="space-y-3 rounded-md border bg-background p-3">
-    <div className="text-xs font-medium text-muted-foreground">Border</div>
-    <div><Label>Border width px</Label><Input type="number" min="0" value={props.borderWidth ?? ""} placeholder="Theme default" onChange={(e) => setProps({ borderWidth: e.target.value === "" ? undefined : Number(e.target.value) })} /></div>
-    <ColorInput label="Border color" value={props.borderColor || ""} onChange={(color) => setProps({ borderColor: color })} />
-    <Button type="button" size="sm" variant="ghost" onClick={() => setProps({ borderWidth: undefined, borderColor: "" })}>Use default border</Button>
-    <p className="text-[11px] text-muted-foreground">Set width to 0 to hide the border.</p>
+    <div className="text-xs font-medium text-muted-foreground">{tUi("Border")}</div>
+    <div><Label>{tUi("Border width px")}</Label><Input type="number" min="0" value={props.borderWidth ?? ""} placeholder={tUi("Theme default")} onChange={(e) => setProps({ borderWidth: e.target.value === "" ? undefined : Number(e.target.value) })} /></div>
+    <ColorInput label={tUi("Border color")} value={props.borderColor || ""} onChange={(color) => setProps({ borderColor: color })} />
+    <Button type="button" size="sm" variant="ghost" onClick={() => setProps({ borderWidth: undefined, borderColor: "" })}>{tUi("Use default border")}</Button>
+    <p className="text-[11px] text-muted-foreground">{tUi("Set width to 0 to hide the border.")}</p>
   </div>;
 }
 
 function ImageSelector({ label = "Image", value = "", media = [], onChange }) {
+  const tUi = useUiText();
   return <div className="w-full max-w-full min-w-0 space-y-2 overflow-hidden">
     <Label>{label}</Label>
     {media.length ? <div className="max-h-56 w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-md border bg-background p-2">
       {normalizeMediaList(media).map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border p-1.5 text-left transition ${value === item.url ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-10 w-14 shrink-0 rounded border object-cover" /><span className="min-w-0 flex-1 overflow-hidden"><span className="block truncate text-xs font-medium">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></button>)}
-    </div> : <p className="text-xs text-muted-foreground">Open Media to upload library images, or paste any URL below.</p>}
-    <Input className="w-full max-w-full min-w-0" value={value ?? ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
+    </div> : <p className="text-xs text-muted-foreground">{tUi("Open Media to upload library images, or paste any URL below.")}</p>}
+    <Input className="w-full max-w-full min-w-0" value={value ?? ""} placeholder={tUi("https://example.com/image.png or /media/file.png")} onChange={(e) => onChange?.(e.target.value, null)} />
   </div>;
 }
 
 function TabsSelector({ label, value, options = [], onChange }) {
-  return <div className="space-y-2">{label ? <Label>{label}</Label> : null}<div className="grid gap-1 rounded-lg border bg-background p-1" style={{ gridTemplateColumns: `repeat(${Math.max(1, options.length)}, minmax(0, 1fr))` }} role="tablist" aria-label={label}>{options.map((option) => { const active = value === option.value; return <button key={option.value} type="button" role="tab" aria-selected={active} onClick={() => onChange?.(option.value)} className={`inline-flex min-w-0 items-center justify-center rounded-md px-2 py-2 text-xs font-medium transition ${active ? "border border-primary bg-primary/10 text-foreground shadow-sm" : "border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"}`}><span className="truncate">{option.label}</span></button>; })}</div></div>;
+  const tUi = useUiText();
+  return <div className="space-y-2">{label ? <Label>{label}</Label> : null}<div className="grid gap-1 rounded-lg border bg-background p-1" style={{ gridTemplateColumns: `repeat(${Math.max(1, options.length)}, minmax(0, 1fr))` }} role="tablist" aria-label={label}>{options.map((option) => { const active = value === option.value; return <button key={option.value} type="button" role="tab" aria-selected={active} onClick={() => onChange?.(option.value)} className={`inline-flex min-w-0 items-center justify-center rounded-md px-2 py-2 text-xs font-medium transition ${active ? "border border-primary bg-primary/10 text-foreground shadow-sm" : "border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"}`}><span className="truncate">{tUi(option.label)}</span></button>; })}</div></div>;
 }
 
 function PaddingNumberControl({ value, onChange }) {
-  return <div><Label>Padding (px)</Label><Input type="number" min="0" value={paddingNumber(value)} onChange={(e) => onChange?.(Math.max(0, Number(e.target.value || 0)))} /></div>;
+  const tUi = useUiText();
+  return <div><Label>{tUi("Padding (px)")}</Label><Input type="number" min="0" value={paddingNumber(value)} onChange={(e) => onChange?.(Math.max(0, Number(e.target.value || 0)))} /></div>;
 }
 
 function ImageScaleControl({ value, onChange }) {
+  const tUi = useUiText();
   const current = imageScalePercent(value);
   const sliderValue = useMemo(() => [current], [current]);
   return <div className="space-y-2 rounded-md border bg-background p-3">
-    <div className="flex items-center justify-between gap-2"><Label>Image scale</Label><span className="text-xs font-medium text-muted-foreground">{current}%</span></div>
+    <div className="flex items-center justify-between gap-2"><Label>{tUi("Image scale")}</Label><span className="text-xs font-medium text-muted-foreground">{current}%</span></div>
     <Slider value={sliderValue} min={50} max={200} step={1} onValueChange={(next) => onChange?.(imageScalePercent(next?.[0]))} />
     <div className="flex justify-between text-[11px] text-muted-foreground"><span>50%</span><span>100%</span><span>200%</span></div>
   </div>;
 }
 
 function ChoiceOptionsControl({ field, updateField, props, setProps, kind = "radio" }) {
+  const tUi = useUiText();
   const options = normalizeOptions(field.options || [], field.id);
   function updateOption(index, patch) { updateField(field.id, { options: options.map((option, i) => i === index ? normalizeOption({ ...option, ...patch }, i, field.id) : option) }); }
   function addOption() { const index = options.length; updateField(field.id, { options: [...options, { _id: `${makeOptionId(field.id, index)}_${Math.random().toString(36).slice(2, 6)}`, label: `Option ${index + 1}`, value: `option_${index + 1}` }] }); }
   function removeOption(index) { updateField(field.id, { options: options.filter((_, i) => i !== index) }); }
-  return <div className="space-y-4">{kind !== "select" ? <TabsSelector label="Layout" value={optionDirection(props)} options={DIRECTION_OPTIONS} onChange={(direction) => setProps({ direction })} /> : null}<div className="space-y-2"><div className="flex items-center justify-between gap-2"><Label>{kind === "checkbox" ? "Checkbox items" : kind === "select" ? "Select options" : "Radio options"}</Label><Button type="button" size="sm" variant="outline" onClick={addOption}><IconPlus className="mr-1 h-3.5 w-3.5" />Add</Button></div>{options.length ? <div className="space-y-2">{options.map((option, index) => <div key={optionKey(option, field.id, index)} className="grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border bg-background p-2"><Input value={option.label || ""} placeholder="Label" onChange={(e) => updateOption(index, { label: e.target.value })} /><Input value={option.value || ""} placeholder="Value" onChange={(e) => updateOption(index, { value: e.target.value })} /><Button type="button" size="icon" variant="ghost" className="text-destructive" onClick={() => removeOption(index)} aria-label="Remove option"><IconTrash className="h-4 w-4" /></Button></div>)}</div> : <div className="rounded-md border border-dashed p-3 text-center text-sm text-muted-foreground">No options yet. Add items to create structured choices.</div>}</div></div>;
+  return <div className="space-y-4">{kind !== "select" ? <TabsSelector label={tUi("Layout")} value={optionDirection(props)} options={DIRECTION_OPTIONS} onChange={(direction) => setProps({ direction })} /> : null}<div className="space-y-2"><div className="flex items-center justify-between gap-2"><Label>{kind === "checkbox" ? tUi("Checkbox items") : kind === "select" ? tUi("Select options") : tUi("Radio options")}</Label><Button type="button" size="sm" variant="outline" onClick={addOption}><IconPlus className="mr-1 h-3.5 w-3.5" />{tUi("Add")}</Button></div>{options.length ? <div className="space-y-2">{options.map((option, index) => <div key={optionKey(option, field.id, index)} className="grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border bg-background p-2"><Input value={option.label || ""} placeholder={tUi("Label")} onChange={(e) => updateOption(index, { label: e.target.value })} /><Input value={option.value || ""} placeholder={tUi("Value")} onChange={(e) => updateOption(index, { value: e.target.value })} /><Button type="button" size="icon" variant="ghost" className="text-destructive" onClick={() => removeOption(index)} aria-label={tUi("Remove option")}><IconTrash className="h-4 w-4" /></Button></div>)}</div> : <div className="rounded-md border border-dashed p-3 text-center text-sm text-muted-foreground">{tUi("No options yet. Add items to create structured choices.")}</div>}</div></div>;
 }
 
 function HeroImageModeTabs({ value = "inline", onChange }) {
+  const tUi = useUiText();
   const options = [
     { value: "inline", label: "Inline", icon: IconPhoto },
     { value: "background", label: "Background", icon: IconRectangle },
   ];
   return <div className="space-y-2">
-    <Label>Image mode</Label>
-    <div className="grid grid-cols-2 gap-1 rounded-lg border bg-background p-1" role="tablist" aria-label="Hero image mode">
+    <Label>{tUi("Image mode")}</Label>
+    <div className="grid grid-cols-2 gap-1 rounded-lg border bg-background p-1" role="tablist" aria-label={tUi("Hero image mode")}>
       {options.map(({ value: optionValue, label, icon: Icon }) => {
         const active = value === optionValue;
         return <button key={optionValue} type="button" role="tab" aria-selected={active} onClick={() => onChange?.(optionValue)} className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition ${active ? "border border-primary bg-primary/10 text-foreground shadow-sm" : "border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
           <Icon className="h-4 w-4 shrink-0" />
-          <span className="truncate">{label}</span>
+          <span className="truncate">{tUi(label)}</span>
         </button>;
       })}
     </div>
@@ -1766,41 +1789,42 @@ function HeroImageModeTabs({ value = "inline", onChange }) {
 }
 
 function SpecificBlockControls({ field, props, setProps, updateField, media = [], dataActions = [] }) {
-  if (field.type === "columns") return <div className="grid grid-cols-2 gap-3"><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
-  if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
-  if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap ?? 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
-  if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
-  if (field.type === "divider") return <div className="space-y-3"><div><Label>Line width px</Label><Input type="number" min="0" value={props.borderWidth ?? 1} onChange={(e) => setProps({ borderWidth: Number(e.target.value) })} /></div><ColorInput label="Line color" value={props.borderColor || ""} onChange={(color) => setProps({ borderColor: color })} /><p className="text-[11px] text-muted-foreground">Set width to 0 to hide the divider line.</p></div>;
-  if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote ?? ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.imageUrl ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}<HeroButtonsControl buttons={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
+  const tUi = useUiText();
+  if (field.type === "columns") return <div className="grid grid-cols-2 gap-3"><div><Label>{tUi("Columns")}</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>{tUi("Gap")}</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
+  if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>{tUi("Rows")}</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>{tUi("Columns")}</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>{tUi("Gap")}</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
+  if (field.type === "flex") return <div className="grid gap-3"><div><Label>{tUi("Direction")}</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">{tUi("Row")}</SelectItem><SelectItem value="column">{tUi("Column")}</SelectItem></SelectContent></Select></div><div><Label>{tUi("Justify")}</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">{tUi("Start")}</SelectItem><SelectItem value="center">{tUi("Center")}</SelectItem><SelectItem value="end">{tUi("End")}</SelectItem></SelectContent></Select></div><div><Label>{tUi("Gap px")}</Label><Input type="number" min="0" value={props.gap ?? 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>{tUi("Wrap")}</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
+  if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>{tUi("Size")}</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>{tUi("Direction")}</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">{tUi("Vertical")}</SelectItem><SelectItem value="horizontal">{tUi("Horizontal")}</SelectItem><SelectItem value="both">{tUi("Both")}</SelectItem></SelectContent></Select></div></div>;
+  if (field.type === "divider") return <div className="space-y-3"><div><Label>{tUi("Line width px")}</Label><Input type="number" min="0" value={props.borderWidth ?? 1} onChange={(e) => setProps({ borderWidth: Number(e.target.value) })} /></div><ColorInput label={tUi("Line color")} value={props.borderColor || ""} onChange={(color) => setProps({ borderColor: color })} /><p className="text-[11px] text-muted-foreground">{tUi("Set width to 0 to hide the divider line.")}</p></div>;
+  if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>{tUi("Quote / eyebrow")}</Label><Input value={props.quote ?? ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>{tUi("Title")}</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>{tUi("Description")}</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label={tUi("Hero image")} value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.imageUrl ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}<HeroButtonsControl buttons={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
   if (field.type === "stats") return <StatsItemsControl items={props.items || []} setItems={(items) => setProps({ items })} />;
-  if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.imageUrl ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}</div>;
-  if (field.type === "richtext") return <div className="space-y-2"><Label>Rich text</Label><RichTextHtmlEditor value={props.richtext ?? ""} onChange={(richtext) => setProps({ richtext })} /><p className="text-xs text-muted-foreground">Supports safe HTML tags like &lt;h1&gt;, &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;li&gt;, &lt;p&gt;, &lt;br&gt;, and links.</p></div>;
-  if (field.type === "codeblock") return <div className="space-y-3"><div><Label>Language</Label><Select value={props.language || "javascript"} onValueChange={(value) => setProps({ language: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CODE_LANGUAGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div><div><Label>Code</Label><Textarea rows={10} className="font-mono text-xs" value={props.code ?? ""} onChange={(e) => setProps({ code: e.target.value })} /></div><div><Label>Max height px</Label><Input type="number" min="120" value={props.maxHeight ?? 360} onChange={(e) => setProps({ maxHeight: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Show line numbers</Label><Switch checked={Boolean(props.showLineNumbers)} onCheckedChange={(checked) => setProps({ showLineNumbers: checked })} /></div></div>;
-  if (field.type === "image") return <div className="space-y-3"><ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.src ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}</div>;
+  if (field.type === "card") return <div className="space-y-3"><div><Label>{tUi("Title")}</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>{tUi("Description")}</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>{tUi("Mode")}</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">{tUi("Card")}</SelectItem><SelectItem value="flat">{tUi("Flat")}</SelectItem></SelectContent></Select></div><ImageSelector label={tUi("Card image")} value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.imageUrl ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}</div>;
+  if (field.type === "richtext") return <div className="space-y-2"><Label>{tUi("Rich text")}</Label><RichTextHtmlEditor value={props.richtext ?? ""} onChange={(richtext) => setProps({ richtext })} /><p className="text-xs text-muted-foreground">{tUi("Supports safe HTML tags like <h1>, <b>, <i>, <u>, <ul>, <ol>, <li>, <p>, <br>, and links.")}</p></div>;
+  if (field.type === "codeblock") return <div className="space-y-3"><div><Label>{tUi("Language")}</Label><Select value={props.language || "javascript"} onValueChange={(value) => setProps({ language: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CODE_LANGUAGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{tUi(option.label)}</SelectItem>)}</SelectContent></Select></div><div><Label>{tUi("Code")}</Label><Textarea rows={10} className="font-mono text-xs" value={props.code ?? ""} onChange={(e) => setProps({ code: e.target.value })} /></div><div><Label>{tUi("Max height px")}</Label><Input type="number" min="120" value={props.maxHeight ?? 360} onChange={(e) => setProps({ maxHeight: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>{tUi("Show line numbers")}</Label><Switch checked={Boolean(props.showLineNumbers)} onCheckedChange={(checked) => setProps({ showLineNumbers: checked })} /></div></div>;
+  if (field.type === "image") return <div className="space-y-3"><ImageSelector label={tUi("Image")} value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.src ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}</div>;
   if (field.type === "accordion") return <AccordionItemsControl field={field} items={props.items || []} props={props} setProps={setProps} />;
-  if (field.type === "avatar") return <div className="space-y-3"><ImageSelector label="Avatar image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle, alt: item ? mediaTitle(item) : props.alt })} />{props.src ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}<div><Label>Fallback text / initials</Label><Input value={props.fallback ?? ""} placeholder="AV" onChange={(e) => setProps({ fallback: e.target.value })} /></div><div><Label>Alt text</Label><Input value={props.alt ?? ""} placeholder={field.label || "Avatar"} onChange={(e) => setProps({ alt: e.target.value })} /></div><TabsSelector label="Size" value={props.size || "md"} options={AVATAR_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /><TabsSelector label="Shape" value={props.shape || "circle"} options={AVATAR_SHAPE_OPTIONS} onChange={(shape) => setProps({ shape })} /><ColorInput label="Fallback text color" value={props.fallbackColor || ""} onChange={(fallbackColor) => setProps({ fallbackColor })} /><ColorInput label="Border color" value={props.borderColor || ""} onChange={(borderColor) => setProps({ borderColor })} /></div>;
-  if (field.type === "badge") return <div className="space-y-3"><div><Label>Badge text</Label><Input value={props.text ?? field.label ?? ""} onChange={(e) => setProps({ text: e.target.value })} /></div><TabsSelector label="Variant" value={props.variant || "secondary"} options={BADGE_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} /><TabsSelector label="Size" value={props.size || "md"} options={BADGE_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /></div>;
-  if (field.type === "switch") return <div className="space-y-3"><div className="flex items-center justify-between rounded-md border p-2"><Label>Default checked</Label><Switch checked={Boolean(field.defaultValue)} {...switchColorProps(field)} onCheckedChange={(checked) => updateField(field.id, { defaultValue: Boolean(checked) })} /></div><div className="grid grid-cols-2 gap-3"><div><Label>On text</Label><Input value={props.onText ?? ""} placeholder="On" onChange={(e) => setProps({ onText: e.target.value })} /></div><div><Label>Off text</Label><Input value={props.offText ?? ""} placeholder="Off" onChange={(e) => setProps({ offText: e.target.value })} /></div></div><ColorInput label="Active track color" value={props.switchActiveTrackColor || ""} onChange={(color) => setProps({ switchActiveTrackColor: color })} /><ColorInput label="Thumb color" value={props.switchThumbColor || ""} onChange={(color) => setProps({ switchThumbColor: color })} /></div>;
-  if (field.type === "slider") return <div className="space-y-3"><div className="grid grid-cols-3 gap-3"><div><Label>Min</Label><Input type="number" value={props.min ?? 0} onChange={(e) => setProps({ min: Number(e.target.value) })} /></div><div><Label>Max</Label><Input type="number" value={props.max ?? 100} onChange={(e) => setProps({ max: Number(e.target.value) })} /></div><div><Label>Step</Label><Input type="number" min="0.0001" value={props.step ?? 1} onChange={(e) => setProps({ step: Number(e.target.value) || 1 })} /></div></div><div><Label>Default value</Label><Input type="number" value={field.defaultValue ?? props.min ?? 0} onChange={(e) => updateField(field.id, { defaultValue: Number(e.target.value) })} /></div><ColorInput label="Active range color" value={props.sliderRangeColor || ""} onChange={(color) => setProps({ sliderRangeColor: color })} /><ColorInput label="Thumb color" value={props.sliderThumbColor || ""} onChange={(color) => setProps({ sliderThumbColor: color })} /><ColorInput label="Track color" value={props.sliderTrackColor || ""} onChange={(color) => setProps({ sliderTrackColor: color })} /></div>;
-  if (field.type === "datetime") return <div className="space-y-3"><TabsSelector label="Mode" value={props.mode || "date"} options={DATETIME_MODE_OPTIONS} onChange={(mode) => setProps({ mode })} /><div><Label>Default value</Label><Input type={dateInputType(props.mode)} value={field.defaultValue || ""} onChange={(e) => updateField(field.id, { defaultValue: e.target.value })} /></div></div>;
+  if (field.type === "avatar") return <div className="space-y-3"><ImageSelector label={tUi("Avatar image")} value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle, alt: item ? mediaTitle(item) : props.alt })} />{props.src ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}<div><Label>{tUi("Fallback text / initials")}</Label><Input value={props.fallback ?? ""} placeholder={tUi("AV")} onChange={(e) => setProps({ fallback: e.target.value })} /></div><div><Label>{tUi("Alt text")}</Label><Input value={props.alt ?? ""} placeholder={field.label || tUi("Avatar")} onChange={(e) => setProps({ alt: e.target.value })} /></div><TabsSelector label={tUi("Size")} value={props.size || "md"} options={AVATAR_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /><TabsSelector label={tUi("Shape")} value={props.shape || "circle"} options={AVATAR_SHAPE_OPTIONS} onChange={(shape) => setProps({ shape })} /><ColorInput label={tUi("Fallback text color")} value={props.fallbackColor || ""} onChange={(fallbackColor) => setProps({ fallbackColor })} /><ColorInput label={tUi("Border color")} value={props.borderColor || ""} onChange={(borderColor) => setProps({ borderColor })} /></div>;
+  if (field.type === "badge") return <div className="space-y-3"><div><Label>{tUi("Badge text")}</Label><Input value={props.text ?? field.label ?? ""} onChange={(e) => setProps({ text: e.target.value })} /></div><TabsSelector label={tUi("Variant")} value={props.variant || "secondary"} options={BADGE_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} /><TabsSelector label={tUi("Size")} value={props.size || "md"} options={BADGE_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /></div>;
+  if (field.type === "switch") return <div className="space-y-3"><div className="flex items-center justify-between rounded-md border p-2"><Label>{tUi("Default checked")}</Label><Switch checked={Boolean(field.defaultValue)} {...switchColorProps(field)} onCheckedChange={(checked) => updateField(field.id, { defaultValue: Boolean(checked) })} /></div><div className="grid grid-cols-2 gap-3"><div><Label>{tUi("On text")}</Label><Input value={props.onText ?? ""} placeholder={tUi("On")} onChange={(e) => setProps({ onText: e.target.value })} /></div><div><Label>{tUi("Off text")}</Label><Input value={props.offText ?? ""} placeholder={tUi("Off")} onChange={(e) => setProps({ offText: e.target.value })} /></div></div><ColorInput label={tUi("Active track color")} value={props.switchActiveTrackColor || ""} onChange={(color) => setProps({ switchActiveTrackColor: color })} /><ColorInput label={tUi("Thumb color")} value={props.switchThumbColor || ""} onChange={(color) => setProps({ switchThumbColor: color })} /></div>;
+  if (field.type === "slider") return <div className="space-y-3"><div className="grid grid-cols-3 gap-3"><div><Label>{tUi("Min")}</Label><Input type="number" value={props.min ?? 0} onChange={(e) => setProps({ min: Number(e.target.value) })} /></div><div><Label>{tUi("Max")}</Label><Input type="number" value={props.max ?? 100} onChange={(e) => setProps({ max: Number(e.target.value) })} /></div><div><Label>{tUi("Step")}</Label><Input type="number" min="0.0001" value={props.step ?? 1} onChange={(e) => setProps({ step: Number(e.target.value) || 1 })} /></div></div><div><Label>{tUi("Default value")}</Label><Input type="number" value={field.defaultValue ?? props.min ?? 0} onChange={(e) => updateField(field.id, { defaultValue: Number(e.target.value) })} /></div><ColorInput label={tUi("Active range color")} value={props.sliderRangeColor || ""} onChange={(color) => setProps({ sliderRangeColor: color })} /><ColorInput label={tUi("Thumb color")} value={props.sliderThumbColor || ""} onChange={(color) => setProps({ sliderThumbColor: color })} /><ColorInput label={tUi("Track color")} value={props.sliderTrackColor || ""} onChange={(color) => setProps({ sliderTrackColor: color })} /></div>;
+  if (field.type === "datetime") return <div className="space-y-3"><TabsSelector label={tUi("Mode")} value={props.mode || "date"} options={DATETIME_MODE_OPTIONS} onChange={(mode) => setProps({ mode })} /><div><Label>{tUi("Default value")}</Label><Input type={dateInputType(props.mode)} value={field.defaultValue || ""} onChange={(e) => updateField(field.id, { defaultValue: e.target.value })} /></div></div>;
   if (field.type === "select") return <ChoiceOptionsControl field={field} updateField={updateField} props={props} setProps={setProps} kind="select" />;
   if (field.type === "radio") return <ChoiceOptionsControl field={field} updateField={updateField} props={props} setProps={setProps} kind="radio" />;
   if (field.type === "checkbox") return <ChoiceOptionsControl field={field} updateField={updateField} props={props} setProps={setProps} kind="checkbox" />;
   if (field.type === "button") return <div className="space-y-3">
-    <TabsSelector label="Variant" value={props.variant || "primary"} options={VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} />
+    <TabsSelector label={tUi("Variant")} value={props.variant || "primary"} options={VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} />
     <div className="space-y-2">
-      <Label>Data action</Label>
+      <Label>{tUi("Data action")}</Label>
       <Select value={props.dataActionFlowId || "none"} onValueChange={(value) => {
         if (value === "none") setProps({ dataActionFlowId: "", dataActionId: "", dataActionLabel: "" });
-        else { const action = dataActions.find((item) => String(item.id) === String(value)); setProps({ dataActionFlowId: value, dataActionLabel: action ? dataActionTitle(action) : "" }); }
+        else { const action = dataActions.find((item) => String(item.id) === String(value)); setProps({ dataActionFlowId: value, dataActionLabel: action ? dataActionTitle(action, tUi) : "" }); }
       }}>
-        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+        <SelectTrigger><SelectValue placeholder={tUi("None")} /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">None</SelectItem>
-          {dataActions.map((action) => <SelectItem key={action.id} value={String(action.id)}>{dataActionTitle(action)}</SelectItem>)}
+          <SelectItem value="none">{tUi("None")}</SelectItem>
+          {dataActions.map((action) => <SelectItem key={action.id} value={String(action.id)}>{dataActionTitle(action, tUi)}</SelectItem>)}
         </SelectContent>
       </Select>
-      <p className="text-xs text-muted-foreground">Attach a Call Flow that starts with a Form Submit initiator.</p>
+      <p className="text-xs text-muted-foreground">{tUi("Attach a Call Flow that starts with a Form Submit initiator.")}</p>
     </div>
   </div>;
   return null;
@@ -1820,6 +1844,7 @@ function accordionBehaviorPatch(value) {
 }
 
 function AccordionItemsControl({ field, items = [], props = {}, setProps }) {
+  const tUi = useUiText();
   const normalizedItems = normalizeAccordionItems(items, field.id);
   const [activeItem, setActiveItem] = useState(normalizedItems[0]?._id || "");
   useEffect(() => {
@@ -1850,35 +1875,36 @@ function AccordionItemsControl({ field, items = [], props = {}, setProps }) {
     commitItems(next);
   }
   return <div className="space-y-4">
-    <TabsSelector label="Behaviour" value={accordionBehaviorValue(props)} options={ACCORDION_BEHAVIOR_OPTIONS} onChange={(value) => setProps(accordionBehaviorPatch(value))} />
-    <TabsSelector label="Style" value={props.variant === "card" ? "card" : "default"} options={ACCORDION_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} />
+    <TabsSelector label={tUi("Behaviour")} value={accordionBehaviorValue(props)} options={ACCORDION_BEHAVIOR_OPTIONS} onChange={(value) => setProps(accordionBehaviorPatch(value))} />
+    <TabsSelector label={tUi("Style")} value={props.variant === "card" ? "card" : "default"} options={ACCORDION_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} />
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2"><Label>Items</Label><Button type="button" size="sm" variant="outline" onClick={addItem}><IconPlus className="mr-1 h-3.5 w-3.5" />Add item</Button></div>
+      <div className="flex items-center justify-between gap-2"><Label>{tUi("Items")}</Label><Button type="button" size="sm" variant="outline" onClick={addItem}><IconPlus className="mr-1 h-3.5 w-3.5" />{tUi("Add item")}</Button></div>
       {normalizedItems.length ? <Accordion type="single" value={activeItem} onValueChange={(value) => { if (value) setActiveItem(value); }} className="space-y-2">
         {normalizedItems.map((item, index) => <AccordionItem key={item._id} value={item._id} className="rounded-md border bg-background px-3 last:border-b">
           <AccordionTrigger className="py-3 hover:no-underline">
             <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
-              <div className="min-w-0 text-left"><div className="text-xs font-semibold uppercase text-muted-foreground">Item {index + 1}</div><div className="truncate text-sm font-medium">{item.title || `Item ${index + 1}`}</div></div>
-              {item.defaultOpen ? <Badge variant="outline" className="shrink-0 text-[10px]">Default open</Badge> : null}
+              <div className="min-w-0 text-left"><div className="text-xs font-semibold uppercase text-muted-foreground">{tUi("Item ")}{index + 1}</div><div className="truncate text-sm font-medium">{item.title || tUi("Item {value0}", { value0: index + 1 })}</div></div>
+              {item.defaultOpen ? <Badge variant="outline" className="shrink-0 text-[10px]">{tUi("Default open")}</Badge> : null}
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-3">
-            <div><Label>Title</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(item._id, { title: e.target.value })} /></div>
-            <div><Label>Content</Label><Textarea rows={4} value={item.content ?? ""} onChange={(e) => updateItem(item._id, { content: e.target.value })} /></div>
-            <div className="flex items-center justify-between rounded-md border p-2"><Label>Default open</Label><Switch checked={Boolean(item.defaultOpen)} onCheckedChange={(defaultOpen) => updateItem(item._id, { defaultOpen })} /></div>
+            <div><Label>{tUi("Title")}</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(item._id, { title: e.target.value })} /></div>
+            <div><Label>{tUi("Content")}</Label><Textarea rows={4} value={item.content ?? ""} onChange={(e) => updateItem(item._id, { content: e.target.value })} /></div>
+            <div className="flex items-center justify-between rounded-md border p-2"><Label>{tUi("Default open")}</Label><Switch checked={Boolean(item.defaultOpen)} onCheckedChange={(defaultOpen) => updateItem(item._id, { defaultOpen })} /></div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => moveItem(item._id, -1)}>Move up</Button>
-              <Button type="button" size="sm" variant="outline" disabled={index === normalizedItems.length - 1} onClick={() => moveItem(item._id, 1)}>Move down</Button>
-              <Button type="button" size="sm" variant="ghost" className="ml-auto text-destructive" onClick={() => removeItem(item._id)}><IconTrash className="mr-1 h-3.5 w-3.5" />Remove</Button>
+              <Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => moveItem(item._id, -1)}>{tUi("Move up")}</Button>
+              <Button type="button" size="sm" variant="outline" disabled={index === normalizedItems.length - 1} onClick={() => moveItem(item._id, 1)}>{tUi("Move down")}</Button>
+              <Button type="button" size="sm" variant="ghost" className="ml-auto text-destructive" onClick={() => removeItem(item._id)}><IconTrash className="mr-1 h-3.5 w-3.5" />{tUi("Remove")}</Button>
             </div>
           </AccordionContent>
         </AccordionItem>)}
-      </Accordion> : <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No accordion items yet.</div>}
+      </Accordion> : <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">{tUi("No accordion items yet.")}</div>}
     </div>
   </div>;
 }
 
 function StatsItemsControl({ items = [], setItems }) {
+  const tUi = useUiText();
   const normalizedItems = normalizeStatItems(items);
   const [activeItem, setActiveItem] = useState(normalizedItems.length ? "item-0" : "");
   useEffect(() => {
@@ -1900,9 +1926,9 @@ function StatsItemsControl({ items = [], setItems }) {
   }
   return <div className="space-y-4">
     <div>
-      <Label>Number of stat cards</Label>
+      <Label>{tUi("Number of stat cards")}</Label>
       <Input type="number" min="0" max="12" value={normalizedItems.length} onChange={(e) => updateCount(e.target.value)} />
-      <p className="mt-1 text-[11px] text-muted-foreground">Changing the count preserves existing card values and only adds or removes cards at the end.</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{tUi("Changing the count preserves existing card values and only adds or removes cards at the end.")}</p>
     </div>
     <div>
       {normalizedItems.length ? <Accordion type="single" value={activeItem} onValueChange={(value) => { if (value) setActiveItem(value); }} className="space-y-2">
@@ -1910,27 +1936,27 @@ function StatsItemsControl({ items = [], setItems }) {
           <AccordionTrigger className="py-3 hover:no-underline">
             <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
               <div className="min-w-0 text-left">
-                <div className="text-xs font-semibold uppercase text-muted-foreground">Stat card {index + 1}</div>
-                <div className="truncate text-sm font-medium">{item.title || `Card ${index + 1}`}</div>
+                <div className="text-xs font-semibold uppercase text-muted-foreground">{tUi("Stat card ")}{index + 1}</div>
+                <div className="truncate text-sm font-medium">{item.title || tUi("Card {value0}", { value0: index + 1 })}</div>
               </div>
-              <div className="flex shrink-0 items-center gap-2 text-muted-foreground"><StatIcon item={item} className="shrink-0" /><span className="text-[11px]">Preview</span></div>
+              <div className="flex shrink-0 items-center gap-2 text-muted-foreground"><StatIcon item={item} className="shrink-0" /><span className="text-[11px]">{tUi("Preview")}</span></div>
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-3">
-            <div><Label>Title</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(index, { title: e.target.value })} /></div>
-            <div><Label>Description</Label><Input value={item.description ?? ""} onChange={(e) => updateItem(index, { description: e.target.value })} /></div>
-            <PageIconPicker label="Icon" value={item.icon || ""} onChange={(icon) => updateItem(index, { icon })} />
-            <div><Label>Icon size px</Label><Input type="number" min="8" max="96" value={item.iconSize ?? 28} onChange={(e) => updateItem(index, { iconSize: Number(e.target.value) || 28 })} /></div>
+            <div><Label>{tUi("Title")}</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(index, { title: e.target.value })} /></div>
+            <div><Label>{tUi("Description")}</Label><Input value={item.description ?? ""} onChange={(e) => updateItem(index, { description: e.target.value })} /></div>
+            <PageIconPicker label={tUi("Icon")} value={item.icon || ""} onChange={(icon) => updateItem(index, { icon })} />
+            <div><Label>{tUi("Icon size px")}</Label><Input type="number" min="8" max="96" value={item.iconSize ?? 28} onChange={(e) => updateItem(index, { iconSize: Number(e.target.value) || 28 })} /></div>
             <div className="space-y-3 rounded-md border bg-muted/20 p-3">
-              <div className="text-xs font-medium text-muted-foreground">Per-card colors</div>
-              <ColorInput label="Icon color" value={item.iconColor || ""} onChange={(color) => updateItem(index, { iconColor: color })} />
-              <ColorInput label="Title color" value={item.titleColor || ""} onChange={(color) => updateItem(index, { titleColor: color })} />
-              <ColorInput label="Description color" value={item.descriptionColor || ""} onChange={(color) => updateItem(index, { descriptionColor: color })} />
-              <Button type="button" size="sm" variant="ghost" onClick={() => resetItemColors(index)}>Use theme colors</Button>
+              <div className="text-xs font-medium text-muted-foreground">{tUi("Per-card colors")}</div>
+              <ColorInput label={tUi("Icon color")} value={item.iconColor || ""} onChange={(color) => updateItem(index, { iconColor: color })} />
+              <ColorInput label={tUi("Title color")} value={item.titleColor || ""} onChange={(color) => updateItem(index, { titleColor: color })} />
+              <ColorInput label={tUi("Description color")} value={item.descriptionColor || ""} onChange={(color) => updateItem(index, { descriptionColor: color })} />
+              <Button type="button" size="sm" variant="ghost" onClick={() => resetItemColors(index)}>{tUi("Use theme colors")}</Button>
             </div>
           </AccordionContent>
         </AccordionItem>)}
-      </Accordion> : <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No stat cards. Increase the count to add one.</div>}
+      </Accordion> : <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">{tUi("No stat cards. Increase the count to add one.")}</div>}
     </div>
   </div>;
 }
@@ -1945,6 +1971,7 @@ function normalizeHeroButton(button = {}, index = 0) {
 }
 
 function HeroButtonsControl({ buttons = [], onChange }) {
+  const tUi = useUiText();
   const normalizedButtons = (buttons || []).map(normalizeHeroButton);
   function updateCount(nextCount) {
     const count = Math.max(0, Math.min(Number(nextCount) || 0, 4));
@@ -1957,16 +1984,16 @@ function HeroButtonsControl({ buttons = [], onChange }) {
   }
   return <div className="space-y-3">
     <div>
-      <Label>Buttons</Label>
+      <Label>{tUi("Buttons")}</Label>
       <Input type="number" min="0" max="4" value={normalizedButtons.length} onChange={(e) => updateCount(e.target.value)} />
-      <p className="mt-1 text-[11px] text-muted-foreground">Add up to four hero buttons. Existing labels, links, and variants are preserved.</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{tUi("Add up to four hero buttons. Existing labels, links, and variants are preserved.")}</p>
     </div>
     <div className="space-y-3">
       {normalizedButtons.map((button, index) => <div key={index} className="space-y-3 rounded-md border bg-background p-3">
-        <div className="text-xs font-semibold uppercase text-muted-foreground">Button {index + 1}</div>
-        <div><Label>Label</Label><Input value={button.label || ""} onChange={(e) => updateButton(index, { label: e.target.value })} /></div>
-        <div><Label>Link</Label><Input value={button.href || ""} placeholder="https://example.com or /path" onChange={(e) => updateButton(index, { href: e.target.value })} /></div>
-        <TabsSelector label="Variant" value={button.variant || "secondary"} options={VARIANT_OPTIONS} onChange={(variant) => updateButton(index, { variant })} />
+        <div className="text-xs font-semibold uppercase text-muted-foreground">{tUi("Button ")}{index + 1}</div>
+        <div><Label>{tUi("Label")}</Label><Input value={button.label || ""} onChange={(e) => updateButton(index, { label: e.target.value })} /></div>
+        <div><Label>{tUi("Link")}</Label><Input value={button.href || ""} placeholder={tUi("https://example.com or /path")} onChange={(e) => updateButton(index, { href: e.target.value })} /></div>
+        <TabsSelector label={tUi("Variant")} value={button.variant || "secondary"} options={VARIANT_OPTIONS} onChange={(variant) => updateButton(index, { variant })} />
       </div>)}
     </div>
   </div>;

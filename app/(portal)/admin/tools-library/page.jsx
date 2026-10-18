@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -71,6 +73,7 @@ import { AiAssistantsSectionPage } from "@/components/assistants/AiAssistantsSec
 import { Can } from "@/components/auth-provider";
 
 function CopyButton({ value }) {
+  const tUi = useUiText();
   const [copied, setCopied] = useState(false);
   const handleCopy = (e) => {
     e.stopPropagation();
@@ -84,7 +87,7 @@ function CopyButton({ value }) {
       type="button"
       onClick={handleCopy}
       className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-      title="Copy ID"
+      title={tUi("Copy ID")}
     >
       {copied ? (
         <IconCheck className="size-3 text-green-500" />
@@ -145,6 +148,7 @@ function toolTypeBadge(type) {
 }
 
 export default function ToolsLibraryPage() {
+  const tUi = useUiText();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -335,10 +339,10 @@ export default function ToolsLibraryPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Tools Library"
+        title={tUi("Tools Library")}
         icon={IconTools}
-        badges={<Badge variant="secondary">{total} tools</Badge>}
-        actions={<Can permission="ai_tools:create"><Button size="sm" onClick={handleNewTool} title="Create new tool"><IconPlus />New Tool</Button></Can>}
+        badges={<Badge variant="secondary">{total}{tUi(" tools")}</Badge>}
+        actions={<Can permission="ai_tools:create"><Button size="sm" onClick={handleNewTool} title={tUi("Create new tool")}><IconPlus />{tUi("New Tool")}</Button></Can>}
       />
       <AiAssistantsSectionPage activeId="tools">
       <Card className="w-full">
@@ -346,13 +350,13 @@ export default function ToolsLibraryPage() {
           {/* Filters */}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
             <div className="md:col-span-2">
-              <label className="text-xs">Tool Name</label>
+              <label className="text-xs">{tUi("Tool Name")}</label>
               <Input
                 value={filters.name}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, name: e.target.value }))
                 }
-                placeholder="e.g. Get Customer Info"
+                placeholder={tUi("e.g. Get Customer Info")}
               />
             </div>
             <div className="flex items-end gap-2 md:col-span-2 col-span-2">
@@ -362,11 +366,9 @@ export default function ToolsLibraryPage() {
                   setFilters({ name: "" });
                   setPage(1);
                 }}
-              >
-                Clear
-              </Button>
+              >{tUi("Clear")}</Button>
               <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
+                {loading ? tUi("Loading…") : tUi("Refresh")}
               </Button>
             </div>
           </div>
@@ -388,13 +390,11 @@ export default function ToolsLibraryPage() {
               <Table className="table-fixed min-w-[900px]">
                 <TableHeader>
                   <TableRow className="bg-muted">
-                    <TableHead className="px-[10px] w-[28%]">Name</TableHead>
-                    <TableHead className="px-[10px] w-[30%]">ID</TableHead>
-                    <TableHead className="px-[10px] w-[15%]">Type</TableHead>
-                    <TableHead className="px-[10px] w-[15%]">Created</TableHead>
-                    <TableHead className="px-[10px] text-right w-[12%]">
-                      Actions
-                    </TableHead>
+                    <TableHead className="px-[10px] w-[28%]">{tUi("Name")}</TableHead>
+                    <TableHead className="px-[10px] w-[30%]">{tUi("ID")}</TableHead>
+                    <TableHead className="px-[10px] w-[15%]">{tUi("Type")}</TableHead>
+                    <TableHead className="px-[10px] w-[15%]">{tUi("Created")}</TableHead>
+                    <TableHead className="px-[10px] text-right w-[12%]">{tUi("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -402,12 +402,12 @@ export default function ToolsLibraryPage() {
                     <TableRow key={t.id}>
                       <TableCell
                         className="px-[10px] text-xs w-[28%] overflow-hidden"
-                        title={t.display_name || t.name || "<no name>"}
+                        title={t.display_name || t.name || tUi("<no name>")}
                       >
                         <div className="flex items-center gap-1 min-w-0">
                           {toolTypeIcon(t.type)}
                           <span className="truncate">
-                            {t.display_name || t.name || "<no name>"}
+                            {t.display_name || t.name || tUi("<no name>")}
                           </span>
                         </div>
                       </TableCell>
@@ -427,7 +427,7 @@ export default function ToolsLibraryPage() {
                       </TableCell>
                       <TableCell className="px-[10px] text-xs w-[15%] whitespace-nowrap">
                         {t.created_at
-                          ? new Date(t.created_at).toLocaleDateString()
+                          ? new Date(t.created_at).toLocaleDateString(tUi.locale)
                           : "—"}
                       </TableCell>
                       <TableCell className="px-[10px] text-xs whitespace-nowrap text-right">
@@ -437,7 +437,7 @@ export default function ToolsLibraryPage() {
                               type="button"
                               onClick={() => handleTestTool(t)}
                               className="inline-flex items-center text-blue-500 hover:text-blue-700"
-                              title="Test tool"
+                              title={tUi("Test tool")}
                             >
                               <IconFlask className="size-4" />
                             </button>
@@ -446,8 +446,8 @@ export default function ToolsLibraryPage() {
                             type="button"
                             onClick={() => handleAssignTool(t)}
                             className="inline-flex items-center text-purple-500 hover:text-purple-700"
-                            title="Assign to assistants"
-                            aria-label="Assign to assistants"
+                            title={tUi("Assign to assistants")}
+                            aria-label={tUi("Assign to assistants")}
                           >
                             <IconUsersPlus className="size-4" />
                           </button>
@@ -455,7 +455,7 @@ export default function ToolsLibraryPage() {
                             type="button"
                             onClick={() => handleEditTool(t)}
                             className="inline-flex items-center text-telnyx-green"
-                            title="Edit tool"
+                            title={tUi("Edit tool")}
                           >
                             <IconPencil className="size-4" />
                           </button>
@@ -463,7 +463,7 @@ export default function ToolsLibraryPage() {
                             type="button"
                             onClick={() => setDeleteId(t.id)}
                             className="inline-flex items-center text-red-500 hover:text-red-700"
-                            title="Delete tool"
+                            title={tUi("Delete tool")}
                           >
                             <IconTrash className="size-4" />
                           </button></Can>
@@ -476,9 +476,7 @@ export default function ToolsLibraryPage() {
                       <TableCell
                         colSpan={5}
                         className="text-center py-8 text-sm text-muted-foreground"
-                      >
-                        No tools found. Create your first tool to get started.
-                      </TableCell>
+                      >{tUi("No tools found. Create your first tool to get started.")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -490,12 +488,10 @@ export default function ToolsLibraryPage() {
         {/* Pagination */}
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Total: {total}</div>
+            <div className="text-xs text-muted-foreground">{tUi("Total: ")}{total}</div>
             <div className="flex w-full items-center gap-8 lg:w-fit">
               <div className="hidden items-center gap-2 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                  Rows per page
-                </Label>
+                <Label htmlFor="rows-per-page" className="text-sm font-medium">{tUi("Rows per page")}</Label>
                 <Select
                   value={`${pageSize}`}
                   onValueChange={(value) => {
@@ -515,8 +511,7 @@ export default function ToolsLibraryPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex w-fit items-center justify-center text-sm font-medium">
-                Page {page} of {totalPages}
+              <div className="flex w-fit items-center justify-center text-sm font-medium">{tUi("Page ")}{page}{tUi(" of ")}{totalPages}
               </div>
               <div className="ml-auto flex items-center gap-2 lg:ml-0">
                 <Button
@@ -525,7 +520,7 @@ export default function ToolsLibraryPage() {
                   onClick={() => setPage(1)}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to first page</span>
+                  <span className="sr-only">{tUi("Go to first page")}</span>
                   <IconChevronsLeft />
                 </Button>
                 <Button
@@ -535,7 +530,7 @@ export default function ToolsLibraryPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
                 >
-                  <span className="sr-only">Go to previous page</span>
+                  <span className="sr-only">{tUi("Go to previous page")}</span>
                   <IconChevronLeft />
                 </Button>
                 <Button
@@ -545,7 +540,7 @@ export default function ToolsLibraryPage() {
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
                 >
-                  <span className="sr-only">Go to next page</span>
+                  <span className="sr-only">{tUi("Go to next page")}</span>
                   <IconChevronRight />
                 </Button>
                 <Button
@@ -555,7 +550,7 @@ export default function ToolsLibraryPage() {
                   onClick={() => setPage(totalPages)}
                   disabled={page >= totalPages}
                 >
-                  <span className="sr-only">Go to last page</span>
+                  <span className="sr-only">{tUi("Go to last page")}</span>
                   <IconChevronsRight />
                 </Button>
               </div>
@@ -588,18 +583,14 @@ export default function ToolsLibraryPage() {
         <SheetContent className="w-[90vw] sm:w-[800px] h-full flex flex-col overflow-hidden">
           <SheetHeader>
             <SheetTitle className="inline-flex items-center gap-2">
-              <IconUsersPlus className="h-5 w-5 text-telnyx-green" />
-              Assign to assistants
-            </SheetTitle>
-            <SheetDescription>
-              Add {assignTool?.display_name || assignTool?.name || "this tool"} to one or more AI assistants.
-            </SheetDescription>
+              <IconUsersPlus className="h-5 w-5 text-telnyx-green" />{tUi("Assign to assistants")}</SheetTitle>
+            <SheetDescription>{tUi("Add ")}{assignTool?.display_name || assignTool?.name || tUi("this tool")}{tUi(" to one or more AI assistants.")}</SheetDescription>
           </SheetHeader>
 
           <div className="mx-4 my-2 rounded-lg border bg-muted/30 p-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               {toolTypeIcon(assignTool?.type)}
-              <span>{assignTool?.display_name || assignTool?.name || "Unnamed tool"}</span>
+              <span>{assignTool?.display_name || assignTool?.name || tUi("Unnamed tool")}</span>
               {assignTool?.type && (
                 <Badge variant="secondary" className="text-[11px]">
                   {toolTypeBadge(assignTool.type)}
@@ -615,20 +606,20 @@ export default function ToolsLibraryPage() {
             <Input
               value={assistantSearch}
               onChange={(e) => setAssistantSearch(e.target.value)}
-              placeholder="Search assistants by name, model, or ID…"
+              placeholder={tUi("Search assistants by name, model, or ID…")}
             />
             <div className="rounded-lg border bg-background flex-1 min-h-0 overflow-y-auto">
               {assistantsLoading ? (
-                <div className="p-6 text-sm text-muted-foreground">Loading assistants…</div>
+                <div className="p-6 text-sm text-muted-foreground">{tUi("Loading assistants…")}</div>
               ) : assistantsError ? (
                 <div className="p-6 text-sm text-red-500">{assistantsError}</div>
               ) : filteredAssistants.length === 0 ? (
-                <div className="p-6 text-sm text-muted-foreground">No assistants found.</div>
+                <div className="p-6 text-sm text-muted-foreground">{tUi("No assistants found.")}</div>
               ) : (
                 <div className="divide-y">
                   {filteredAssistants.map((assistant) => {
                     const selected = selectedAssistantIds.includes(assistant.id);
-                    const model = assistant.model || assistant.llm_model || assistant.llm || "No model";
+                    const model = assistant.model || assistant.llm_model || assistant.llm || tUi("No model");
                     return (
                       <div
                         role="button"
@@ -654,14 +645,14 @@ export default function ToolsLibraryPage() {
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-medium text-sm truncate">
-                              {assistant.name || "Unnamed assistant"}
+                              {assistant.name || tUi("Unnamed assistant")}
                             </span>
                             <Badge variant="outline" className="text-[11px]">
                               {model}
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground line-clamp-2">
-                            {assistant.description || assistant.greeting || "No description"}
+                            {assistant.description || assistant.greeting || tUi("No description")}
                           </div>
                           <div className="text-[11px] font-mono text-muted-foreground truncate">
                             {assistant.id}
@@ -681,17 +672,15 @@ export default function ToolsLibraryPage() {
               variant="secondary"
               onClick={() => setAssistantAssignSheetOpen(false)}
               disabled={assigning}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               type="button"
               onClick={handleAssignConfirm}
               disabled={assigning || selectedAssistantIds.length === 0}
             >
               {assigning
-                ? "Adding…"
-                : `Add to Selected Assistants (${selectedAssistantIds.length})`}
+                ? tUi("Adding…")
+                : tUi("Add to Selected Assistants ({value0})", { value0: selectedAssistantIds.length })}
             </Button>
           </div>
         </SheetContent>
@@ -704,26 +693,21 @@ export default function ToolsLibraryPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Tool</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this tool? This action cannot be
-              undone.
-            </DialogDescription>
+            <DialogTitle>{tUi("Delete Tool")}</DialogTitle>
+            <DialogDescription>{tUi("Are you sure you want to delete this tool? This action cannot be undone.")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setDeleteId(null)}
               disabled={deleting}
-            >
-              Cancel
-            </Button>
+            >{tUi("Cancel")}</Button>
             <Button
               variant="destructive"
               onClick={handleDeleteConfirm}
               disabled={deleting}
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? tUi("Deleting…") : tUi("Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

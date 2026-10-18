@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -68,11 +70,12 @@ function validateParameters(text) {
   return { parsed };
 }
 
-export default function ClientSideToolEditor({
+export default function ClientSideToolEditor({ executionTarget = "client",
   value,
   onChange,
   onValidationChange,
 }) {
+  const tUi = useUiText();
   const config = value?.client_side_tool || {};
   const parameters = useMemo(
     () => config.parameters || DEFAULT_CLIENT_SIDE_PARAMETERS,
@@ -99,13 +102,14 @@ export default function ClientSideToolEditor({
     lastParametersRef.current = serializedParameters;
 
     // Refresh the draft when an existing tool is replaced by another selection.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setParametersText(formatSchema(parameters));
     setParametersError("");
     setModeNotice("");
     setVisualRowsError("");
 
     if (clientSideParametersSupportVisualMode(parameters)) {
+      // Keep the editable rows in sync when a different saved tool is selected.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisualRows(withRowIds(clientSideParametersToRows(parameters)));
     } else {
       setAdvancedMode(true);
@@ -229,45 +233,37 @@ export default function ClientSideToolEditor({
     <div className="space-y-5">
       <Alert variant="info">
         <IconDeviceDesktopCog className="size-4" />
-        <AlertDescription>
-          This function runs in the connected Voice SDK client (browser or
-          mobile), not on a server. It is available to WebRTC voice and chat
-          clients; SIP and PSTN calls cannot execute it.
-        </AlertDescription>
+        <AlertDescription>{tUi(executionTarget === "function" ? "Describe the function and the parameters your application handles when the assistant calls it." : "This function runs in the connected Voice SDK client (browser or mobile), not on a server. It is available to WebRTC voice and chat clients; SIP and PSTN calls cannot execute it.")}</AlertDescription>
       </Alert>
 
       <div className="space-y-2">
-        <Label htmlFor="client-side-tool-name">Name</Label>
+        <Label htmlFor="client-side-tool-name">{tUi("Name")}</Label>
         <Input
           id="client-side-tool-name"
           value={name}
           onChange={(event) => updateConfig({ name: event.target.value })}
-          placeholder="show_order_details"
+          placeholder={tUi("show_order_details")}
           aria-invalid={Boolean(nameError)}
         />
         {nameError ? (
-          <p className="text-xs text-destructive">{nameError}</p>
+          <p className="text-xs text-destructive">{tUi(nameError)}</p>
         ) : (
-          <p className="text-xs text-muted-foreground">
-            The function name registered by the Voice SDK client.
-          </p>
+          <p className="text-xs text-muted-foreground">{tUi(executionTarget === "function" ? "Use a unique name for this function." : "The function name registered by the Voice SDK client.")}</p>
         )}
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="client-side-tool-description">Description</Label>
+        <Label htmlFor="client-side-tool-description">{tUi("Description")}</Label>
         <Textarea
           id="client-side-tool-description"
           value={config.description || ""}
           onChange={(event) =>
             updateConfig({ description: event.target.value })
           }
-          placeholder="Show the selected order in the customer's browser."
+          placeholder={tUi("Show the selected order in the customer's browser.")}
           rows={3}
         />
-        <p className="text-xs text-muted-foreground">
-          Tell the assistant when it should invoke this client-side function.
-        </p>
+        <p className="text-xs text-muted-foreground">{tUi("Tell the assistant when it should invoke this client-side function.")}</p>
       </div>
 
       <div className="space-y-4">
@@ -280,9 +276,7 @@ export default function ClientSideToolEditor({
           <Label
             htmlFor="client-side-tool-advanced-mode"
             className="cursor-pointer font-normal"
-          >
-            Advanced mode
-          </Label>
+          >{tUi("Advanced mode")}</Label>
         </div>
 
         {advancedMode ? (
@@ -290,9 +284,7 @@ export default function ClientSideToolEditor({
             <Label
               htmlFor="client-side-tool-parameters"
               className="inline-flex items-center gap-1.5"
-            >
-              Parameters (JSON Schema)
-              <IconInfoCircle className="size-4 text-muted-foreground" />
+            >{tUi("Parameters (JSON Schema)")}<IconInfoCircle className="size-4 text-muted-foreground" />
             </Label>
             <Textarea
               id="client-side-tool-parameters"
@@ -306,9 +298,8 @@ export default function ClientSideToolEditor({
             {parametersError ? (
               <p className="text-xs text-destructive">{parametersError}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                The root schema must define <code>type</code>,{" "}
-                <code>properties</code>, and <code>required</code>.
+              <p className="text-xs text-muted-foreground">{tUi("The root schema must define ")}<code>type</code>,{" "}
+                <code>properties</code>{tUi(", and ")}<code>required</code>.
               </p>
             )}
             {modeNotice ? (
@@ -320,9 +311,7 @@ export default function ClientSideToolEditor({
         ) : (
           <div className="space-y-4">
             {visualRows.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                No parameters have been added yet.
-              </p>
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{tUi("No parameters have been added yet.")}</p>
             ) : null}
 
             {visualRows.map((row, index) => (
@@ -332,7 +321,7 @@ export default function ClientSideToolEditor({
               >
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
                   <div className="space-y-2 md:col-span-4">
-                    <Label htmlFor={`${row.id}-name`}>Name</Label>
+                    <Label htmlFor={`${row.id}-name`}>{tUi("Name")}</Label>
                     <Input
                       id={`${row.id}-name`}
                       value={row.name}
@@ -346,7 +335,7 @@ export default function ClientSideToolEditor({
                   </div>
 
                   <div className="space-y-2 md:col-span-4">
-                    <Label htmlFor={`${row.id}-type`}>Type</Label>
+                    <Label htmlFor={`${row.id}-type`}>{tUi("Type")}</Label>
                     <Select
                       value={row.type}
                       onValueChange={(type) =>
@@ -370,7 +359,7 @@ export default function ClientSideToolEditor({
                   </div>
 
                   <div className="space-y-2 md:col-span-3">
-                    <Label htmlFor={`${row.id}-required`}>Required</Label>
+                    <Label htmlFor={`${row.id}-required`}>{tUi("Required")}</Label>
                     <div className="flex h-9 items-center">
                       <Checkbox
                         id={`${row.id}-required`}
@@ -389,7 +378,7 @@ export default function ClientSideToolEditor({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label={`Remove parameter ${index + 1}`}
+                      aria-label={tUi("Remove parameter {value0}", { value0: index + 1 })}
                       onClick={() => removeVisualRow(index)}
                     >
                       <IconTrash className="size-4" />
@@ -401,9 +390,7 @@ export default function ClientSideToolEditor({
                   <Label
                     htmlFor={`${row.id}-description`}
                     className="inline-flex items-center gap-1.5"
-                  >
-                    Description
-                    <IconInfoCircle className="size-4 text-muted-foreground" />
+                  >{tUi("Description")}<IconInfoCircle className="size-4 text-muted-foreground" />
                   </Label>
                   <Input
                     id={`${row.id}-description`}
@@ -418,13 +405,11 @@ export default function ClientSideToolEditor({
 
                 {row.type === "enum" ? (
                   <div className="space-y-2">
-                    <Label htmlFor={`${row.id}-enum-values`}>
-                      Enum values (comma separated)
-                    </Label>
+                    <Label htmlFor={`${row.id}-enum-values`}>{tUi("Enum values (comma separated)")}</Label>
                     <Input
                       id={`${row.id}-enum-values`}
                       value={row.enumValues}
-                      placeholder="pending, shipped, delivered"
+                      placeholder={tUi("pending, shipped, delivered")}
                       onChange={(event) =>
                         updateVisualRow(index, {
                           enumValues: event.target.value,
@@ -442,16 +427,14 @@ export default function ClientSideToolEditor({
 
             <div className="flex justify-end">
               <Button type="button" variant="outline" onClick={addVisualRow}>
-                <IconPlus className="size-4" />
-                Add parameter
-              </Button>
+                <IconPlus className="size-4" />{tUi("Add parameter")}</Button>
             </div>
           </div>
         )}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="client-side-tool-timeout">Timeout (ms)</Label>
+      {executionTarget === "client" && <div className="space-y-2">
+        <Label htmlFor="client-side-tool-timeout">{tUi("Timeout (ms)")}</Label>
         <Input
           id="client-side-tool-timeout"
           type="number"
@@ -466,10 +449,8 @@ export default function ClientSideToolEditor({
             })
           }
         />
-        <p className="text-xs text-muted-foreground">
-          Maximum time Telnyx waits for the client to return a result.
-        </p>
-      </div>
+        <p className="text-xs text-muted-foreground">{tUi("Maximum time Telnyx waits for the client to return a result.")}</p>
+      </div>}
     </div>
   );
 }

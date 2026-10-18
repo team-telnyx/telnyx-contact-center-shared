@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { VoiceRecoveryBadge } from "@/components/voice-recovery-badge";
@@ -13,6 +15,7 @@ import { getStatusDisplay } from "@/lib/call-status-utils";
 import { notify } from "@/components/ToastNotify";
 
 export default function FloatingSoftphone() {
+  const tUi = useUiText();
   const { visible, toggle } = usePhoneUi();
   const { enabled: experimentalFeaturesEnabled } = useExperimentalFeatures();
   const boxRef = useRef(null);
@@ -69,7 +72,7 @@ export default function FloatingSoftphone() {
 
     try {
       await navigator.clipboard.writeText(sipUri);
-      notify({ title: "WebRTC URI copied", description: `${sipUri} has been copied to your clipboard.`, variant: "success" });
+      notify({ title: "WebRTC URI copied", description: tUi("{value0} has been copied to your clipboard.", {value0: sipUri}), variant: "success" });
     } catch (_) {
       notify({ title: "WebRTC URI copy failed", description: "The WebRTC SIP URI could not be copied. Please try again.", variant: "error" });
     }
@@ -216,8 +219,8 @@ export default function FloatingSoftphone() {
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  aria-label="Copy WebRTC URI"
-                  title={sipUri ? `Copy ${sipUri}` : "WebRTC URI not configured"}
+                  aria-label={tUi("Copy WebRTC URI")}
+                  title={sipUri ? tUi("Copy {value0}", { value0: sipUri }) : tUi("WebRTC URI not configured")}
                   className="grid h-7 w-7 place-items-center rounded-full text-background/80 hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={copySipUri}
                   disabled={!sipUri}
@@ -227,7 +230,7 @@ export default function FloatingSoftphone() {
                 {/* Close button */}
                 <button
                   type="button"
-                  aria-label="Hide phone"
+                  aria-label={tUi("Hide phone")}
                   className="rounded p-1 text-background/80 hover:text-foreground transition-colors"
                   onClick={() => {
                     try {
@@ -260,6 +263,7 @@ export default function FloatingSoftphone() {
 // Optimized to prevent unnecessary re-renders when answering calls
 // Uses ref to track last displayed value and only updates state when it changes
 function PhoneStatus() {
+  const tUi = useUiText();
   // Subscribe to store values
   const status = useActiveCallStore((state) => state.status);
   const call = useActiveCallStore((state) => state.call);
@@ -283,7 +287,7 @@ function PhoneStatus() {
         currentColor
       )}
     >
-      {currentText}
+      {tUi(currentText)}
     </div>
   );
 }

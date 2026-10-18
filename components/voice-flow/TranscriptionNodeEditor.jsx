@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Label } from "@/components/ui/label";
@@ -310,6 +312,7 @@ function coerceCurrentModelIntoOptions(provider, model, models) {
 }
 
 export default function TranscriptionNodeEditor({ config = {}, onChange }) {
+  const tUi = useUiText();
   // Read from transcription_engine_config first (new structure), then fall back to flat structure (backward compatibility)
   const engineConfig = config.transcription_engine_config || {};
   const savedModel = engineConfig.transcription_model || config.transcription_model || "";
@@ -676,36 +679,32 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     <div className="space-y-4">
       {/* Provider Selection */}
       <div>
-        <Label>
-          Provider <span className="text-red-500">*</span>
+        <Label>{tUi("Provider ")}<span className="text-red-500">*</span>
         </Label>
         <Select value={provider} onValueChange={handleProviderChangeInternal}>
           <SelectTrigger className="w-full mt-1">
-            <SelectValue placeholder="Select provider" />
+            <SelectValue placeholder={tUi("Select provider")} />
           </SelectTrigger>
           <SelectContent>
             {TRANSCRIPTION_PROVIDERS.map((p) => (
               <SelectItem key={p.value} value={p.value}>
-                {p.label}
+                {tUi(p.label)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          The transcription service provider
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("The transcription service provider")}</p>
       </div>
 
       {/* Model Selection (if provider has models) */}
       {availableModels.length > 0 && (
         <div>
-          <Label>
-            Model{" "}
+          <Label>{tUi("Model")}{" "}
             {provider !== "Google" && <span className="text-red-500">*</span>}
           </Label>
           <Select value={model} onValueChange={handleModelChangeInternal}>
             <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select model" />
+              <SelectValue placeholder={tUi("Select model")} />
             </SelectTrigger>
             <SelectContent>
               {availableModels.map((m) => (
@@ -715,53 +714,46 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            The model to use for transcription
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("The model to use for transcription")}</p>
         </div>
       )}
 
       {/* Language Selection with Filter */}
       {availableLanguages.length > 0 && (
         <div>
-          <Label>Language</Label>
+          <Label>{tUi("Language")}</Label>
           <div className="mt-1">
             <Combobox
               options={availableLanguages}
               value={language}
               onChange={handleLanguageChangeInternal}
-              placeholder="Select language"
-              emptyLabel="No language found"
+              placeholder={tUi("Select language")}
+              emptyLabel={tUi("No language found")}
               searchable={true}
               triggerClassName="w-full"
             />
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Language for speech recognition ({availableLanguages.length}{" "}
-            available)
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{tUi("Language for speech recognition (")}{availableLanguages.length}{" "}{tUi("available)")}</p>
         </div>
       )}
 
       {/* Transcription Tracks (for all providers) */}
       <div>
-        <Label>Transcription Tracks</Label>
+        <Label>{tUi("Transcription Tracks")}</Label>
         <Select
           value={transcriptionTracks}
           onValueChange={handleTranscriptionTracksChange}
         >
           <SelectTrigger className="w-full mt-1">
-            <SelectValue placeholder="Select tracks" />
+            <SelectValue placeholder={tUi("Select tracks")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="inbound">Inbound</SelectItem>
-            <SelectItem value="outbound">Outbound</SelectItem>
-            <SelectItem value="both">Both</SelectItem>
+            <SelectItem value="inbound">{tUi("Inbound")}</SelectItem>
+            <SelectItem value="outbound">{tUi("Outbound")}</SelectItem>
+            <SelectItem value="both">{tUi("Both")}</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground mt-1">
-          Indicates which leg of the call will be transcribed
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{tUi("Indicates which leg of the call will be transcribed")}</p>
       </div>
 
       {/* Advanced settings supported by multiple providers */}
@@ -778,13 +770,9 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
             <Label
               htmlFor="interim_results"
               className="text-sm font-normal cursor-pointer"
-            >
-              Interim Results
-            </Label>
+            >{tUi("Interim Results")}</Label>
           </div>
-          <p className="text-xs text-muted-foreground -mt-2 ml-6">
-            Send interim transcription updates before the final result.
-          </p>
+          <p className="text-xs text-muted-foreground -mt-2 ml-6">{tUi("Send interim transcription updates before the final result.")}</p>
         </div>
       )}
 
@@ -792,7 +780,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       {provider === "Google" && (
         <>
           <div className="space-y-4 pt-2 border-t">
-            <h4 className="text-sm font-medium">Google Advanced Settings</h4>
+            <h4 className="text-sm font-medium">{tUi("Google Advanced Settings")}</h4>
 
             {/* Enable Speaker Diarization */}
             <div className="flex items-center space-x-2">
@@ -806,18 +794,14 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
               <Label
                 htmlFor="enable_speaker_diarization"
                 className="text-sm font-normal cursor-pointer"
-              >
-                Enable Speaker Diarization
-              </Label>
+              >{tUi("Enable Speaker Diarization")}</Label>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2 ml-6">
-              Enables speaker diarization.
-            </p>
+            <p className="text-xs text-muted-foreground -mt-2 ml-6">{tUi("Enables speaker diarization.")}</p>
 
             {/* Min Speaker Count */}
             {enableSpeakerDiarization && (
               <div>
-                <Label htmlFor="min_speaker_count">Min Speaker Count</Label>
+                <Label htmlFor="min_speaker_count">{tUi("Min Speaker Count")}</Label>
                 <Input
                   id="min_speaker_count"
                   type="number"
@@ -831,16 +815,14 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
                   }
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defines minimum number of speakers in the conversation.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Defines minimum number of speakers in the conversation.")}</p>
               </div>
             )}
 
             {/* Max Speaker Count */}
             {enableSpeakerDiarization && (
               <div>
-                <Label htmlFor="max_speaker_count">Max Speaker Count</Label>
+                <Label htmlFor="max_speaker_count">{tUi("Max Speaker Count")}</Label>
                 <Input
                   id="max_speaker_count"
                   type="number"
@@ -854,9 +836,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
                   }
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Defines maximum number of speakers in the conversation.
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{tUi("Defines maximum number of speakers in the conversation.")}</p>
               </div>
             )}
 
@@ -872,13 +852,9 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
               <Label
                 htmlFor="profanity_filter"
                 className="text-sm font-normal cursor-pointer"
-              >
-                Profanity Filter
-              </Label>
+              >{tUi("Profanity Filter")}</Label>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2 ml-6">
-              Enables profanity filter.
-            </p>
+            <p className="text-xs text-muted-foreground -mt-2 ml-6">{tUi("Enables profanity filter.")}</p>
 
             {/* Use Enhanced */}
             <div className="flex items-center space-x-2">
@@ -892,14 +868,9 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
               <Label
                 htmlFor="use_enhanced"
                 className="text-sm font-normal cursor-pointer"
-              >
-                Use Enhanced
-              </Label>
+              >{tUi("Use Enhanced")}</Label>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2 ml-6">
-              Enables enhanced transcription, this works for models phone_call
-              and video.
-            </p>
+            <p className="text-xs text-muted-foreground -mt-2 ml-6">{tUi("Enables enhanced transcription, this works for models phone_call and video.")}</p>
           </div>
         </>
       )}

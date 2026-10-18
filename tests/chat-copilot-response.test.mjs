@@ -1,6 +1,9 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {parseCopilotSuggestions,requestCopilotSuggestions} from "../lib/contact-center/chat-copilot.js";
+import {parseCopilotSuggestions,requestCopilotSuggestions as requestSuggestions} from "../lib/contact-center/chat-copilot.js";
+
+const pool={query:async()=>({rows:[{cc_settings:{}}]})};
+const requestCopilotSuggestions=(input,options)=>requestSuggestions(input,{pool,...options});
 
 const input={settings:{model:"zai-org/GLM-5.3",bucketIds:["one","two","three","four","five"]},question:"How can I use Voice API?",messages:[]};
 const content=JSON.stringify({suggestions:[{text:"Here is a suggested reply.",confidence:0.8,rationale:"Available documentation."}]});
@@ -58,4 +61,17 @@ test("revoked access stops the compatibility retry before the second provider ca
   let calls=0;
   await assert.rejects(requestCopilotSuggestions(input,{request:async()=>{calls++;return completion("{}");},beforeRetry:async()=>{throw Object.assign(Error("Access revoked"),{status:403});}}),e=>e.status===403);
   assert.equal(calls,1);
+});
+
+test("request uses instructions from its supplied database without changing the selected model",async()=>{
+  const configuredPool={query:async sql=>{
+    assert.match(sql,/FROM app_settings/);
+    return {rows:[{cc_settings:{ai_operations:{'reply-suggestions':{model:'default/model',instructions:'Use our service terminology.'}}}}]};
+  }};
+  await requestCopilotSuggestions(input,{pool:configuredPool,request:async(_path,{body})=>{
+    assert.equal(body.model,input.settings.model);
+    assert.match(body.messages[0].content,/Use our service terminology/);
+    assert.match(body.messages[0].content,/Protected technical contract/);
+    return completion();
+  }});
 });

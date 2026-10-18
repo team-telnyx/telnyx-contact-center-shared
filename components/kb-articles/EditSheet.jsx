@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useState, useEffect } from "react";
 import {
@@ -37,6 +39,7 @@ export default function KbArticleEditSheet({
   articleId,
   onSave,
 }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState("");
@@ -221,7 +224,7 @@ export default function KbArticleEditSheet({
 
       notify({
         title: "Article saved",
-        description: `Article ${articleId ? "updated" : "created"} successfully`,
+        description: (articleId ? tUi("Article updated successfully") : tUi("Article created successfully")),
         variant: "success",
       });
 
@@ -244,21 +247,17 @@ export default function KbArticleEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-2xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             {articleId ? (
               <>
-                <IconEdit className="size-5" />
-                Edit KB Article
-              </>
+                <IconEdit className="size-5" />{tUi("Edit KB Article")}</>
             ) : (
               <>
-                <IconPlus className="size-5" />
-                Create KB Article
-              </>
+                <IconPlus className="size-5" />{tUi("Create KB Article")}</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -287,110 +286,104 @@ export default function KbArticleEditSheet({
               ) : (
                 <>
                   <div className="grid gap-2">
-                    <Label htmlFor="title">Title *</Label>
+                    <Label htmlFor="title">{tUi("Title *")}</Label>
                     <Input
                       id="title"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="e.g., How to reset your password"
+                      placeholder={tUi("e.g., How to reset your password")}
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="slug">Slug *</Label>
+                    <Label htmlFor="slug">{tUi("Slug *")}</Label>
                     <Input
                       id="slug"
                       value={slug}
                       onChange={(e) => setSlug(e.target.value)}
-                      placeholder="e.g., how-to-reset-password"
+                      placeholder={tUi("e.g., how-to-reset-password")}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      URL-friendly identifier (auto-generated from title)
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tUi("URL-friendly identifier (auto-generated from title)")}</p>
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="summary">Summary</Label>
+                    <Label htmlFor="summary">{tUi("Summary")}</Label>
                     <Textarea
                       id="summary"
                       value={summary}
                       onChange={(e) => setSummary(e.target.value)}
-                      placeholder="Brief summary of the article"
+                      placeholder={tUi("Brief summary of the article")}
                       rows={3}
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="content">Content *</Label>
+                    <Label htmlFor="content">{tUi("Content *")}</Label>
                     <Textarea
                       id="content"
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
-                      placeholder="Full article content (markdown or plain text)"
+                      placeholder={tUi("Full article content (markdown or plain text)")}
                       rows={12}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="category">Category *</Label>
+                      <Label htmlFor="category">{tUi("Category *")}</Label>
                       <Input
                         id="category"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        placeholder="e.g., General, Technical, Billing"
+                        placeholder={tUi("e.g., General, Technical, Billing")}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="subcategory">Subcategory</Label>
+                      <Label htmlFor="subcategory">{tUi("Subcategory")}</Label>
                       <Input
                         id="subcategory"
                         value={subcategory}
                         onChange={(e) => setSubcategory(e.target.value)}
-                        placeholder="Optional subcategory"
+                        placeholder={tUi("Optional subcategory")}
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="tags">Tags</Label>
+                      <Label htmlFor="tags">{tUi("Tags")}</Label>
                       <Input
                         id="tags"
                         value={tags}
                         onChange={(e) => setTags(e.target.value)}
-                        placeholder="Comma-separated tags"
+                        placeholder={tUi("Comma-separated tags")}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        e.g., password, reset, account
-                      </p>
+                      <p className="text-xs text-muted-foreground">{tUi("e.g., password, reset, account")}</p>
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="keywords">Keywords</Label>
+                      <Label htmlFor="keywords">{tUi("Keywords")}</Label>
                       <Input
                         id="keywords"
                         value={keywords}
                         onChange={(e) => setKeywords(e.target.value)}
-                        placeholder="Comma-separated keywords"
+                        placeholder={tUi("Comma-separated keywords")}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        For search optimization
-                      </p>
+                      <p className="text-xs text-muted-foreground">{tUi("For search optimization")}</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="authorName">Author Name</Label>
+                      <Label htmlFor="authorName">{tUi("Author Name")}</Label>
                       <Input
                         id="authorName"
                         value={authorName}
                         onChange={(e) => setAuthorName(e.target.value)}
-                        placeholder="Author name"
+                        placeholder={tUi("Author name")}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="status">Status *</Label>
+                      <Label htmlFor="status">{tUi("Status *")}</Label>
                       <Select value={status} onValueChange={setStatus}>
                         <SelectTrigger id="status">
                           <SelectValue />
@@ -398,7 +391,7 @@ export default function KbArticleEditSheet({
                         <SelectContent>
                           {STATUS_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
+                              {tUi(opt.label)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -407,31 +400,27 @@ export default function KbArticleEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="language">Language</Label>
+                    <Label htmlFor="language">{tUi("Language")}</Label>
                     <Input
                       id="language"
                       value={language}
                       onChange={(e) => setLanguage(e.target.value)}
-                      placeholder="en"
+                      placeholder={tUi("en")}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      ISO 639-1 language code (e.g., en, es, fr)
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tUi("ISO 639-1 language code (e.g., en, es, fr)")}</p>
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="customData">Custom Data</Label>
+                    <Label htmlFor="customData">{tUi("Custom Data")}</Label>
                     <Textarea
                       id="customData"
                       value={customDataText}
                       onChange={(e) => setCustomDataText(e.target.value)}
-                      placeholder={'{"source":"portal","audience":"agents"}'}
+                      placeholder={tUi("{\"source\":\"portal\",\"audience\":\"agents\"}")}
                       rows={6}
                       className="font-mono text-xs"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Enter a valid JSON object. Leave empty to save an empty object.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{tUi("Enter a valid JSON object. Leave empty to save an empty object.")}</p>
                   </div>
                 </>
               )}
@@ -444,14 +433,12 @@ export default function KbArticleEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button
             onClick={handleSave}
             disabled={saving || !title.trim() || !slug.trim() || !content.trim() || !category.trim()}
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

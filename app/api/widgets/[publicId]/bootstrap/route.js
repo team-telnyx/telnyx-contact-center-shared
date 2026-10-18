@@ -4,6 +4,7 @@ import { getPublishedWidget } from "@/lib/widgets/store";
 import { isWidgetOriginAllowed } from "@/lib/widgets/config";
 import { verifyWidgetTestGrant } from "@/lib/widgets/session-tokens";
 import { buildWidgetBootstrapPayload } from "@/lib/widgets/bootstrap-payload";
+import { refreshAvatarPreview } from "@/lib/ai/telnyx-avatars.mjs";
 
 async function bootstrap(request,context){
   const pool=getPostgresPool();if(!pool)return NextResponse.json({error:"Service unavailable"},{status:503});
@@ -20,6 +21,8 @@ async function bootstrap(request,context){
     "Access-Control-Allow-Headers":"content-type","Access-Control-Max-Age":"600","Cache-Control":"no-store",Vary:"Origin"};
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers});
   try{
+    widget.config.channels.voice.avatar = await refreshAvatarPreview(widget.config.channels.voice.avatar);
+    widget.config.channels.video.ai.avatar = await refreshAvatarPreview(widget.config.channels.video.ai.avatar);
     return NextResponse.json(buildWidgetBootstrapPayload(widget,{publicId,origin,testGrant:Boolean(grant)}),{headers});
   }catch{return NextResponse.json({error:"Widget could not be initialized"},{status:503,headers});}
 }

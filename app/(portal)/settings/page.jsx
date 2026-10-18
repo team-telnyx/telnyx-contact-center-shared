@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
@@ -158,6 +160,7 @@ const COLOR_GROUPS = [
 ];
 
 export default function SettingsPage() {
+  const tUi = useUiText();
   const [lightColors, setLightColors] = useState({});
   const [darkColors, setDarkColors] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
@@ -972,18 +975,14 @@ export default function SettingsPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader
-        title="Theme Settings"
+        title={tUi("Theme Settings")}
         badges={
-          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-300">
-            Branding & colors
-          </span>
+          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-300">{tUi("Branding & colors")}</span>
         }
         actions={
           <>
             <Button variant="outline" onClick={handleReset} disabled={isSaving}>
-              <IconRefresh className="size-4 mr-2" />
-              Reset to Defaults
-            </Button>
+              <IconRefresh className="size-4 mr-2" />{tUi("Reset to Defaults")}</Button>
             <Button
               variant="secondary"
               onClick={handleSave}
@@ -991,12 +990,10 @@ export default function SettingsPage() {
               className="border border-border/70 bg-foreground text-background hover:bg-foreground/90"
             >
               {isSaving ? (
-                "Saving..."
+                tUi("Saving...")
               ) : (
                 <>
-                  <IconCheck className="size-4 mr-2" />
-                  Save Changes
-                </>
+                  <IconCheck className="size-4 mr-2" />{tUi("Save Changes")}</>
               )}
             </Button>
           </>
@@ -1006,19 +1003,15 @@ export default function SettingsPage() {
         {/* Branding Section */}
         <Card>
         <CardHeader>
-          <CardTitle>Branding & Logos</CardTitle>
-          <CardDescription>
-            Upload logos to customize the appearance of authentication pages and
-            sidebar
-          </CardDescription>
+          <CardTitle>{tUi("Branding & Logos")}</CardTitle>
+          <CardDescription>{tUi("Upload logos to customize the appearance of authentication pages and sidebar")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Brand / company name (used in agent-assist suggested-response greetings) */}
           <div className="space-y-2">
-            <Label htmlFor="brand-name">Brand / Company Name</Label>
-            <p className="text-sm text-muted-foreground">
-              Used in agent-assist greetings, e.g. &ldquo;Thanks for calling{" "}
-              {brandName?.trim() || "<your company>"}.&rdquo;
+            <Label htmlFor="brand-name">{tUi("Brand / Company Name")}</Label>
+            <p className="text-sm text-muted-foreground">{tUi("Used in agent-assist greetings, e.g. “Thanks for calling")}{" "}
+              {brandName?.trim() || tUi("<your company>")}.&rdquo;
             </p>
             <Input
               id="brand-name"
@@ -1027,22 +1020,20 @@ export default function SettingsPage() {
                 setBrandName(e.target.value);
                 setHasChanges(true);
               }}
-              placeholder="e.g. Acme Air Medical"
+              placeholder={tUi("e.g. Acme Air Medical")}
               className="max-w-md"
             />
           </div>
 
           {/* Brand Logo (Auth Pages Left Side) */}
           <div className="space-y-2">
-            <Label>Brand Logo (Auth Pages)</Label>
-            <p className="text-sm text-muted-foreground">
-              Logo displayed on the left side of sign-in and sign-up pages
-            </p>
+            <Label>{tUi("Brand Logo (Auth Pages)")}</Label>
+            <p className="text-sm text-muted-foreground">{tUi("Logo displayed on the left side of sign-in and sign-up pages")}</p>
             <div className="flex items-center gap-4">
               <div className="relative">
                 <img
                   src={brandLogoUri || "/auth_brand_logo.png"}
-                  alt="Brand Logo"
+                  alt={tUi("Brand Logo")}
                   className="h-16 w-auto object-contain border rounded p-2"
                 />
                 {brandLogoUri && (
@@ -1072,22 +1063,20 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => brandLogoInputRef.current?.click()}
               >
-                {brandLogoUri ? "Change Logo" : "Upload Logo"}
+                {brandLogoUri ? tUi("Change Logo") : tUi("Upload Logo")}
               </Button>
             </div>
           </div>
 
           {/* Auth Right Image */}
           <div className="space-y-2">
-            <Label>Right Panel Image (Auth Pages)</Label>
-            <p className="text-sm text-muted-foreground">
-              Image displayed on the right panel of sign-in and sign-up pages
-            </p>
+            <Label>{tUi("Right Panel Image (Auth Pages)")}</Label>
+            <p className="text-sm text-muted-foreground">{tUi("Image displayed on the right panel of sign-in and sign-up pages")}</p>
             <div className="flex items-center gap-4">
               <div className="relative">
                 <img
                   src={authRightImageUri || "/auth_right_image.png"}
-                  alt="Auth Right Image"
+                  alt={tUi("Auth Right Image")}
                   className="h-32 w-48 object-cover border rounded"
                 />
                 {authRightImageUri && (
@@ -1117,22 +1106,20 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => authRightInputRef.current?.click()}
               >
-                {authRightImageUri ? "Change Image" : "Upload Image"}
+                {authRightImageUri ? tUi("Change Image") : tUi("Upload Image")}
               </Button>
             </div>
           </div>
 
           {/* Sidebar Logo */}
           <div className="space-y-2">
-            <Label>Sidebar Logo</Label>
-            <p className="text-sm text-muted-foreground">
-              Logo displayed at the top of the sidebar after authentication
-            </p>
+            <Label>{tUi("Sidebar Logo")}</Label>
+            <p className="text-sm text-muted-foreground">{tUi("Logo displayed at the top of the sidebar after authentication")}</p>
             <div className="flex items-center gap-4">
               <div className="relative">
                 <img
                   src={sidebarLogoUri || "/sidebar_logo.png"}
-                  alt="Sidebar Logo"
+                  alt={tUi("Sidebar Logo")}
                   className="h-12 w-auto object-contain border rounded p-2"
                 />
                 {sidebarLogoUri && (
@@ -1162,7 +1149,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => sidebarLogoInputRef.current?.click()}
               >
-                {sidebarLogoUri ? "Change Logo" : "Upload Logo"}
+                {sidebarLogoUri ? tUi("Change Logo") : tUi("Upload Logo")}
               </Button>
             </div>
           </div>
@@ -1174,15 +1161,11 @@ export default function SettingsPage() {
         onValueChange={handleThemeTabChange}
         className="w-full"
       >
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="light" className="flex items-center gap-2">
-            <IconSun className="size-4" />
-            Light Theme
-          </TabsTrigger>
-          <TabsTrigger value="dark" className="flex items-center gap-2">
-            <IconMoon className="size-4" />
-            Dark Theme
-          </TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="light">
+            <IconSun className="size-4" />{tUi("Light Theme")}</TabsTrigger>
+          <TabsTrigger value="dark">
+            <IconMoon className="size-4" />{tUi("Dark Theme")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="light" className="mt-6">
@@ -1190,15 +1173,15 @@ export default function SettingsPage() {
             {COLOR_GROUPS.map((group) => (
               <Card key={group.title}>
                 <CardHeader>
-                  <CardTitle>{group.title}</CardTitle>
-                  <CardDescription>{group.description}</CardDescription>
+                  <CardTitle>{tUi(group.title)}</CardTitle>
+                  <CardDescription>{tUi(group.description)}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {group.colors.map((color) => (
                       <ColorPicker
                         key={color.key}
-                        label={color.label}
+                        label={tUi(color.label)}
                         value={lightColors[color.key] || ""}
                         initialHex={lightColorsHex[color.key] || undefined}
                         onChange={(value, hexValue) =>
@@ -1218,15 +1201,15 @@ export default function SettingsPage() {
             {COLOR_GROUPS.map((group) => (
               <Card key={group.title}>
                 <CardHeader>
-                  <CardTitle>{group.title}</CardTitle>
-                  <CardDescription>{group.description}</CardDescription>
+                  <CardTitle>{tUi(group.title)}</CardTitle>
+                  <CardDescription>{tUi(group.description)}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {group.colors.map((color) => (
                       <ColorPicker
                         key={color.key}
-                        label={color.label}
+                        label={tUi(color.label)}
                         value={darkColors[color.key] || ""}
                         initialHex={darkColorsHex[color.key] || undefined}
                         onChange={(value, hexValue) =>
@@ -1244,30 +1227,22 @@ export default function SettingsPage() {
 
       {hasChanges && (
         <div className="fixed bottom-4 right-4 bg-card border border-border rounded-lg shadow-lg p-4">
-          <p className="text-sm text-muted-foreground">
-            You have unsaved changes. Don't forget to save!
-          </p>
+          <p className="text-sm text-muted-foreground">{tUi("You have unsaved changes. Don't forget to save!")}</p>
         </div>
       )}
 
       <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset Colors to Defaults?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to reset all colors to their default values?
-              This action cannot be undone and will remove all your custom color
-              settings.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Reset Colors to Defaults?")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("Are you sure you want to reset all colors to their default values? This action cannot be undone and will remove all your custom color settings.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tUi("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmReset}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Reset to Defaults
-            </AlertDialogAction>
+            >{tUi("Reset to Defaults")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1275,22 +1250,15 @@ export default function SettingsPage() {
       <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved changes. Are you sure you want to leave this
-              page? Your changes will be lost if you don't save them.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{tUi("Unsaved Changes")}</AlertDialogTitle>
+            <AlertDialogDescription>{tUi("You have unsaved changes. Are you sure you want to leave this page? Your changes will be lost if you don't save them.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleLeaveCancel}>
-              Stay on Page
-            </AlertDialogCancel>
+            <AlertDialogCancel onClick={handleLeaveCancel}>{tUi("Stay on Page")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleLeaveConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Leave Without Saving
-            </AlertDialogAction>
+            >{tUi("Leave Without Saving")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

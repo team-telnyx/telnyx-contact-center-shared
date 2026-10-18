@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React, { useState, useEffect } from "react";
 import {
@@ -44,6 +46,7 @@ export default function StatusEditSheet({
   statusId,
   onSave,
 }) {
+  const tUi = useUiText();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
@@ -152,7 +155,7 @@ export default function StatusEditSheet({
 
       notify({
         title: "Status saved",
-        description: `Status ${statusId ? "updated" : "created"} successfully`,
+        description: (statusId ? tUi("Status updated successfully") : tUi("Status created successfully")),
         variant: "success",
       });
 
@@ -175,21 +178,17 @@ export default function StatusEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             {statusId ? (
               <>
-                <IconEdit className="size-5" />
-                Edit Status
-              </>
+                <IconEdit className="size-5" />{tUi("Edit Status")}</>
             ) : (
               <>
-                <IconPlus className="size-5" />
-                Create Status
-              </>
+                <IconPlus className="size-5" />{tUi("Create Status")}</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -227,9 +226,7 @@ export default function StatusEditSheet({
                 <>
                   {/* Active Switch at the top */}
                   <div className="flex items-center justify-between pb-4 border-b">
-                    <Label htmlFor="isActive" className="text-sm font-medium">
-                      Active
-                    </Label>
+                    <Label htmlFor="isActive" className="text-sm font-medium">{tUi("Active")}</Label>
                     <Switch
                       id="isActive"
                       checked={isActive}
@@ -241,9 +238,7 @@ export default function StatusEditSheet({
                     <Label
                       htmlFor="userSelectable"
                       className="text-sm font-medium"
-                    >
-                      User selectable
-                    </Label>
+                    >{tUi("User selectable")}</Label>
                     <Switch
                       id="userSelectable"
                       checked={userSelectable}
@@ -252,17 +247,17 @@ export default function StatusEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Name *</Label>
+                    <Label htmlFor="name">{tUi("Name *")}</Label>
                     <Input
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g., Available, Busy, Break"
+                      placeholder={tUi("e.g., Available, Busy, Break")}
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="type">Type *</Label>
+                    <Label htmlFor="type">{tUi("Type *")}</Label>
                     <Select value={type} onValueChange={setType}>
                       <SelectTrigger id="type">
                         <SelectValue />
@@ -270,7 +265,7 @@ export default function StatusEditSheet({
                       <SelectContent>
                         {STATUS_TYPES.map((t) => (
                           <SelectItem key={t.value} value={t.value}>
-                            {t.label}
+                            {tUi(t.label)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -278,7 +273,7 @@ export default function StatusEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="icon">Icon</Label>
+                    <Label htmlFor="icon">{tUi("Icon")}</Label>
                     <Combobox
                       value={icon}
                       onChange={setIcon}
@@ -287,7 +282,7 @@ export default function StatusEditSheet({
                         label: opt.label,
                         Icon: opt.Icon,
                       }))}
-                      placeholder="Select icon"
+                      placeholder={tUi("Select icon")}
                       searchable
                       contentClassName="w-[--radix-dropdown-menu-trigger-width]"
                       renderSelected={(selected) => {
@@ -302,7 +297,7 @@ export default function StatusEditSheet({
                               style={color ? { color } : undefined}
                             />
                             <span className="truncate">
-                              {selected?.label || "Select icon"}
+                              {selected?.label || tUi("Select icon")}
                             </span>
                           </div>
                         );
@@ -311,7 +306,7 @@ export default function StatusEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="color">Icon Color</Label>
+                    <Label htmlFor="color">{tUi("Icon Color")}</Label>
                     <Select value={color} onValueChange={setColor}>
                       <SelectTrigger id="color">
                         <SelectValue />
@@ -324,7 +319,7 @@ export default function StatusEditSheet({
                                 className="inline-block size-3 rounded-full border"
                                 style={{ backgroundColor: opt.value }}
                               />
-                              <span>{opt.label}</span>
+                              <span>{tUi(opt.label)}</span>
                             </span>
                           </SelectItem>
                         ))}
@@ -335,7 +330,7 @@ export default function StatusEditSheet({
                   <div className="border-t" />
 
                   <div className="grid gap-2">
-                    <Label htmlFor="displayOrder">Display Order</Label>
+                    <Label htmlFor="displayOrder">{tUi("Display Order")}</Label>
                     <Input
                       id="displayOrder"
                       type="number"
@@ -346,12 +341,12 @@ export default function StatusEditSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description">{tUi("Description")}</Label>
                     <Input
                       id="description"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Optional description for this status"
+                      placeholder={tUi("Optional description for this status")}
                     />
                   </div>
                 </>
@@ -365,11 +360,9 @@ export default function StatusEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={handleSave} disabled={saving || !name.trim()}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>

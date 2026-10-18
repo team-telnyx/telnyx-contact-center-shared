@@ -1,4 +1,6 @@
 "use client";
+import { useUiText } from "@/components/i18n/use-ui-text";
+
 
 import React from "react";
 import {
@@ -34,6 +36,7 @@ export default function ContactEditSheet({
   onSaveComplete,
   prefillPhone,
 }) {
+  const tUi = useUiText();
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
@@ -234,13 +237,13 @@ export default function ContactEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="right"
+        side="end"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             <IconEdit className="size-5" />
-            {contactId ? "Edit Contact" : "New Contact"}
+            {contactId ? tUi("Edit Contact") : tUi("New Contact")}
           </SheetTitle>
         </SheetHeader>
 
@@ -273,14 +276,11 @@ export default function ContactEditSheet({
                 <>
                   {/* Name Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Personal Information
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Personal Information")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">
-                            First name <span className="text-red-500">*</span>
+                          <Label className="text-sm">{tUi("First name ")}<span className="text-red-500">*</span>
                           </Label>
                           <Input
                             value={firstName}
@@ -288,8 +288,7 @@ export default function ContactEditSheet({
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">
-                            Last name <span className="text-red-500">*</span>
+                          <Label className="text-sm">{tUi("Last name ")}<span className="text-red-500">*</span>
                           </Label>
                           <Input
                             value={lastName}
@@ -298,8 +297,7 @@ export default function ContactEditSheet({
                         </div>
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">
-                          Display name <span className="text-red-500">*</span>
+                        <Label className="text-sm">{tUi("Display name ")}<span className="text-red-500">*</span>
                         </Label>
                         <Input
                           value={displayName}
@@ -308,8 +306,7 @@ export default function ContactEditSheet({
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">
-                            Company <span className="text-red-500">*</span>
+                          <Label className="text-sm">{tUi("Company ")}<span className="text-red-500">*</span>
                           </Label>
                           <Input
                             value={companyName}
@@ -317,7 +314,7 @@ export default function ContactEditSheet({
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Job title</Label>
+                          <Label className="text-sm">{tUi("Job title")}</Label>
                           <Input
                             value={jobTitle}
                             onChange={(e) => setJobTitle(e.target.value)}
@@ -325,7 +322,7 @@ export default function ContactEditSheet({
                         </div>
                       </div>
                       <div className="grid gap-2">
-                        <Label className="text-sm">Department</Label>
+                        <Label className="text-sm">{tUi("Department")}</Label>
                         <Input
                           value={department}
                           onChange={(e) => setDepartment(e.target.value)}
@@ -338,20 +335,18 @@ export default function ContactEditSheet({
 
                   {/* Phone Numbers Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Phone Numbers
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Phone Numbers")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Phone</Label>
+                          <Label className="text-sm">{tUi("Phone")}</Label>
                           <Input
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Mobile</Label>
+                          <Label className="text-sm">{tUi("Mobile")}</Label>
                           <Input
                             value={mobile}
                             onChange={(e) => setMobile(e.target.value)}
@@ -360,14 +355,14 @@ export default function ContactEditSheet({
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Business phone 1</Label>
+                          <Label className="text-sm">{tUi("Business phone 1")}</Label>
                           <Input
                             value={businessPhone1}
                             onChange={(e) => setBusinessPhone1(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Business phone 2</Label>
+                          <Label className="text-sm">{tUi("Business phone 2")}</Label>
                           <Input
                             value={businessPhone2}
                             onChange={(e) => setBusinessPhone2(e.target.value)}
@@ -376,14 +371,14 @@ export default function ContactEditSheet({
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Home phone 1</Label>
+                          <Label className="text-sm">{tUi("Home phone 1")}</Label>
                           <Input
                             value={homePhone1}
                             onChange={(e) => setHomePhone1(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Home phone 2</Label>
+                          <Label className="text-sm">{tUi("Home phone 2")}</Label>
                           <Input
                             value={homePhone2}
                             onChange={(e) => setHomePhone2(e.target.value)}
@@ -397,13 +392,11 @@ export default function ContactEditSheet({
 
                   {/* Email Addresses Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Email Addresses
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Email Addresses")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Email address 1</Label>
+                          <Label className="text-sm">{tUi("Email address 1")}</Label>
                           <Input
                             type="email"
                             value={emailAddress1}
@@ -411,7 +404,7 @@ export default function ContactEditSheet({
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Email address 2</Label>
+                          <Label className="text-sm">{tUi("Email address 2")}</Label>
                           <Input
                             type="email"
                             value={emailAddress2}
@@ -426,12 +419,10 @@ export default function ContactEditSheet({
 
                   {/* Address Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Address
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Address")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Street</Label>
+                        <Label className="text-sm">{tUi("Street")}</Label>
                         <Input
                           value={addressStreet}
                           onChange={(e) => setAddressStreet(e.target.value)}
@@ -439,14 +430,14 @@ export default function ContactEditSheet({
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">City</Label>
+                          <Label className="text-sm">{tUi("City")}</Label>
                           <Input
                             value={addressCity}
                             onChange={(e) => setAddressCity(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">State</Label>
+                          <Label className="text-sm">{tUi("State")}</Label>
                           <Input
                             value={addressState}
                             onChange={(e) => setAddressState(e.target.value)}
@@ -455,14 +446,14 @@ export default function ContactEditSheet({
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">ZIP code</Label>
+                          <Label className="text-sm">{tUi("ZIP code")}</Label>
                           <Input
                             value={addressZip}
                             onChange={(e) => setAddressZip(e.target.value)}
                           />
                         </div>
                         <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Country</Label>
+                          <Label className="text-sm">{tUi("Country")}</Label>
                           <Input
                             value={addressCountry}
                             onChange={(e) => setAddressCountry(e.target.value)}
@@ -476,12 +467,10 @@ export default function ContactEditSheet({
 
                   {/* Notes Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Notes
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Notes")}</h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Notes</Label>
+                        <Label className="text-sm">{tUi("Notes")}</Label>
                         <Textarea
                           value={notes}
                           onChange={(e) => setNotes(e.target.value)}
@@ -495,21 +484,17 @@ export default function ContactEditSheet({
 
                   {/* Custom Data Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Custom Data
-                    </h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">{tUi("Custom Data")}</h3>
                     <div className="grid gap-2">
-                      <Label className="text-sm">JSON object</Label>
+                      <Label className="text-sm">{tUi("JSON object")}</Label>
                       <Textarea
                         value={customDataText}
                         onChange={(e) => setCustomDataText(e.target.value)}
                         rows={6}
                         className="font-mono text-xs"
-                        placeholder={'{"externalId":"123","segment":"vip"}'}
+                        placeholder={tUi("{\"externalId\":\"123\",\"segment\":\"vip\"}")}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Enter a valid JSON object. Leave empty to save an empty object.
-                      </p>
+                      <p className="text-xs text-muted-foreground">{tUi("Enter a valid JSON object. Leave empty to save an empty object.")}</p>
                     </div>
                   </div>
                 </>
@@ -524,11 +509,9 @@ export default function ContactEditSheet({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-          >
-            Cancel
-          </Button>
+          >{tUi("Cancel")}</Button>
           <Button onClick={onSave} disabled={saving || loading}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? tUi("Saving...") : tUi("Save Changes")}
           </Button>
         </SheetFooter>
       </SheetContent>
