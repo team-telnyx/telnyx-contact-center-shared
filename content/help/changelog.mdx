@@ -16,6 +16,9 @@ are also available inside the application through **About Contact Center → Rel
 
 ### Fixed
 
+- Custom avatar previews decode only bounded raster images into a canvas.
+- Localization review tools keep configuration and provider errors out of console output.
+
 - Hold and unhold include the selected voice device's authorization headers.
 - Direct calls remain connected when answer/bridge webhooks omit routing headers
   or arrive more than once; the connect saga retains lifecycle ownership.

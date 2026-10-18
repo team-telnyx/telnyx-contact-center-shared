@@ -18,7 +18,7 @@ async function fixture(t, options={}) {
   };
   const relay=createWatchAudioRelay({store,apiKey:()=> 'server-only-secret',heartbeatMs:50,...options,
     openUpstream(url,opts) {
-      upstreamCount++; assert.match(url,/api.telnyx.com/);assert.equal(opts.headers.Authorization,'Bearer server-only-secret');
+      upstreamCount++; assert.equal(new URL(url).hostname,'api.telnyx.com');assert.equal(opts.headers.Authorization,'Bearer server-only-secret');
       const socket=new EventEmitter();socket.readyState=0;socket.bufferedAmount=0;
       socket.send=text=>frames.push(JSON.parse(text));
       socket.close=socket.terminate=()=>{ if(socket.readyState===3)return;socket.readyState=3;socket.emit('close'); };

@@ -52,7 +52,7 @@ async function worker() {
           signal: AbortSignal.timeout(180000),
           body: JSON.stringify({ model, max_tokens: 12000, enable_thinking: false, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: instruction }, { role: 'user', content: JSON.stringify({ locale: job.locale, entryCount: job.entries.length, glossary: glossary.entries.map(e => ({ source: e.source, context: e.context, meaning: e.meaning, translation: e.translations[job.locale] })), entries: job.entries }) }] })
         });
-        if (!response.ok) throw Error(`HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
+        if (!response.ok) throw Error(`HTTP ${response.status}`);
         const responseBody = await response.json();
         const content = responseBody.choices?.[0]?.message?.content || '';
         const reviewed = JSON.parse(content.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''));
@@ -69,7 +69,7 @@ async function worker() {
         lastError = null; break;
       } catch (error) {
         lastError = error;
-        console.warn(`${job.locale} attempt ${attempt + 1}: ${error.message}`);
+        console.warn(`${job.locale} attempt ${attempt + 1} failed; details saved in the local review output.`);
       }
     }
     if (lastError) results.push({ locale: job.locale, fingerprint: job.fingerprint, error: lastError.message, reviewedCount: 0 });
@@ -78,5 +78,5 @@ async function worker() {
 await Promise.all(Array.from({ length: Number(env.I18N_REVIEW_CONCURRENCY) || 10 }, worker));
 const summary = { model, totalBatches: total, completedBatches: results.filter(r => !r.error).length, failedBatches: results.filter(r => r.error), reviewedCount: results.reduce((sum, r) => sum + r.reviewedCount, 0), proposedCorrections: results.reduce((sum, r) => sum + (r.issues?.length || 0), 0) };
 await fs.writeFile(path.join(output, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
-console.log(JSON.stringify(summary));
+console.log(JSON.stringify({ totalBatches: total, completedBatches: summary.completedBatches, failedBatches: summary.failedBatches.length, reviewedCount: summary.reviewedCount, proposedCorrections: summary.proposedCorrections }));
 if (summary.failedBatches.length) process.exitCode = 1;

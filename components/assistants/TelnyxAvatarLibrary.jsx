@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { drawAvatarPreview, isAvatarImageFile } from "@/lib/ai/avatar-preview.mjs";
 
 // Shared catalog for assistant settings and both widget media channels. The
 // avatar ID is durable; catalog reads refresh the provider's signed previews.
@@ -19,7 +20,8 @@ export default function TelnyxAvatarLibrary({ selectedId, onSelect, carousel = f
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState("");
+  const [previewReady, setPreviewReady] = useState(false);
+  const previewCanvas = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [renameId, setRenameId] = useState("");
@@ -35,13 +37,20 @@ export default function TelnyxAvatarLibrary({ selectedId, onSelect, carousel = f
     }).catch(e => { if (!controller.signal.aborted) setCatalog({ status: "error", entries: [], error: e.message }); });
     return () => controller.abort();
   }, [revision]);
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(() => {
+    if (!file || !previewCanvas.current) return;
+    const controller = new AbortController();
+    drawAvatarPreview(previewCanvas.current, file, { signal: controller.signal })
+      .then(drawn => { if (drawn) setPreviewReady(true); })
+      .catch(() => { if (!controller.signal.aborted) { setError(tUi("Invalid image data")); setFile(null); setPreviewReady(false); } });
+    return () => controller.abort();
+  }, [file, tUi]);
   async function save(method, body) {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/ai/avatars", { method, ...(method === "PATCH" ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { body }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Avatar operation failed");
-      onSelect(data.avatar); setFile(null); setPreview(""); setName(""); setRenameId(""); reload(r => r + 1);
+      onSelect(data.avatar); setFile(null); setPreviewReady(false); setName(""); setRenameId(""); reload(r => r + 1);
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
   const visible = catalog.entries.filter(a => a.type === type && a.name.toLowerCase().includes(search.toLowerCase()));
@@ -84,12 +93,11 @@ export default function TelnyxAvatarLibrary({ selectedId, onSelect, carousel = f
     {type === "custom" && <div className="space-y-2 rounded-lg border p-3">
       <Label>{tUi("Create an avatar from an image")}</Label>
       <Input value={name} aria-label={tUi("Avatar name")} placeholder={tUi("Avatar name")} maxLength={255} onChange={e => setName(e.target.value)} />
-      <Input type="file" aria-label={tUi("Avatar image")} accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e => { const f = e.target.files?.[0]; setError(""); if (f?.size > 10 * 1024 * 1024) { setError(tUi("Choose an image up to 10 MiB")); setFile(null); setPreview(""); e.target.value = ""; return; } setFile(f || null); setPreview(f ? URL.createObjectURL(f) : ""); }} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {preview && <img src={preview} alt={tUi("Avatar preview")} className="max-h-40 rounded object-contain" />}
+      <Input type="file" aria-label={tUi("Avatar image")} accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e => { const f = e.target.files?.[0]; setError(""); setPreviewReady(false); if (f && !isAvatarImageFile(f)) { setError(tUi("Choose a JPEG, PNG or WebP image up to 10 MiB")); setFile(null); e.target.value = ""; return; } setFile(f || null); }} />
+      {file && <>{!previewReady && <Skeleton className="h-40 w-40 rounded" />}<canvas ref={previewCanvas} role="img" aria-label={tUi("Avatar preview")} hidden={!previewReady} className="max-h-40 rounded" /></>}
       <p className="text-xs text-muted-foreground">{tUi("JPEG, PNG or WebP, up to 10 MiB. Each side: 256–8192 pixels; at most 40 megapixels. Use one centered, front-facing person.")}</p>
       <p className="text-xs text-muted-foreground">{tUi("Telnyx allows 20 custom avatars per organization. Uploaded avatars cannot currently be deleted; replacing an image uses a new slot.")}</p>
-      <Button type="button" disabled={busy || !file || !name.trim()} onClick={() => { const form = new FormData(); form.set("name", name); form.set("image_file", file); save("POST", form); }}>{tUi(busy ? "Uploading…" : "Create avatar")}</Button>
+      <Button type="button" disabled={busy || !file || !previewReady || !name.trim()} onClick={() => { const form = new FormData(); form.set("name", name); form.set("image_file", file); save("POST", form); }}>{tUi(busy ? "Uploading…" : "Create avatar")}</Button>
     </div>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </Tabs.Content>

@@ -62,7 +62,7 @@ async function worker() {
         await fs.writeFile(job.file, JSON.stringify(result, null, 2) + '\n');
         results.push(result); done++; console.log(`${done}/${total} ${job.locale}: ${decisions.filter(d => d.approve).length}/${decisions.length} accepted`);
         error = null; break;
-      } catch (e) { error = e; console.warn(`${job.locale} attempt ${attempt + 1}: ${e.message}`); }
+      } catch (e) { error = e; console.warn(`${job.locale} attempt ${attempt + 1} failed; details saved in the local review output.`); }
     }
     if (error) results.push({ locale: job.locale, error: error.message });
   }
@@ -70,5 +70,5 @@ async function worker() {
 await Promise.all(Array.from({ length: Number(env.I18N_REVIEW_CONCURRENCY) || 10 }, worker));
 const summary = { model, totalBatches: total, failed: results.filter(r => r.error), decisions: results.flatMap(r => r.decisions || []).length, accepted: results.flatMap(r => r.decisions || []).filter(d => d.approve).length };
 await fs.writeFile(path.join(output, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
-console.log(JSON.stringify(summary));
+console.log(JSON.stringify({ totalBatches: total, failedBatches: summary.failed.length, decisions: summary.decisions, accepted: summary.accepted }));
 if (summary.failed.length) process.exitCode = 1;
