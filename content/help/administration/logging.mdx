@@ -4,7 +4,7 @@ description: Inspect live and archived logs and configure runtime logging levels
 audiences: [admin, owner]
 keywords: [logging, live logs, JSONL, level, topic, preset, troubleshooting]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Open **Admin → System**, then select **Logging**. The nested rail contains Live, Files, Settings, and Exit.
@@ -28,3 +28,9 @@ Presets include normal production logging, temporary STT debug, and errors-only 
 ## Sensitive information
 
 Although the logger applies redaction rules, treat logs as sensitive. Do not paste API keys, bearer tokens, secret values, customer data, or recordings into search fields or external tickets. Share only the minimum excerpt required for diagnosis.
+
+## Investigate current media and AI failures
+
+Correlate the interaction, flow or conversation ID and time before choosing topics. For a failed assistant invitation, check flow-save validation and Conversation WebSocket conflicts. For delayed AI text, inspect event connection/recovery and the provider conversation. For Video AI unavailable errors, check the video runtime's readiness and capacity; adding a Vision tool does not repair a failed runtime.
+
+For a schedule error, inspect its evaluated date, coverage and published revision. For a pending device move, inspect its lifecycle evidence instead of assuming an accepted command completed. Live-view interruption can be a stream/session problem; refresh or inspect stored files before concluding no events occurred. See [Troubleshooting](/help/troubleshooting).

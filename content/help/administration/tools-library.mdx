@@ -4,7 +4,7 @@ description: Create reusable assistant tools, test webhooks, and assign tools to
 audiences: [admin, owner]
 keywords: [AI tool, webhook, transfer, handoff, retrieval, DTMF]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Open **Admin → AI Assistants**, then select **Tools Library** in the rail. The library stores reusable tools independently from any one assistant.
@@ -23,14 +23,30 @@ Every tool has a **Display Name**, **Tool Type**, and type-specific configuratio
 | **Hangup** | Ends the call, optionally with a closing message. |
 | **Transfer** | Transfers to an E.164 number or SIP URI, with targets, headers, and optional warm-transfer instructions. |
 | **Handoff** | Hands the conversation to another AI assistant. |
-| **Send Message** | Sends an SMS/MMS message during the conversation. |
+| **Send Message (SMS)** | Sends an SMS/MMS message during the conversation. |
 | **Invite** | Adds a third party to a call and configures targets, headers, and answering-machine behavior. |
 | **SIP Refer** | Transfers via SIP REFER with authentication and headers. |
-| **Send DTMF** | Lets the assistant send DTMF tones. |
-| **Retrieval** | Searches selected knowledge buckets. |
-| **Skip Turn** | Skips the assistant response for the current turn. |
+| **Send DTMF** | Lets the assistant send DTMF tones to operate the configured telephone interaction. |
+| **Retrieval** | Searches selected embedded knowledge buckets for material relevant to the conversation. |
+| **Skip Turn** | Skips the assistant response for the current turn; use instructions to define when silence is appropriate. |
+| **Vision** | Analyzes permitted camera/screen frames in a supported live session. Configure source consent and video publication separately. |
+| **Function** | Declares a function name, description and parameter schema for the supported execution integration. A declaration alone does not implement its handler. |
+| **Payment** | Uses a configured payment connector and payment parameters. A valid designated connector is required for testing. |
+| **Update Dynamic Variables** | Updates the configured conversation variables for later use in the assistant session. |
+| **WhatsApp Template** | Sends a configured approved template with its required parameters; validate the channel and template prerequisites. |
+| **Client-Side Tool** | Requests a handler supplied by the connected client. The client must support and implement that handler. |
 
 For webhook secrets, insert a reference from Secrets instead of typing credentials directly. Async webhooks do not wait for a response, so response fields cannot drive the current turn.
+
+## Tool behavior and compatibility
+
+Some types allow only one tool of that type per assistant; others allow several distinct definitions. Review required fields and supported combinations before saving. Configure webhook request-start and delayed-response messages when appropriate; a delayed message applies only while the request remains pending. Tool audio is separate from the assistant's normal response.
+
+Skip Turn is required for assistants selected for [voice invitations](/help/administration/call-flows/nodes/agent-assist#allow-assistant-invitations). Give the assistant clear instructions about addressed questions and silence; attaching the tool alone does not define when it should speak.
+
+Vision for a video session is separate from direct image input in AI chat. Video publication rejects incompatible workflow, telephone-transfer, delegation and custom client tools. See [Video AI and Vision](/help/administration/chat-widgets#video-calls-with-ai-and-vision).
+
+Payment, external client handlers and remote integrations require controlled runtime tests with the relevant resources. A successful definition save is not evidence of a completed payment or handler invocation. Review the [assistant limitations](/help/administration/ai-assistants#known-limitations).
 
 ## Test and assign
 

@@ -1,0 +1,46 @@
+---
+title: Schedules & calendars
+description: Publish working hours and exception calendars, then use them in Call Flow routing.
+audiences: [admin, owner]
+keywords: [schedules, calendars, holidays, opening hours, time zone, DST, coverage, publication]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+Open **Admin → System → Schedules & calendars**. Use schedules for weekly opening hours and calendars for holidays or date-specific exceptions. **Scheduled Events** under AI Assistants is a separate feature for scheduling calls and messages.
+
+## Create and publish working hours
+
+1. Create a schedule, name it, and select its IANA time zone, such as `Europe/Warsaw`.
+2. Set each weekday to closed, all day, or one or more time periods. An end earlier than the start continues into the next day; overlapping periods are rejected. The end time is exclusive.
+3. Choose **Save draft**. This preserves your edits without changing call routing.
+4. Choose **Publish**, review the affected Call Flows, and confirm the publication.
+5. Select the published schedule in a [Schedules node](/help/administration/call-flows/nodes/schedules), connect both outputs, test, and save the flow.
+
+Drafts and published revisions are separate. A flow starting after publication uses the new revision; an already running flow keeps its earlier configuration. A concurrent edit requires reloading and reviewing the latest draft. You cannot archive a resource while a flow references it.
+
+## Exception calendars
+
+Create a calendar with an explicit **coverage range**, then add dates or inclusive date ranges. Each entry can close the day, open it all day, or replace its hours. Entries can be one-time or repeat annually. Replacement hours also suppress overnight hours carried from the preceding day; represent an overnight exception with a separate entry for each date.
+
+Attach calendars in priority order. The **first selected calendar with a matching exception wins**. Within that calendar, a one-time exception takes precedence over an annual entry. Equal-priority overlaps are rejected. Annual ranges may cross New Year; February 29 matches only leap years.
+
+Every enabled calendar must cover the evaluated date. A date outside coverage is an **evaluation error**, not a closed day. Coverage can span up to five years, with a review warning in the final 90 days. Maintain successive years in the same calendar rather than attaching calendars with disjoint coverage.
+
+## Import holidays or your own dates
+
+Choose country, year and an optional region, preview the holiday import, and review the merged entries before saving and publishing. The imported dates become editable calendar entries; live calls do not depend on the holiday service. Re-import preserves overlapping entries and manual corrections. Import every required year: widening coverage alone does not add missing holidays.
+
+CSV and JSON imports are available if the holiday provider is unavailable. CSV uses `name,start_date,end_date,availability,repeat,start,end`. Dates use `YYYY-MM-DD`; availability is `closed`, `open` or `hours`, and repeat is `once` or `annual`. Set coverage before CSV import. JSON includes `coverageStart`, `coverageEnd` and entries with unique IDs.
+
+## Test a decision
+
+The node tester uses published shared resources. Enter a local date and time in the schedule's time zone; the browser's time zone does not change the rule. A nonexistent spring-forward time is rejected. A repeated fall-back time requires choosing its earlier or later occurrence.
+
+Check the selected branch, matched rule, calendar revision and local evaluation time. Test opening and closing boundaries, overnight periods, holidays, the end of coverage and daylight-saving changes. The tester does not place a call.
+
+## Resolve errors and access problems
+
+If coverage is missing, import or define the required year, review coverage, save and publish, then retest. If the node references an unavailable resource, select a published replacement. The node's **If evaluation fails** setting determines which branch continues; the monitor still records the error.
+
+Screen access, editing, publication, import and testing have separate permissions. Call Flow editors can select published resources without access to calendar drafts. Exported flows retain resource IDs; when importing into another installation, select resources published in that installation.

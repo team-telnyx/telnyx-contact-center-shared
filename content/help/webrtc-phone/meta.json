@@ -1,4 +1,12 @@
 {
   "title": "WebRTC Phone",
-  "pages": ["index", "setup", "inbound-outbound", "active-call-controls", "transfer-consult", "troubleshooting"]
+  "pages": [
+    "index",
+    "setup",
+    "devices",
+    "inbound-outbound",
+    "active-call-controls",
+    "transfer-consult",
+    "troubleshooting"
+  ]
 }

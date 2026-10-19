@@ -57,7 +57,7 @@ export default function CobrowseAgentModal({ interaction, onClose }) {
 
   const live = liveStates.has(state.session?.state);
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent className="z-[80] max-h-[min(90vh,560px)] overflow-y-auto sm:max-w-md" overlayClassName="z-[79]" showCloseButton={false}>
+    <DialogContent data-help-id="agent.cobrowse" className="z-[80] max-h-[min(90vh,560px)] overflow-y-auto sm:max-w-md" overlayClassName="z-[79]" showCloseButton={false}>
       <DialogHeader>
         <DialogTitle>{tUi("Co-browsing")}</DialogTitle>
         <DialogDescription>{tUi("Page viewing requires consent · control requires a second approval · no recording")}</DialogDescription>

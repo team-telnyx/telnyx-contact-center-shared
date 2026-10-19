@@ -1,5 +1,6 @@
 "use client";
 import { operationalStatusLabel } from "@/lib/i18n/interaction-labels.mjs";
+import { transcriptSpeaker, transcriptSpeakerLabel } from "@/lib/agent-assist/transcription-speaker.mjs";
 import { useUiText } from "@/components/i18n/use-ui-text";
 
 
@@ -26,6 +27,7 @@ import {
   Volume2,
   User,
   Headphones,
+  Bot,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { notify } from "@/components/ToastNotify";
@@ -430,7 +432,7 @@ export function AgentAssist({ interactionId, interaction }) {
                 </div>
               ) : (
                 <div className="p-3 space-y-2">
-                  {transcriptions.map((t, idx) => (
+                  {transcriptions.filter(t => !t.deleted).map((t, idx) => (
                     <TranscriptionBubble
                       key={t.id || idx}
                       transcription={t}
@@ -519,14 +521,15 @@ export function AgentAssist({ interactionId, interaction }) {
  */
 function TranscriptionBubble({ transcription, isSelected, onClick }) {
   const tUi = useUiText();
-  const isInbound = transcription.track === "inbound";
+  const isInbound = transcriptSpeaker(transcription.track) === "customer";
+  const isAssistant = transcriptSpeaker(transcription.track) === "assistant";
   const isInterim = !transcription.isFinal;
 
   return (
-    <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div data-speaker={transcriptSpeaker(transcription.track)} className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300 ${isAssistant ? "justify-center" : isInbound ? "justify-start" : "justify-end"}`}>
       <div
-        className={`rounded-lg p-3 border-2 cursor-pointer transition-all hover:shadow-md ${
-          isInbound
+        className={`${isAssistant ? "w-full" : "max-w-[90%]"} rounded-lg p-3 border-2 cursor-pointer transition-all hover:shadow-md ${
+          isAssistant ? "bg-violet-500/10 border-l-4 border-l-violet-500" : isInbound
             ? "bg-sky-500/5 border-l-4 border-l-sky-500"
             : "bg-emerald-500/5 border-l-4 border-l-emerald-500"
         } ${
@@ -538,10 +541,10 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
       >
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
           <span className={`flex items-center gap-1 text-xs font-medium ${
-            isInbound ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400"
+            isAssistant ? "text-violet-600 dark:text-violet-400" : isInbound ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400"
           }`}>
-            {isInbound ? <User className="h-3 w-3" /> : <Headphones className="h-3 w-3" />}
-            {isInbound ? tUi("Customer") : tUi("Agent")}
+            {isAssistant ? <Bot className="h-3 w-3" /> : isInbound ? <User className="h-3 w-3" /> : <Headphones className="h-3 w-3" />}
+            {tUi(transcriptSpeakerLabel(transcription.track))}
           </span>
           {transcription.sentiment && (
             <Badge

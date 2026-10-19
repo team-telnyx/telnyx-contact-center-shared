@@ -5,24 +5,136 @@ are also available inside the application through **About Contact Center → Rel
 
 ## [Unreleased]
 
-### Fixed
+## [1.10.0] - 2026-10-19
 
-- Custom avatar previews decode only bounded raster images into a canvas.
-- Localization review tools keep configuration and provider errors out of console output.
+This release expands AI participation in customer conversations, adds multilingual
+interfaces and reusable routing schedules, and improves mobile device management,
+assistant configuration and deployment reliability.
 
-- Hold and unhold include the selected voice device's authorization headers.
-- Direct calls remain connected when answer/bridge webhooks omit routing headers
-  or arrive more than once; the connect saga retains lifecycle ownership.
-- Owner seeding no longer assigns the main service DID as a personal direct-call
-  number. Existing main-number assignments cannot bypass inbound application routing.
-- First-login voice status prompts for a device instead of reporting ready without
-  a selection. WebRTC connection setup repairs call parking on existing connections.
+### Added
+
+- **Video AI with Vision.** Start a customer session with an AI assistant or invite
+  one into an existing video conversation. Transfer to a human in the same room,
+  with configurable AI participation after handoff. Vision supports uploaded images
+  and authorized camera or screen-sharing sources, with consent controls and manual
+  or automatic source selection.
+- **Images in widget AI chat.** Customers can attach supported images when enabled
+  in the published widget configuration. Attachments remain available through
+  conversation reloads, transcripts and human handoff. Assistant tool and model
+  capability checks provide clearer configuration errors.
+- **AI participation in live voice calls.** Agents can invite an allowed AI assistant
+  into an ongoing customer call and remove it without ending the human conversation.
+  AI speech appears as a distinct participant in the live transcript. Participation
+  is controlled through the Agent Assist call-flow configuration and requires
+  compatible Skip Turn behavior.
+- **Telnyx avatars and custom avatar management.** Native Telnyx avatars join the
+  existing provider choices. A shared library supports stock and custom avatars,
+  image upload, previews, naming and background configuration.
+- **Eight interface languages.** Choose English, German, Dutch, Spanish, French,
+  European Portuguese, Italian or Polish in the user profile. Localized interface
+  text and date/number formatting remain independent of conversation and
+  transcription language.
+- **Schedules and exception calendars.** Manage reusable business hours, split and
+  overnight shifts, time zones, holidays and exceptional opening hours. The
+  Schedules call-flow node supports published revisions, TRUE/FALSE routing and
+  explicit error handling. Calendar imports and a schedule tester help validate
+  routing before use.
+- **Android companion integration and mobile onboarding.** Backend support covers
+  Android voice device registration, routing and push delivery. Profile setup QR
+  codes and invitation links simplify companion-app configuration. Ordinary Android
+  alerts support Firebase Cloud Messaging configuration.
+- **Individual phone and tablet management.** Profile → Devices shows one Computer
+  entry and separate phone/tablet installations. Revoke an installation and its
+  associated access. Move calls between devices on the same platform, with a guided
+  interface showing the source, destination and progress. Watch calling also
+  supports eligible contacts from the device address book.
 
 ### Changed
 
-- Added name filtering and a five-row scroll area for additional video assistants.
-- Updated rrweb recorder/replay, React Table, Pino, Pino Pretty, Inquirer and pg
-  to compatible versions reviewed from the open dependency-update proposals.
+- **Expanded AI Assistant configuration.** Richer controls cover provider-aware
+  models and fallbacks, custom compatible endpoints, transcription, voice behavior,
+  recording, tools, integrations and visual workflows. Find setting and Review
+  changes improve navigation. Saves verify returned Telnyx configuration and
+  preserve drafts when verification detects a mismatch.
+- **Centralized application AI model selection.** AI Copilot provides a platform
+  default, operation overrides and an option to apply inheritance across operations
+  and reply-suggestion channels. Test AI Agent independently selects workflow
+  analysis and simulated-customer models.
+- **More reliable AI workflow testing.** Chat analysis processes messages sequentially
+  without losing results when a reply arrives. Correction handling preserves
+  confirmed values until a correction is accepted. Voice testing uses authenticated
+  conversation WebSockets with clearer turn handling.
+- **Integrated Video AI deployment.** The standard application launcher starts Video
+  AI within the Contact Center deployment; a separate Video AI container is no
+  longer required. The production image includes browser and media dependencies.
+  Deployment guidance covers sandbox permissions, persistent recordings, shutdown
+  behavior and multi-host requirements.
+- **Updated Help and deployment documentation for new features.** Added and expanded
+  guidance for AI Assistants, Copilot, Video AI/Vision, schedules, mobile devices,
+  workflow/MCP and co-browsing. Navigation and contextual F1 help now cover the new
+  screens and controls, with automated checks for missing coverage and broken links.
+- **Updated dependencies and tooling.** Includes Next.js 16.4.0 and media, interface
+  and infrastructure library updates. Babel tooling stays on the compatible 7.x
+  line to retain the Node.js runtime floor already required by 1.9.0 dependencies.
+
+### Fixed
+
+- Preserve saved workflow primary and fallback models during upgrade, including
+  choices matching old defaults. Existing installations without a platform default
+  receive editable AI Copilot settings preserving historical operation models and
+  legacy model environment overrides. Migration runs once and preserves unrelated
+  settings and subsequent administrator choices.
+- Prevent direct calls from ending prematurely when answer or bridge events omit
+  routing information or arrive more than once.
+- Include the selected device's authorization when holding or resuming calls;
+  improve stale-device cleanup, voice credential recovery and call parking repair.
+- Recover orphaned call offers when provider termination events are missing.
+- Prevent the main service number from being treated as an owner's personal
+  direct-call number; prompt for an initial voice device before reporting readiness.
+- Improve PostgreSQL connection recovery after failover and bound stalled operations.
+- Fix assistant editor, supervisor interaction and consult-transfer errors.
+- Improve Video AI startup, greeting playback, Vision readiness and image validation;
+  add name filtering and a compact list for additional video assistants.
+- Fix production builds affected by runtime logs and recordings entering build traces.
+- Restrict custom avatar previews to bounded raster images and redact sensitive
+  configuration from localization review output.
+
+### Upgrade notes
+
+- Use Node.js 22.12+; Node.js 24 LTS is recommended. Puppeteer in 1.9.0 already
+  required 22.12; the earlier README incorrectly listed 22.3. This release removes
+  the additional Babel 8 requirement introduced during development.
+- Run the standard database initialization. Existing operation settings, workflow
+  models and fallback models are retained. Historical operation defaults are
+  migrated only when no new platform default is configured. Review them in AI
+  Copilot and use Apply to all if you want operations to inherit a new default.
+  New installations configure AI Copilot or `TELNYX_AI_DEFAULT_MODEL` explicitly.
+- Migrations preserve the values present at upgrade time. They cannot reconstruct
+  choices already cleared by an earlier unreleased development build.
+- For Video AI, use the application launcher and documented container sandbox,
+  recording volume and shutdown settings. Updating only the image is insufficient
+  when an existing container lacks these options. Remove legacy external-worker
+  overrides when adopting the integrated deployment.
+- After changing widget image or Vision settings, publish the widget and start a
+  new session so the updated configuration takes effect.
+- Save existing call flows that will use AI voice participation to prepare their
+  conversation observer configuration. Review observer destination conflicts when
+  sharing an assistant between environments.
+- Configure FCM credentials when enabling ordinary Android push alerts.
+
+### Known limitations
+
+- Vision requires compatible primary and fallback models. GPT Live does not support
+  the buffered Vision path used by this integration.
+- Multi-host Video AI requires additional private networking and shared recording
+  storage; it remains disabled by default in the HA deployment wizard.
+- Provider and integration validation is not complete for every configurator option.
+  Outstanding cases include some FastRouter, custom endpoint authentication and
+  external fallback scenarios. Preserving an external-provider model does not
+  provision its credentials; OpenAI inference still requires appropriate provider
+  authentication.
+- Android behavior depends on a compatible companion-app version; backend validation
+  does not establish complete physical-device acceptance.
 
 ## [1.9.0] - 2026-09-27
 

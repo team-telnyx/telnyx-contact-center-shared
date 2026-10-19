@@ -4,6 +4,7 @@
  */
 
 import { CALL_FLOW_NOISE_SUPPRESSION_ENGINES } from "./voice.js";
+import { defaultWeekly } from "../lib/schedules/evaluator.mjs";
 
 export const NODE_CATEGORIES = {
   INITIATOR: "initiator",
@@ -2090,6 +2091,32 @@ export const VOICE_FLOW_NODES = {
   },
 
   // LOGICAL NODES
+  schedules: {
+    id: "schedules",
+    category: NODE_CATEGORIES.LOGICAL,
+    label: "Schedules",
+    icon: "IconCalendarClock",
+    color: NODE_COLORS[NODE_CATEGORIES.LOGICAL],
+    description: "Route by working hours and shared exception calendars",
+    telnyxAction: null,
+    telnyxEndpoint: null,
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["True", "False"],
+    outputEvents: [],
+    customEditor: "ScheduleNodeEditor",
+    config: {
+      source: { type: "select", label: "Working hours source", default: "custom" },
+      scheduleId: { type: "string", label: "Shared schedule" },
+      timeZone: { type: "string", label: "Time zone", default: "Europe/Warsaw" },
+      weekly: { type: "json", label: "Weekly hours", default: defaultWeekly() },
+      useExceptions: { type: "boolean", label: "Use exception calendars", default: false },
+      calendarIds: { type: "json", label: "Exception calendars", default: [] },
+      timeSource: { type: "select", label: "Time to evaluate", default: "node_entry" },
+      errorBranch: { type: "select", label: "If evaluation fails", default: "false" },
+      resultVariable: { type: "string", label: "Result variable", default: "schedule_result" },
+    },
+  },
   condition: {
     id: "condition",
     category: NODE_CATEGORIES.LOGICAL,
@@ -2277,6 +2304,8 @@ export const VOICE_FLOW_NODES = {
     outputDescriptions: ["Agent Assist has been configured for this call"],
     customEditor: "AgentAssistNodeEditor",
     config: {
+      enable_assistant_invite: { type: "boolean", label: "Enable assistant invite", default: false },
+      invite_assistant_ids: { type: "array", label: "Available assistants", default: [] },
       enabled: {
         type: "boolean",
         label: "Enable Agent Assist",

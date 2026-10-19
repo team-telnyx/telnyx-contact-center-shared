@@ -4,7 +4,7 @@ description: Validate graph structure, variables, mappings, expressions, and ope
 audiences: [admin, owner]
 keywords: [validation, testing, errors, cycles]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Validation checks duplicate or invalid globals, missing global values, invalid edge mappings, unknown template variables, Set Variable expressions, condition operands, missing connections, invalid edges, and graph cycles.
@@ -16,3 +16,17 @@ Warnings require review even when saving is allowed. A node without an outgoing 
 Test the happy path plus no-answer, busy, rejection, timeout, full queue, invalid input, retry exhaustion, external API error, malformed response, MCP/tool failure, caller hangup, and duplicate webhook delivery where applicable. Confirm the actual output handle and mapped variables at every branch.
 
 For inbound flows, use a non-production number. For outbound flows, restrict destinations and volume. Check logs for sensitive data before enabling verbose logging in production.
+
+## Conversation WebSocket conflicts
+
+Saving a flow with assistant invitations prepares the selected assistants' live event connection and verifies it before persisting the flow. Re-save existing flows to prepare their selected assistants after this feature is enabled. The assistant must have Skip Turn and the editor needs the relevant assistant permissions.
+
+If an assistant already sends events to another destination, **Replace Conversation WebSocket destinations?** lists its current and proposed URLs. **Cancel** leaves that conflict unapproved. **Overwrite and save** explicitly redirects future events to this Contact Center and can interrupt transcription or delegation in the other environment. This setting is shared by all flows using that assistant. Flows within one installation can share it; use separate assistants when Dev and Prod require simultaneous live events.
+
+If the destination changed while the confirmation was open, review the new conflict rather than assuming the earlier approval still applies. A failed or ambiguous save requires checking the reported state before retrying. Confirm success in the editor, reload the flow and run a controlled invitation with separate Customer, Agent and AI transcript lines.
+
+## Schedules and live channel tests
+
+Test a [Schedules node](/help/administration/call-flows/nodes/schedules) at opening/closing boundaries, holidays, missing coverage and daylight-saving transitions. Its tester uses the same evaluator without placing a call; follow with a controlled call through the complete route.
+
+For an AI start or invitation, verify audible speech, interruption, tool failure and human fallback. For live transcription, verify each speaker and recovery after a brief event-stream interruption. Keep expected outcomes and actual interaction IDs; passing a configuration save does not establish successful media or delivery.

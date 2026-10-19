@@ -80,10 +80,10 @@ test("no workflow route hard-codes openai/gpt-4o over the AI Copilot default", a
   assert.doesNotMatch(callGenerator, /preferredModel: workflow\?\.llm_model/);
 });
 
-test("workflows store an empty model as 'inherit AI Copilot'; the old default is migrated once", async () => {
+test("workflows store an empty model as 'inherit AI Copilot' without clearing existing choices", async () => {
   const schema = await read("lib/postgres-schema.mjs");
-  assert.match(schema, /ADD COLUMN llm_model VARCHAR\(100\);/);
-  assert.match(schema, /column_default IS NOT NULL[\s\S]{0,200}UPDATE aa_workflows SET llm_model = NULL WHERE llm_model = 'openai\/gpt-4o';\s*ALTER TABLE aa_workflows ALTER COLUMN llm_model DROP DEFAULT;/);
+  assert.match(schema, /await ensureWorkflowModelColumns\(client\)/);
+  assert.doesNotMatch(schema, /UPDATE aa_workflows SET llm_model = NULL/);
   const put = await read("app/api/admin/workflows/[id]/route.js");
   assert.match(put, /llm_model\.trim\(\) \? llm_model\.trim\(\) : null/);
   const editor = await read("app/(portal)/admin/workflows/[id]/page.jsx");

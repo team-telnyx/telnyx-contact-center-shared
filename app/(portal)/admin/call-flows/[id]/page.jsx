@@ -117,6 +117,7 @@ import {
   IconApi,
   IconDatabase,
   IconGitBranch,
+  IconCalendarClock,
   IconGitFork,
   IconCircuitGround,
   IconCircleCheckFilled,
@@ -149,6 +150,7 @@ import PlayAudioNodeEditor from "@/components/voice-flow/PlayAudioNodeEditor";
 import TranscriptionNodeEditor from "@/components/voice-flow/TranscriptionNodeEditor";
 import StreamingStartNodeEditor from "@/components/voice-flow/StreamingStartNodeEditor";
 import ConditionNodeEditor from "@/components/voice-flow/ConditionNodeEditor";
+import ScheduleNodeEditor from "@/components/voice-flow/ScheduleNodeEditor";
 import SwitchNodeEditor from "@/components/voice-flow/SwitchNodeEditor";
 import SetVariableNodeEditor, {
   SetVariableNodeEditorSaveButton,
@@ -164,6 +166,8 @@ import AnswerNodeEditor from "@/components/voice-flow/AnswerNodeEditor";
 import EnqueueNodeEditor from "@/components/voice-flow/EnqueueNodeEditor";
 import SetQueueOptionsNodeEditor from "@/components/voice-flow/SetQueueOptionsNodeEditor";
 import AgentAssistNodeEditor from "@/components/voice-flow/AgentAssistNodeEditor";
+import { useAssistantEventDestinationConfirmation } from "@/components/voice-flow/AssistantEventDestinationConfirmation";
+import { saveFlowWithAssistantConfirmation } from "@/lib/ai/flow-save-client.mjs";
 import ClientStateUpdateNodeEditor from "@/components/voice-flow/ClientStateUpdateNodeEditor";
 import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
@@ -217,6 +221,7 @@ const iconMap = {
   IconSquare,
   IconPlayerPause,
   IconGitBranch,
+  IconCalendarClock,
   IconGitMerge,
   IconVariable,
   IconCircuitSwitchOpen,
@@ -1391,6 +1396,7 @@ export default function FlowBuilderPage() {
     checkAuth();
   }, [router]);
   const [saving, setSaving] = useState(false);
+  const assistantDestination = useAssistantEventDestinationConfirmation();
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeConfig, setNodeConfig] = useState({});
   const [setVariableValidation, setSetVariableValidation] = useState({
@@ -2155,6 +2161,7 @@ export default function FlowBuilderPage() {
   }, [flowId, clearFlowEvents]);
 
   async function handleSave() {
+    if (saving) return;
     // Check if flow has an initiator node before saving
     const hasInitiator = nodes.some(
       (node) =>
@@ -2238,22 +2245,14 @@ export default function FlowBuilderPage() {
 
     setSaving(true);
     try {
-      const res = await fetch(`/api/voice/flows/${flowId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: flowName,
-          description: flowDescription,
-          nodes,
-          edges,
-          globalVariables,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Failed to save flow");
-      }
+      const data = await saveFlowWithAssistantConfirmation(`/api/voice/flows/${flowId}`, {
+        name: flowName,
+        description: flowDescription,
+        nodes,
+        edges,
+        globalVariables,
+      }, { confirm: assistantDestination.confirm });
+      if (!data) return;
 
       // Update initial state after successful save
       initialStateRef.current = createCallFlowDirtySnapshot({
@@ -2277,7 +2276,7 @@ export default function FlowBuilderPage() {
       console.error("Error saving flow:", error);
       notify({
         title: "Error",
-        description: "Failed to save flow",
+        description: error.message || "Failed to save flow",
         variant: "error",
       });
     } finally {
@@ -3251,6 +3250,16 @@ export default function FlowBuilderPage() {
                               }}
                             />
                           ) : selectedNodeDef.customEditor ===
+                            "ScheduleNodeEditor" ? (
+                            <ScheduleNodeEditor
+                              config={nodeConfig}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                setNodes((nds) => nds.map((node) => node.id === selectedNode.id
+                                  ? { ...node, data: { ...node.data, config: newConfig } } : node));
+                              }}
+                            />
+                          ) : selectedNodeDef.customEditor ===
                             "ConditionNodeEditor" ? (
                             <ConditionNodeEditor
                               config={nodeConfig}
@@ -3730,6 +3739,7 @@ export default function FlowBuilderPage() {
                           ) : selectedNodeDef.customEditor ===
                             "AgentAssistNodeEditor" ? (
                             <AgentAssistNodeEditor
+                              key={selectedNode.id}
                               config={nodeConfig}
                               experimentalFeaturesEnabled={experimentalFeaturesEnabled}
                               availableVariables={getAllVariableNames({
@@ -4311,6 +4321,7 @@ export default function FlowBuilderPage() {
         </CardContent>
       </Card>
 
+      {assistantDestination.dialog}
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

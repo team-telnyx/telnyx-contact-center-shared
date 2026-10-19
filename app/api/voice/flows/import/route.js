@@ -1,3 +1,7 @@
+import { scheduleStore } from "@/lib/schedules/store.mjs";
+import { saveFlowWithPreparedAssistants } from "@/lib/ai/flow-assistant-events.mjs";
+import { flowAssistantErrorPayload } from "@/lib/ai/assistant-event-conflicts.mjs";
+import { widgetAiRequest } from "@/lib/widgets/ai-provider";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -97,7 +101,7 @@ function findOldFlowId(nodes) {
  * POST /api/voice/flows/import
  * Import a call flow JSON bundle as a new flow.
  */
-async function POST_handler(request) {
+async function POST_handler(request, _context, authz) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -131,7 +135,7 @@ async function POST_handler(request) {
 
     const newFlowId = randomUUID();
     const oldFlowId = findOldFlowId(body.nodes);
-    const nodes = updateNodeConfigs(body.nodes, oldFlowId, newFlowId, getBaseUrl(request));
+    let nodes = updateNodeConfigs(body.nodes, oldFlowId, newFlowId, getBaseUrl(request));
     const edges = body.edges;
     const variables = body.globalVariables || body.variables || {};
 
@@ -143,11 +147,19 @@ async function POST_handler(request) {
       );
     }
 
-    const flow = await VoiceFlowDb.createFlow(username, {
+    if ((nodes || []).some(node => node.data?.nodeType === "schedules")) {
+      try { await scheduleStore().validateFlow(nodes); }
+      catch (error) { return NextResponse.json({ ok: false, error: error.code ? error.message : "Schedule validation unavailable." }, { status: error.status || 503 }); }
+    }
+
+    const flow = await saveFlowWithPreparedAssistants(nodes, widgetAiRequest, {
+      confirmations: body.assistantEventDestinationConfirmations,
+      canUpdateAssistant: authz.can("ai_assistants:update"),
+    }, (preparedNodes, db) => VoiceFlowDb.createFlow(username, {
       id: newFlowId,
       name: body.name || "Imported Flow",
       description: body.description || "",
-      nodes,
+      nodes: preparedNodes,
       edges,
       variables,
       metadata: {
@@ -156,7 +168,7 @@ async function POST_handler(request) {
         original_exported_at: body.exported_at || null,
         original_flow_id: oldFlowId,
       },
-    });
+    }, { db }));
 
     const updatedFlow = await VoiceFlowDb.getFlowById(flow.id, username);
 
@@ -164,8 +176,8 @@ async function POST_handler(request) {
   } catch (error) {
     voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
-      { ok: false, error: error.message || "Failed to import flow" },
-      { status: 500 },
+      flowAssistantErrorPayload(error, "Failed to import flow"),
+      { status: error.status || 500 },
     );
   }
 }

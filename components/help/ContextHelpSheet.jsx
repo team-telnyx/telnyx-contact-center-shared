@@ -29,7 +29,7 @@ export function ContextHelpSheet() {
         showOverlay={false}
         portalContainer={portalContainer || undefined}
         data-context-help-sheet="true"
-        className="w-full gap-0 p-0 sm:max-w-md"
+        className="z-[1300] w-full gap-0 p-0 sm:max-w-md"
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}

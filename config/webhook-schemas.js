@@ -82,7 +82,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     caller_id_name: {
       type: "string",
       description: "Caller id.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     call_screening_result: {
       type: "string",
@@ -92,7 +92,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -169,7 +169,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -241,7 +241,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -320,7 +320,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -534,7 +534,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -584,7 +584,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -682,7 +682,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -728,7 +728,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -774,7 +774,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -821,7 +821,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -1038,7 +1038,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     sip_notify_response: {
       type: "number",
@@ -1084,7 +1084,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     sip_notify_response: {
       type: "number",
@@ -1130,7 +1130,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     sip_notify_response: {
       type: "number",
@@ -1355,7 +1355,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "Number or SIP URI placing the call.",
-      example: "+35319605860",
+      example: "+13125550125",
     },
     to: {
       type: "string",
@@ -1382,7 +1382,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     assistant_id: {
       type: "string",
       description: "Unique identifier of the assistant involved in the call.",
-      example: "assistant-d9082b56-ba2d-4ad1-a50c-58661eb1463d",
+      example: "assistant-00000000-0000-0000-0000-000000000003",
     },
     call_control_id: {
       type: "string",
@@ -1431,13 +1431,13 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     from: {
       type: "string",
       description: "The caller's number or identifier.",
-      example: "+13124287921",
+      example: "+13125550124",
     },
     to: {
       type: "string",
       description: "The callee's number or SIP address.",
       example:
-        "jamesw@assistant-d9082b56-ba2d-4ad1-a50c-58661eb1463d.sip.telnyx.com",
+        "user@assistant-00000000-0000-0000-0000-000000000003.sip.telnyx.com",
     },
     llm_model: {
       type: "string",

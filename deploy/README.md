@@ -15,6 +15,7 @@ start, see the [top-level README](../README.md#deployment-wizard-deploycc).
 ## Table of contents
 
 - [Quick start](#quick-start)
+- [Video AI and Vision](#video-ai-and-vision)
 - [How the wizard works](#how-the-wizard-works)
 - [Commands](#commands)
   - [`cc up`](#cc-up)
@@ -32,7 +33,7 @@ start, see the [top-level README](../README.md#deployment-wizard-deploycc).
   - [Azure](#azure)
 - [Wizard steps in detail](#wizard-steps-in-detail)
 - [Sizing](#sizing)
-- [Non-interactive mode (CI, demos, scripted re-install)](#non-interactive-mode-ci-demos-scripted-re-install)
+- [Non-interactive mode (CI, demos, re-install)](#non-interactive-mode-ci-demos-re-install)
 - [Webhook tunnels (Local target only)](#webhook-tunnels-local-target-only)
 - [Persistent state (`.cc-state.json`)](#persistent-state-cc-statejson)
 - [File layout](#file-layout)
@@ -43,7 +44,7 @@ start, see the [top-level README](../README.md#deployment-wizard-deploycc).
 ## Quick start
 
 ```bash
-git clone https://github.com/team-telnyx/telnyx-contact-center.git
+git clone https://github.com/team-telnyx/telnyx-contact-center-shared.git telnyx-contact-center
 cd telnyx-contact-center
 ./deploy/cc up          # walks you through everything, interactively
 ```
@@ -56,6 +57,153 @@ its packages ask for `>=23.5.0 || ^22.13.0 || ^20.17.0`, so the 22 line is
 supported only from 22.13 onward and 23.0 through 23.4 are excluded entirely.
 That still matches the Node 22 production image and every CI workflow (Node 20
 reached end of life on 2026-04-30).
+
+---
+
+## Video AI and Vision
+
+Video AI runs inside the normal Contact Center application launcher. Chromium
+is its child process; a separate Video AI container is not required. Configure
+both the instance and the published widget before testing a call.
+
+### Deploy or upgrade the instance
+
+| Installation | Required action |
+| --- | --- |
+| New single-node Local, AWS, GCP or Azure deployment | Run `./deploy/cc up` from the intended release. The image includes Chromium and FFmpeg; the deployment applies the Chromium sandbox policy, private recording storage and a 60-second stop timeout. |
+| Existing wizard-managed single-node deployment | Keep `deploy/.cc-state.json` and the existing environment, update the checkout and run `./deploy/cc update`. Back up existing container-local recordings before adding their persistent mount. Do not use `--fresh` or delete volumes for an upgrade. |
+| Compose deployment | Use the current image and deployment definitions with `./docker/deploy.sh production`. Preserve private recordings and existing configuration. |
+| Custom container or CI/CD deployment | Persist the container options below in the deployment and rollback configuration. Recreate the application container; changing `.env` or restarting the same container does not apply security options or new mounts. |
+| Local development without Docker | Run `yarn install`, configure `.env.local`, initialize PostgreSQL with `yarn ensure:pg`, and use `yarn dev`. Puppeteer needs its installed browser or `VIDEO_AI_CHROMIUM_PATH`; FFmpeg/FFprobe are needed for recording composition fallback. |
+| AWS HA / multiple application hosts | Video AI starts disabled. Complete the HA prerequisites below before enabling it. An app-only update does not apply Terraform networking changes or provision shared storage. |
+
+Use `yarn dev` or `yarn start`, which invoke the application launcher; direct
+`next dev` or `next start` bypass integrated Video AI. The normal schema initializer
+must complete. PostgreSQL and `TELNYX_API_KEY` must be configured server-side.
+For a single-node deployment, these values make the defaults explicit:
+
+```dotenv
+PROCESS_ROLE=all
+VIDEO_CONFERENCE_AI_ENABLED=true
+VIDEO_VISION_ENABLED=true
+VIDEO_AI_WORKER_CAPACITY=2
+```
+
+Leave `VIDEO_AI_EXTERNAL_WORKER` and `VIDEO_AI_CONTROL_URL` unset. Remove obsolete
+`VIDEO_AI_LOCAL_WORKER` settings. Keep credentials out of `NEXT_PUBLIC_*` variables.
+The `worker` process role can also run Video AI; `web` and `streaming` do not.
+Capacity is a configured limit, not a certified number of concurrent production calls.
+
+For custom single-host containers, copy the checked-in policy to the Docker host:
+
+```sh
+sudo install -d -m 0755 /opt/contact-center
+sudo install -m 0644 docker/production/chromium-seccomp.json /opt/contact-center/chromium-seccomp.json
+docker volume create cc-video-recordings
+```
+
+Add these options to the existing app container creation command, preserving its
+existing environment, network, ports and other mounts:
+
+```sh
+--security-opt seccomp=/opt/contact-center/chromium-seccomp.json \
+--stop-timeout 60 \
+--mount type=volume,source=cc-video-recordings,target=/app/.data/video-recordings
+```
+
+Use the installation's existing private recording volume if one is already present.
+Preserve recordings before introducing a mount over their directory. No public relay
+port or `SYS_ADMIN` capability is needed. Do not disable the Chromium sandbox.
+The host must permit the sandbox's unprivileged user namespaces.
+If migrating from an external video worker, remove its overrides and stop that legacy
+worker during the same planned migration to avoid duplicate capacity.
+
+Finish or drain active calls before updates. The current AWS/GCP/Azure update paths
+use forced container removal even though they configure a 60-second stop timeout.
+For a custom deployment, stop gracefully with `docker stop` before removal and retain
+the private volume through updates and rollbacks. A timeout alone does not make
+`docker rm -f` graceful.
+
+### HA prerequisites
+
+On every enabled node, mount the same private NFS/EFS or other supported shared
+filesystem and configure `/opt/cc/node.env`, using that node's own assigned private IP:
+
+```dotenv
+VIDEO_CONFERENCE_AI_ENABLED=true
+VIDEO_AI_PRIVATE_IP=10.0.1.7
+VIDEO_AI_CONTROL_PORT=3092
+CC_VIDEO_RECORDINGS_PATH=/mnt/cc-private-video
+```
+
+The address above is illustrative. A host-local Docker volume or S3 bucket does not
+replace the shared recording filesystem. Restrict its access to the application.
+Allow the relay TCP port only between application nodes in the private security group.
+Apply the HA Terraform `video_ai_control_port` networking change before enabling it;
+keep its value aligned with node configuration. The wizard checks address assignment
+and mount type, but cannot prove network connectivity or that mounts use the same export.
+It does not provision shared recording storage. Verify relay connectivity and recording
+playback from another node. Leave `VIDEO_CONFERENCE_AI_ENABLED=false` if this media
+infrastructure is not ready. Single-node installations do not need these HA settings.
+
+### Configure and publish the widget
+
+1. Prepare a source assistant with primary and fallback models verified by the
+   application's Vision capability checks. GPT Live cannot use buffered Vision.
+   For an avatar, select compatible Telnyx TTS. Resolve publication errors for
+   unsupported workflow, telephone transfer, delegation or custom client tools.
+2. Create an enabled fallback queue with the Video channel. Enable Video capacity
+   and queue membership for agents who will receive handoffs.
+3. In **Admin → Web Widgets**, enable **Voice & Video Call**. Under **Video**, choose
+   **Start the video call with → AI assistant**, the fallback queue and Video AI
+   assistant. For human-first calls, use queue routing and enable agent invitations.
+4. Optionally enable a Telnyx avatar. Set **Vision → Uploaded images and live video**
+   for camera/screen analysis, or **Uploaded images only**. Add a Vision tool to the
+   assistant or enable **Add Vision tool on publish** for the managed video profile.
+5. Configure allowed Vision sources, selection and agent controls. Enable screen
+   sharing when required. Recording and Vision consent are separate settings.
+6. Set the allowed website origin and **Publish**. Publication creates and verifies
+   a dedicated profile. Use **Check published assistant profiles** and republish after
+   source changes. Test a new call through **Test the published video widget** or an
+   allowed HTTPS site. The Studio visual preview is not a live acceptance test.
+
+For Messaging images, separately enable **Channels → Allow images in AI chat**, select
+an image-capable chat assistant, publish and start a new chat. Video Vision settings
+or a Vision tool alone do not enable chat uploads. With **Persist session**, a refresh
+may resume the old chat revision; end it and start a new conversation for verification.
+
+### Verify and troubleshoot
+
+1. Check `/api/health`, then inspect authorized application logs for
+   `video_ai_runtime_state` reaching `ready`. Web health does not verify Chromium,
+   avatar media or Vision.
+2. In an authorized database session, inspect only non-secret readiness fields:
+
+   ```sql
+   SELECT id, capacity, active, heartbeat_at,
+          now() - heartbeat_at AS heartbeat_age
+   FROM cc_video_ai_workers
+   ORDER BY heartbeat_at DESC;
+   ```
+
+   Confirm the heartbeat advances, is less than 15 seconds old and `active < capacity`.
+3. Start a fresh published-widget call. Verify audible replies and moving avatar
+   video when enabled; a static portrait or room join alone is insufficient.
+4. Explicitly allow AI access to a camera or shared screen in the call. Browser camera
+   permission alone does not grant AI consent. Show a harmless random code/shape,
+   verify the answer, then revoke access. Allow approximately 10.5 seconds for source
+   transitions. Test uploads separately when enabled.
+5. End the call and check its recent video history. If recording is enabled, allow
+   asynchronous composition and verify authorized playback. On HA, check every node.
+
+For **The video assistant service is unavailable**, check the launcher, process role,
+flags, capacity and worker heartbeat. A Chromium **No usable sandbox!** error requires
+checking the running container's `HostConfig.SecurityOpt`, host namespace policy and
+persistent container settings; an image-only update is insufficient. If Vision is
+unavailable at publication, resolve model/tool validation. If a connected assistant
+cannot see a source, check the published mode, allowed source, explicit AI consent and
+current selection. Never include room tokens, worker capabilities, account keys or
+image payloads in diagnostic output.
 
 ---
 
@@ -91,7 +239,7 @@ persisted to `deploy/.cc-state.json` as soon as it's given, so:
 
 Runs (or resumes) the full interactive deployment wizard. See
 [Wizard steps in detail](#wizard-steps-in-detail) for what each step asks,
-and [Non-interactive mode](#non-interactive-mode-ci-demos-scripted-re-install)
+and [Non-interactive mode](#non-interactive-mode-ci-demos-re-install)
 for scripted/CI runs.
 
 ### `cc doctor`

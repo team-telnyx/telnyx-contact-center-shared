@@ -11466,6 +11466,15 @@
     "m2719cc4a": "AI can see",
     "m9bd8c631": "Screen",
     "m64619f73": "Analyze",
-    "mdd634969": "Choose a call device before receiving voice calls."
+    "mdd634969": "Choose a call device before receiving voice calls.",
+    "m216b6b71": "Disconnecting…",
+    "me513c3e7": "Choose an assistant",
+    "mbf780210": "Invite assistant",
+    "m1f7b7c73": "Enable assistant invite",
+    "mddcb069e": "Let agents invite a selected AI assistant to speak with both participants. Each assistant must have the Skip Turn tool.",
+    "m7793a57e": "Search assistants",
+    "m21d463ca": "Add Skip Turn in the assistant''s Tools settings.",
+    "ma7228848": "A selected assistant is unavailable or has no Skip Turn tool. Update the selection before saving.",
+    "m67dba4b1": "Available assistants"
   }
 }

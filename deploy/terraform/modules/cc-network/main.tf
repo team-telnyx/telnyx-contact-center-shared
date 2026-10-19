@@ -157,6 +157,17 @@ resource "aws_security_group" "app" {
   vpc_id      = aws_vpc.main.id
 
   dynamic "ingress" {
+    for_each = var.topology == "ha" ? [1] : []
+    content {
+      description = "Private Video AI relay between application nodes only"
+      from_port   = var.video_ai_control_port
+      to_port     = var.video_ai_control_port
+      protocol    = "tcp"
+      self        = true
+    }
+  }
+
+  dynamic "ingress" {
     for_each = !var.alb_enabled ? [1] : []
     content {
       description = "App HTTP port, direct (no ALB/TLS in front)"

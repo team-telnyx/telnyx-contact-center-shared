@@ -52,7 +52,8 @@
       "components/assistants/AssistantWorkflowTab.jsx",
       "components/contact-center/handoff/DeviceHandoffDialog.jsx",
       "components/contact-center/handoff/HandoffParts.jsx",
-      "components/widget-admin/VideoConferenceSettings.jsx"
+      "components/widget-admin/VideoConferenceSettings.jsx",
+      "components/voice-flow/AssistantInviteSettings.jsx"
     ]
   },
   "md9a6e969": {
@@ -645,7 +646,8 @@
       "components/ai-elements/mic-overlay.jsx",
       "components/contact-center/LiveInteractionsView.jsx",
       "components/assistants/AssistantPhoneWidget.jsx",
-      "components/video/ConferenceAiControls.jsx"
+      "components/video/ConferenceAiControls.jsx",
+      "components/contact-center/VoiceAssistantInvite.jsx"
     ]
   },
   "mdb89a899": {
@@ -2009,7 +2011,8 @@
       "components/profile/VoiceDevicesCard.jsx",
       "components/video/ConferenceAiControls.jsx",
       "components/widget-admin/VideoConferenceHistory.jsx",
-      "components/widget-admin/VideoConferenceSettings.jsx"
+      "components/widget-admin/VideoConferenceSettings.jsx",
+      "components/voice-flow/AssistantInviteSettings.jsx"
     ]
   },
   "m999029f1": {
@@ -11640,7 +11643,8 @@
       "app/(portal)/supervisor/outbound-dialer/page.jsx",
       "lib/i18n/interaction-labels.mjs",
       "components/contact-center/VideoInteractionDetail.jsx",
-      "components/video/ConferenceAiControls.jsx"
+      "components/video/ConferenceAiControls.jsx",
+      "components/contact-center/VoiceAssistantInvite.jsx"
     ]
   },
   "m6f1db872": {
@@ -32182,7 +32186,8 @@
       "components/assistants/AssistantPhoneWidget.jsx",
       "components/contact-center/VideoInteractionDetail.jsx",
       "components/video/ConferenceAiControls.jsx",
-      "components/widget-admin/VideoConferenceSettings.jsx"
+      "components/widget-admin/VideoConferenceSettings.jsx",
+      "components/contact-center/VoiceAssistantInvite.jsx"
     ]
   },
   "mec2f0d59": {
@@ -35491,7 +35496,8 @@
   "m186e474b": {
     "source": "No assistants found",
     "files": [
-      "app/(portal)/admin/call-flows/[id]/page.jsx"
+      "app/(portal)/admin/call-flows/[id]/page.jsx",
+      "components/voice-flow/AssistantInviteSettings.jsx"
     ]
   },
   "m8ca54dae": {
@@ -48334,7 +48340,8 @@
   "mf0e8d99f": {
     "source": "Invalid image data",
     "files": [
-      "app/actions/user.js"
+      "app/actions/user.js",
+      "components/assistants/TelnyxAvatarLibrary.jsx"
     ]
   },
   "m8778300a": {
@@ -73390,7 +73397,8 @@
   "mb5a388b5": {
     "source": "Choose a JPEG, PNG or WebP image up to 10 MiB",
     "files": [
-      "components/video/ConferenceAiControls.jsx"
+      "components/video/ConferenceAiControls.jsx",
+      "components/assistants/TelnyxAvatarLibrary.jsx"
     ]
   },
   "mcb1fda64": {
@@ -73438,7 +73446,8 @@
   "mb027f7e5": {
     "source": "Remove assistant",
     "files": [
-      "components/video/ConferenceAiControls.jsx"
+      "components/video/ConferenceAiControls.jsx",
+      "components/contact-center/VoiceAssistantInvite.jsx"
     ]
   },
   "mc7075fd2": {
@@ -73919,6 +73928,61 @@
     "files": [
       "components/contact-center/VoiceEndpointSelector.jsx",
       "lib/telephony/phone-indicator.mjs"
+    ]
+  },
+  "m216b6b71": {
+    "source": "Disconnecting…",
+    "files": [
+      "components/contact-center/VoiceAssistantInvite.jsx"
+    ]
+  },
+  "me513c3e7": {
+    "source": "Choose an assistant",
+    "files": [
+      "components/contact-center/VoiceAssistantInvite.jsx"
+    ]
+  },
+  "mbf780210": {
+    "source": "Invite assistant",
+    "files": [
+      "components/contact-center/VoiceAssistantInvite.jsx"
+    ]
+  },
+  "m1f7b7c73": {
+    "source": "Enable assistant invite",
+    "files": [
+      "components/voice-flow/AssistantInviteSettings.jsx",
+      "config/voice-flow-nodes.js"
+    ]
+  },
+  "mddcb069e": {
+    "source": "Let agents invite a selected AI assistant to speak with both participants. Each assistant must have the Skip Turn tool.",
+    "files": [
+      "components/voice-flow/AssistantInviteSettings.jsx"
+    ]
+  },
+  "m7793a57e": {
+    "source": "Search assistants",
+    "files": [
+      "components/voice-flow/AssistantInviteSettings.jsx"
+    ]
+  },
+  "m21d463ca": {
+    "source": "Add Skip Turn in the assistant's Tools settings.",
+    "files": [
+      "components/voice-flow/AssistantInviteSettings.jsx"
+    ]
+  },
+  "ma7228848": {
+    "source": "A selected assistant is unavailable or has no Skip Turn tool. Update the selection before saving.",
+    "files": [
+      "components/voice-flow/AssistantInviteSettings.jsx"
+    ]
+  },
+  "m67dba4b1": {
+    "source": "Available assistants",
+    "files": [
+      "config/voice-flow-nodes.js"
     ]
   }
 }

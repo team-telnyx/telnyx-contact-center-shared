@@ -1,0 +1,58 @@
+---
+title: MCP bindings and template values
+description: Enrich workflow slots with live MCP lookups, dependent results and deliberate submission policies.
+audiences: [admin, owner]
+keywords: [MCP binding, slots, on_fill, on_result, on_complete, manual_submit, alternatives, templates, corrections]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+## Configure a slot binding
+
+Open a workflow, select a slot item, and expand **MCP Tool Binding**. Select the server and tool, then map the tool's required arguments and returned values. Configure the server and credentials in [MCP Servers](/help/administration/mcp-servers) first.
+
+| Trigger | When it runs |
+| --- | --- |
+| `on_fill` | The owning slot receives a value from conversation analysis or an agent edit. |
+| `on_result` | A named earlier binding result becomes available. Select its dependency. |
+| `on_complete` | Required input slots are filled; derived output slots do not block their own producing tool. |
+| `manual_submit` | Required inputs are ready and an agent explicitly confirms submission through a supported submit control. |
+
+Give each binding a stable result key. Map outputs to exact slot names and paths in the tool response. Configure alternatives when several candidates can match. The agent must choose an ambiguous candidate before dependent bindings continue.
+
+Only explicitly mapped outputs become MCP-derived fields. Other slots remain conversation-driven. Agents can edit a derived field manually; that manual value is protected from subsequent MCP overwrites.
+
+## Arguments and prefill
+
+Use `slots` for workflow values and `mcp` for results produced by bindings in the current workflow session. A pre-call Call Flow MCP result must first be mapped into `workflow_data`; consume it from the resulting slots. It is not automatically available as a workflow MCP result.
+
+For example, a binding can read `{{slots.customer_id}}` and map `0.address` from its result into an address slot. A template consisting only of one variable preserves its type; embedding it in text creates a string. Dot paths and numeric/bracket indices address nested results. Unresolved arguments defer execution until their values exist.
+
+## Template helpers
+
+Use helpers in a binding argument when the receiving tool needs a computed value. Keep the entire expression in the value to preserve its type.
+
+| Expression | Result and limits |
+| --- | --- |
+| `{{@number:slots.weight}}` | Extracts a number; `300 lbs` becomes `300`. This helper also converts kilograms to pounds, rounded to one decimal (`72.5 kg` becomes `159.8`), so it is not a unit-neutral numeric parser. |
+| `{{@us_date_mmddyyyy:slots.date}}` | Converts an ISO date such as `1975-01-01` to `01/01/1975`, or normalizes an existing US date. Invalid calendar dates leave the argument unresolved. |
+| `{{@us_area_code:slots.callback_number}}` | Extracts the three-digit area code from a supported US telephone number. |
+| `{{@us_local_number:slots.callback_number}}` | Extracts the remaining US telephone number in `NNN-NNNN` format. |
+| `{{@uuid:request}}` | Creates a UUID for the supplied name; repeated uses in the same invocation scope share it. It is not a permanent customer identifier. |
+| `{{@utc_now_plus_minutes:20}}` | Produces a UTC timestamp 20 minutes after evaluation. The offset must be between 0 and 1,440 minutes. |
+
+Missing or invalid inputs can leave arguments unresolved and defer execution. Test dates, number units and telephone formats with known inputs. A newly generated UUID or timestamp alone does not trigger another lookup; corrected deterministic inputs can. Keep persistent identifiers in explicit slots.
+
+## Corrections, retries and submissions
+
+The default **on argument change** policy re-runs a lookup when its resolved input changes, including a corrected slot. Repeated analysis with identical inputs does not issue the same lookup again. Results from a superseded lookup must not overwrite a later correction.
+
+Use **Run once per call** (`once_per_session`) for actions that create or submit a record. This is the default for `on_complete` and `manual_submit`. Confirmed failures before dispatch or explicit remote rejection may retry. An uncertain result after dispatch, or failure to save a successful result locally, stays blocked from automatic resubmission because the remote action may already have happened. Reconcile it with the external system first. A later correction after successful creation needs an update/cancel workflow.
+
+For `create_transport`, select **Manual confirmed submit**. The agent uses **Submit transport**, reviews gathered values and confirms creation. Required values and suggested alternatives must be resolved first. Legacy `create_transport` bindings using `on_complete` also require this confirmation; they do not submit automatically. The built-in manual submit UI currently handles transport creation, so selecting this trigger for an arbitrary tool does not create a corresponding agent action. See [agent submission steps](/help/agent/agent-assist#confirm-a-transport-submission).
+
+Optional enrichment failures can leave the agent working with an error to resolve. A non-optional failure stops the remaining binding chain. Inspect status and returned evidence before retrying an operation with external effects. Bindings also run after manual slot updates and item completion; include those paths in testing.
+
+## Verify the full chain
+
+Use synthetic data to test one match, several candidates, no match, missing arguments, a timeout, manual corrections and a repeated completion. Check the chosen candidate, every mapped output and dependent step. Export/import retains bindings, but the destination installation must have the referenced servers, tools and credentials.

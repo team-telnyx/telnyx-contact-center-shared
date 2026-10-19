@@ -4,7 +4,7 @@ description: Navigate Admin Workspace and understand its tiles, section rails, a
 audiences: [admin, owner]
 keywords: [admin, workspace, navigation, tiles, rail, configuration, system, automations]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Admin Workspace contains the configuration, automation, AI, and platform-management tools used to operate the contact center. The application's left menu remains labeled **ADMIN**; **Admin Workspace** is the name of this documentation chapter and the page-header context.
@@ -17,19 +17,21 @@ The left menu exposes four entry points. Selecting one opens a page with a secti
 | --- | --- |
 | **AI Assistants** | AI Assistants, Tools Library, Insights, Scheduled Events, Pronunciation Dictionaries, MCP Servers |
 | **Configuration** | Users, Teams, Queues, Skills, Statuses, Wrapup Codes, Numbers, Data Sources, Web Pages, Media Library, Domains, Secrets, Permissions |
-| **System** | Dashboard, Call Generator, Logging, Phones Provisioning, Theme Settings |
+| **System** | Dashboard, Settings, Schedules & calendars, AI Copilot, Call Generator, Logging, Phones Provisioning, Theme Settings |
 | **Automations** | Call & App Flows, Workflows, Forms |
 
 **System** first opens a tile overview. Select a module tile or the same module in the rail. **Data Sources** also uses tiles for Contacts, KB Articles, and Tasks.
 
 Some complex modules replace the outer rail with their own detailed rail:
 
-- an AI Assistant editor uses Dashboard, Agent, Voice, Workflow, Integrations, Insights, Calling, Messaging, Widget, Privacy, and Conversations;
+- an AI Assistant editor uses Dashboard, Agent, Voice, Avatar, Workflow, Integrations, Insights, Calling, Messaging, Widget, Privacy, and Conversations;
 - Call Generator uses Dashboard, Logs, Scenarios, Actions, and Settings;
 - Logging uses Live, Files, and Settings;
 - Phones Provisioning uses Dashboard, Phones, Bridges, Logs, and Settings.
 
 Use **Exit** in these nested rails to return to the parent list or System overview.
+
+The visible menu depends on permissions. Channel configuration also includes Web Widgets, Email, SMS and WhatsApp. Phones Provisioning is available when experimental features are enabled. The table describes each rail's membership; it does not imply every user can access every entry.
 
 ## Recommended setup order
 
@@ -62,8 +64,10 @@ Use **Exit** in these nested rails to return to the parent list or System overvi
 ### System
 
 - [System](/help/administration/system)
-- [Settings and AI Copilot](/help/administration/system#ai-copilot)
-- [Dashboard](/help/administration/system#dashboard)
+- [Settings](/help/administration/system/settings)
+- [AI Copilot](/help/administration/system/ai-copilot)
+- [Schedules & calendars](/help/administration/system/schedules)
+- [Dashboard](/help/administration/system/dashboard)
 - [Call Generator](/help/administration/call-generator)
 - [Logging](/help/administration/logging)
 - [Phones Provisioning](/help/administration/phones-provisioning)
@@ -79,4 +83,6 @@ Use **Exit** in these nested rails to return to the parent list or System overvi
 
 Open **Admin → Web Widgets** to create, clone, rename, disable, preview, and publish website chat widgets. Enable Chat and set concurrency and workload weights in both the queue and agent **Channels & Utilization** settings first. The lower channel maximum applies across all queues; pending offers, active chats, and required wrap-up occupy capacity. Agents use **Agent Desktop** to accept, decline, reply, end, and wrap up chats. Voice credentials are not required when Voice is disabled for that agent.
 
-Widget Studio includes appearance, placement, responsive previews, attachments, targeting, triggers, rules, localization, accessibility, embed code, and publication history. Published revisions are immutable; restore creates a draft for review and publication. Disabling a widget pauses new conversations while existing sessions continue. WebRTC, callbacks, email, WhatsApp, and SMS transport are not enabled by this chat delivery.
+Widget Studio includes appearance, placement, responsive previews, attachments, targeting, triggers, rules, localization, accessibility, embed code, and publication history. Published revisions are immutable; restore creates a draft for review and publication. Disabling a widget pauses new conversations while existing sessions continue.
+
+For image input, follow [Images in AI chat](/help/administration/chat-widgets#images-in-ai-chat). For human/AI video conferences, optional avatars and camera/screen analysis, complete [Video AI instance setup](/help/setup#video-ai-and-vision), then [Video calls with AI and Vision](/help/administration/chat-widgets#video-calls-with-ai-and-vision). These features have separate widget controls and require publishing before testing a new session.

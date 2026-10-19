@@ -69,6 +69,8 @@ cat > /opt/cc/node.env <<EOF
 NODE_INDEX=${node_index}
 APP_PORT=${app_port}
 STREAMING_WS_PORT=${streaming_ws_port}
+VIDEO_CONFERENCE_AI_ENABLED=false
+VIDEO_AI_CONTROL_PORT=${video_ai_control_port}
 STORAGE_PROVIDER=s3
 STORAGE_BUCKET=${storage_bucket}
 STORAGE_REGION=${storage_region}

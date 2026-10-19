@@ -6,6 +6,10 @@ import { documentPreviewTracingIncludes } from "./scripts/lib/document-preview-t
 const applicationBuild = createBuildInfo();
 process.env.CC_BUILD_INFO = JSON.stringify(applicationBuild);
 const previewTracingIncludes = documentPreviewTracingIncludes();
+const buildWorkers = Number(process.env.CC_BUILD_WORKERS || 0);
+if (process.env.CC_BUILD_WORKERS && (!Number.isInteger(buildWorkers) || buildWorkers < 1 || buildWorkers > 32)) {
+  throw new Error("CC_BUILD_WORKERS must be an integer between 1 and 32");
+}
 
 function devOriginHostname(value) {
   const candidate = String(value || "").trim();
@@ -46,6 +50,9 @@ const nextConfig = {
   },
   // Configure body size limit for Server Actions (for profile picture uploads)
   experimental: {
+    // Docker Desktop can expose many CPUs with a much smaller memory budget.
+    // Bound page-generation workers only when the build explicitly opts in.
+    ...(buildWorkers ? { cpus: buildWorkers } : {}),
     serverActions: {
       bodySizeLimit: "10mb",
       allowedOrigins: allowedDevOrigins,

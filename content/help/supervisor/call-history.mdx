@@ -4,7 +4,7 @@ description: Filter historical calls and inspect timelines, recordings, transcri
 audiences: [supervisor, admin, owner]
 keywords: [call history, recording, transcript, timeline, workflow history]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Call History is the last section of the Analytics rail. Filter the list by the available date, direction, queue, agent, state, number, or search controls before opening an interaction.
@@ -23,3 +23,15 @@ The detail page contains interaction identity and operational timestamps plus th
 Workflow history can show stages, Action/Question/Topic/Data items, completion, and captured slot values. Compare the transcript source utterance and confidence before treating an extracted value as verified.
 
 Missing recording, transcript, or AI tab data can be expected when the relevant service was not enabled, failed to start, or data was removed by retention. Do not infer that the interaction itself did not occur.
+
+## Multichannel history
+
+The **Interactions History** route and legacy Call History route open the same history workspace. Use the available channel filters to inspect Voice, Chat, Email, SMS, WhatsApp or Video. Text channels expose conversation/preview information rather than requiring a voice recording. Email preview follows the administrator's global display policy.
+
+The timeline can contain several queue visits, handling segments, transfers and device changes for one customer interaction. Inspect those segments before interpreting total duration as a single agent's handling time. Delivery badges describe provider outcomes separately from the agent's send action.
+
+## Recordings and transcription
+
+Video recordings may need time to compose after the conference. **No recording available** can mean recording was disabled or processing/storage is incomplete. Use the available recording player; authorized access and retention still apply. A successful room connection does not prove that a recording exists.
+
+For supported recordings, the transcript viewer can navigate to the corresponding playback time. Compare recognized text with the actual audio when accuracy matters. An invited voice assistant's transcript is distinct from Customer and Agent speech; streamed wording may be reconciled with provider history. Workflow values and AI summaries remain derived evidence, not a substitute for the original conversation.

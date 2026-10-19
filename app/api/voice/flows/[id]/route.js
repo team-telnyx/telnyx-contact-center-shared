@@ -1,3 +1,7 @@
+import { scheduleStore } from "@/lib/schedules/store.mjs";
+import { saveFlowWithPreparedAssistants } from "@/lib/ai/flow-assistant-events.mjs";
+import { flowAssistantErrorPayload } from "@/lib/ai/assistant-event-conflicts.mjs";
+import { widgetAiRequest } from "@/lib/widgets/ai-provider";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -130,41 +134,49 @@ async function PUT_handler(request, { params }, authz) {
       }
     }
 
-    // Update voice application if name changed or SIP subdomain needs to be set
-    if (existingFlow.telnyx_voice_app_id) {
-      try {
-        const voiceAppUpdates = {};
+    if ((updates.nodes ?? existingFlow.nodes ?? []).some(node => node.data?.nodeType === "schedules")) {
+      try { await scheduleStore().validateFlow(updates.nodes ?? existingFlow.nodes ?? []); }
+      catch (error) { return NextResponse.json({ ok: false, error: error.code ? error.message : "Schedule validation unavailable." }, { status: error.status || 503 }); }
+    }
 
-        // Update name if it changed
-        if (body.name !== undefined) {
-          // Ensure name is unique for Telnyx by appending a portion of the flow ID
-          voiceAppUpdates.application_name = `${body.name} (${flowId.substring(
-            0,
-            8
-          )})`;
+    const flow = await saveFlowWithPreparedAssistants(updates.nodes ?? existingFlow.nodes ?? [], widgetAiRequest, {
+      confirmations: body.assistantEventDestinationConfirmations,
+      canUpdateAssistant: authz.can("ai_assistants:update"),
+    }, async (preparedNodes, db) => {
+      updates.nodes = preparedNodes;
+
+      // Update voice application if name changed or SIP subdomain needs to be set
+      if (existingFlow.telnyx_voice_app_id) {
+        try {
+          const voiceAppUpdates = {};
+
+          // Update name if it changed
+          if (body.name !== undefined) {
+            // Ensure name is unique for Telnyx by appending a portion of the flow ID
+            voiceAppUpdates.application_name = `${body.name} (${flowId.substring(
+              0,
+              8
+            )})`;
+          }
+
+          // Always ensure SIP subdomain is set to flow ID
+          voiceAppUpdates.sip_subdomain = flowId;
+
+          await updateVoiceApplication(
+            existingFlow.telnyx_voice_app_id,
+            voiceAppUpdates
+          );
+        } catch (error) {
+          voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+          // Don't fail the flow update if voice app update fails
         }
-
-        // Always ensure SIP subdomain is set to flow ID
-        voiceAppUpdates.sip_subdomain = flowId;
-
-        await updateVoiceApplication(
-          existingFlow.telnyx_voice_app_id,
-          voiceAppUpdates
-        );
-      } catch (error) {
-        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-        // Don't fail the flow update if voice app update fails
       }
-    }
 
-    const flow = await VoiceFlowDb.updateFlow(flowId, username, updates);
+      const savedFlow = await VoiceFlowDb.updateFlow(flowId, username, updates, { db });
 
-    if (!flow) {
-      return NextResponse.json(
-        { ok: false, error: "Flow not found" },
-        { status: 404 }
-      );
-    }
+      if (!savedFlow) throw Object.assign(new Error("Flow not found"), { status: 404 });
+      return savedFlow;
+    });
 
     // Map variables to globalVariables for UI compatibility
     const flowResponse = {
@@ -179,8 +191,8 @@ async function PUT_handler(request, { params }, authz) {
   } catch (error) {
     voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
-      { ok: false, error: error.message || "Failed to update flow" },
-      { status: 500 }
+      flowAssistantErrorPayload(error, "Failed to update flow"),
+      { status: error.status || 500 }
     );
   }
 }

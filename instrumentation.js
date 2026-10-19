@@ -99,8 +99,6 @@ export async function register() {
     }
 
     if (allowsWorkerRole(processRole)) {
-      const { startLocalVideoAiService } = await import("./lib/runtime/video-ai-service.mjs");
-      startLocalVideoAiService({onError:error=>appLogger.warn("video_ai_service_error",{error:error.message})});
       if (process.env.CALL_GENERATOR_EXTERNAL_WORKER !== "true") {
         try {
           const { getPostgresPool } = await import("./lib/postgres.mjs");

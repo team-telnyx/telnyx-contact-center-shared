@@ -2,6 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { createRequire } from "node:module";
 import nextEnv from "@next/env";
 import { createDiagnosticLogger } from "../lib/diagnostic-logger.mjs";
 import { renderStructuredLogLineForConsole } from "../lib/logger/index.mjs";
@@ -11,6 +12,7 @@ import {
 } from "../lib/logger/runtime-config.mjs";
 import { flushApplicationLogSinks } from "../lib/logger/app-log-sinks.mjs";
 import { validateJwtSecrets } from "../lib/jwt-secrets.mjs";
+import { startVideoAiService } from "../lib/runtime/video-ai-service.mjs";
 import {
   allowsStreamingRole,
   allowsWebRole,
@@ -20,7 +22,8 @@ import {
 
 const { loadEnvConfig } = nextEnv;
 const originalEnv = { ...process.env };
-const nodeEnv = originalEnv.NODE_ENV || "production";
+const development = process.argv[2] === "dev";
+const nodeEnv = development ? "development" : originalEnv.NODE_ENV || "production";
 process.env.NODE_ENV = nodeEnv;
 loadEnvConfig(process.cwd(), nodeEnv !== "production");
 
@@ -75,12 +78,22 @@ logger.info("process_role_runtime_starting", {
   pid: process.pid,
 });
 
+const videoAi = startVideoAiService({
+  onError: error => logger.warn("video_ai_runtime_error", { error: error.message }),
+  onState: state => logger.info("video_ai_runtime_state", { ...state, pid: process.pid }),
+});
+
+async function stopApplicationRuntime() {
+  await videoAi.stop();
+  await flushLoggingSinksBeforeExit();
+}
+
 async function waitUntilShutdown() {
   return new Promise((resolve) => {
     for (const signal of ["SIGINT", "SIGTERM"]) {
       process.once(signal, () => {
         logger.info("process_role_runtime_shutdown_signal", { signal, processRole });
-        flushLoggingSinksBeforeExit().finally(() => resolve(signal));
+        stopApplicationRuntime().finally(() => resolve(signal));
       });
     }
   });
@@ -159,10 +172,12 @@ function startWebRuntime() {
   // Use a dedicated override and otherwise listen on every container interface.
   const hostname = process.env.APP_HOSTNAME || "0.0.0.0";
   const port = process.env.PORT || "3000";
-  const args = ["next", "start", "--hostname", hostname, "--port", port];
+  const mode = development ? "dev" : "start";
+  const args = [createRequire(import.meta.url).resolve("next/dist/bin/next"), mode, "--hostname", hostname, "--port", port,
+    ...(development ? process.argv.slice(3) : [])];
 
   logger.info("web_server_starting", {
-    command: "next start",
+    command: `next ${mode}`,
     hostname,
     port,
     nodeEnv: process.env.NODE_ENV || "production",
@@ -171,7 +186,7 @@ function startWebRuntime() {
     message: `Web server starting on port ${port}`,
   });
 
-  const child = spawn("yarn", args, {
+  const child = spawn(process.execPath, args, {
     env: { ...process.env, NODE_ENV: nodeEnv },
     stdio: ["inherit", "pipe", "pipe"],
   });
@@ -234,7 +249,7 @@ function startWebRuntime() {
 
   child.on("error", (error) => {
     logger.error("web_server_start_failed", { error: error?.message || String(error), processRole });
-    process.exitCode = 1;
+    void stopApplicationRuntime().finally(() => process.exit(1));
   });
 
   child.on("exit", (code, signal) => {
@@ -244,17 +259,16 @@ function startWebRuntime() {
     } else {
       logger.error("web_server_exited", payload);
     }
-    if (signal) {
-      flushLoggingSinksBeforeExit().finally(() => process.kill(process.pid, signal));
-    } else {
-      flushLoggingSinksBeforeExit().finally(() => process.exit(code ?? 1));
-    }
+    void stopApplicationRuntime().finally(() => process.exit(code ?? (signal === "SIGINT" || signal === "SIGTERM" ? 0 : 1)));
   });
 
+  let stopping = false;
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.once(signal, () => {
+      if (stopping) return;
+      stopping = true;
       logger.info("web_server_shutdown_signal", { signal, processRole });
-      flushLoggingSinksBeforeExit().finally(() => child.kill(signal));
+      void stopApplicationRuntime().finally(() => child.kill(signal));
     });
   }
 }

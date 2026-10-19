@@ -33,7 +33,7 @@ function fakeSdk() {
       state.subscriptions.get(participantId)?.delete(key);
       emit("subscription_ended", participantId, key);
     },
-    async sendMessage() {}, async addStream() {}, async updateStream() {}, async removeStream() {}, updateClientToken() {},
+    async sendMessage(message, recipients) { calls.push(["message", message, recipients]); }, async addStream() {}, async updateStream() {}, async removeStream() {}, updateClientToken() {},
   };
   // Like the SDK: the participant goes, streams and subscriptions stay.
   const leave = (id) => { state.participants.delete(id); emit("participant_left", id); };
@@ -149,4 +149,19 @@ test("playback uses permitted individual tracks, never the room-wide supervisor 
   assert.equal(snapshots.at(-1).audioTracks.length, 1);
   assert.equal(fake.state.mixedAudioTrack.enabled, false);
   await controller.leave();
+});
+
+
+test("AI playback receipts follow playing audio and stay scoped to the sender", async () => {
+  const fake = fakeSdk(), snapshots = [];
+  fake.addParticipant("me", { role: "customer" }); fake.addParticipant("bot", { role: "ai" }); fake.publish("bot");
+  const room = await joinVideoRoom({ roomId: "r", token: "t", sdk: fake.sdk, onChange: s => snapshots.push(s) }); await flush();
+  const probe = nonce => fake.emit("message_received", "bot", { type: "text", payload: JSON.stringify({ type: "ai.media.probe", nonce }) });
+  probe("first"); await flush(); assert.equal(fake.calls.filter(c => c[0] === "message").length, 0);
+  snapshots.at(-1).audioTracks[0].onReady(); await flush();
+  assert.deepEqual(fake.calls.at(-1), ["message", { type: "text", payload: JSON.stringify({ type: "ai.media.playing", nonce: "first" }) }, ["bot"]]);
+  probe("second"); await flush(); assert.equal(JSON.parse(fake.calls.at(-1)[1].payload).nonce, "second");
+  fake.publish("bot"); await flush(); const before = fake.calls.filter(c => c[0] === "message").length;
+  probe("replacement"); await flush(); assert.equal(fake.calls.filter(c => c[0] === "message").length, before, "a replaced track must play before acknowledging");
+  await room.leave();
 });

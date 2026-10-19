@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
+import { chromiumSeccomp } from './chromium-policy.mjs';
 
 const execFileAsync = promisify(execFileCb);
 
@@ -23,6 +24,9 @@ RELEASE_DIR="$APP_DIR/releases/$RELEASE_ID"
 CURRENT_IMAGE_FILE="$APP_DIR/current-image"
 CONTAINER_NAME=cc-app
 mkdir -p "$RELEASE_DIR"
+cat > "$APP_DIR/chromium-seccomp.json" <<'CC_CHROMIUM_SECCOMP'
+${chromiumSeccomp}
+CC_CHROMIUM_SECCOMP
 cd "$RELEASE_DIR"
 
 echo "Refreshing /opt/cc/app.env from Secret Manager"
@@ -53,6 +57,9 @@ run_container() {
   docker run -d \\
     --name "$CONTAINER_NAME" \\
     --restart unless-stopped \\
+    --stop-timeout 60 \\
+    --security-opt "seccomp=$APP_DIR/chromium-seccomp.json" \\
+    --mount "type=volume,source=cc-video-recordings,target=/app/.data/video-recordings" \\
     --env-file "$APP_DIR/app.env" \\
     --env-file "$APP_DIR/node.env" \\
     -p "$APP_PORT:$APP_PORT" \\

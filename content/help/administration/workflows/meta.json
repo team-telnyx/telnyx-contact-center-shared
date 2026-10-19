@@ -1,4 +1,12 @@
 {
   "title": "Workflows",
-  "pages": ["index", "stages", "items", "slots", "recommendations", "testing"]
+  "pages": [
+    "index",
+    "stages",
+    "items",
+    "slots",
+    "mcp-bindings",
+    "recommendations",
+    "testing"
+  ]
 }

@@ -1,3 +1,4 @@
+import { initializeScheduleExecution } from "@/lib/schedules/runtime.mjs";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
@@ -173,6 +174,10 @@ async function runHttpRequestFlow(request, context, method) {
     flowId,
   );
 
+  if (flow.nodes.some(n => n.data?.nodeType === "schedules")) {
+    try { await initializeScheduleExecution(flow, callControlId, event); }
+    catch { /* The node records the unavailable context and takes its error branch. */ }
+  }
   let queue = determineNextNodes(flow, startNode, event, executionState);
   let finalResult = { success: true, output: 0, variables: {} };
   let steps = 0;

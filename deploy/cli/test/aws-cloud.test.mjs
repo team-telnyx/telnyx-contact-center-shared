@@ -458,7 +458,8 @@ describe('aws-cloud.mjs — provisionAwsInfra', () => {
     });
     assert.strictEqual(result.aborted, false);
     assert.deepStrictEqual(result.state.infra.instanceIds, ['i-1', 'i-2']);
-    assert.deepStrictEqual(deployedInstances, ['i-1', 'i-2']);
+    // Preflight every node before the rolling application replacement.
+    assert.deepStrictEqual(deployedInstances, ['i-1', 'i-2', 'i-1', 'i-2']);
     await rm(deployDir, { recursive: true, force: true });
   });
 
@@ -589,7 +590,7 @@ describe('aws-cloud.mjs — redeployAwsApp', () => {
       io, deployDir, execImpl, sleep: async () => {},
     });
     assert.strictEqual(result.aborted, false);
-    assert.deepStrictEqual(ssmInstanceIds, ['i-1', 'i-2']);
+    assert.deepStrictEqual(ssmInstanceIds, ['i-1', 'i-2', 'i-1', 'i-2']);
     await rm(deployDir, { recursive: true, force: true });
   });
 

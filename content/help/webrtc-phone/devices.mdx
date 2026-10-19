@@ -1,0 +1,35 @@
+---
+title: Devices and call handoff
+description: Select the device for future calls and move an active voice or video interaction.
+audiences: [agent, supervisor, admin, owner]
+keywords: [Calls on, Computer, iPhone, Android, takeover, handoff, move call, devices]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+## Select where calls ring
+
+Open the phone panel's **Calls on** selector. Choose a reachable Computer or registered phone. The selection controls future calls; changing it is not an instruction to move an active conversation. On first use, select a device before expecting calls to be ready.
+
+Computer represents your browser connections. The browser that owns a live call supplies its media controls. A phone in push standby can remain eligible while its iOS app is suspended, but a notifications-only device is not a ready voice destination. See [device availability](/help/mobile#read-device-availability).
+
+## Move an active call
+
+For a supported active voice or video interaction, open the move action in the phone/device controls or open the interaction on the destination and choose **Take over here**. The voice move dialog shows the current device, destination and progress.
+
+1. Sign in on both devices and check that the destination is reachable.
+2. Select the destination and start the move, or take over from the destination.
+3. Answer the replacement voice call. For video, follow **Connect video here** and grant the destination's camera/microphone permissions.
+4. Wait for the confirmed outcome. The source remains responsible until the replacement is ready. Only the handling device can control media and complete wrap-up.
+
+Calls on updates after a successful move. The customer remains in the same interaction. A brief media interruption is possible. Screen sharing stops on the source and requires a new permission and action on the destination.
+
+## Cancel or recover
+
+Use **Cancel** while available before cutover. Rejection or no answer before cutover leaves the original device responsible. **Try again** retries a failed move; after an uncertain network result, wait for the dialog to reconcile rather than starting separate calls.
+
+Resume held calls and finish consultation, transfer or supervision before moving. Supervisory sessions themselves cannot be moved this way. Device and client support determine which destinations are offered. If progress remains pending, keep the original connection and report the interaction ID, devices and exact state to an administrator.
+
+## Audio settings and diagnostics
+
+Use the phone's settings control for audio device and region choices; changing a microphone does not change the Calls on destination. **Statistics** opens Connection quality and reports measurements for a call in this browser. An iPhone call must be diagnosed on the iPhone. See [WebRTC troubleshooting](/help/webrtc-phone/troubleshooting#connection-quality).

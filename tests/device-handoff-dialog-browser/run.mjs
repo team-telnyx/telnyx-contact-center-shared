@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer';
 // while it runs, and the leg ringing here is answered or turned down with the softphone's round buttons.
 const require=createRequire(import.meta.url);
 const stubs={
+ 'navigation':`export const usePathname=()=>'/agent';`,
  'endpoint-client':`export const voiceFetch=(...a)=>fetch(...a); export const refreshVoiceEndpoints=async()=>{};
   export const voiceEndpointRegistration=()=>({id:'web-1'});
   export const subscribeVoiceEndpoints=(listener)=>{listener({endpointId:'ios-1',generation:'1',endpoints:[{id:'web-1',kind:'web',label:'Computer',reachable:true},{id:'ios-1',deviceId:'install-a',kind:'ios',label:'iPhone',reachable:true}]});return()=>{};};`,
@@ -15,6 +16,7 @@ const stubs={
 const bundle=await build({entryPoints:['tests/device-handoff-dialog-browser/entry.jsx'],bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':process.cwd()},
  define:{'process.env.NODE_ENV':'"test"'},
  plugins:[{name:'network',setup(b){
+  b.onResolve({filter:/^next\/navigation$/},()=>({path:'navigation',namespace:'stub'}));
   b.onResolve({filter:/(endpoint-client|agent-stream)(\.m?js)?$/},a=>({path:a.path.match(/(endpoint-client|agent-stream)/)[1],namespace:'stub'}));
   b.onResolve({filter:/^[^./]/},a=>{if(a.path.startsWith('@/'))return;try{return {path:require.resolve(a.path)};}catch{return;}});
   b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:stubs[a.path],loader:'js'}));
@@ -46,6 +48,33 @@ try{
  const click=async label=>{await text(label);for(const b of await page.$$('[data-testid="device-handoff-dialog"] button'))if(await b.evaluate((el,label)=>el.textContent.trim()===label,label)){await b.click();return;}};
  const closeState=()=>page.$eval('[data-testid="handoff-close"]',el=>el.getAttribute('aria-disabled'));
  await page.evaluate(()=>window.handoffStore.getState().openHandoff('call'));
+ await page.waitForSelector('[data-testid="handoff-close"]');
+ // Relevant Tailwind positioning/stacking rules; the actual components supply
+ // the classes, so the former z-[100] Help sheet fails the hit-target assertion.
+ const layerStyles=await page.addStyleTag({content:`
+   [class~="z-[1150]"]{position:fixed;inset:0;z-index:1150}
+   [data-testid="device-handoff-dialog"]{position:fixed;left:100px;top:100px;width:400px;height:500px;z-index:1160}
+   [data-context-help-sheet="true"]{position:fixed;right:0;top:0;width:420px;height:100vh;background:white;overflow:auto}
+   [class~="z-[100]"]{z-index:100}
+   [class~="z-[1300]"]{z-index:1300}
+ `});
+ await page.focus('[data-testid="handoff-close"]');
+ await page.keyboard.press('F1');
+ const help='[data-context-help-sheet="true"]';
+ const helpLink=`${help} a[target="contact-center-help"]`;
+ await page.waitForSelector(helpLink);
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.$eval(helpLink,e=>e.scrollIntoView({block:"center"}));
+ assert.equal(await page.$eval(helpLink,e=>e.getAttribute('href')),'/help/webrtc-phone/devices');
+ assert.equal(await page.$eval(helpLink,e=>{const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),true,'F1 Help must be above the real handoff overlay: '+JSON.stringify(await page.$eval(helpLink,e=>{const r=e.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {x:r.x,y:r.y,width:r.width,height:r.height,hit:hit?.outerHTML.slice(0,180),pointer:getComputedStyle(e).pointerEvents,z:getComputedStyle(e.closest('[data-context-help-sheet]')).zIndex};})));
+ await page.focus(helpLink);
+ assert.equal(await page.$eval(helpLink,e=>e===document.activeElement),true,'F1 Help is keyboard accessible during handoff');
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.keyboard.press('Escape');
+ await page.waitForSelector(help,{hidden:true});
+ assert.equal(await open(),true,'closing Help preserves the handoff dialog');
+ await layerStyles.evaluate(e=>e.remove());
+
  await text('Take over here');
  // Close is the last control of the header, after the title: the top right corner (the bundle carries no CSS).
  const header=await page.$eval('[data-testid="handoff-close"]',el=>Array.from(el.parentElement.children).map(c=>c.getAttribute('data-testid')||c.tagName));

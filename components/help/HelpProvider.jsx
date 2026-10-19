@@ -37,15 +37,20 @@ export function HelpProvider({ children }) {
   const openHelp = useCallback(
     (helpId) => {
       const requestedHelpId = getHelpTopic(helpId) ? helpId : null;
-      const focusedHelpId =
+      const focusedElement =
         typeof document === "undefined"
           ? null
-          : helpIdFromElement(document.activeElement);
+          : document.activeElement;
+      const focusedHelpId = helpIdFromElement(focusedElement);
+      const focusIsInsideHelp = focusedElement?.closest('[data-context-help-sheet="true"]');
 
-      setSelection({
+      setSelection((previous) => ({
         pathname,
-        helpId: requestedHelpId || focusedHelpId,
-      });
+        // F1 while reading Help must not replace field help with screen help.
+        helpId: requestedHelpId || (focusIsInsideHelp && previous.pathname === pathname
+          ? previous.helpId
+          : focusedHelpId),
+      }));
       setIsOpen(true);
     },
     [pathname],

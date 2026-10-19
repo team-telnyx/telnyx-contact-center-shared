@@ -80,3 +80,8 @@ variable "portainer_server_cidrs" {
   type    = list(string)
   default = []
 }
+variable "video_ai_control_port" {
+  description = "Private Video AI relay port; shared by node configuration and the app-to-app security-group rule."
+  type        = number
+  default     = 3092
+}

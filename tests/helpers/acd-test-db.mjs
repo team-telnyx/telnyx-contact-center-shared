@@ -77,7 +77,7 @@ export async function prepareAcdTestPool(testDbName) {
         quality_ai_jobs, quality_evaluations, aa_workflow_sessions CASCADE;
       DROP TABLE IF EXISTS cc_video_ai_commands, cc_video_ai_events, cc_video_members, cc_video_ai_sessions, cc_video_ai_profiles, cc_video_ai_workers,
         acd_work_item_annotations, acd_transcripts, acd_recordings,
-        acd_action_requests, acd_outbound_lines, acd_direct_intents, acd_test_provider_calls, acd_stream_events, acd_retention_watermarks, acd_operator_actions, acd_outbox, acd_webhook_events, acd_events, acd_commands,
+        acd_assistant_invites, acd_action_requests, acd_outbound_lines, acd_direct_intents, acd_test_provider_calls, acd_stream_events, acd_retention_watermarks, acd_operator_actions, acd_outbox, acd_webhook_events, acd_events, acd_commands,
         acd_sagas, acd_agent_sessions, acd_agent_state, acd_reservations, acd_offers,
         acd_leg_intents, acd_legs, acd_segments, acd_work_items CASCADE;
       DROP TABLE IF EXISTS cc_agent_status_intervals,

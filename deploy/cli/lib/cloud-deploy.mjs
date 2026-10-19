@@ -5,6 +5,8 @@ import { readFile, writeFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createBuildInfo, dockerBuildMetadata } from '../../../scripts/lib/build-info.mjs';
+import { chromiumSeccomp } from './chromium-policy.mjs';
+import { HA_VIDEO_SETUP, HA_VIDEO_PREFLIGHT } from './ha-video-runtime.mjs';
 
 const execFileAsync = promisify(execFileCb);
 
@@ -30,6 +32,9 @@ RELEASE_DIR="$APP_DIR/releases/$RELEASE_ID"
 CURRENT_IMAGE_FILE="$APP_DIR/current-image"
 CONTAINER_NAME=cc-app
 mkdir -p "$RELEASE_DIR"
+cat > "$APP_DIR/chromium-seccomp.json" <<'CC_CHROMIUM_SECCOMP'
+${chromiumSeccomp}
+CC_CHROMIUM_SECCOMP
 cd "$RELEASE_DIR"
 
 echo "Refreshing /opt/cc/app.env from Secrets Manager"
@@ -57,6 +62,9 @@ run_container() {
   docker run -d \\
     --name "$CONTAINER_NAME" \\
     --restart unless-stopped \\
+    --stop-timeout 60 \\
+    --security-opt "seccomp=$APP_DIR/chromium-seccomp.json" \\
+    --mount "type=volume,source=cc-video-recordings,target=/app/.data/video-recordings" \\
     --env-file "$APP_DIR/app.env" \\
     --env-file "$APP_DIR/node.env" \\
     -p "$APP_PORT:$APP_PORT" \\
@@ -88,72 +96,9 @@ fi
 exit 5
 `;
 
-const REMOTE_DEPLOY_SCRIPT_HA = `#!/usr/bin/env bash
-set -euo pipefail
-ARTIFACT_PREFIX="$1"
-APP_DIR=/opt/cc
-RELEASE_ID="$(basename "$ARTIFACT_PREFIX")"
-RELEASE_DIR="$APP_DIR/releases/$RELEASE_ID"
-CURRENT_IMAGE_FILE="$APP_DIR/current-image"
-CONTAINER_NAME=cc-app
-mkdir -p "$RELEASE_DIR"
-cd "$RELEASE_DIR"
-
-echo "Refreshing /opt/cc/app.env from Secrets Manager"
-aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$APP_ENV_SECRET" --query SecretString --output text > "$APP_DIR/app.env"
-chmod 0600 "$APP_DIR/app.env"
-
-echo "Downloading artifact from $ARTIFACT_PREFIX"
-aws s3 cp "$ARTIFACT_PREFIX/manifest.json" manifest.json --only-show-errors
-aws s3 cp "$ARTIFACT_PREFIX/image.tar.zst" image.tar.zst --only-show-errors
-aws s3 cp "$ARTIFACT_PREFIX/image.tar.zst.sha256" image.tar.zst.sha256 --only-show-errors
-
-echo "Verifying checksum"
-sha256sum -c image.tar.zst.sha256
-
-IMAGE_NAME="$(python3 -c "import json;print(json.load(open('manifest.json'))['image'])")"
-previous_image=""
-[ -f "$CURRENT_IMAGE_FILE" ] && previous_image="$(tr -d '\\n' < "$CURRENT_IMAGE_FILE")"
-
-echo "Loading image $IMAGE_NAME"
-zstd -dc image.tar.zst | docker load
-
-run_container() {
-  local image="$1"
-  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  docker run -d \\
-    --name "$CONTAINER_NAME" \\
-    --restart unless-stopped \\
-    --env-file "$APP_DIR/app.env" \\
-    --env-file "$APP_DIR/node.env" \\
-    -p "$APP_PORT:$APP_PORT" \\
-    -p "$STREAMING_WS_PORT:$STREAMING_WS_PORT" \\
-    "$image"
-}
-
-wait_health() {
-  for i in $(seq 1 60); do
-    if curl -fsS --max-time 5 "http://127.0.0.1:$APP_PORT/api/health" >/dev/null; then return 0; fi
-    sleep 5
-  done
-  return 1
-}
-
-run_container "$IMAGE_NAME"
-if wait_health; then
-  echo "$IMAGE_NAME" > "$CURRENT_IMAGE_FILE"
-  echo "DEPLOY_OK image=$IMAGE_NAME"
-  exit 0
-fi
-
-echo "New image failed health checks: $IMAGE_NAME" >&2
-if [ -n "$previous_image" ]; then
-  echo "Rolling back to previous image: $previous_image" >&2
-  run_container "$previous_image"
-  wait_health || true
-fi
-exit 5
-`;
+const REMOTE_DEPLOY_SCRIPT_HA = REMOTE_DEPLOY_SCRIPT_SINGLE
+  .replace('echo "Downloading artifact', `${HA_VIDEO_SETUP}\necho "Downloading artifact`)
+  .replace('    --mount "type=volume,source=cc-video-recordings,target=/app/.data/video-recordings"', '    "${video_args[@]}"');
 
 /**
  * Builds the production Docker image locally (operator's own machine — see
@@ -571,6 +516,17 @@ export async function deployHaRolling({
     if (!ssmReady.online) {
       throw new Error(`Instance ${instanceId} never registered with SSM (PingStatus=Online) after ${ssmReady.attempts} attempts.`);
     }
+    // Validate every node before draining any of them. Missing shared storage
+    // or a routable relay must leave the running fleet untouched.
+    // eslint-disable-next-line no-await-in-loop -- validate all hosts before rollout.
+    const preflight = await runSsmDeployCommandImpl({
+      instanceId, region, s3Prefix, execImpl, script: HA_VIDEO_PREFLIGHT,
+      env: { AWS_REGION: region, APP_ENV_SECRET: appEnvSecretName },
+      ...(sleep ? { sleep } : {}),
+    });
+    if (!preflight.success) throw new Error(`HA Video AI preflight failed on ${instanceId}: ${preflight.error || preflight.output}`.slice(0, 4000));
+  }
+  for (const instanceId of instanceIds) {
     // eslint-disable-next-line no-await-in-loop -- deliberately sequential.
     await deregisterFromAlbImpl({ appTargetGroupArn, wsTargetGroupArn, instanceId, appPort, wsPort: streamingWsPort, region, execImpl, sleep });
     // eslint-disable-next-line no-await-in-loop -- deliberately sequential.

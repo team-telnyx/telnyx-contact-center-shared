@@ -7,7 +7,7 @@ This directory contains everything needed to deploy the Telnyx Contact Center on
 The Docker setup runs two containers:
 
 - **PostgreSQL 17** — database with a persistent volume
-- **Next.js application** — production build of the Contact Center
+- **Next.js application** — production build of the Contact Center, including the integrated Video AI runtime and its Chromium/FFmpeg dependencies
 
 Both containers are defined in `docker/production/compose.yaml` and managed by the `deploy.sh` script. Local installs also apply `compose.local.yaml`, which publishes PostgreSQL only on loopback.
 
@@ -128,8 +128,8 @@ If you prefer to run Docker Compose directly:
 ```bash
 cd docker/production
 
-# Build and start
-docker compose -f compose.yaml -f compose.local.yaml up --build -d
+# Build and start, including bundled PostgreSQL
+docker compose --profile with-pg -f compose.yaml -f compose.local.yaml up --build -d
 
 # Check logs
 docker compose -f compose.yaml -f compose.local.yaml logs -f
@@ -137,6 +137,37 @@ docker compose -f compose.yaml -f compose.local.yaml logs -f
 # Stop
 docker compose -f compose.yaml -f compose.local.yaml down
 ```
+
+Omit `--profile with-pg` only when the environment points to an existing PostgreSQL server.
+
+## Video AI and Vision
+
+Use the **[deployment and activation guide](../deploy/README.md#video-ai-and-vision)** after the base application is running. Video AI runs inside the app deployment; it does not add another service container.
+
+The current Compose definition already applies:
+
+- `security_opt: seccomp=./chromium-seccomp.json` for sandboxed Chromium;
+- `stop_grace_period: 60s` for media cleanup before shutdown;
+- a private persistent volume at `/app/.data/video-recordings` (`CC_VIDEO_RECORDINGS_PATH` can select an existing host path).
+
+On a single host, leave `VIDEO_AI_EXTERNAL_WORKER` and `VIDEO_AI_CONTROL_URL` unset,
+use the normal app launcher, and do not set `VIDEO_CONFERENCE_AI_ENABLED` or
+`VIDEO_VISION_ENABLED` to `false`. PostgreSQL and `TELNYX_API_KEY` remain required.
+No additional Video AI enablement flag is needed with these defaults.
+
+For an **existing installation**, retain the current `.env` and private recordings,
+update the checkout including its Compose files, and run the normal
+`./docker/deploy.sh production`. If recordings previously lived only inside the
+container, copy them to persistent storage before mounting over that directory.
+An image-only upgrade or container restart does not apply missing security options
+or mounts. Custom container deployments must follow the guide's
+[migration instructions](../deploy/README.md#video-ai-and-vision)
+and store those options in their deployment mechanism for later updates and rollbacks.
+
+Then configure the assistant, Video-enabled fallback queue, Vision mode and allowed
+sources in **Admin → Web Widgets → Video**, and **Publish**. Run the guide's
+[live verification checklist](../deploy/README.md#video-ai-and-vision)
+in a new call. `/api/health` alone does not establish Video AI readiness.
 
 ## Database Schema & Seeding
 
@@ -191,11 +222,25 @@ For high-availability deployments with multiple application nodes behind a load 
 4. Use `/api/health` as the health check endpoint
 5. Increase the load balancer idle timeout to ~300 seconds for SSE and WebSocket connections
 6. Ensure all `NEXT_PUBLIC_*` variables, plus `GOOGLE_MAPS_KEY`, are consistent across nodes (they are compiled into the browser bundle at build time)
-7. Store recordings, uploads, and media in S3-compatible object storage shared across nodes
+7. Use shared storage for artifacts that must be read across nodes. Video AI fallback compositions specifically require the same private shared filesystem mounted on every reader/compositor; S3-compatible object storage is not a substitute for this mount.
 
-The app is designed to be stateless or near-stateless — in-memory state is periodically synced to PostgreSQL, so individual nodes can be replaced without data loss.
+Video AI owns live media connections and uses PostgreSQL leases to coordinate workers.
+Follow the [HA prerequisites](../deploy/README.md#video-ai-and-vision)
+for per-node private relay addresses, security-group connectivity and shared storage.
+The HA wizard disables Video AI until these prerequisites are explicitly configured.
+Allow graceful shutdown and verify session recovery and recording playback during
+your rollout; web health alone does not validate the media path.
 
 ## Troubleshooting
+
+### Video assistant service is unavailable
+
+Check application logs for `video_ai_runtime_error` and for
+`video_ai_runtime_state` reaching `ready`. `No usable sandbox!` after an image-only
+upgrade usually means the app container lacks the checked-in seccomp policy.
+Recreate it through the updated deployment definition; do not disable Chromium's
+sandbox. See the [activation troubleshooting table](../deploy/README.md#video-ai-and-vision)
+for feature flags, capacity, assistant/profile validation and Vision consent.
 
 ### Permission denied: Cannot connect to Docker daemon
 

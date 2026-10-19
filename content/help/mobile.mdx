@@ -1,0 +1,44 @@
+---
+title: Mobile apps and devices
+description: Connect a companion app, understand device availability and retire a phone safely.
+audiences: [agent, supervisor, admin, owner]
+keywords: [mobile, QR code, setup link, iPhone, iPad, Android, Watch, devices, push standby]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+## Connect the companion app
+
+1. Open **Profile → Devices → Mobile app** in Contact Center.
+2. Check the displayed organization and server address. Use **Install the app** when an installation link is configured.
+3. Scan the QR code with a compatible NovumCX for Telnyx app, or use the iPhone camera. You can also copy the setup link to a supported device.
+4. Sign in with your usual account. The setup code selects the Contact Center; it does not sign you in or grant permissions.
+5. Allow the microphone, camera and notification permissions needed for your work. Select the intended device in **Calls on** and verify its availability before becoming Available.
+
+The backend supports iOS and Android device registration and platform-specific notifications. Available screens and media features depend on the installed companion client and its version. Do not assume every browser feature is available on every mobile platform. If setup fails, verify the server address, network access and supported client version with your administrator.
+
+## Read device availability
+
+**Profile → Devices** always shows one **Computer** entry representing your browser connections. Opening another tab does not create another physical computer entry. Phones and tablets are listed by installation.
+
+| State | Meaning |
+| --- | --- |
+| Takes calls | This is the selected destination for calls. Selection alone does not establish reachability. |
+| Connected | The device has a live connection recognized by Contact Center. |
+| Standby via push | An eligible iOS device can be woken by authenticated VoIP push while its signaling connection is suspended. |
+| Notifications only | A push registration exists without an available call connection. |
+| Unavailable / not seen | Check the app, sign-in, network and selected destination before relying on it. |
+
+Agent status, queue and campaign changes synchronize across signed-in clients. Selecting a device does not make an unavailable agent eligible for queue work. Message drafts belong to their authenticated sessions; check the draft before switching clients and sending.
+
+## Forget a retired device
+
+Choose **Forget** beside a phone or tablet and review the confirmation. This removes its call registrations and notifications and signs its app sessions out. It must sign in again to be used. If it was the selected destination, choose another device in the phone panel.
+
+Computer cannot be forgotten. A device holding voice work cannot be forgotten until that work is resolved. Use [call handoff](/help/webrtc-phone/devices#move-an-active-call) to move supported active work before retiring a phone.
+
+## Watch and native AI sessions
+
+A compatible Watch app can use supported AI audio sessions and outgoing calls to saved contacts or colleagues. Microphone access, app connectivity and a reachable destination are required. A Watch session shares the account's voice/video occupancy; it does not create another simultaneous voice slot.
+
+Native AI sessions have their own lifecycle and do not support Contact Center queue handoff, transfer or queue wrap-up. After a client crash, busy state can remain until the configured session limit and recovery period expire. Ask an administrator to investigate persistent occupancy rather than starting repeated calls. Platform support and installed-client capabilities must be verified on the device.

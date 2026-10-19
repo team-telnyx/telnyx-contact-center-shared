@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { videoStartErrorMessage } from "../lib/video/start-error.mjs";
-import { shouldStartLocalVideoAiService } from "../lib/runtime/video-ai-service.mjs";
+import { shouldStartVideoAiService } from "../lib/runtime/video-ai-service.mjs";
 
 test("video startup distinguishes service, network and media failures", () => {
   const copy = { media: "Check camera access", generic: "Please reconnect" };
@@ -11,12 +11,13 @@ test("video startup distinguishes service, network and media failures", () => {
   assert.equal(videoStartErrorMessage(new Error("ICE failed"), copy), copy.generic);
 });
 
-test("local production builds require explicit media-worker opt-in", () => {
-  assert.equal(shouldStartLocalVideoAiService({ NODE_ENV: "production" }), false);
-  assert.equal(shouldStartLocalVideoAiService({ NODE_ENV: "production", VIDEO_AI_LOCAL_WORKER: "true" }), true);
-  assert.equal(shouldStartLocalVideoAiService({ NODE_ENV: "development" }), true);
+test("Video AI is integrated by default in development and production worker roles", () => {
   for (const NODE_ENV of ["production", "development"]) {
-    assert.equal(shouldStartLocalVideoAiService({ NODE_ENV, VIDEO_AI_LOCAL_WORKER: "true", VIDEO_AI_EXTERNAL_WORKER: "true" }), false);
-    assert.equal(shouldStartLocalVideoAiService({ NODE_ENV, VIDEO_AI_LOCAL_WORKER: "true", VIDEO_CONFERENCE_AI_ENABLED: "false" }), false);
+    assert.equal(shouldStartVideoAiService({ NODE_ENV }), true);
+    assert.equal(shouldStartVideoAiService({ NODE_ENV, PROCESS_ROLE: "worker" }), true);
+    assert.equal(shouldStartVideoAiService({ NODE_ENV, PROCESS_ROLE: "web" }), false);
+    assert.equal(shouldStartVideoAiService({ NODE_ENV, PROCESS_ROLE: "streaming" }), false);
+    assert.equal(shouldStartVideoAiService({ NODE_ENV, VIDEO_AI_EXTERNAL_WORKER: "true" }), false);
+    assert.equal(shouldStartVideoAiService({ NODE_ENV, VIDEO_CONFERENCE_AI_ENABLED: "false" }), false);
   }
 });

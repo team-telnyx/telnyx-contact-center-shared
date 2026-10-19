@@ -4,7 +4,7 @@ description: Create queues, choose routing behavior, assign agents, configure ov
 audiences: [admin, owner]
 keywords: [queue, ACD, routing, waiting, overflow, SLA, hold music, agent assignment]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Queues hold calls until an eligible agent can handle them. A queue combines call ordering, agent assignment, capacity limits, overflow behavior, service-level targets, and the audio played while a caller waits.
@@ -208,3 +208,11 @@ Deletion cannot be undone. A queue cannot be deleted while it is selected as ano
 ## Verify the result
 
 Place a controlled test call through the associated call flow. Confirm that the call joins the expected queue, hears the intended audio, is offered to an eligible agent, respects the answer timeout, and follows the intended overflow behavior when capacity is reached.
+
+## Channels and utilization
+
+In **Channels & Utilization**, enable each channel the queue should receive: Voice, Chat, Email, SMS, WhatsApp or Video. The eligible agent must also enable it in their user configuration, belong to and activate the queue, and have a suitable status and capacity. Channel availability in this card does not connect a mailbox, number or website widget automatically.
+
+Set each channel's maximum and workload percentage. The smaller queue/agent maximum and the larger workload weight apply. Pending offers, active work and required wrap-up consume capacity across queues and sessions. Queue-routed Voice and Video are exclusive; manual/supervisory voice admission has separate rules and still prevents concurrent voice/video work.
+
+Save the card with the sheet's **Save Changes** button. Changing limits revalidates unaccepted offers; accepted work continues. Complete channel setup in [Web Widgets](/help/administration/chat-widgets), [Email](/help/administration/email), [SMS](/help/administration/sms) or [WhatsApp](/help/administration/whatsapp), then test one offer and its wrap-up. Video also needs the widget's video queue and media configuration.

@@ -1,10 +1,10 @@
 ---
 title: Web Widgets
-description: Configure native website chat, routing, publication, and agent capacity.
+description: Configure website chat, video AI, Vision, routing, publication, and agent capacity.
 audiences: [admin, owner]
-keywords: [chat, messaging, widget, utilization, capacity, publication]
+keywords: [chat, messaging, widget, video, avatar, vision, images, utilization, capacity, publication]
 owner: contact-center
-lastReviewed: 2026-10-14
+lastReviewed: 2026-10-19
 ---
 
 # Web Widgets
@@ -25,7 +25,7 @@ The footer saves channel settings together with the other user or queue settings
 ## Create and publish
 
 1. Click **New widget** or **New**, enter a unique name, and create the draft.
-2. Under **Channels → Available channels**, enable Messaging and/or Voice and select **Widget AI assistant**. Configure the queue and routing allowlist under **Handoff → AI chat handoff routing**. Widgets without an assistant use **Handoff → Direct chat routing**.
+2. Under **Channels → Available channels**, enable Messaging and/or Voice and select **Widget AI assistant**. Configure the queue and routing allowlist under **Handoff → AI chat handoff routing**. Widgets without an assistant use **Handoff → Direct chat routing**. For video conferences, enable **Voice & Video Call** and follow [Video calls with AI and Vision](#video-calls-with-ai-and-vision); video has its own assistant selection and fallback queue.
 3. Under **Targeting**, enter the allowed embedding origins, including the scheme and port where applicable. Use an exact origin such as `https://shop.example.com` or an HTTPS wildcard such as `https://*.example.com`.
 4. Configure dimensions, appearance, launcher, messages, handoff timeline, attachments, triggers, heads-up messages, rules, language, and accessibility. Use the device preview to check placement and sizing.
 5. Click **Publish**. Publication validates the current draft and queue configuration, creates or reuses the installation's shared chat handoff tool, and attaches it to the widget assistant. Copy the installation script from **Embed** into the customer website.
@@ -56,13 +56,19 @@ Start a new chat after this feature is first enabled so the provider conversatio
 
 ## Current delivery boundary
 
-This delivery supports native human chat, AI assistant messaging, AI-to-queue chat handoff, and AI assistant voice widgets. Callbacks, email, WhatsApp, SMS, and agent-to-agent chat transfer are subsequent work. The shared chat handoff tool does not transfer voice calls.
+The widget supports native human chat, AI assistant messaging with optional image input, AI-to-queue chat handoff, AI assistant voice widgets, and video conferences with human/AI participants and optional Vision. The shared chat handoff tool applies to chat; video uses its own conference handoff and fallback queue.
 
 ## AI channels
 
 In **Channels → Available channels**, the Messaging and Voice switches share one **Widget AI assistant** picker. Search by name or ID. The selection belongs to the widget revision, is saved for both channels, and remains assigned when either channel is disabled and re-enabled. Draft saving and publication reject conflicting assistant IDs. Voice without a native Telnyx avatar uses the AI Agent Library and requires unauthenticated web calls in the assistant's Widget settings. **Voice → Web Calls** contains the media region setting for those calls.
 
-### Video avatars
+### Images in AI chat
+
+Select an image-capable **Widget AI assistant**, enable **Allow images in AI chat** under **Channels**, then **Publish**. The application verifies the primary and fallback models. Chat uploads use the model's image input directly; a Vision tool alone does not enable uploads and is not required for this chat path. Use still PNG, JPEG or WebP images, at most three per message and 5 MiB per image. After handoff to a human, that chat's attachment policy also applies.
+
+Start a new chat after publication. Existing chats retain their original revision, and **Persist session** can restore that old chat on refresh. End the conversation and choose **Start new conversation**, or test in a fresh private browsing session. If the widget reports **Images for the AI assistant are disabled**, check the published chat image switch and session revision before changing video deployment settings.
+
+### Voice-call avatars
 
 Enable the avatar under **Voice** and choose a provider. **Telnyx** is the preferred default for new widget configurations. Existing explicit HeyGen and Anam selections remain unchanged. Selecting Telnyx offers six avatars and three backgrounds; the catalog displays official Telnyx portrait previews, which remain visible in the voice panel until the first video frame appears.
 
@@ -74,14 +80,47 @@ The server requires `TELNYX_API_KEY` and a browser-reachable streaming relay. Th
 
 The preview device selector fills the right panel width. Its orientation control is on the following row.
 
+## Video calls with AI and Vision
+
+The deployment administrator must first complete [Video AI instance setup](/help/setup#video-ai-and-vision). The video runtime is included in Contact Center; custom or older deployments may still need updated Docker security options and recording storage.
+
+1. Prepare a source assistant whose primary and fallback models are verified for buffered Vision. For an avatar with Vision, use a compatible Telnyx TTS voice. GPT Live does not support buffered Vision. Publication rejects incompatible workflow, telephone transfer, delegation and custom client tools.
+2. Enable **Video** in the fallback queue's **Channels & Utilization**. For human handoff, enable Video for eligible agents, configure their capacity and activate queue membership.
+3. Enable **Channels → Available channels → Voice & Video Call**. Open **Video**, set **Start the video call with → AI assistant**, select **Video queue / fallback queue**, and choose **Video AI assistant**. For human-first calls, choose queue/agent routing and enable **Allow agents to invite an assistant** instead.
+4. Optionally enable **Show a Telnyx avatar**, choose its avatar/background, and set **AI after the agent joins**. The assistant can use Vision with audio-only participation as well.
+5. Set **Vision** to **Uploaded images only** or **Uploaded images and live video**. Add the Vision tool to the source assistant, or enable **Add Vision tool on publish** to add it to the dedicated video profile. Verify additional assistants allowed for invitations too.
+6. For live Vision, choose **Allowed Vision sources**, **Vision source selection**, **Preferred camera**, and **Let the assigned agent control Vision**. Enable **Screen sharing** if visitors should share their screen. Configure **Record calls** separately.
+7. Click **Publish**, then **Check published assistant profiles**. Confirm **Published profile is up to date**. Video publication creates a managed profile while preserving the source assistant's voice/chat settings. Changes to the source require publishing again.
+8. Open **Test the published video widget**. End any previous call and reload before starting the new one. The embedded website must be allowed under **Targeting** and use HTTPS for camera/microphone access (localhost is suitable for development).
+
+During the call, each participant must explicitly allow AI to see their own camera or screen. Browser media permission alone does not grant AI access. Only one selected, authorized source is analyzed at a time. Automatic selection uses an authorized screen or the preferred camera; manual selection pauses when its source disappears. Allow about 10.5 seconds when switching sources. Owners can revoke their source consent at any time.
+
+Verify an audible reply, moving avatar video when enabled, and an accurate answer about a harmless test image or selected camera/screen. A static portrait, Studio preview or healthy web endpoint does not prove that Video AI is connected. **The video assistant service is unavailable** requires checking worker readiness/capacity and instance configuration; adding a Vision tool does not fix a failed browser runtime.
+
+The **Allow images in AI chat** switch is independent of the Video Vision settings. Enabling either one does not enable the other.
+
 ## Agent and queue settings
 
 The user editor separates **Account Settings**, **Channels & Utilization**, **Queue Assignments**, and **Skills & Proficiency** into cards. The queue editor places **Channels & Utilization** between **Queue Settings** and **Routing Settings**. The footer button saves all cards in one database transaction; there is no separate utilization save button.
 
-File attachments remain available in native Contact Center chat. The AI Assistant Chat adapter currently exchanges text. A message with an uncertain provider result remains pending and is not automatically sent again.
+File attachments remain available in native Contact Center chat. AI chat also accepts images when explicitly enabled as described above. A message with an uncertain provider result remains pending and is not automatically sent again.
 
 ## Anonymous session admission
 
 New sessions are limited to 10 per minute per widget and client address, with a separate 600-per-minute widget safety cap. Successful retries and session resumption do not consume additional slots. The database stores a keyed hash of the address, not the raw address.
 
 The ingress must append verified peer addresses to `X-Forwarded-For` and prevent direct public access to Next.js. Set `WIDGET_TRUSTED_PROXY_HOPS` to the number of trusted ingress hops (default 1). Client-supplied leading entries are ignored. Missing or invalid addresses share a restricted fallback bucket. Use the same widget signing secret across application nodes.
+
+## Co-browsing
+
+In Widget Studio → **Co-browsing**, enable page sharing and choose the permitted entry points. Configure the pairing-code lifetime, privacy preset, additional mask selectors and blocked content. Enable **Allow agent to request control** only when assisted interaction is intended, then publish.
+
+Viewing needs visitor consent. Control needs separate consent and the agent's `cobrowse:control` permission, in addition to request/view access. The default Agent role does not include control. The site owner must explicitly mark eligible links, safe buttons and fields with `data-cobrowse-control`. Password/payment fields, private targets and form submissions remain blocked. All input values stay masked in the replay. Co-browsing is live and is not recorded.
+
+Test both approval and refusal, masking, code expiry, disconnect, transfer and consent revocation using the Studio test page. Source-site script/WebSocket policies must allow the widget. See the [agent procedure](/help/agent/cobrowsing).
+
+## Test page and publication checks
+
+Open **Delivery → Test page** for the signed-in widget test host. Use synthetic data to test navigation, attachments, masking, allowed controls and published media settings. For video, also check recording configuration, waiting playlist, agent admission and supervision; a Studio preview alone does not verify those runtime paths.
+
+Changes require publication before a new visitor session uses them. Existing sessions retain their original revision. Inspect **History** when comparing a report with the current draft, and begin a fresh session after changing AI, image or video settings.

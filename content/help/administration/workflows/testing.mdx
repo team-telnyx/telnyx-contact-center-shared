@@ -4,7 +4,7 @@ description: Run chat and voice scenarios and inspect item completion and slot e
 audiences: [admin, owner]
 keywords: [workflow test, persona, scenario, voice test]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Open **Test** from the workflow editor. The module uses the same conversation-analysis path as the live Agent Assist workflow and displays messages, item statuses, and filled slots.
@@ -14,3 +14,23 @@ Choose or generate a persona/scenario, then run a chat or voice test. Automatic 
 During a run, verify which speaker completed each item, the extracted value, confidence/alternatives, and whether the workflow advances in the intended order. Use Reset to start with clean item and slot state; stopping a run prevents further messages in that session.
 
 Run at least one scripted happy path and adversarial cases: out-of-order answers, corrections, silence, unknown information, ambiguous names, multiple slots in one sentence, low-confidence audio, and an early conversation end. AI-generated scenarios are test aids, not acceptance evidence; preserve expected inputs and results separately for repeatable regression checks.
+
+## Choose analysis and caller models
+
+**Test AI Agent** has separate model pickers for workflow analysis and the simulated caller. The analysis default comes from the workflow override, then its AI Copilot operation and platform default. The caller uses the **Simulated customer** operation independently of the workflow model. Each picker shows its effective default; a different choice affects that test only.
+
+Use **Reset** on a model override to return to the inherited choice. Configure persistent defaults in [AI Copilot](/help/administration/system/ai-copilot). The tested assistant retains its own model configuration. A listed external model may still require provider credentials; a missing key or unconfigured default is a configuration error, not a failed workflow assertion.
+
+## Voice tests
+
+The voice test uses an authenticated assistant WebSocket session. It does not require enabling anonymous web calls. Workflow tests are voice-only even when the assistant has an avatar. The configured TTS voice must support this transport; KokoroTTS is not supported on this path.
+
+In automatic mode, the simulated caller's generated speech is sent at real-time pace. In manual mode, allow the microphone and speak, or send a typed text turn. Use audio monitoring to hear the test. Inspect streamed assistant text, the **Spoken** line when recognized speech differs from the injected text, interruption markers and the Telnyx conversation ID.
+
+Stop the test before changing modes or starting another session. Distinguish normal conversation end, idle timeout and maximum duration from connection errors. A microphone permission failure requires browser/OS permission; changing the model will not fix it.
+
+## Acceptance and troubleshooting
+
+Check expected slot values and speaker attribution after final transcript analysis, not only whether the assistant replied. Include a correction after completion, ambiguous lookup alternatives and manual edits when [MCP bindings](/help/administration/workflows/mcp-bindings) are used.
+
+An automatic run does not verify a real microphone, every TTS provider or a production call route. Record mode, model choices, assistant version, expected values and observed errors. For an empty simulated response, inspect the selected model's output and token budget. For missing transcript/slot updates, compare final messages, the conversation ID and analysis errors before rerunning.

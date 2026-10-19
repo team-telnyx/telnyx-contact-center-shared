@@ -1,0 +1,8 @@
+chromium-seccomp.json is distributed under the Apache License 2.0.
+Source: https://github.com/microsoft/playwright/blob/main/utils/docker/seccomp_profile.json
+Retrieved: 2026-10-19
+SHA-256: cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849
+
+The upstream profile derives from Docker's default seccomp profile and permits
+the namespace syscalls Chromium needs for its non-root browser sandbox.
+The upstream license is included in chromium-seccomp.LICENSE.

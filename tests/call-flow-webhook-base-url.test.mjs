@@ -98,8 +98,9 @@ test("new and duplicated call flows use the same fixed creation endpoint", async
     source.indexOf("async function handleExport"),
   );
 
+  assert.match(createHandler, /fetch\("\/api\/voice\/flows", \{/);
+  assert.match(duplicateHandler, /saveFlowWithAssistantConfirmation\("\/api\/voice\/flows", \{/);
   for (const handler of [createHandler, duplicateHandler]) {
-    assert.match(handler, /fetch\("\/api\/voice\/flows", \{/);
     assert.match(handler, /method: "POST"/);
   }
 });
@@ -198,6 +199,6 @@ test("call flow creation persists rebased node configuration", async () => {
   assert.match(source, /voiceApplicationId: voiceApp\.id/);
   assert.ok(
     source.indexOf("flowData.nodes = rebaseFlowOwnedNodeConfig") <
-      source.indexOf("VoiceFlowDb.createFlow(username, flowData)"),
+      source.indexOf("VoiceFlowDb.createFlow(username, flowData, { db })"),
   );
 });

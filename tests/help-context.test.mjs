@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { VOICE_FLOW_NODES } from "../config/voice-flow-nodes.js";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -59,6 +60,20 @@ test("queue routes resolve to queue screen help, including nested paths", () => 
   assert.equal(resolveScreenHelpId("/admin/queues/"), "admin.queues.screen");
 });
 
+test("specific routes win over parents and dynamic siblings without matching path prefixes", () => {
+  for (const [pathname, expected] of [
+    ["/admin/system/settings/ai-copilot/?tab=models#test", "admin.system.ai-copilot.screen"],
+    ["/admin/system/settings", "admin.system.settings.screen"],
+    ["/admin/system/schedules", "admin.system.schedules.screen"],
+    ["/admin/workflows/example-id/test", "admin.workflows.test.screen"],
+    ["/admin/ai-assistants/pronunciation-dictionaries", "admin.pronunciation.screen"],
+    ["/admin/ai-assistants/example-id", "admin.ai-assistants.screen"],
+    ["/admin/queues-archive", DEFAULT_HELP_ID],
+    ["/unknown", DEFAULT_HELP_ID],
+    ["/", "agent.dashboard.screen"],
+  ]) assert.equal(resolveScreenHelpId(pathname), expected, pathname);
+});
+
 test("users and skills routes resolve to their administration guides", () => {
   assert.equal(resolveScreenHelpId("/admin/users"), "admin.users.screen");
   assert.equal(resolveScreenHelpId("/admin/skills"), "admin.skills.screen");
@@ -74,10 +89,10 @@ test("users and skills routes resolve to their administration guides", () => {
 
 test("Agent and Supervisor routes resolve to their workspace guides", () => {
   const routes = [
-    ["/agent/desktop", "agent.desktop.screen", "/help/agent"],
+    ["/agent/desktop", "agent.desktop.screen", "/help/agent/desktop"],
     ["/supervisor/monitor?section=agents", "supervisor.monitor.screen", "/help/supervisor/monitoring"],
     ["/supervisor/analytics?section=skills-gap", "supervisor.analytics.screen", "/help/supervisor/analytics"],
-    ["/supervisor/call-history/call-1", "supervisor.analytics.screen", "/help/supervisor/analytics"],
+    ["/supervisor/call-history/call-1", "supervisor.history.screen", "/help/supervisor/call-history"],
     ["/supervisor/quality?section=evaluations", "supervisor.quality.screen", "/help/supervisor/quality"],
     ["/supervisor/outbound-dialer", "supervisor.outbound-dialer.screen", "/help/supervisor/outbound-dialer"],
   ];
@@ -338,7 +353,7 @@ test("Automation documentation exposes detailed submenus and one page per Call F
       "utf8",
     ),
   );
-  assert.equal(nodeMeta.pages.length, 43);
+  assert.equal(nodeMeta.pages.length, Object.keys(VOICE_FLOW_NODES).length + 1);
   assert.equal(new Set(nodeMeta.pages).size, nodeMeta.pages.length);
   for (const slug of nodeMeta.pages) {
     const article = await readHelpArticle(`administration/call-flows/nodes/${slug}`);

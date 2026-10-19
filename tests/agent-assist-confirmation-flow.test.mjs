@@ -249,5 +249,5 @@ test("server: a bare customer yes/no refocuses onto the boolean the agent just a
   // Only booleans, only pending/suggested, keyed on the last AGENT context line.
   const block = route.slice(route.indexOf("BARE_YES_NO_RE"), route.indexOf("workflow_bare_answer_focus_override"));
   assert.match(block, /i\.slot_type !== "boolean"/);
-  assert.match(block, /"inbound"/);
+  assert.match(block, /normalizeSpeakerType\(e\.speaker\) === "agent"/);
 });

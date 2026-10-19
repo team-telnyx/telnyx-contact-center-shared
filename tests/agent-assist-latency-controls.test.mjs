@@ -34,7 +34,10 @@ test("workflow slot fallback model is optional and configurable, with no default
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
   const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
   assert.match(schema, /llm_fallback_model VARCHAR\(100\), -- optional/);
-  assert.match(schema, /ALTER COLUMN llm_fallback_model DROP NOT NULL,\s*ALTER COLUMN llm_fallback_model DROP DEFAULT;/);
+  const upgrade = await read("../lib/ai-operations/upgrade-1-10.mjs");
+  assert.match(schema, /await ensureWorkflowModelColumns\(client\)/);
+  assert.match(upgrade, /ALTER COLUMN llm_fallback_model DROP DEFAULT/);
+  assert.match(upgrade, /ALTER COLUMN llm_fallback_model DROP NOT NULL/);
   assert.match(api, /values\.push\(fallbackModel \|\| null\)/);
   assert.match(editor, /Slot filling fallback model/);
   assert.match(editor, /No fallback model/);

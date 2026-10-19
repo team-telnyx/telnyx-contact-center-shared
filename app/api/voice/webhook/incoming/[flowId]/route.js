@@ -37,6 +37,8 @@ import {
   markProcessed as markWebhookKeyProcessed,
 } from "@/lib/events/webhook-dedupe.js";
 
+import { initializeScheduleExecution } from "@/lib/schedules/runtime.mjs";
+
 const DEDUPE_KIND_TRANSITION = "voice:transition";
 const DEDUPE_KIND_FLOW_COMPLETE = "voice:flow-complete";
 
@@ -492,6 +494,10 @@ export async function POST(request, context) {
       if (execution.status !== "active") {
         return NextResponse.json({ ok: true, message: "Flow already completed" });
       }
+      if (flow.nodes.some(n => n.data?.nodeType === "schedules")) {
+        try { await initializeScheduleExecution(flow, callControlId, body, execution); }
+        catch (error) { voiceWebhookLogger.error("schedule_context_unavailable", { flowId, callControlId, error: error.message }); }
+      }
     }
 
     // Handle different event types
@@ -617,6 +623,7 @@ export async function POST(request, context) {
               "mcp_tool",
               "set_variable",
               "condition",
+              "schedules",
               "switch",
               "logic_gate",
               "flow_end",
@@ -960,6 +967,7 @@ export async function POST(request, context) {
                 "mcp_tool",
                 "set_variable",
                 "condition",
+                "schedules",
                 "switch",
                 "logic_gate",
                 "flow_end",
@@ -1215,6 +1223,7 @@ async function executeNodeChain(
       "mcp_tool",
       "set_variable",
       "condition",
+      "schedules",
       "switch",
       "logic_gate",
       "flow_end",

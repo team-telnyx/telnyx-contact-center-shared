@@ -4,7 +4,7 @@ description: A starting point for diagnosing common contact-center problems.
 audiences: [agent, supervisor, admin, owner]
 keywords: [troubleshooting, diagnostics, calls, audio, routing]
 owner: contact-center
-lastReviewed: 2026-07-10
+lastReviewed: 2026-10-19
 ---
 
 ## A call is not offered to an agent
@@ -24,3 +24,31 @@ Confirm browser microphone permission, the selected input and output devices, an
 ## Contextual help shows a general topic
 
 Only fields with a stable help identifier have field-level guidance. Keep the panel open and focus a supported field, or use **Open full article** to browse the complete chapter.
+
+## Devices and mobile setup
+
+If the phone does not ring, check the selected **Calls on** destination and its reachability as well as status and queue activation. A notifications-only registration is not a voice connection. Use [Mobile apps and devices](/help/mobile) for setup and [handoff recovery](/help/webrtc-phone/devices#cancel-or-recover) for a pending move. Keep the original call connected until the move outcome is confirmed.
+
+## AI settings or tests fail
+
+**No AI model is configured** means the relevant override/default chain is empty. Configure [AI Copilot](/help/administration/system/ai-copilot) and check provider credentials. In Test AI Agent, distinguish the workflow analysis model, simulated caller model and the assistant's model.
+
+**Save requires attention** means the assistant's independent read-back did not match the intended changes. Inspect the reported paths and retained draft; do not assume a field was cleared. See [AI Assistant limitations](/help/administration/ai-assistants#known-limitations).
+
+## Invited assistant transcript is missing
+
+Verify transcription is enabled and that the flow has been saved to prepare its allowed assistants. Review any [Conversation WebSocket conflict](/help/administration/call-flows/validation-testing#conversation-websocket-conflicts). A brief stream interruption can delay AI text while provider history reconciles it. Keep the human call active and report its interaction and conversation IDs if the issue persists.
+
+## Video, Vision or page sharing is unavailable
+
+Check the published widget revision and start a fresh session after publication. **The video assistant service is unavailable** requires runtime readiness/capacity checks by the administrator. A Vision tool cannot repair an unavailable video runtime. Browser media permission and the participant's permission for AI to see a source are separate.
+
+For co-browsing, verify the active interaction, visitor approval, widget publication and request/view permissions. Control requires another approval and the control permission. A masked or blocked field is intentionally unavailable. See [Co-browsing](/help/agent/cobrowsing).
+
+## Schedule decisions are unexpected
+
+Check the evaluated local time, IANA time zone, resource publication and ordered calendar exceptions. Missing calendar coverage is an error with the configured fallback branch. Import the missing year, review it, save and publish before retesting; changing draft coverage alone does not update calls. Use [Schedules & calendars](/help/administration/system/schedules).
+
+## Report a reproducible problem
+
+Record the time and time zone, application version, screen, interaction/flow/conversation ID, channel, selected device, exact error and expected result. Include the published revision where relevant. Keep credentials and unnecessary customer content out of screenshots and logs. An empty or failed request is not evidence of zero activity; preserve the error before retrying.

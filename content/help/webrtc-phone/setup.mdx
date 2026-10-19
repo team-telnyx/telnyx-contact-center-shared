@@ -4,7 +4,7 @@ description: Prepare browser permissions, WebRTC region, microphone, speaker, pr
 audiences: [agent, supervisor, admin, owner]
 keywords: [microphone permission, speaker, WebRTC region, SIP URI]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 ## First-time setup
@@ -19,3 +19,9 @@ lastReviewed: 2026-07-11
 Microphone selection is applied through the available browser/Telnyx client device API. Speaker selection requires browser support for output-device routing (`setSinkId`); on unsupported browsers, the operating-system default output remains authoritative.
 
 Changing a physical headset while the page is open can change device identifiers. Reopen selectors and verify the active devices after docking, reconnecting Bluetooth, or switching audio hardware.
+
+## Select a call device
+
+Use **Calls on** to select Computer or a reachable registered phone. A ready microphone alone does not select a call destination. Open the phone's settings control to adjust audio devices and region, and use [Profile → Devices](/help/mobile) to connect or forget a handset.
+
+An active call is moved through [Devices and call handoff](/help/webrtc-phone/devices), not by changing a microphone or merely selecting another device for future calls.

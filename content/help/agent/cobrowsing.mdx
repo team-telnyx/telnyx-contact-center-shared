@@ -1,0 +1,33 @@
+---
+title: Co-browsing
+description: Request page sharing and separately approved assistance with eligible customer-page controls.
+audiences: [agent, supervisor, admin, owner]
+keywords: [co-browsing, cobrowse, page sharing, pairing code, control, masking, privacy]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+Co-browsing lets you see the visitor's current supported website tab while handling an interaction. It does not share the visitor's entire desktop and does not record the session. The widget must have co-browsing enabled and published, and your role must allow the requested operations.
+
+## Request page sharing
+
+1. Accept or select the assigned interaction and open **Co-browsing**.
+2. For an associated widget session, choose **Request page sharing from visitor**.
+3. Where pairing is available, ask the visitor to open the website widget, choose **Share this page**, and give you the six-digit code through the interaction. Enter the code before it expires.
+4. Wait for the visitor's approval. A pairing code identifies the session; it does not grant consent.
+
+The shared view starts in view-only mode. Use fit, zoom and pan to inspect it. These viewing controls affect your local view; they do not move the visitor's page. Masked fields remain masked.
+
+## Request control separately
+
+Choose **Request control** only after page sharing is active. The visitor receives a separate approval request. A decline leaves viewing active. Control requires both the widget's **Allow agent to request control** setting and your `cobrowse:control` permission; the default Agent role does not include that permission.
+
+After approval, use **Control page** for permitted clicks and the explicit remote-scroll controls for scrolling. Select an eligible input, enter the intended text and choose **Fill selected field**. Shift-drag still pans your local view.
+
+The website must explicitly allow eligible links, buttons and fields. Password, payment, hidden, file, disabled, read-only, private and masked targets remain blocked. Form submit/reset actions and cross-origin navigation are unavailable. Input values stay masked even where an approved agent can fill a field.
+
+## End or resume safely
+
+The visitor can choose **Stop control** to return to viewing, or **Stop sharing** to end the session. Disconnect/reconnect, transfer and session end revoke control. Request and obtain fresh approval before controlling the page again.
+
+If the view is unavailable, check the active interaction, visitor consent, code expiry, website configuration and your permissions. A blocked action may reflect the site's privacy policy; do not try to bypass it. Administrators configure and test the policy in [Web Widgets](/help/administration/chat-widgets#co-browsing).

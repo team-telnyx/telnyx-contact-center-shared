@@ -1,3 +1,7 @@
+import { scheduleStore } from "@/lib/schedules/store.mjs";
+import { saveFlowWithPreparedAssistants } from "@/lib/ai/flow-assistant-events.mjs";
+import { flowAssistantErrorPayload } from "@/lib/ai/assistant-event-conflicts.mjs";
+import { widgetAiRequest } from "@/lib/widgets/ai-provider";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -147,7 +151,7 @@ async function GET_handler(request, _context, authz) {
  * POST /api/voice/flows
  * Create a new flow
  */
-async function POST_handler(request) {
+async function POST_handler(request, _context, authz) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -179,44 +183,50 @@ async function POST_handler(request) {
       }
     }
 
-    // Generate webhook URL
-    const flowId = body.id || require("crypto").randomUUID();
-    const baseUrl = resolveWebhookBaseUrl({ requestUrl: request.url });
-    const webhookUrl = `${baseUrl}/api/voice/webhook/incoming/${flowId}`;
-
-    // Create Telnyx Voice Application
-    let voiceApp = null;
-    try {
-      // Ensure name is unique for Telnyx by appending a portion of the flow ID
-      const telnyxAppName = `${flowData.name} (${flowId.substring(0, 8)})`;
-      // Pass flowId as SIP subdomain
-      voiceApp = await createVoiceApplication(
-        telnyxAppName,
-        webhookUrl,
-        flowId
-      );
-    } catch (error) {
-      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `Failed to create voice application: ${error.message}`,
-        },
-        { status: 500 }
-      );
+    if ((flowData.nodes || []).some(node => node.data?.nodeType === "schedules")) {
+      try { await scheduleStore().validateFlow(flowData.nodes); }
+      catch (error) { return NextResponse.json({ ok: false, error: error.code ? error.message : "Schedule validation unavailable." }, { status: error.status || 503 }); }
     }
 
-    // Create flow with voice app ID
-    flowData.id = flowId;
-    flowData.telnyx_voice_app_id = voiceApp.id;
-    flowData.webhook_url = webhookUrl;
-    flowData.nodes = rebaseFlowOwnedNodeConfig(flowData.nodes, {
-      baseUrl,
-      flowId,
-      voiceApplicationId: voiceApp.id,
-    });
+    const flow = await saveFlowWithPreparedAssistants(flowData.nodes, widgetAiRequest, {
+      confirmations: body.assistantEventDestinationConfirmations,
+      canUpdateAssistant: authz.can("ai_assistants:update"),
+    }, async (preparedNodes, db) => {
+      flowData.nodes = preparedNodes;
 
-    const flow = await VoiceFlowDb.createFlow(username, flowData);
+      // Generate webhook URL
+      const flowId = body.id || require("crypto").randomUUID();
+      const baseUrl = resolveWebhookBaseUrl({ requestUrl: request.url });
+      const webhookUrl = `${baseUrl}/api/voice/webhook/incoming/${flowId}`;
+
+      // Create Telnyx Voice Application
+      let voiceApp = null;
+      try {
+        // Ensure name is unique for Telnyx by appending a portion of the flow ID
+        const telnyxAppName = `${flowData.name} (${flowId.substring(0, 8)})`;
+        // Pass flowId as SIP subdomain
+        voiceApp = await createVoiceApplication(
+          telnyxAppName,
+          webhookUrl,
+          flowId
+        );
+      } catch (error) {
+        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+        throw Object.assign(new Error(`Failed to create voice application: ${error.message}`), { status: error.status || 500 });
+      }
+
+      // Create flow with voice app ID
+      flowData.id = flowId;
+      flowData.telnyx_voice_app_id = voiceApp.id;
+      flowData.webhook_url = webhookUrl;
+      flowData.nodes = rebaseFlowOwnedNodeConfig(flowData.nodes, {
+        baseUrl,
+        flowId,
+        voiceApplicationId: voiceApp.id,
+      });
+
+      return await VoiceFlowDb.createFlow(username, flowData, { db });
+    });
 
     return NextResponse.json({
       ok: true,
@@ -225,8 +235,8 @@ async function POST_handler(request) {
   } catch (error) {
     voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
-      { ok: false, error: error.message || "Failed to create flow" },
-      { status: 500 }
+      flowAssistantErrorPayload(error, "Failed to create flow"),
+      { status: error.status || 500 }
     );
   }
 }

@@ -1,0 +1,62 @@
+const path = require('node:path'), fs = require('node:fs'), os = require('node:os'), http = require('node:http'), assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '../..');
+const output = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-invite-selection-'));
+(async () => {
+  await require('esbuild').build({ entryPoints: [path.join(__dirname, 'assistant-invite-selection.fixture.jsx')], bundle: true, outfile: path.join(output, 'app.js'), platform: 'browser', jsx: 'automatic', alias: { '@': root }, define: { 'process.env.NODE_ENV': '"development"' }, plugins: [{ name: 'locale', setup(build) {
+    build.onResolve({ filter: /^@\/components\/i18n\/use-ui-text$/ }, args => ({ path: args.path, namespace: 'mock' }));
+    build.onLoad({ filter: /.*/, namespace: 'mock' }, () => ({ contents: 'const text=s=>s;export const useUiText=()=>text;' }));
+  } }] });
+  const server = http.createServer((request, response) => {
+    response.setHeader('Content-Type', request.url === '/app.js' ? 'text/javascript' : 'text/html');
+    response.end(request.url === '/app.js' ? fs.readFileSync(path.join(output, 'app.js')) : '<!doctype html><html><body><div id="root"></div><script src="/app.js"></script></body></html>');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  let browser;
+  try {
+    const mac = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    browser = await require('puppeteer').launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : fs.existsSync(mac) ? { executablePath: mac } : {}), args: process.env.CI ? ['--no-sandbox'] : [] });
+    const page = await browser.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}`);
+    const row = index => `[data-assistant-id="assistant-00000000-0000-0000-0000-${String(index).padStart(12, '0')}"]`;
+    const box = index => `${row(index)} [role="checkbox"]`;
+    await page.waitForSelector(box(19));
+    assert.equal(await page.evaluate(() => fixture.listRequests), 1);
+    assert.deepEqual(await page.evaluate(() => fixture.checks), []);
+    assert.equal(await page.$('[role="alert"]'), null, 'saved selections are not incorrectly flagged as missing');
+    await page.click(box(1)); await page.waitForSelector(`${row(1)} .animate-spin`);
+    assert.equal(await page.$eval(box(1), element => element.getAttribute('aria-checked')), 'false');
+    await page.click(box(2)); await page.click(box(0));
+    await page.evaluate(() => fixture.editOther());
+    await page.waitForFunction(() => fixture.config.otherSetting === 'edited');
+    await page.evaluate(() => { fixture.pending.get(fixture.ids[2])(true); fixture.pending.get(fixture.ids[1])(true); });
+    await page.waitForFunction(() => fixture.config.invite_assistant_ids.length === 2);
+    assert.deepEqual((await page.evaluate(() => fixture.config.invite_assistant_ids)).sort(), (await page.evaluate(() => fixture.ids.slice(1, 3))).sort());
+    assert.equal(await page.evaluate(() => fixture.config.otherSetting), 'edited');
+    await page.click(box(3)); await page.evaluate(() => fixture.pending.get(fixture.ids[3])(false));
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent.includes('Add Skip Turn'), {}, row(3));
+    assert.equal(await page.$eval(box(3), element => element.disabled), true);
+    assert.match(await page.$eval(row(3), element => element.textContent), /Add Skip Turn/);
+    assert.equal(await page.$eval(box(3), element => element.getAttribute('aria-checked')), 'false');
+    await page.click(`${row(3)} button:not([role="checkbox"])`); await page.evaluate(() => fixture.pending.get(fixture.ids[3])(true));
+    await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('aria-checked') === 'true', {}, box(3));
+    await page.click(box(4)); await page.evaluate(() => fixture.pending.get(fixture.ids[4])(false, false));
+    await page.waitForFunction(selector => document.querySelector(selector)?.textContent.includes('Verification unavailable'), {}, row(4));
+    assert.equal(await page.$eval(box(4), element => element.getAttribute('aria-checked')), 'false');
+    await page.click(`${row(4)} button:not([role="checkbox"])`); await page.evaluate(() => fixture.pending.get(fixture.ids[4])(true));
+    await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('aria-checked') === 'true', {}, box(4));
+    await page.click(box(5)); await page.click('[role="switch"]'); await page.evaluate(() => fixture.pending.get(fixture.ids[5])(true));
+    await page.waitForFunction(() => !fixture.config.enable_assistant_invite);
+    assert.equal(await page.evaluate(() => fixture.config.invite_assistant_ids.includes(fixture.ids[5])), false);
+    await page.click('[role="switch"]'); await page.waitForSelector(box(6)); await page.click(box(6));
+    await page.evaluate(() => fixture.changeNode());
+    await page.waitForFunction(() => fixture.nodeId === 1); await page.waitForSelector(box(19));
+    await page.evaluate(() => fixture.pending.get(fixture.ids[6])(true));
+    assert.deepEqual(await page.evaluate(() => fixture.config.invite_assistant_ids), []);
+    const before = await page.evaluate(() => fixture.checks.length);
+    await page.type('input[aria-label="Search assistants"]', 'Assistant 19');
+    assert.equal((await page.$$('[data-assistant-id]')).length, 1);
+    assert.equal(await page.evaluate(() => fixture.checks.length), before);
+    assert.deepEqual(errors, []);
+    console.log(JSON.stringify({ passed: true, checks: ['list-only initial load', 'spinner before selection', 'concurrent checks preserve selections and other edits', 'missing tool blocks selection', 'verification errors block selection', 'retry after tool fix or outage', 'disable and node change ignore late responses', 'search performs no verification', 'no browser errors'] }));
+  } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

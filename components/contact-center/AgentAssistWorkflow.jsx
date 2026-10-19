@@ -1,4 +1,5 @@
 "use client";
+import { transcriptSpeaker, transcriptSpeakerLabel } from "@/lib/agent-assist/transcription-speaker.mjs";
 import { useUiText } from "@/components/i18n/use-ui-text";
 
 
@@ -1885,7 +1886,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
                 <p className="text-sm">{tUi("Waiting for conversation...")}</p>
               </div>
             ) : (
-              transcriptions.map((t) => (
+              transcriptions.filter(t => !t.deleted).map((t) => (
                 <div
                   key={t.id}
                   data-transcript-id={t.id}
@@ -1930,7 +1931,8 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
  */
 function TranscriptionBubble({ transcription, translationConfig, interactionId, showSttConfidence = true, isHighlighted = false }) {
   const tUi = useUiText();
-  const isCustomer = transcription.track === "inbound";
+  const isCustomer = transcriptSpeaker(transcription.track) === "customer";
+  const isAssistant = transcriptSpeaker(transcription.track) === "assistant";
   const sentiment = transcription.sentiment;
   const sentimentScore = transcription.sentimentScore;
   const intent = transcription.intent;
@@ -1956,7 +1958,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
     Boolean(translationText) &&
     translationText.toLowerCase() !== originalText.toLowerCase();
   const autoSendEnabled = translationConfig?.auto_send_response === true;
-  const manualAllowed = showTranslation && !autoSendEnabled;
+  const manualAllowed = !isAssistant && showTranslation && !autoSendEnabled;
 
   const handleSpeakTranslation = async () => {
     if (!manualAllowed || !interactionId || !transcription.callControlId || !translationText) return;
@@ -1991,23 +1993,23 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
   };
 
   return (
-    <div className={`flex flex-col ${isCustomer ? "items-start" : "items-end"}`}>
+    <div data-speaker={transcriptSpeaker(transcription.track)} className={`flex flex-col ${isAssistant ? "items-center" : isCustomer ? "items-start" : "items-end"}`}>
       {/* Speaker label */}
       <div className={`flex items-center gap-1 mb-1 text-xs ${
-        isCustomer ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400 flex-row-reverse"
+        isAssistant ? "text-violet-600 dark:text-violet-400" : isCustomer ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400 flex-row-reverse"
       }`}>
-        {isCustomer ? (
+        {isAssistant ? <Bot className="h-3 w-3" /> : isCustomer ? (
           <User className="h-3 w-3" />
         ) : (
           <Headphones className="h-3 w-3" />
         )}
-        <span className="font-medium">{isCustomer ? tUi("Customer") : tUi("Agent")}</span>
+        <span className="font-medium">{tUi(transcriptSpeakerLabel(transcription.track))}</span>
       </div>
 
       {/* Message bubble */}
       <div
-        className={`max-w-[90%] rounded-xl px-3 py-2 border ${
-          isCustomer
+        className={`${isAssistant ? "w-full" : "max-w-[90%]"} rounded-xl px-3 py-2 border ${
+          isAssistant ? "bg-violet-500/10 border-violet-500/30" : isCustomer
             ? "bg-sky-500/10 border-sky-500/20 rounded-tl-sm"
             : "bg-emerald-500/10 border-emerald-500/20 text-foreground rounded-tr-sm"
         } ${isInterim ? "opacity-70" : ""} ${isHighlighted ? "ring-2 ring-violet-500/60 bg-violet-500/5 transition-all" : ""}`}
@@ -2042,7 +2044,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
       {/* Intent, sentiment, and STT confidence badges */}
       {(intent || sentiment || (showSttConfidence && sttConfidencePercent !== null)) && (
         <div className={`flex items-center gap-1.5 mt-1 ${
-          isCustomer ? "" : "flex-row-reverse"
+          isCustomer || isAssistant ? "" : "flex-row-reverse"
         }`}>
           {showSttConfidence && sttConfidencePercent !== null && (
             <Badge
@@ -2091,7 +2093,7 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
       .filter(t => t.isFinal)
       .slice(-5)
       .map(t => ({
-        speaker: t.track === "inbound" ? "Customer" : "Agent",
+        speaker: transcriptSpeakerLabel(t.track),
         text: t.transcript,
       }));
 

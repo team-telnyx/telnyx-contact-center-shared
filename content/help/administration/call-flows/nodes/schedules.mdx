@@ -1,0 +1,24 @@
+---
+title: Schedules
+description: Route a call through True or False using published hours and exception calendars.
+audiences: [admin, owner]
+keywords: [schedules, working hours, holidays, time zone, calendar, routing]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+Add **Logical → Schedules** in the Call Flow editor. This node evaluates opening hours and continues through **True** when open or **False** when closed. Both outputs must be connected before saving.
+
+## Configure the node
+
+Choose **Custom hours for this node** or a published **Shared schedule**. Configure the time zone and weekly hours, then add published exception calendars in priority order. Manage shared resources in [System → Schedules & calendars](/help/administration/system/schedules).
+
+Under **Advanced routing**, choose whether to evaluate **When this node is reached** or **When the call was received**. The server supplies that instant; caller number and browser time zone do not determine it.
+
+Choose **If evaluation fails** explicitly. The default takes False and records an error. Missing calendar coverage is a failure, not a normal closed-day result. Use a deliberate fallback route, such as an explanatory message followed by the appropriate queue or termination.
+
+## Inspect and test
+
+The result is available in `schedule_result`, or your configured result variable. It records status, the match, branch, local/UTC time, rule and resource revisions. Errors record a reason with no successful match. Inspect it in Call Monitor and downstream variable mappings.
+
+Use the built-in tester for opening/closing boundaries, overnight hours, holiday precedence, daylight-saving transitions and missing coverage. Shared-resource tests use published revisions. Save draft alone does not update them. Existing calls retain the revision available when their flow started, including when the resource is published again during the call.

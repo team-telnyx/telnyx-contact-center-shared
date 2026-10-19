@@ -11466,6 +11466,15 @@
     "m2719cc4a": "AI może widzieć",
     "m9bd8c631": "Ekran",
     "m64619f73": "Analizuj",
-    "mdd634969": "Wybierz urządzenie, zanim zaczniesz odbierać połączenia głosowe."
+    "mdd634969": "Wybierz urządzenie, zanim zaczniesz odbierać połączenia głosowe.",
+    "m216b6b71": "Odłączanie…",
+    "me513c3e7": "Wybierz asystenta",
+    "mbf780210": "Zaproś asystenta",
+    "m1f7b7c73": "Włącz zapraszanie asystenta",
+    "mddcb069e": "Pozwól agentom zaprosić wybranego asystenta AI do rozmowy z obiema stronami. Każdy asystent musi mieć narzędzie Skip Turn.",
+    "m7793a57e": "Szukaj asystentów",
+    "m21d463ca": "Dodaj Skip Turn w ustawieniach narzędzi asystenta.",
+    "ma7228848": "Wybrany asystent jest niedostępny lub nie ma narzędzia Skip Turn. Zaktualizuj wybór przed zapisaniem.",
+    "m67dba4b1": "Dostępni asystenci"
   }
 }

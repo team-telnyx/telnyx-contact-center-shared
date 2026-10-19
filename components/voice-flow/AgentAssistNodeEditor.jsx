@@ -1,5 +1,6 @@
 "use client";
 import { useUiText } from "@/components/i18n/use-ui-text";
+import { AssistantInviteSettings } from "./AssistantInviteSettings";
 
 
 import { useMemo, useState, useEffect, useRef } from "react";
@@ -315,6 +316,8 @@ export default function AgentAssistNodeEditor({
       </div>
 
       <Separator />
+
+      <AssistantInviteSettings config={config} onChange={onChange} />
 
       {/* Assist Type Selection */}
       <div className="space-y-3">

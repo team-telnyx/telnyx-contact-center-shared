@@ -8,6 +8,7 @@ module "network" {
   deployment_name         = var.deployment_name
   azs                     = slice(data.aws_availability_zones.available.names, 0, 2)
   topology                = "ha"
+  video_ai_control_port   = var.video_ai_control_port
   alb_enabled             = true
   admin_ssh_cidrs         = var.admin_ssh_cidrs
   portainer_agent_enabled = var.portainer_agent_enabled
@@ -44,7 +45,8 @@ module "secrets" {
 }
 
 module "compute" {
-  source = "../../modules/cc-compute-ha"
+  video_ai_control_port = var.video_ai_control_port
+  source                = "../../modules/cc-compute-ha"
 
   deployment_name          = var.deployment_name
   vpc_id                   = module.network.vpc_id

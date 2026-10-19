@@ -55,7 +55,8 @@ test("non-inbound agent track names are treated as the agent leg for turn bounda
   assert.equal(normalizeTranscriptionLeg("inbound"), "inbound");
   assert.equal(normalizeTranscriptionLeg("outbound"), "outbound");
   assert.equal(normalizeTranscriptionLeg("agent"), "outbound");
-  assert.equal(normalizeTranscriptionLeg("customer"), "outbound"); // not "inbound" -> agent leg
+  assert.equal(normalizeTranscriptionLeg("customer"), "inbound");
+  assert.equal(normalizeTranscriptionLeg("assistant"), "assistant");
 
   const customerKey1 = getTranscriptionMessageKey(CALL, "inbound", false);
   getTranscriptionMessageKey(CALL, "agent", true); // agent leg labelled "agent" finalizes

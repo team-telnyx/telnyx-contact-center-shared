@@ -1,0 +1,21 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import store from "../lib/stores/active-call-store.js";
+test("AI deltas update one bubble; history corrections and deletion beat delayed SSE and hydration", () => {
+  store.setState({ call: { id: "test" }, transcriptions: [] });
+  const send = data => store.getState().addTranscription({ transcription_key: "ai-turn", transcription_track: "assistant", source: "telnyx_assistant_websocket", timestamp: "2026-10-19T10:00:00Z", ...data });
+  send({ transcript: "One", revision: 1, is_final: false });
+  send({ transcript: "One. Two. Three.", revision: 2, is_final: false });
+  assert.equal(store.getState().transcriptions.length, 1);
+  const partial = structuredClone(store.getState().transcriptions[0]);
+  send({ transcript: "One. Two.", revision: 3, is_final: true, source: "telnyx_assistant_history" });
+  send({ transcript: "One. Two. Three.", revision: 2, is_final: false });
+  assert.equal(store.getState().transcriptions[0].transcript, "One. Two.");
+  const final = structuredClone(store.getState().transcriptions[0]);
+  store.setState({ transcriptions: [partial] }); store.getState().hydrateTranscriptions([final]);
+  assert.equal(store.getState().transcriptions[0].transcript, "One. Two.");
+  send({ transcript: "", deleted: true, revision: 4, is_final: true });
+  store.getState().hydrateTranscriptions([final]);
+  assert.equal(store.getState().transcriptions[0].deleted, true);
+  store.setState({ call: null, transcriptions: [] });
+});

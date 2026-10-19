@@ -4,10 +4,10 @@ description: Create, configure, version, test, and monitor Telnyx AI assistants.
 audiences: [admin, owner]
 keywords: [AI assistant, model, voice, workflow, calling, messaging, privacy]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
-Open **Admin → AI Assistants**. The outer rail links AI Assistants, Tools Library, Insights, Scheduled Events, and MCP Servers.
+Open **Admin → AI Assistants**. The outer rail links AI Assistants, Tools Library, Insights, Scheduled Events, Pronunciation Dictionaries, and MCP Servers.
 
 ## Assistant list
 
@@ -24,6 +24,7 @@ Opening an assistant replaces the outer rail with a detailed editor rail.
 | **Dashboard** | Recent activity, conversation counts, channel mix, and latency. |
 | **Agent** | Name, description, LLM model, instructions, greeting, and dynamic variables. |
 | **Voice** | TTS voice/provider, speed, background audio, pronunciation, expressive options, and transcription model. |
+| **Avatar** | Avatar appearance, background and compatible voice pairing. |
 | **Workflow** | Visual conversation workflow, nodes, edges, conditions, agent/voice/tool overrides, and variable comparisons. |
 | **Integrations** | Dynamic variables, reusable tools, external providers, and MCP Servers. |
 | **Insights** | Post-conversation insight configuration assigned to this assistant. |
@@ -35,11 +36,71 @@ Opening an assistant replaces the outer rail with a detailed editor rail.
 
 Use **Exit** to return to the assistant list.
 
+## Models and providers
+
+In **Agent**, choose a provider and model, then configure its authentication where required. The grouped, searchable catalog includes models explicitly recommended for assistants. A saved model absent from that catalog remains visible as a saved value; this does not establish that it is currently available for selection or inference.
+
+Telnyx-hosted models and external providers have different credential requirements. The configurator supports Anthropic, Google, OpenAI, FastRouter and custom OpenAI-compatible endpoints. Select an integration-secret reference instead of pasting a key into instructions. Refresh the secret list after creating or rotating a credential.
+
+For **FastRouter**, choose a fixed model or enter the exact virtual alias configured in FastRouter. Routing pools are managed there. For a **custom endpoint**, provide the model ID, compatible base URL and required token or certificate settings. Configure the backup model independently; it may require different credentials.
+
+Changing the primary model does not prove that fallback works. Test the primary, a supported failure condition and the fallback independently. Some provider variants remain subject to the [known limitations](#known-limitations).
+
+## Voice and transcription
+
+Select the TTS provider, voice and applicable speed, background-audio and interruption controls in **Voice**. Keep pronunciation dictionaries and the greeting language aligned with the intended callers. Protecting the greeting from interruption is a separate choice from general interruption behavior.
+
+Transcription has a primary model and optional additional-model configuration. **Fallback** and **Language Booster** are mutually exclusive. Switching modes clears the competing draft configuration; use **Undo** before saving if you changed it accidentally. Reorder fallback cards in the intended sequence.
+
+**Same as primary language** inherits language. Turning off custom recognition settings restores inheritance. Changing a provider/model resets incompatible settings. Language Booster selection rules determine whether to choose a turn, an engine or merge words; only applicable combinations are available. Removing the final fallback clears the list. Verify the saved result and then test real speech, including interruptions and language changes.
+
+## Avatar
+
+Use **Avatar** to select appearance and background and review the required voice pairing. Native Telnyx avatars require a compatible Telnyx TTS voice. A configuration preview does not verify live media; use a controlled call to check moving video and synchronized speech.
+
+Widget voice calls and video conferences have different publication paths. A voice widget can update the shared source assistant's avatar, while video publication creates a managed video profile. Follow [Web Widgets](/help/administration/chat-widgets#voice-call-avatars) and republish after relevant source changes.
+
+## Workflow and delegation
+
+The assistant's **Workflow** is its conversation graph, separate from Contact Center's Agent Assist workflows. Configure the starting step, connected steps, expressions, and any per-step model, voice, tools or variable overrides. Validate highlighted steps and connections before saving. Tool behavior belongs to workflow nodes where supported; it is not a global assistant setting.
+
+Configure delegation and connected agents only with reachable, authorized destinations. Test both a successful handoff and an unavailable destination. Saving a destination does not verify remote execution or reconnection.
+
+## Integrations and tools
+
+Use **Integrations** for dynamic variables and their webhook, shared tools, MCP servers, connected agents, live event connections and observability controls. Test variable lookup with synthetic input, including a missing value or timeout. Shared tool definitions are managed in [Tools Library](/help/administration/tools-library); removing an assignment does not delete its shared definition.
+
+Conversation WebSocket sends live assistant events to a configured destination. Saving a Call Flow with assistant invitations can prepare that destination for this Contact Center. If another environment already owns it, review the [replacement confirmation](/help/administration/call-flows/validation-testing#conversation-websocket-conflicts). Use separate assistants when environments need events simultaneously.
+
+## Calling and messaging
+
+In **Calling**, review assigned numbers, duration and idle limits, recording, voicemail response and relevant transfer settings. Turning recording off explicitly disables it. Voicemail handling controls how the assistant responds after detection; enabling answering-machine detection on an outbound Dial is a separate step.
+
+In **Messaging**, review routing and delivery settings, the messaging profile and inactivity timeout. Test the actual channel and assigned number. A successful chat test does not establish telephone, SMS or WhatsApp delivery.
+
+## Widget, insights and privacy
+
+**Widget** controls the assistant's browser-calling appearance and behavior. Contact Center's published Web Widgets are configured in their own Studio; follow that guide for allowed origins, images, avatars and video.
+
+**Insights** selects post-conversation extraction and processing. **Privacy** controls the exposed recording, retention and processing-region settings. Verify downstream delivery and retention behavior separately; changing configuration is not evidence that historical data was removed. **Conversations** provides provider history, while **Dashboard** summarizes assistant activity and configuration.
+
 ## Save, versions, and testing
 
 The header shows **Unsaved** or **Saved** state. Save ordinary edits to the current assistant, or use **Save as New Version** to create a named version without immediately changing the live version. Traffic distribution controls can split traffic between versions; verify percentages and production readiness before rollout.
 
 Use the assistant chat panel for controlled prompt/tool testing. A chat test does not replace a real call or message test because telephony, STT/TTS, number assignment, recording, and provider credentials are channel-specific.
+
+Use **Search settings** to find a setting by its visible name or API parameter and jump to its section. **Review changes** shows the pending request with credential values redacted. Invalid advanced JSON prevents saving and stays in the draft when changing sections.
+
+Saving includes an independent read-back from Telnyx. **Saved and verified** means the returned configuration matches the requested changes. **Save requires attention** means the provider may have accepted a request but did not return the expected values: inspect the reported paths and retained draft before retrying. A successful HTTP request alone is insufficient.
+
+**Save as New Version** creates and verifies that version without promoting it; the editor reloads the main configuration afterward. Use the version controls to promote deliberately and review **Traffic %** before distributing traffic. Clearing a field is not always equivalent to omitting it: use the feature's disable/reset controls and confirm the result after saving and reloading.
+
+## Known limitations
+
+The configurator exposes supported settings but does not claim complete runtime acceptance of every provider and variant. Current acceptance gaps include FastRouter fixed/alias inference with designated credentials, certificate-authenticated endpoints, external fallback persistence, some widget visualizer presets and some nested telephony clearing operations. A payment flow needs a valid designated connector. An external-primary 404 did not demonstrate hosted fallback recovery in the recorded experiment.
+
+Some A2A, observability, voice/STT and advanced workflow variants also require environment-specific runtime validation. Treat verification mismatches as unresolved; do not remove working credentials or assume a reset succeeded merely because Save returned. Validate with controlled resources before applying a configuration to operational traffic.
 
 ## Recommended verification
 

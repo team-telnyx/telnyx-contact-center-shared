@@ -36,7 +36,7 @@ test("Admin Logging Live uses EventSource subscription and closes it only when l
   assert.match(source, /setLogEntries\(\(prev\) => \[/);
   assert.match(source, /source\.onerror = \(\) => \{[\s\S]*setLiveConnected\(false\)[\s\S]*source\.close\(\)[\s\S]*\};[\s\S]*return \(\) =>/);
   assert.match(source, /return \(\) => \{[\s\S]*source\.close\(\)[\s\S]*\}/);
-  assert.match(source, /if \(active !== "live"\) return undefined/);
+  assert.match(source, /if \(!RAW_LOG_VIEWER_AVAILABLE \|\| active !== "live"\) return undefined/);
   assert.match(source, /latest: "1"/);
 });
 

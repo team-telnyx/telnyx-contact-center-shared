@@ -1,0 +1,20 @@
+---
+title: Dashboard
+description: Review platform inventory and integration state before investigating a configuration problem.
+audiences: [admin, owner]
+keywords: [system dashboard, inventory, integrations, health]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+Open **Admin → System → Dashboard**. Review the configuration inventory, integration status and platform activity cards, then follow the relevant module to inspect or change its configuration.
+
+## Interpret the overview
+
+Wait for loading to finish before interpreting counts. A failed request is different from an empty inventory. Refresh after a configuration change and investigate an error in the relevant module rather than assuming the resource has been deleted.
+
+Inventory and connectivity indicators are starting points for diagnosis. They do not establish that a phone call, message, AI response or video session works end to end. Use a controlled test of the affected channel and inspect its interaction history.
+
+## Find the relevant settings
+
+Use [System Settings](/help/administration/system/settings) for operational policies, [AI Copilot](/help/administration/system/ai-copilot) for AI defaults, and [Schedules & calendars](/help/administration/system/schedules) for routing hours. For a failed live operation, correlate its time and interaction ID in [Logging](/help/administration/logging).

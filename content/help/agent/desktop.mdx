@@ -4,7 +4,7 @@ description: Read the interaction list, select work, and understand the detail p
 audiences: [agent, supervisor, admin, owner]
 keywords: [agent desktop, interaction list, ringing, call state]
 owner: contact-center
-lastReviewed: 2026-09-15
+lastReviewed: 2026-10-19
 ---
 
 **Desktop** shows current interactions in the left panel and details for the selected interaction in the main workspace. Entries combine authoritative interaction records with live WebRTC state, so mute and hold indicators can update immediately.
@@ -60,3 +60,21 @@ Delivery badges describe each recipient separately. BCC addresses are hidden in 
 A location shared by the customer appears as a map card with the place name and address. Click the card to open an interactive Google map in a preview window; from there you can open the point in Google Maps in a new tab. To send a location, use the map-pin button below the reply box: search for an address or type coordinates, check the preview, adjust the zoom and choose **Send location**. To send a contact card, use the contact button: pick up to five contacts from the Contacts directory and choose **Send contact**. The customer receives the name, phone numbers, email and company as a WhatsApp contact.
 
 When the customer reacts to one of your messages with an emoji, the reaction appears as a small chip under that message rather than as a new message. To react to a customer message, use the smiley button next to the copy action on their bubble and pick an emoji; choosing the same emoji again or the cross removes your reaction. A reply the customer sent by quoting one of your messages shows the quoted text above their answer. Locations, contact cards and reactions are free-form messages, so they need the 24-hour customer service window to be open.
+
+## SMS
+
+SMS interactions have their own channel cards and use the assigned business number. Accept the interaction before sending; review recipient identity, text length and delivery status. Messaging drafts, transfers, waiting and completion follow the channel controls and shared wrap-up. An opt-out or paused number can prevent sending even while the conversation is visible. See [SMS channel](/help/administration/sms) for number policy and delivery evidence.
+
+## Video and assisted page sharing
+
+Video cards join the customer to a conference after acceptance. Camera, microphone, screen sharing, AI participation and Vision have separate controls and permissions. Follow [Video calls and Vision](/help/agent/video-calls), including the handling-device and wrap-up rules.
+
+Use [Co-browsing](/help/agent/cobrowsing) to request the visitor's page, or pair an eligible voice/SMS/WhatsApp interaction with a six-digit code. Page viewing requires consent; controlling eligible elements requires another approval. Co-browsing is separate from screen sharing in a video call.
+
+## Calls on another device
+
+The same interaction can remain visible across signed-in clients while one device owns its media and wrap-up. Use [Devices and call handoff](/help/webrtc-phone/devices) to move supported active work. Selecting a card on another device does not transfer ownership.
+
+## Invited voice assistants
+
+If the flow permits it, [invite an AI assistant](/help/agent/agent-assist#invite-an-ai-assistant-to-a-voice-call) to speak with the customer and agent. This differs from transferring the customer to an assistant. Check connection state and the separate AI transcript before relying on its participation.

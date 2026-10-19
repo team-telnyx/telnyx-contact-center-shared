@@ -8,6 +8,7 @@ node_modules
 .yarn/install-state.gz
 .pnp.*
 coverage
+logs
 .DS_Store
 .env
 .env.*

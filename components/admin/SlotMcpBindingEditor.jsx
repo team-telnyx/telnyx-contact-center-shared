@@ -258,7 +258,7 @@ export default function SlotMcpBindingEditor({ value, onChange, slotName, itemId
 
   if (!enabled) {
     return (
-      <div className="space-y-3 border-t pt-4">
+      <div data-help-id="admin.workflows.mcp" className="space-y-3 border-t pt-4">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("MCP Tool Binding")}</Label>
@@ -271,7 +271,7 @@ export default function SlotMcpBindingEditor({ value, onChange, slotName, itemId
   }
 
   return (
-    <div className="space-y-4 border-t pt-4">
+    <div data-help-id="admin.workflows.mcp" className="space-y-4 border-t pt-4">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
           <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{tUi("MCP Tool Binding")}</Label>

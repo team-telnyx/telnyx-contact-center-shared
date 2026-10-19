@@ -38,6 +38,16 @@ variable "app_port" {
   default     = 3000
 }
 
+variable "video_ai_control_port" {
+  description = "Private Video AI relay port between HA application nodes. Never opened to public CIDRs."
+  type        = number
+  default     = 3092
+  validation {
+    condition     = var.video_ai_control_port >= 1024 && var.video_ai_control_port <= 65535 && floor(var.video_ai_control_port) == var.video_ai_control_port
+    error_message = "video_ai_control_port must be an integer from 1024 to 65535."
+  }
+}
+
 variable "streaming_ws_port" {
   description = "Streaming WebSocket sidecar port."
   type        = number

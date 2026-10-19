@@ -203,7 +203,7 @@ export default function VideoInteractionDetail({ interaction, onChanged, headerT
     </div>
   );
   return (
-    <div className="@container flex min-h-0 flex-1 flex-col" data-testid="video-interaction-detail">
+    <div className="@container flex min-h-0 flex-1 flex-col" data-help-id="agent.video" data-testid="video-interaction-detail">
       {headerTarget && createPortal(headerContent, headerTarget)}
       {detail?.assignmentState==='active'&&!wrapup&&<DeviceHandoff interactionId={interaction.id} onJoinVideo={joinMovedVideo}/>}
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-muted/20 p-3">

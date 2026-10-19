@@ -71,7 +71,7 @@ export default function MobileAppSetupCard() {
   }
 
   return (
-    <Card className="w-full">
+    <Card data-help-id="profile.devices" className="w-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <IconDeviceMobile className="size-6 text-brand-primary" />

@@ -3,13 +3,13 @@ import { useUiText } from "@/components/i18n/use-ui-text";
 
 
 import { useMemo } from "react";
-import { HandoffEntryCard } from "./handoff/HandoffEntry";
 import { AgentAssist } from "./AgentAssist";
 import { AgentAssistWorkflow } from "./AgentAssistWorkflow";
 import { AgentFormsView } from "./AgentFormsView";
 import { AgentWebPagesView } from "./AgentWebPagesView";
 import TransportMcpSubmitControl from "./TransportMcpSubmitControl";
 import { Sparkles } from "lucide-react";
+import { VoiceAssistantInvite } from "./VoiceAssistantInvite";
 
 /**
  * InteractionDetail Component
@@ -29,7 +29,7 @@ export function InteractionDetail({ interaction }) {
     && ['active','connected','answered','held'].includes(interaction.state || interaction.status)
     && !interaction.completed_at && !interaction.abandoned_at;
   return <div className="flex h-full min-h-0 flex-col">
-    {activeVoice && <div className="shrink-0 p-3"><HandoffEntryCard key={interaction.id} callInteractionId={interaction.id}/></div>}
+    {activeVoice && interaction.metadata?.agent_assist_config?.enable_assistant_invite === true && <div className="shrink-0 px-3 pt-3"><VoiceAssistantInvite key={interaction.id} interactionId={interaction.id} /></div>}
     <div className="min-h-0 flex-1"><InteractionAssistDetail interaction={interaction}/></div>
   </div>;
 }

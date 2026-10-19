@@ -62,6 +62,9 @@ services:
         GOOGLE_MAPS_KEY: ${GOOGLE_MAPS_KEY:-}
     image: ${CC_IMAGE:-telnyx-contact-center-prod}
     container_name: telnyx-contact-center-app
+    security_opt:
+      - seccomp=./chromium-seccomp.json
+    stop_grace_period: 60s
     ports:
       - "3000:3000"
       - "3001:3001"  # Streaming WebSocket server (Google Gemini, OpenAI Realtime, Azure)
@@ -85,6 +88,7 @@ services:
       #
       # Same default-vs-override convention as CC_MEDIA_PATH above.
       - ${CC_LOGS_PATH:-cc_logs}:/app/logs
+      - ${CC_VIDEO_RECORDINGS_PATH:-cc_video_recordings}:/app/.data/video-recordings
     depends_on:
       postgres:
         condition: service_healthy
@@ -149,6 +153,7 @@ volumes:
     name: cc-postgres-${POSTGRES_VOLUME_NAME:-main}
   cc_media:
   cc_logs:
+  cc_video_recordings:
   caddy_data:
   caddy_config:
 

@@ -72,10 +72,10 @@ function Tile({ track, label, cameraOff, cameraOffLabel, poster, mirror = false,
 /**
  * tiles: [{ id, role, kind: "camera" | "screen", self, track, label, cameraOff, cameraOffLabel, mirror, muted }]
  */
-function RemoteAudio({ track, muted }) {
+function RemoteAudio({ track, muted, onReady }) {
   const ref = useRef(null);
   useTrackElement(ref, track, { muted });
-  return <audio ref={ref} autoPlay playsInline className="hidden" />;
+  return <audio ref={ref} autoPlay playsInline onPlaying={onReady} className="hidden" />;
 }
 
 export function VideoStage({
@@ -139,7 +139,7 @@ export function VideoStage({
         })()}
         {corner && <div className="absolute right-2 top-2 z-30">{corner}</div>}
         <audio ref={audioRef} autoPlay playsInline className="hidden" />
-      {audioTracks.map(({ id, track }) => <RemoteAudio key={id} track={track} muted={audioMuted} />)}
+      {audioTracks.map(({ id, track, onReady }) => <RemoteAudio key={id} track={track} muted={audioMuted} onReady={onReady} />)}
       </div>
     </div>
   );

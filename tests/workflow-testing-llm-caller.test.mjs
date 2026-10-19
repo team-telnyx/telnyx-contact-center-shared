@@ -14,6 +14,7 @@ process.env.TELNYX_AI_DEFAULT_MODEL ||= "test/platform-model";
 function makePool({ ledgerRow, captureUpdates }) {
   return {
     async query(sql, params) {
+      if (/FROM app_settings/i.test(sql)) return { rows: [{ cc_settings: { ai_operations: { "test-caller": { model: "configured/caller", instructions: "" } } } }] };
       if (/FROM cg_call_ledger/i.test(sql) && /status IN \('answered','talking'\)/.test(sql)) {
         // correlation lookup — assert it does NOT filter by call_session_id
         assert.ok(!/call_session_id\s*=/.test(sql), "must not correlate by flow-leg call_session_id");
@@ -63,6 +64,7 @@ test("generates an LLM caller reply and speaks it on the active generated leg", 
   await withFetch(async (url, options) => {
     const u = String(url);
     if (u.includes("/ai/chat/completions")) {
+      assert.equal(JSON.parse(options.body).model, "configured/caller", "caller uses the supplied database settings");
       return { ok: true, async json() { return { choices: [{ message: { content: "Hi, my name is John Wick." } }] }; } };
     }
     if (u.includes("/actions/speak")) {

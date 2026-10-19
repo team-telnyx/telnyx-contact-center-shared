@@ -11466,6 +11466,15 @@
     "m2719cc4a": "KI darf sehen",
     "m9bd8c631": "Bildschirm",
     "m64619f73": "Analysieren",
-    "mdd634969": "Wähle ein Anrufgerät aus, bevor du Sprachanrufe empfängst."
+    "mdd634969": "Wähle ein Anrufgerät aus, bevor du Sprachanrufe empfängst.",
+    "m216b6b71": "Verbindung wird getrennt…",
+    "me513c3e7": "Assistent auswählen",
+    "mbf780210": "Assistent einladen",
+    "m1f7b7c73": "Einladen von Assistenten aktivieren",
+    "mddcb069e": "Agenten können einen ausgewählten KI-Assistenten zum Gespräch mit beiden Teilnehmern einladen. Jeder Assistent benötigt das Tool Skip Turn.",
+    "m7793a57e": "Assistenten suchen",
+    "m21d463ca": "Fügen Sie Skip Turn in den Tool-Einstellungen des Assistenten hinzu.",
+    "ma7228848": "Ein ausgewählter Assistent ist nicht verfügbar oder hat kein Skip Turn-Tool. Aktualisieren Sie die Auswahl vor dem Speichern.",
+    "m67dba4b1": "Verfügbare Assistenten"
   }
 }

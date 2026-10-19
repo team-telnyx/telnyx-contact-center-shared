@@ -4,7 +4,7 @@ description: Use knowledge suggestions, guided workflow items, slots, confirmati
 audiences: [agent, supervisor, admin, owner]
 keywords: [agent assist, workflow, slots, knowledge suggestions]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Agent Assist content is selected by the call flow and interaction metadata. Keep the correct interaction selected because transcript analysis, suggestions, forms, and workflows are interaction-specific.
@@ -14,3 +14,27 @@ In KB mode, suggestions are generated from live transcript/context and the confi
 In Workflow mode, stages and items guide the conversation. Data slots can be filled from customer speech or prefilled by Call Flow data. Values below the confidence threshold require review. Confirm or edit incorrect values, use offered alternatives where appropriate, and do not complete required items merely to advance. A negative boolean is a valid answer, and an explicit unknown value may be represented as `N/A`.
 
 Workflow actions can invoke configured data operations and forms. Read returned status messages and retry only when the operation is safe to repeat. A read-back/confirmation step should be completed with the customer before final submission when configured.
+
+## Corrections and live lookup results
+
+Review the current slot value and its source before confirming. Correct a mistaken value explicitly; a manual correction should not be overwritten by stale analysis. Follow the configured read-back step with the customer and verify the completed result rather than treating a proposed suggestion as completion.
+
+A workflow can run an MCP lookup when a slot changes. If several candidates are returned, choose the intended one before dependent steps continue. A corrected input may trigger another lookup. An already successful submission is not automatically repeated to apply a correction; follow the configured update or cancellation procedure. See [MCP bindings](/help/administration/workflows/mcp-bindings) for administrator setup.
+
+## Confirm a transport submission
+
+For a workflow configured to create a transport, **Submit transport** becomes available after required values and suggested alternatives are resolved. Review the gathered fields and their sources, correct mistakes, then choose **Confirm & submit new transport**. This creates a real request in the connected system.
+
+Wait for **Transport submitted** before assuming success. Use **Check ETA** afterward to read the returned status and available arrival estimates; no result yet does not mean the request failed. An uncertain outcome after sending must be reconciled with the connected system before retrying. Correcting a successfully submitted workflow does not create a replacement request automatically.
+
+## Invite an AI assistant to a voice call
+
+When enabled by the Call Flow, select an allowed assistant and choose **Invite assistant** in the active interaction. The assistant joins the customer and human agent. Each allowed assistant must have a **Skip Turn** tool; its instructions should define when it should speak and when it should remain silent.
+
+The invitation controls show progress and errors. Do not interpret a submitted invitation as a connected participant. **Remove assistant** ends AI participation while leaving the customer–agent interaction active. It is different from transferring the customer to an AI destination.
+
+## Three-speaker transcription
+
+With transcription enabled, Customer, Agent and AI Assistant appear as separate speakers. AI text can stream before the provider's final history is available; wording remains provisional until reconciled. A temporary event-stream interruption can delay AI text while the human call continues. Do not restart the customer call merely because an AI bubble is late.
+
+If AI text remains absent, ask the administrator to verify that the flow was saved with the current invitation configuration and that its Conversation WebSocket points at this environment. See [flow validation](/help/administration/call-flows/validation-testing#conversation-websocket-conflicts). Voice translation and sentiment depend on the configured AI operations and agent speech language.

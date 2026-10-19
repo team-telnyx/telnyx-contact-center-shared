@@ -2,9 +2,9 @@
 title: Setup
 description: Install, configure, initialize, and deploy Telnyx Contact Center.
 audiences: [admin, owner]
-keywords: [setup, install, deployment, docker, postgres, telnyx, wizard]
+keywords: [setup, install, deployment, docker, postgres, telnyx, wizard, video, vision]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Telnyx Contact Center is a Next.js application backed by PostgreSQL and
@@ -20,7 +20,7 @@ transcription, and AI assistant administration.
 
 ## Requirements
 
-- Node.js 20 or newer.
+- Node.js 22.18+ on the 22.x release line, or Node.js 24.11+ (including newer major versions).
 - Yarn package manager.
 - PostgreSQL for local development.
 - Docker Engine and Docker Compose v2 for production Docker deployment.
@@ -163,6 +163,46 @@ not duplicate voice apps, SIP connections, or numbers.
     generated env files, tunnel logs, and Terraform state files.
   </DocsFeature>
 </DocsFeatureGrid>
+
+## Video AI and Vision
+
+Video AI runs inside the standard Contact Center application deployment. The app
+launcher starts it automatically with <code>yarn dev</code> or
+<code>yarn start</code>; no separate Video AI container is required. Direct
+<code> next dev</code> or <code>next start</code> commands bypass that launcher.
+
+Current single-node Compose and wizard deployments include Chromium, FFmpeg,
+the browser seccomp policy, a private recording volume and a 60-second shutdown
+grace period. Existing custom deployments must recreate the app container with
+these settings and persist them in the deployment mechanism. Updating only the
+image or <code>.env</code> does not apply Docker security options or mounts.
+Preserve existing private recordings before introducing their persistent mount.
+
+Use the normal server-side PostgreSQL and <code>TELNYX_API_KEY</code> settings.
+For a single app container, use <code>PROCESS_ROLE=all</code> (the default), leave
+<code> VIDEO_AI_EXTERNAL_WORKER</code> and <code>VIDEO_AI_CONTROL_URL</code> unset,
+and do not set <code>VIDEO_CONFERENCE_AI_ENABLED</code> or
+<code> VIDEO_VISION_ENABLED</code> to <code>false</code>. No extra enablement
+variable is required with those defaults.
+
+<DocsCallout title="Multiple application hosts" tone="warning">
+  The AWS HA wizard leaves Video AI disabled until explicitly configured.
+  Each node needs its own private relay address and connectivity to peer nodes,
+  plus the same private shared recording filesystem. A host-local Docker volume
+  or S3 bucket cannot replace that shared mount. The wizard does not provision
+  it, and an app-only update does not apply Terraform networking changes.
+</DocsCallout>
+
+The complete [Video AI and Vision deployment guide](https://github.com/team-telnyx/telnyx-contact-center-shared/blob/master/deploy/README.md#video-ai-and-vision)
+contains new-install and upgrade steps, exact Docker options, environment
+reference, HA prerequisites and troubleshooting. Use the guide in your deployed
+release checkout when comparing version-specific behavior.
+
+After instance setup, follow [Web Widgets: Video calls with AI and Vision](/help/administration/chat-widgets#video-calls-with-ai-and-vision)
+to configure the assistant, fallback queue, Vision mode, sources and publication.
+Test a new published-widget call and explicitly allow AI access to the test
+camera/screen. Verify moving avatar video when enabled, audio and an accurate
+visual answer. The general health endpoint does not verify Video AI readiness.
 
 ## Streaming WebSocket
 

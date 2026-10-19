@@ -159,6 +159,7 @@ resource "aws_instance" "app" {
     region                  = data.aws_region.current.name
     app_port                = var.app_port
     streaming_ws_port       = var.streaming_ws_port
+    video_ai_control_port   = var.video_ai_control_port
     app_env_secret          = var.app_env_secret_arn
     db_secret               = var.db_secret_arn
     storage_bucket          = var.storage_bucket_name

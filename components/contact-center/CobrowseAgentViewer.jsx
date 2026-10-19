@@ -266,7 +266,7 @@ export default function CobrowseAgentViewer({ interaction, session, onChanged })
     finally { setBusy(false); }
   }
 
-  return <div className="flex min-h-0 flex-1 flex-col gap-3 bg-muted/20 p-3" data-testid="cobrowse-interaction-viewer">
+  return <div className="flex min-h-0 flex-1 flex-col gap-3 bg-muted/20 p-3" data-help-id="agent.cobrowse" data-testid="cobrowse-interaction-viewer">
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
       <div><p className="font-semibold">{tUi("Live page view")}</p><p className="text-xs text-muted-foreground">{controlActive ? tUi("Visitor-approved assistance · no recording") : tUi("View only · no recording")}</p></div>
       <InteractionActionGroup label={tUi("Co-browsing session actions")}>

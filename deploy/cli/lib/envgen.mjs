@@ -130,6 +130,7 @@ export function buildEnvValues({ sampleKeys, answers, target = 'local', postgres
     APP_ENV: 'production',
     NODE_ENV: 'production',
     APP_HOSTNAME: '0.0.0.0',
+    VIDEO_AI_WORKER_CAPACITY: '2',
     ALLOWED_ORIGINS: baseUrl,
     ALLOWED_DEV_ORIGINS: host,
     NEXT_PUBLIC_BASE_URL: baseUrl,

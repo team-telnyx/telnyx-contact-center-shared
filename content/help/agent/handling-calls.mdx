@@ -4,7 +4,7 @@ description: Follow the complete inbound and outbound call procedure from offer 
 audiences: [agent, supervisor, admin, owner]
 keywords: [answer, reject, mute, hold, transfer, DTMF]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 ## Inbound calls
@@ -25,3 +25,9 @@ Choose a destination from Contacts in the phone, verify the read-only **From** n
 Transfer destinations include Queues, Agents, Contacts, AI Agents, and a Manual number/SIP target. Queue transfer can preserve routing options where supported. **Consult** is available for external destinations, not queue transfer. During consult, the original caller is parked and the modal lets the agent switch between the parked and consultant legs before completing or cancelling the transfer.
 
 Do not close the transfer dialog while a consult is being established. If a leg cannot be identified yet, wait briefly for call metadata rather than repeating the action.
+
+## AI participation and device moves
+
+A flow can allow [inviting an AI assistant](/help/agent/agent-assist#invite-an-ai-assistant-to-a-voice-call) into the customer–agent conversation. Use Remove assistant to end its participation without ending the human call. Transferring to an AI destination is a different operation.
+
+To continue on another supported device, use [call handoff](/help/webrtc-phone/devices#move-an-active-call). Finish hold, consultation, transfer or supervision first. Wait for the confirmed move; only the device handling the interaction may operate its media and complete wrap-up.

@@ -4,7 +4,7 @@ description: Use Overview, Dashboard, Agents, Queues, filters, and live supervis
 audiences: [supervisor, admin, owner]
 keywords: [monitoring, agents, queues, waiting calls, supervision]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Open **SUPERVISOR → Monitoring**. The selected rail section is preserved and can also be addressed with the `section` URL parameter.
@@ -41,3 +41,15 @@ Once the agent sends, the draft is replaced by the outbound message. **Sent** me
 ## Supervising a live call
 
 Open the supervisory console from an active call and choose the supported supervision role, such as monitor, whisper, or barge. The target call must still be active. Announce or record supervisory participation where law and organizational policy require it.
+
+## Channels, availability and devices
+
+Use channel and queue filters to separate voice/video pressure from messaging workload. Agent presence is global, while offers and active work have channel-specific capacity. A user can be visible and Available but have no reachable selected voice device. Review Calls on/device state and queue activation before changing routing.
+
+A device handoff preserves the interaction while changing the handling device. Do not count that as a second customer call. Pending offers, active work and wrap-up occupy capacity; a different browser tab does not add another agent.
+
+## Video supervision
+
+Open **Supervise video call** on an active video interaction. The available modes depend on permissions. Monitor observes/listens, Whisper addresses the agent, and Barge joins the conference. The supervisor's camera control is available in Barge. Switching mode changes who receives the supervisor's media; verify the displayed mode before speaking.
+
+The agent sees a supervision badge. Ending supervision leaves the customer's interaction active. Camera permission, room readiness and the target interaction's active state still apply. See [Video calls](/help/agent/video-calls) for participant controls and Vision consent, which is separate from human supervision.

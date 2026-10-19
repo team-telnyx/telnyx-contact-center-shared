@@ -136,7 +136,7 @@ export const menuConfig = {
           title: "System",
           description: "Control platform operations and appearance",
           url: "/admin/system/dashboard",
-          activeUrls: ["/admin/call-generator", "/admin/logging", "/admin/phones-provisioning", "/settings"],
+          activeUrls: ["/admin/system", "/admin/call-generator", "/admin/logging", "/admin/phones-provisioning", "/settings"],
           icon: IconSettings,
           screen: "admin.system",
         },

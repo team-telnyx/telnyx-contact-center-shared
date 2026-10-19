@@ -2,6 +2,16 @@
 
 This directory contains the Docker production configuration for Telnyx Contact Center.
 
+The standard app image includes Video AI, Chromium and FFmpeg. Start the usual
+`app` service; no Video AI sidecar is required. Compose supplies Chromium's
+seccomp policy and a private persistent recording volume. Custom `docker run`
+deployments must pass the same policy and volume as described in
+[integrated Video AI operations](../../deploy/README.md#video-ai-and-vision).
+
+Image builds limit Next's page-generation workers to two by default so a
+high-CPU Docker Desktop VM does not exhaust a smaller memory allocation.
+Override with the `CC_BUILD_WORKERS` build argument when appropriate.
+
 Word previews run inside the CC application using bundled JavaScript libraries;
 no additional conversion service is required. See
 chat document previews for supported formats
@@ -11,7 +21,9 @@ and preview limits.
 
 ```
 docker/production/
-├── Dockerfile         # Multi-stage production build
+├── Dockerfile         # Application + integrated Video AI production build
+├── chromium-seccomp.json # Browser sandbox policy
+├── chromium-launcher.sh # Unprivileged Chromium launch
 ├── compose.yaml       # Docker Compose: app + PostgreSQL
 ├── compose.local.yaml # Local-only loopback port for PostgreSQL
 ├── sample.env         # Environment variable template (copy to .env)

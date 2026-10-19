@@ -1,0 +1,74 @@
+---
+title: AI Copilot
+description: Configure platform and operation models, business guidance, knowledge sources and controlled draft tests.
+audiences: [admin, owner]
+keywords: [AI Copilot, default model, inheritance, prompts, test, knowledge buckets, model precedence]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+Open **Admin → System → AI Copilot**. Select an operation card to edit its model and business guidance. Protected output formats and technical rules remain read-only. Inspect the complete effective prompts before testing a change.
+
+## Model inheritance
+
+The effective model is chosen in this order:
+
+1. An explicit feature or test choice, where available: a workflow model, scorecard model, channel reply model, email designer choice, or one-off test override.
+2. The operation card's model.
+3. The saved **platform default model** at the top of AI Copilot.
+4. The installation's `TELNYX_AI_DEFAULT_MODEL` environment value.
+
+An empty model field means inherit. If none of these supplies a model, the request fails with **No AI model is configured**. Models that require external provider credentials must have those credentials configured in Telnyx; being listed does not establish that your account can run them.
+
+**Apply to all AI operations** asks for confirmation and clears operation and reply-channel model overrides. It preserves instructions, token limits, knowledge buckets, workflow models and scorecard models. Resolve unsaved card changes first. If the default changes while the confirmation is open, reload and review it again. **Use environment value** is available only when an environment default exists.
+
+## Operations
+
+| Operation | Where it is used and what to review |
+| --- | --- |
+| Reply suggestions | Chat, SMS, WhatsApp and email. Review tone and knowledge grounding; agents review suggestions before sending. |
+| Knowledge-based response | Agent Assist KB mode. Check the suggested reply against the selected article. |
+| Workflow analysis | Live workflows and workflow tests. Check slot values, corrections, confidence and item completion. |
+| Workflow next response | Suggested wording for the current workflow step. Template responses do not invoke a model. |
+| Sentiment & intent | Transcript classifications. A factual negative answer does not necessarily indicate negative sentiment. |
+| Live translation | Transcript translation into the agent's speech language; review names and numbers. |
+| Quality evaluation | Draft scoring from voice transcripts or messaging text; human review is required. |
+| Call summary | Summaries of transcribed recordings. Check conclusions against the source transcript. |
+| Email template designer | Draft HTML and text templates; preserve variables and inspect the preview. |
+| AI Form Builder | Proposed form edits; inspect fields and validation before publishing. |
+| Assistant dashboard summary | A description of assistant configuration, not proof of runtime capability. |
+| Voice preview translation | Translates the sample sentence used by the voice picker. |
+| Workflow test scenarios | Generates synthetic customer scenarios independently of the workflow model. |
+| Simulated customer | Generates test customer replies in chat, voice and Call Generator workflow tests. |
+| Expressive voice sample | Generates a short preview utterance for a simulated caller. |
+
+## Reply knowledge and channel settings
+
+For reply suggestions, configure the model, token budget and up to five embedded Telnyx Object Storage buckets. Upload and embed documents in Telnyx before selecting a bucket. With no buckets selected, suggestions use conversation context. SMS, WhatsApp and email may inherit Chat settings or use their own channel configuration.
+
+Review **Use reply** before sending: it inserts text into a draft and does not send the message. Usage and cost estimates depend on returned token counts and available pricing; an unavailable estimate is not zero cost.
+
+## Test and save
+
+Choose the operation's tester, supply a synthetic example, optionally choose a test model, and run the draft. Inspect output, format checks, latency and token usage. Tests use the supplied example and instructions, do not retrieve real conversations, and do not save settings or create a quality evaluation.
+
+Format checks cannot establish factual correctness. Try both expected and incomplete inputs. Use the page's save action separately to apply settings to future generations. Existing results are unchanged. Read-only users can inspect configuration; changing it requires the appropriate System Settings permission.
+
+## Workflow models and testing
+
+A workflow's optional **LLM Model** overrides the relevant live analysis and response operations. **Use AI Copilot default** removes that override. An optional slot-filling fallback applies only when configured; leaving it empty does not configure a fallback.
+
+The simulated customer, scenario generator and expressive voice sample use their own operations. The [workflow tester](/help/administration/workflows/testing) exposes separate analysis and caller model choices for one run. Changing the test caller does not change the assistant's own model or save a workflow override.
+
+## Upgrading from 1.9
+
+The startup migration preserves existing workflow primary and fallback models,
+including selections equal to former defaults. For existing installations without
+a configured platform default, it records the historical operation models in AI
+Copilot, including legacy per-feature environment overrides. Existing operation
+models, guidance, channel settings and unrelated configuration remain intact.
+The migration runs once; later clearing or Apply to all is not undone on restart.
+
+A configured platform default (saved or `TELNYX_AI_DEFAULT_MODEL`) keeps its
+inheritance behavior. New installations must select a default explicitly. Values
+already cleared by an unreleased development build cannot be reconstructed.

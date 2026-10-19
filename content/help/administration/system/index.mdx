@@ -1,18 +1,20 @@
 ---
 title: System
-description: Navigate operational testing, observability, hardphone provisioning, and visual identity modules.
+description: Navigate platform settings, schedules, AI defaults, operational testing, observability and provisioning.
 audiences: [admin, owner]
-keywords: [system, tiles, call generator, logging, phones, theme]
+keywords: [system, tiles, schedules, calendars, AI Copilot, settings, call generator, logging, phones, theme]
 owner: contact-center
-lastReviewed: 2026-09-14
+lastReviewed: 2026-10-19
 ---
 
 Open **Admin → System**. The System landing page is a tile overview and a persistent rail for platform-level modules.
 
 | Tile and rail item | Purpose |
 | --- | --- |
+| **Dashboard** | Review configuration inventory, integrations and platform activity. |
+| **Settings** | Configure SLA response targets, hold behavior, interaction notification sounds and agent lifecycle. |
+| **Schedules & calendars** | Publish working hours, holidays and date exceptions used by Call Flows. |
 | **AI Copilot** | Configure fifteen AI operations, their default models and editable guidance, inspect full effective prompts, and test drafts with synthetic examples. |
-| **Settings** | Configure SLA response targets, hold behavior, interaction notification sounds, agent lifecycle, and agent lifecycle settings. |
 | **Call Generator** | Create controlled scenarios, action sequences, and test runs. |
 | **Logging** | Inspect live runtime events, JSONL files, and logging policies. |
 | **Phones Provisioning** | Manage hardphone inventory, LAN bridges, provisioning events, and vendor settings. |
@@ -24,15 +26,26 @@ In **Settings**, the center cards are read-only summaries. Select a card to edit
 
 ## AI Copilot
 
+See the complete [AI Copilot guide](/help/administration/system/ai-copilot) for platform defaults, model inheritance, operation guidance, channel knowledge sources and draft testing. The platform default and **Apply to all AI operations** controls affect inherited models; explicit workflow and scorecard choices remain separate.
+
 Open **Admin → System → AI Copilot** to select an operation in the center and edit its default model or business guidance in the right panel. Each card identifies affected menus and screens. Protected output formats and technical rules remain read-only; the full effective system and user prompts are available in the instruction preview.
 
 For **Chat reply suggestions**, choose a Telnyx Chat Completions model, token budget and up to five embedded Object Storage buckets. With no sources selected, replies use conversation context. Upload and embed documents in Telnyx before selecting their buckets. Channel-specific models can override the default.
 
 Use the tester to choose a model, edit the synthetic example and run an unsaved draft. It sends only the supplied example and instructions to Telnyx, then displays output, format checks, latency and token usage. It does not retrieve real conversations or save an evaluation. Format checks do not guarantee semantic correctness. Save settings separately to apply a configuration to future generations; existing results remain unchanged.
 
+## Interaction sounds
 
 In **Settings → Interaction sounds**, below **Hold experiences**, select one of ten original ringtones for each messaging channel. The tones last 3.2–4 seconds. Use **Play** to hear the current selection and **Stop** to stop the preview. **Loop** repeats the tone with a one-second pause after each playback; without Loop, each new offer rings once. The volume control and channel enable switches apply globally when you click **Save settings**. Email and Chat are enabled by default with different tones. WhatsApp and SMS settings can be prepared in advance; they do not activate those channels. Voice keeps its WebRTC ringtone.
 
 Agent Desktop plays the configured sound while an interaction is offered to the agent. Playback stops when the offer is accepted, declined, withdrawn, or expires. Several simultaneous offers play in turn instead of overlapping. Saved settings refresh automatically with the agent's interaction list. Keep Agent Desktop open for messaging notifications; if the browser blocks playback, click **Enable notification sounds** or interact with the page to enable audio. Muting the browser tab or system audio still silences notifications.
 
 System modules can affect production traffic, credentials, external calls, logging volume, or all users' UI. Apply changes during a controlled window and verify the result before broad rollout.
+
+## Schedules and calendars
+
+Use [Schedules & calendars](/help/administration/system/schedules) to publish hours and exceptions before selecting them in a Call Flow's Schedules node. Saving a draft does not change routing. This feature is separate from AI Assistant Scheduled Events.
+
+## Dashboard and settings
+
+The [System Dashboard](/help/administration/system/dashboard) summarizes inventory and integration state. Use [System Settings](/help/administration/system/settings) for global behavior. Phones Provisioning is shown only when experimental features are enabled; permissions also affect visible modules.

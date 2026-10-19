@@ -59,10 +59,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Can } from "@/components/auth-provider";
+import { useAssistantEventDestinationConfirmation } from "@/components/voice-flow/AssistantEventDestinationConfirmation";
+import { saveFlowWithAssistantConfirmation } from "@/lib/ai/flow-save-client.mjs";
 
 export default function CallFlowsPage() {
   const tUi = useUiText();
   const router = useRouter();
+  const assistantDestination = useAssistantEventDestinationConfirmation();
   const [flows, setFlows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -223,23 +226,15 @@ export default function CallFlowsPage() {
       }
 
       // Create duplicate (without voice app - user needs to create new one)
-      const res = await fetch("/api/voice/flows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `${name} (Copy)`,
-          description: getData.flow.description,
-          nodes: getData.flow.nodes,
-          edges: getData.flow.edges,
-          variables: getData.flow.variables || getData.flow.globalVariables,
-          metadata: getData.flow.metadata,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Failed to duplicate flow");
-      }
+      const data = await saveFlowWithAssistantConfirmation("/api/voice/flows", {
+        name: `${name} (Copy)`,
+        description: getData.flow.description,
+        nodes: getData.flow.nodes,
+        edges: getData.flow.edges,
+        variables: getData.flow.variables || getData.flow.globalVariables,
+        metadata: getData.flow.metadata,
+      }, { method: "POST", confirm: assistantDestination.confirm });
+      if (!data) return;
 
       notify({
         title: "Success",
@@ -303,16 +298,10 @@ export default function CallFlowsPage() {
 
       try {
         const data = JSON.parse(await file.text());
-        const res = await fetch("/api/voice/flows/import", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
+        const result = await saveFlowWithAssistantConfirmation("/api/voice/flows/import", data, {
+          method: "POST", confirm: assistantDestination.confirm,
         });
-        const result = await res.json();
-
-        if (!res.ok || !result.ok) {
-          throw new Error(result.error || "Failed to import flow");
-        }
+        if (!result) return;
 
         notify({
           title: "Success",
@@ -644,6 +633,7 @@ export default function CallFlowsPage() {
         </div>
       </Card>
 
+      {assistantDestination.dialog}
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

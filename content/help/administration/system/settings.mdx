@@ -1,0 +1,32 @@
+---
+title: Settings
+description: Configure shared service levels, hold experiences, notifications and lifecycle policies.
+audiences: [admin, owner]
+keywords: [settings, SLA, hold, notifications, lifecycle, messaging campaigns]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+Open **Admin → System → Settings**. Select a summary card to edit its configuration in the right panel. Draft values remain while switching cards. Review them before using the header's save action.
+
+## Service levels
+
+Configure response targets for the relevant channel and scope. **Save SLA** saves service-level policies separately from the other settings. Voice and Video answer events differ from messaging response events; see [Analytics](/help/supervisor/analytics#channel-scope-and-service-levels) before comparing results.
+
+## Hold experiences and lifecycle
+
+Configure the supported hold behavior and agent lifecycle settings, then use **Save settings**. These policies affect how work waits, completes and releases capacity. Validate changes with a controlled interaction, including caller hangup and required wrap-up. A settings change does not itself repair an existing stuck interaction.
+
+## Interaction sounds
+
+Choose a tone for each available channel, preview it, set volume and optionally enable looping. Playback stops when an offer is accepted, declined, withdrawn or expires. Several offers play in turn. The Voice ringtone is managed by WebRTC Phone.
+
+Save shared defaults with **Save settings**. Users can keep personal overrides in [Profile → notification sounds](/help/profile#notification-sounds). A tone does not enable a channel, and browser autoplay or system mute can prevent playback.
+
+## Messaging campaign policies
+
+Messaging campaign policies are configured in **Supervisor → Outbound Dialer → Settings → Messaging campaigns**, separately from System Settings. Review the available SMS and WhatsApp settings before starting a campaign. These govern permitted sending behavior; configuring them does not connect a number or approve a WhatsApp template. Follow the channel setup and [Outbound Dialer](/help/supervisor/outbound-dialer) instructions, then validate a controlled campaign.
+
+## Related configuration
+
+Model defaults and operation prompts are managed in [AI Copilot](/help/administration/system/ai-copilot). Call Flow opening hours and holidays are managed in [Schedules & calendars](/help/administration/system/schedules). Changing either requires its own save/publication workflow.

@@ -5,7 +5,7 @@ import { mobileAlertPayload, mobileAlertSenders } from '../lib/mobile/alerts.mjs
 import { sanitizeLogPayload } from '../lib/logger/redaction.mjs';
 
 const now = Date.parse('2026-10-13T10:00:00Z');
-const config = { projectId: 'novumcx-telnyx', credentials: { client_email: 'test@example.test', private_key: 'test-key' } };
+const config = { projectId: 'example-firebase-project', credentials: { client_email: 'test@example.test', private_key: 'test-key' } };
 const notification = {
   fcm_token: 'opaque-FCM:registration_123', channel: 'sms', customer_name: 'Test customer',
   queue_name: 'Support', work_item_id: 'interaction-1', event_id: 42,
@@ -24,7 +24,7 @@ test('FCM sends a data-only HTTP v1 request with APNs display text, correct scop
     },
     fetchImpl: async (url, request) => {
       requests++;
-      assert.equal(url, 'https://fcm.googleapis.com/v1/projects/novumcx-telnyx/messages:send');
+      assert.equal(url, 'https://fcm.googleapis.com/v1/projects/example-firebase-project/messages:send');
       assert.equal(request.method, 'POST');
       assert.equal(request.headers.Authorization, 'Bearer test-oauth-access-token');
       const apns = mobileAlertPayload(notification);
@@ -47,7 +47,7 @@ test('FCM sends a data-only HTTP v1 request with APNs display text, correct scop
 
 test('configuration accepts escaped PEM newlines and never exposes JSON parse errors', () => {
   assert.equal(fcmConfiguration({}), null);
-  const env = { FCM_PROJECT_ID: 'novumcx-telnyx', FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({
+  const env = { FCM_PROJECT_ID: 'example-firebase-project', FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({
     type: 'service_account', client_email: 'test@example.test', private_key: 'line1\\nline2',
   }) };
   assert.equal(fcmConfiguration(env).credentials.private_key, 'line1\nline2');
@@ -91,7 +91,7 @@ test('worker FCM configuration is independent of APNs and reports disabled only 
   const logger = { info: event => logs.push(event), warn: event => logs.push(event) };
   assert.equal(mobileAlertSenders({}, logger).enabled, false);
   assert.deepEqual(logs, ['fcm_alerts_disabled']);
-  const env = { FCM_PROJECT_ID: 'novumcx-telnyx', FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({
+  const env = { FCM_PROJECT_ID: 'example-firebase-project', FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({
     type: 'service_account', client_email: 'test@example.test', private_key: 'test',
   }), APNS_ALERT_KEY_ID: 'x', APNS_ALERT_TEAM_ID: 'x', APNS_ALERT_PRIVATE_KEY: 'x', APNS_ALERT_TOPICS: 'bad-json' };
   assert.equal(mobileAlertSenders(env, logger).enabled, true);

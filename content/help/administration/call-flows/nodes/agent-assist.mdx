@@ -1,8 +1,24 @@
 ---
 title: Agent Assist
 description: Activate Agent Assist behavior and workflow guidance for an interaction.
+audiences: [admin, owner]
+keywords: [agent assist, assistant invite, Skip Turn, transcription, workflow]
+owner: contact-center
+lastReviewed: 2026-10-19
 ---
 
 **Agent Assist** connects the interaction to configured assistant/workflow capabilities for live agent guidance, suggestions, and slot extraction.
 
 Select the intended assistant/workflow resources and pass any workflow prefill data with exact slot names. Test with the assigned queues and agent desktop, including low-confidence values and assistant unavailability.
+
+## Allow assistant invitations
+
+Enable Agent Assist, turn on **Enable assistant invite**, and select the allowed assistants. Selection checks that each has **Skip Turn**. Add that tool in the assistant's Tools settings if missing, then retry the check. Search by name and remove unavailable selections before saving.
+
+Saving the flow validates and prepares the selected assistants for live transcription in this environment. Save an existing flow again after enabling this capability. The agent uses the saved selection during a call. Configure and test transcription so Customer, Agent and AI Assistant remain distinct.
+
+If a selected assistant already sends Conversation WebSocket events elsewhere, saving requires a deliberate replacement decision. Read [Conversation WebSocket conflicts](/help/administration/call-flows/validation-testing#conversation-websocket-conflicts) before proceeding. Use a separate assistant when both environments need live events.
+
+## Verify live guidance
+
+Test KB/workflow behavior, prefilled slots, transcript updates, invitation failure, successful AI participation and removal while the human call remains active. For slot enrichment, test [MCP bindings](/help/administration/workflows/mcp-bindings). For agent controls, see [Agent Assist](/help/agent/agent-assist).

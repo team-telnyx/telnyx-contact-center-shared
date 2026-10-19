@@ -1,0 +1,36 @@
+---
+title: Video calls and Vision
+description: Handle video interactions, invite AI, control permitted Vision sources and complete wrap-up.
+audiences: [agent, supervisor, admin, owner]
+keywords: [video, camera, screen sharing, AI participant, Vision, avatar, recording]
+owner: contact-center
+lastReviewed: 2026-10-19
+---
+
+## Accept and control a video call
+
+Select the incoming Video interaction and accept it from the interaction list. Your queue and user must have Video enabled with available capacity. Allow the browser's camera and microphone permissions and use the device that owns the interaction.
+
+Use the toolbar to mute your microphone, turn your camera on/off, share or stop sharing your screen, change the layout, and end the call. Browser permission is required separately for screen capture. Ending a video call opens wrap-up; complete the Wrapup Codes sheet to release the slot. Follow [Devices and call handoff](/help/webrtc-phone/devices) when moving supported video work.
+
+## AI participation
+
+The widget may start with an AI assistant or allow an agent to invite one. Open the AI assistant control, select an allowed assistant when offered, and choose **Join assistant**. Available assistants and behavior after human handoff come from the published widget configuration.
+
+Check the status: Connecting, Active, Audio only, Visible/muted, Stopped or Unavailable. Use **Mute assistant**, **Activate assistant** or **Remove assistant** as available. Removing AI does not end the human video conference. An avatar portrait alone does not establish that the assistant is connected; verify an audible response and moving video when an avatar is enabled.
+
+## Vision consent and source selection
+
+Each participant decides whether AI may see their own camera or shared screen. Browser camera permission and sharing with a human do not grant AI access. Use **Allow AI to see my camera** or **Allow AI to see my shared screen** only for a source you intend to expose; revoke access at any time.
+
+When agent controls are enabled, open **Vision source** to inspect the preview, pause analysis, choose an authorized source, or use automatic selection. Only one authorized source is analyzed at a time. Manual selection pauses when its source disappears. Allow about 10.5 seconds for a source change; do not assume a pending change is already effective.
+
+**Analyze current frame** requests analysis of the selected source. **Send image to Vision** accepts JPEG, PNG or WebP up to 10 MiB; the application prepares a bounded image before sending. Controls are disabled while the assistant is inactive or a source/upload transition is pending. Ask a concrete question and verify the answer against what is visible.
+
+Video Vision and **Allow images in AI chat** are separate features with separate limits and publication settings. See [Web Widgets](/help/administration/chat-widgets#video-calls-with-ai-and-vision).
+
+## Supervision and recordings
+
+A badge indicates when a supervisor is listening, whispering or has joined. Recording availability follows the widget's published configuration; turning a camera off does not disable recording. Authorized supervisors can review an available composed recording in interaction history after processing finishes.
+
+If AI fails, the human conference can continue. If media fails, check permissions, the handling device and network before retrying. Report the interaction ID and displayed state; never use a successful preview as proof that a live call or recording succeeded.

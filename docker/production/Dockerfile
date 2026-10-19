@@ -1,6 +1,11 @@
 # Production Dockerfile for Telnyx Contact Center
 FROM node:22-slim
 
+# Video AI is part of the standard application image. Use the distribution's
+# Chromium instead of downloading a second browser during dependency install.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV VIDEO_AI_CHROMIUM_PATH=/app/docker/production/chromium-launcher.sh
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
   python3 \
@@ -13,6 +18,10 @@ RUN apt-get update && apt-get install -y \
   librsvg2-dev \
   postgresql-client \
   curl \
+  chromium \
+  ffmpeg \
+  tini \
+  util-linux \
   && rm -rf /var/lib/apt/lists/*
 
 # Enable Corepack for Yarn
@@ -23,8 +32,12 @@ WORKDIR /app
 # Copy everything at once
 COPY . .
 
+RUN useradd --create-home --uid 1100 --user-group cc-video \
+  && chmod 755 docker/production/chromium-launcher.sh \
+  && mkdir -p /app/.data/video-recordings && chmod 700 /app/.data/video-recordings
+
 # Install dependencies with Yarn
-RUN yarn install
+RUN yarn install --immutable
 
 # NEXT_PUBLIC_* values are compiled into client bundles by `next build`. Keep
 # these as explicit build args so production compose can pass the same public
@@ -49,7 +62,8 @@ ENV GOOGLE_MAPS_KEY=$GOOGLE_MAPS_KEY
 # Build the Next.js production bundle at image build time. Containers must start
 # from this prebuilt artifact so HA rolling deploys do not take a node out for a
 # multi-minute runtime build.
-RUN yarn build
+ARG CC_BUILD_WORKERS=2
+RUN CC_BUILD_WORKERS=$CC_BUILD_WORKERS yarn build
 
 # Create startup script that waits for PostgreSQL, initializes schema, and starts
 # the already-built application.
@@ -65,13 +79,17 @@ RUN echo '#!/bin/bash\n\
   node scripts/ensure-pg.mjs\n\
   \n\
   echo "Starting prebuilt application..."\n\
-  exec yarn start\n\
+  exec node scripts/start-next-with-pino.mjs\n\
   ' > /app/start-prod.sh && chmod +x /app/start-prod.sh
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV PROCESS_ROLE=all
+ENV NODE_ENV=production
+
+# Reap Chromium descendants and forward shutdown to the application launcher.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Start the application with the startup script
 CMD ["/app/start-prod.sh"]

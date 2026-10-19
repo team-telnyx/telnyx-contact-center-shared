@@ -390,7 +390,7 @@ function ProfileWorkspace() {
           <TabsTrigger value="devices">{tUi("Devices")}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="devices" className="space-y-6">
+        <TabsContent data-help-id="profile.devices" value="devices" className="space-y-6">
           <VoiceDevicesCard />
           <MobileAppSetupCard />
         </TabsContent>

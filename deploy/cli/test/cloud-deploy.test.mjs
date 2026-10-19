@@ -3,6 +3,11 @@ import { describe, it } from 'node:test';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { REMOTE_SCRIPTS as GCP_SCRIPTS } from '../lib/gcp-deploy.mjs';
+import { REMOTE_SCRIPTS as AZURE_SCRIPTS } from '../lib/azure-deploy.mjs';
+import { HA_VIDEO_PREFLIGHT } from '../lib/ha-video-runtime.mjs';
 import {
   buildAndPackageImage, uploadArtifact, waitForSsmOnline, runSsmDeployCommand,
   deregisterFromAlb, registerWithAlb, deploySingleNode, deployHaRolling, REMOTE_SCRIPTS,
@@ -28,9 +33,26 @@ describe('cloud-deploy.mjs — REMOTE_SCRIPTS single-node deploy mechanism', () 
     assert.doesNotMatch(REMOTE_SCRIPTS.single, /caddy/i);
   });
 
-  it('single-node and HA remote scripts use the identical deploy mechanism (unified single-vs-HA behavior)', () => {
-    assert.strictEqual(REMOTE_SCRIPTS.single, REMOTE_SCRIPTS.ha);
+  it('HA keeps the same image and rollback mechanism but requires shared video configuration before container replacement', () => {
+    assert.match(REMOTE_SCRIPTS.ha, /run_container "\$previous_image"/);
+    assert.ok(REMOTE_SCRIPTS.ha.indexOf('read_video_env()') < REMOTE_SCRIPTS.ha.indexOf('docker rm -f'));
+    assert.doesNotMatch(REMOTE_SCRIPTS.ha, /source=cc-video-recordings/);
+    assert.match(REMOTE_SCRIPTS.ha, /"\$\{video_args\[@\]\}"/);
   });
+
+  for (const [provider, script] of Object.entries({ aws: REMOTE_SCRIPTS.single, awsHa: REMOTE_SCRIPTS.ha, gcp: GCP_SCRIPTS.single, azure: AZURE_SCRIPTS.single })) {
+    it(`${provider} ships the reviewed Chromium policy and persistent recordings with the existing app container`, () => {
+      const policy = JSON.parse(script.split("<<'CC_CHROMIUM_SECCOMP'\n")[1].split('\nCC_CHROMIUM_SECCOMP')[0]);
+      assert.deepStrictEqual(policy, JSON.parse(readFileSync(new URL('../../../docker/production/chromium-seccomp.json', import.meta.url), 'utf8')));
+      assert.equal(policy.defaultAction, 'SCMP_ACT_ERRNO');
+      assert.match(script, /--security-opt "seccomp=\$APP_DIR\/chromium-seccomp.json"/);
+      assert.match(script, provider === 'awsHa' ? /type=bind,source=\$video_path,target=\/app\/\.data\/video-recordings/ : /source=cc-video-recordings,target=\/app\/\.data\/video-recordings/);
+      assert.match(script, /--stop-timeout 60/);
+      assert.equal((script.match(/docker run -d/g) || []).length, 1);
+      assert.doesNotMatch(script, /--privileged|--cap-add|seccomp=unconfined/);
+      execFileSync('bash', ['-n'], { input: script });
+    });
+  }
 });
 
 describe('cloud-deploy.mjs — buildAndPackageImage', () => {
@@ -425,7 +447,7 @@ describe('cloud-deploy.mjs — deployHaRolling', () => {
     const order = [];
     const waitForSsmOnlineImpl = async ({ instanceId }) => { order.push(`ssm-wait:${instanceId}`); return { online: true }; };
     const deregisterFromAlbImpl = async ({ instanceId }) => { order.push(`deregister:${instanceId}`); };
-    const runSsmDeployCommandImpl = async ({ instanceId }) => { order.push(`deploy:${instanceId}`); return { success: true, output: 'ok' }; };
+    const runSsmDeployCommandImpl = async ({ instanceId, script }) => { order.push(`${script === HA_VIDEO_PREFLIGHT ? 'preflight' : 'deploy'}:${instanceId}`); return { success: true, output: 'ok' }; };
     const registerWithAlbImpl = async ({ instanceId }) => { order.push(`register:${instanceId}`); };
 
     const results = await deployHaRolling({
@@ -436,8 +458,9 @@ describe('cloud-deploy.mjs — deployHaRolling', () => {
     });
 
     assert.deepStrictEqual(order, [
-      'ssm-wait:i-1', 'deregister:i-1', 'deploy:i-1', 'register:i-1',
-      'ssm-wait:i-2', 'deregister:i-2', 'deploy:i-2', 'register:i-2',
+      'ssm-wait:i-1', 'preflight:i-1', 'ssm-wait:i-2', 'preflight:i-2',
+      'deregister:i-1', 'deploy:i-1', 'register:i-1',
+      'deregister:i-2', 'deploy:i-2', 'register:i-2',
     ]);
     assert.strictEqual(results.length, 2);
   });
@@ -446,7 +469,8 @@ describe('cloud-deploy.mjs — deployHaRolling', () => {
     const order = [];
     const waitForSsmOnlineImpl = async ({ instanceId }) => ({ online: true });
     const deregisterFromAlbImpl = async ({ instanceId }) => { order.push(`deregister:${instanceId}`); };
-    const runSsmDeployCommandImpl = async ({ instanceId }) => {
+    const runSsmDeployCommandImpl = async ({ instanceId, script }) => {
+      if (script === HA_VIDEO_PREFLIGHT) return { success: true };
       order.push(`deploy:${instanceId}`);
       if (instanceId === 'i-1') return { success: false, status: 'Failed', error: 'oom' };
       return { success: true };
@@ -479,5 +503,21 @@ describe('cloud-deploy.mjs — deployHaRolling', () => {
       /never registered with SSM/,
     );
     assert.strictEqual(order.length, 0);
+  });
+
+  it('does not drain or replace any node when another node lacks HA video prerequisites', async () => {
+    const checked = [];
+    await assert.rejects(deployHaRolling({
+      instanceIds: ['i-1', 'i-2'],
+      waitForSsmOnlineImpl: async () => ({ online: true }),
+      runSsmDeployCommandImpl: async ({ instanceId, script }) => {
+        assert.equal(script, HA_VIDEO_PREFLIGHT);
+        checked.push(instanceId);
+        return { success: instanceId === 'i-1', error: 'shared filesystem missing' };
+      },
+      deregisterFromAlbImpl: async () => assert.fail('must not drain any node'),
+      registerWithAlbImpl: async () => assert.fail('must not change ALB targets'),
+    }), /preflight failed on i-2.*shared filesystem missing/);
+    assert.deepStrictEqual(checked, ['i-1', 'i-2']);
   });
 });

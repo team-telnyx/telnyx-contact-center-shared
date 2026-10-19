@@ -70,5 +70,5 @@ test("WS4-T4 production start wrapper can run web, worker, or streaming-only rol
   assert.match(startWrapper, /startAcdWorker/);
   assert.match(startWrapper, /startReconciler/);
   assert.match(dockerfile, /PROCESS_ROLE/);
-  assert.match(dockerfile, /exec yarn start/);
+  assert.match(dockerfile, /exec node scripts\/start-next-with-pino.mjs/);
 });

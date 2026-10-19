@@ -102,7 +102,8 @@ test("production start is wrapped so Next CLI ready lines become pino events", a
   assert.match(startWrapper, /web_server_next_runtime/);
   assert.match(startWrapper, /web_server_endpoint/);
   assert.match(startWrapper, /nextCliStartingLineSuppressed/);
-  assert.match(startWrapper, /next", "start"/);
+  assert.match(startWrapper, /development \? "dev" : "start"/);
+  assert.match(startWrapper, /resolve\("next\/dist\/bin\/next"\)/);
   assert.match(startWrapper, /process\.env\.APP_HOSTNAME \|\| "0\.0\.0\.0"/);
   assert.doesNotMatch(startWrapper, /(?:--hostname|hostname:)\s*process\.env\.HOSTNAME/);
   assert.doesNotMatch(packageJson.scripts.start, /next start --hostname/);

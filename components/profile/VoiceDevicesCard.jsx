@@ -66,7 +66,7 @@ export default function VoiceDevicesCard() {
   }
 
   const devices = state?.devices || [];
-  return <Card className="w-full" data-testid="voice-devices-card" id="devices">
+  return <Card data-help-id="profile.devices" className="w-full" data-testid="voice-devices-card" id="devices">
     <CardHeader>
       <CardTitle className="flex items-center gap-2"><Smartphone className="size-6 text-brand-primary" aria-hidden="true" />{tUi(" Call devices")}</CardTitle>
       <p className="text-sm text-muted-foreground">{tUi("Your computer takes calls in the browser and is always listed. Phones and tablets you sign in on appear here too; forget one you no longer use so it stops ringing and receiving notifications.")}</p>

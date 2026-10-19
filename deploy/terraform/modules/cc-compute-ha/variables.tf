@@ -112,3 +112,8 @@ variable "dns_zone_id" {
   type        = string
   default     = ""
 }
+variable "video_ai_control_port" {
+  description = "Private Video AI relay port matching the network module security-group rule."
+  type        = number
+  default     = 3092
+}

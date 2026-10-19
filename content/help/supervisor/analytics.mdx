@@ -4,7 +4,7 @@ description: Detailed reference for every report in the Analytics rail and its o
 audiences: [supervisor, admin, owner]
 keywords: [analytics, SLA, abandonment, adherence, skills gap]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 Open **SUPERVISOR → Analytics**, select a report in the rail, then set quick/custom date-time range and filters. Refresh after changing the scope when the screen does not load automatically.
@@ -23,3 +23,15 @@ Open **SUPERVISOR → Analytics**, select a report in the rail, then set quick/c
 | Call History | Searchable interaction records with recordings, transcript, timeline, metadata, and workflow details. |
 
 Analytics aggregates depend on lifecycle events and selected timestamps. Avoid adding percentages from reports with different denominators. Export/screenshot only according to customer-data handling policy.
+
+## Channel scope and service levels
+
+Select the same date range, queues and channel before comparing reports. Queue/agent performance, abandonment and wrap-up views include multichannel measures. Voice and Video service events are human answers; Chat uses a persisted human message; Email, SMS and WhatsApp use an accepted human send. An accepted outbound message is not proof of recipient delivery or reading.
+
+Voice/Video service levels are scoped to queue visits; messaging service levels are scoped to the interaction. System SLA policies define response targets on a 24×7 clock. Working-hours schedules used by Call Flows do not automatically turn SLA timing into a business-hours clock.
+
+Adherence measures global workforce presence and is not divided by the channel filter. Transfer reports can span channels, while hold measurements apply to Voice. Outbound voice attempt metrics should not be interpreted as SMS/WhatsApp delivery counts. Check the report's scope message and denominator before combining results.
+
+## History and evidence
+
+Open [Interaction history](/help/supervisor/call-history) for the underlying timeline, conversation, media and workflow evidence. Missing delivery, transcript or recording data is different from a zero-valued metric. Refresh or resolve a loading error before drawing conclusions from empty charts.

@@ -4,7 +4,7 @@ description: Understand every control visible in the shared application header.
 audiences: [agent, supervisor, admin, owner]
 keywords: [header, status, queues, campaigns, docs, phone]
 owner: contact-center
-lastReviewed: 2026-07-11
+lastReviewed: 2026-10-19
 ---
 
 The header remains available while navigating the application.
@@ -21,3 +21,9 @@ The header remains available while navigating the application.
 Agent controls appear only for a user who has the `agent` role. Supervisor, admin, or owner access does not automatically show them unless that same account also has the agent role.
 
 Status, queue, and campaign changes are updated in real time. If the shared event stream is unavailable, status uses fallback polling. A newly created queue can generate a **New queue available** notification; it is not activated automatically.
+
+## Call device and personal preferences
+
+The phone panel's **Calls on** control identifies the selected destination for future calls. Choose a ready device before expecting voice offers. Moving an active call uses a separate handoff action; follow [Devices and call handoff](/help/webrtc-phone/devices).
+
+Use the account menu's [Profile](/help/profile) for interface language, speech language, personal notification sounds, security and device management. A microphone selector changes audio input on the current device, not the destination that takes calls.

@@ -2,7 +2,7 @@
 import { useUiText } from "@/components/i18n/use-ui-text";
 
 import { useRouter } from "next/navigation";
-import { IconBrain, IconBug, IconDashboard, IconDeviceLandlinePhone, IconLogout, IconPalette, IconPhoneCall, IconSettings } from "@tabler/icons-react";
+import { IconBrain, IconBug, IconCalendarClock, IconDashboard, IconDeviceLandlinePhone, IconLogout, IconPalette, IconPhoneCall, IconSettings } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { useExperimentalFeatures } from "@/lib/experimental-features-client";
@@ -10,6 +10,7 @@ import { useExperimentalFeatures } from "@/lib/experimental-features-client";
 export const SYSTEM_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, href: "/admin/system/dashboard", description: "Review configuration inventory, integrations, and platform activity." },
   { id: "settings", label: "Settings", icon: IconSettings, href: "/admin/system/settings", description: "Configure global Contact Center behavior and media." },
+  { id: "schedules", label: "Schedules & calendars", icon: IconCalendarClock, href: "/admin/system/schedules", description: "Manage shared working hours, holidays, and date exceptions." },
   { id: "ai-copilot", label: "AI Copilot", icon: IconBrain, href: "/admin/system/settings/ai-copilot", screen: "admin.system.settings", description: "Configure AI models, business guidance and reply knowledge sources." },
   { id: "call-generator", label: "Call Generator", icon: IconPhoneCall, href: "/admin/call-generator", description: "Create controlled call scenarios, actions, and test runs." },
   { id: "logging", label: "Logging", icon: IconBug, href: "/admin/logging", description: "Inspect live runtime events, log files, and logging policies." },

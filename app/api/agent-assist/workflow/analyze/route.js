@@ -566,7 +566,7 @@ async function analyzeOneUtterance({
   if (speakerType === "customer" && BARE_YES_NO_RE.test(transcript.trim())) {
     const lastAgentContext = [...recentContextEntries]
       .reverse()
-      .find((e) => e?.text && String(e.speaker || "").toLowerCase() !== "inbound");
+      .find((e) => e?.text && normalizeSpeakerType(e.speaker) === "agent");
     const questionText = String(lastAgentContext?.text || "").toLowerCase();
     if (questionText) {
       const questionedBoolean = pendingItems.find((i) => {

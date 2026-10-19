@@ -50,7 +50,7 @@ export function VoiceEndpointSelector({ onOpenQuality }) {
     }
   }
 
-  return <div className="space-y-3" data-testid="voice-endpoint-selector">
+  return <div className="space-y-3" data-help-id="phone.devices" data-testid="voice-endpoint-selector">
     <div className="flex items-center justify-between gap-3">
       <h3 className="text-sm font-semibold">{tUi("Calls on")}</h3>
       <span className="truncate text-xs text-muted-foreground">{selected?.label || (state ? tUi("Choose a device") : '')}</span>

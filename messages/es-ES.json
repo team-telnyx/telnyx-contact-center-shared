@@ -11466,6 +11466,15 @@
     "m2719cc4a": "La IA puede ver",
     "m9bd8c631": "Pantalla",
     "m64619f73": "Analizar",
-    "mdd634969": "Selecciona un dispositivo antes de recibir llamadas de voz."
+    "mdd634969": "Selecciona un dispositivo antes de recibir llamadas de voz.",
+    "m216b6b71": "Desconectando…",
+    "me513c3e7": "Seleccionar un asistente",
+    "mbf780210": "Invitar asistente",
+    "m1f7b7c73": "Habilitar invitaciones de asistentes",
+    "mddcb069e": "Permite a los agentes invitar a un asistente de IA seleccionado para hablar con ambos participantes. Cada asistente debe tener la herramienta Skip Turn.",
+    "m7793a57e": "Buscar asistentes",
+    "m21d463ca": "Añade Skip Turn en la configuración de herramientas del asistente.",
+    "ma7228848": "Un asistente seleccionado no está disponible o no tiene la herramienta Skip Turn. Actualiza la selección antes de guardar.",
+    "m67dba4b1": "Asistentes disponibles"
   }
 }
