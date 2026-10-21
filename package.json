@@ -105,7 +105,7 @@
     "jose": "^6.2.12",
     "lucide-react": "^1.55.0",
     "mammoth": "1.13.0",
-    "marked": "^18.0.14",
+    "marked": "^18.1.1",
     "nanoid": "^6.0.2",
     "next": "16.4.0",
     "next-auth": "^4.24.13",
@@ -136,7 +136,7 @@
     "ws": "^8.22.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yauzl": "3.4.0",
-    "zod": "^4.6.6",
+    "zod": "^4.6.7",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
